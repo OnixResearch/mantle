@@ -1,0 +1,11 @@
+{
+  "task": 1715,
+  "result": {
+    "Failed": 101
+  },
+  "log": "developer-check-failed-1715.log",
+  "test_result": "FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 2976 filtered out",
+  "reason": "The regression expected relative source spellings; source-only topology emits canonical absolute operands. Corrected the regression to compare the resolved admitted source paths, retaining its explicit ParentDir rejection and physical canonical identity checks.",
+  "planner_source_before": "b57071015d3630f99f248cb1eafc8ace36e9db3b7cc7055b02842d294223a5bd",
+  "non_claim": "No qualified runner or proof success."
+}

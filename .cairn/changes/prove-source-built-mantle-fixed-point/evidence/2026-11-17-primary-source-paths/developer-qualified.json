@@ -1,0 +1,21 @@
+{
+  "task": 1716,
+  "result": "Success",
+  "source_base_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "developer_source": "/home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace",
+  "planner_blake3": "19a69880e0b071de85c17d41b0b530bbd9a2452abec7ed203bf4ab6a4c1b0323",
+  "planner_before_after_equal": true,
+  "test_results": [
+    "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 2976 filtered out; finished in 0.02s"
+  ],
+  "formatting": "cargo fmt --check -p mantle",
+  "strict_clippy": "cargo clippy --release --locked --offline -p mantle --bin mantle --no-deps -- -D warnings",
+  "build": "cargo build --release --locked --offline -p mantle --bin mantle",
+  "log": "developer-check-1716.log",
+  "log_blake3": "72a3d04624cccf3eb41b1f78e5832924d97da734ade755a0e01292a44ce8b722",
+  "log_transfer_equal": true,
+  "owner": "Source-only Rust planner and Mantle proof-inspection adapters",
+  "durable_capability": "Canonical primary target production with exact typed source-role/member comparison and complete inert primary-source coverage",
+  "scope": "Warm-target developer behavior only. Fresh published-source isolated qualification, real current-cohort primary-source agreement and complete independent review remain required before protected proof or native rows."
+}

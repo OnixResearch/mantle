@@ -1,0 +1,20 @@
+{
+  "task": 1717,
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH",
+    "--label",
+    "retained-primary-source-regression",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/inspect-retained-primary-source-20261117.sh"
+  ],
+  "source_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919",
+  "inspector_directory": "/home/brittonr/sbfp-20261113-berdKH/review-tools-primary-source-paths-20261117",
+  "scratch": "/home/brittonr/sbfp-20261113-berdKH/primary-source-admission-regression-b3a39a01-20261117",
+  "scope": "Inert data-level regression only, using preserved cold1714 source/cohort and no product execution or changed expected pins."
+}

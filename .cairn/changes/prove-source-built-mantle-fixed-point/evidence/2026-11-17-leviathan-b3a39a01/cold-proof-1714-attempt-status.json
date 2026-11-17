@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "51bdefb05b7324bc84953c4d5cc75e4c54f5c1d587e928a7c47c6731ba939630",
+  "blocker": "error: build failed\nsource-built Mantle actions: unit 0:path+native#snix-build@0.1.0:build-script-build:custom-build:build compiler does not consume its exact admitted primary source"
+}

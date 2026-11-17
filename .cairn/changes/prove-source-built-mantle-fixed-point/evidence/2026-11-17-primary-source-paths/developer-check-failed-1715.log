@@ -1,0 +1,64 @@
++ cd /home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117
++ export CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ CARGO_TARGET_DIR=/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace
++ export TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 CARGO_NET_OFFLINE=true
++ TMPDIR=/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace
++ XDG_CACHE_HOME=/home/brittonr/sbfp-20261113-berdKH/tooling-cache
++ CARGO_BUILD_JOBS=8
++ CARGO_INCREMENTAL=0
++ CARGO_NET_OFFLINE=true
++ unset RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER RUSTFLAGS CARGO_ENCODED_RUSTFLAGS RUSTC_BOOTSTRAP
++ export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf GIT_CONFIG_VALUE_0=ssh://git@github.com/ GIT_TERMINAL_PROMPT=0
++ GIT_CONFIG_NOSYSTEM=1
++ GIT_CONFIG_GLOBAL=/dev/null
++ GIT_CONFIG_COUNT=1
++ GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf
++ GIT_CONFIG_VALUE_0=ssh://git@github.com/
++ GIT_TERMINAL_PROMPT=0
++ /nix/store/lp2fcmbwq2g4yxmb91kmsrb1a09s5rf5-b3sum-1.8.7/bin/b3sum src/rust_plan.rs
+b57071015d3630f99f248cb1eafc8ace36e9db3b7cc7055b02842d294223a5bd  src/rust_plan.rs
++ /run/current-system/sw/bin/nix develop --profile /home/brittonr/sbfp-20261113-berdKH/tooling-profile-primary-source-paths-dev --builders '' --no-write-lock-file -c bash -c 'set -euo pipefail; unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; cargo fmt --check -p mantle; cargo test --release --locked --offline -p mantle --bin mantle rust_plan::tests::source_only_topology_ -- --test-threads=1; cargo clippy --release --locked --offline -p mantle --bin mantle --no-deps -- -D warnings; cargo build --release --locked --offline -p mantle --bin mantle'
+copying path '/nix/store/9ypl7656d54kj4c8s2q7lzzfj9z976ir-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/9qa4c94rswp05pi33cw8djmr481xfmsb-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/yizimqvgzppr2amr2ksbva0b37bqrci4-source' from 'https://nix-community.cachix.org'...
+copying path '/nix/store/d3w5r13zl953fricj30nr8zk9j9zl2rq-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/3x4zykgw2993df9a4l3dqcl7la79f4hf-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/77dbgds155bbz3vd3qywq1sii07i5ljs-source' from 'https://cache.nixos.org'...
+copying path '/nix/store/j4jaky3a4hpkw6wlpjbladhfz15mvxyb-source' from 'https://nix-community.cachix.org'...
+warning: /home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117/Cargo.toml: file `/home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117)
+    Finished `release` profile [optimized] target(s) in 4m 12s
+     Running unittests src/main.rs (/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace/release/deps/mantle-61d96712292a8e06)
+
+running 5 tests
+test rust_plan::tests::source_only_topology_binds_declared_host_before_resolving_host_dependencies ... ok
+test rust_plan::tests::source_only_topology_canonicalizes_primary_sources_from_parent_paths ... FAILED
+test rust_plan::tests::source_only_topology_orders_generated_build_script_before_consumer_without_compiler ... ok
+test rust_plan::tests::source_only_topology_rejects_cargo_oracle_and_missing_declared_source ... ok
+test rust_plan::tests::source_only_topology_uses_only_explicit_vendor_authority_without_overlay ... ok
+
+failures:
+
+---- rust_plan::tests::source_only_topology_canonicalizes_primary_sources_from_parent_paths stdout ----
+
+thread 'rust_plan::tests::source_only_topology_canonicalizes_primary_sources_from_parent_paths' (1091130) panicked at src/rust_plan.rs:20035:9:
+assertion `left == right` failed
+  left: {("path+native#nested@0.1.0", "custom-build"): "/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace/nix-shell.13gLst/.tmpGYdrxA/vendor/nested/build.rs", ("path+native#nested@0.1.0", "lib"): "/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace/nix-shell.13gLst/.tmpGYdrxA/vendor/nested/src/lib.rs", ("path+native#static-topology@0.1.0", "custom-build"): "/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace/nix-shell.13gLst/.tmpGYdrxA/build.rs", ("path+native#static-topology@0.1.0", "lib"): "/home/brittonr/sbfp-20261113-berdKH/canonical-tmp-869a461d-request-workspace/nix-shell.13gLst/.tmpGYdrxA/src/lib.rs"}
+ right: {("path+native#nested@0.1.0", "custom-build"): "vendor/nested/build.rs", ("path+native#nested@0.1.0", "lib"): "vendor/nested/src/lib.rs", ("path+native#static-topology@0.1.0", "custom-build"): "build.rs", ("path+native#static-topology@0.1.0", "lib"): "src/lib.rs"}
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    rust_plan::tests::source_only_topology_canonicalizes_primary_sources_from_parent_paths
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 2976 filtered out; finished in 0.12s
+
+error: test failed, to rerun pass `-p mantle --bin mantle`
++ status=101
++ '[' 101 -eq 0 ']'
++ printf 'primary_source_developer_exit=%s\n' 101
+primary_source_developer_exit=101
++ printf '%s\n' 101
++ exit 101

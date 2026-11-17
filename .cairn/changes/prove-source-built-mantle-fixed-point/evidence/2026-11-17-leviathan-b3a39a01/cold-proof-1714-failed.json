@@ -1,0 +1,15 @@
+{
+  "task": 1714,
+  "result": {
+    "Failed": 1
+  },
+  "start": "2026-11-17T08:14:12.416245669-05:00",
+  "end": "2026-11-17T11:55:32.915947078-05:00",
+  "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-b3a39a01-immutable-source-gpt6sol",
+  "preserved_attempt": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-b3a39a01-immutable-source-gpt6sol/.proof.source-built-fixed-point-staging-3988162",
+  "plan_digest_blake3": "51bdefb05b7324bc84953c4d5cc75e4c54f5c1d587e928a7c47c6731ba939630",
+  "blocker": "source-built Mantle actions: unit 0:path+native#snix-build@0.1.0:build-script-build:custom-build:build compiler does not consume its exact admitted primary source",
+  "success_aliases_absent_after": true,
+  "verified_v2_receipt": false,
+  "scope": "Actual failed closed cold attempt only; no provider/stage success, fixed point, signed adoption, native rows or release accepted."
+}

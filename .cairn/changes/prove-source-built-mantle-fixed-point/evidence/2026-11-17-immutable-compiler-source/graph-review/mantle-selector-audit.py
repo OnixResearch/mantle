@@ -322,17 +322,18 @@ def plain_cfg_features(arguments):
     return selected
 
 
-def source_plan_operand(value, roots):
+def source_plan_operand(value, roots, *, exact=False):
     if not isinstance(value, str) or not value or '\x00' in value:
         raise ValueError('missing original plan source operand')
     mantle = roots['mantle-source']
     vendor = roots['vendor-inputs']
     path = Path(value)
-    if path.is_relative_to('/mantle/release/source'):
+    if not exact and path.is_relative_to('/mantle/release/source'):
         path = mantle / path.relative_to('/mantle/release/source')
     elif not path.is_absolute():
         path = mantle / path
-    path = Path(posixpath.normpath(str(path)))
+    if not exact:
+        path = Path(posixpath.normpath(str(path)))
     for role, root in (('vendor-inputs', vendor), ('mantle-source', mantle)):
         root = Path(posixpath.normpath(str(root)))
         if path.is_relative_to(root):
@@ -425,10 +426,11 @@ def unit_plan_facts(plan_documents, recipes):
                                 not arg.startswith('-') and arg.endswith('.rs')]
                 if len(primary_args) != 1:
                     raise ValueError('planner has no unique primary source')
-                primary_role, primary_path = source_plan_operand(primary_args[0], roots)
+                owned_role, owned_path = source_plan_operand(primary_args[0], roots)
                 package_prefix = package_path.rstrip('/') + '/' if package_path else ''
-                if primary_role != role or not primary_path.startswith(package_prefix):
+                if owned_role != role or not owned_path.startswith(package_prefix):
                     raise ValueError('planner primary source differs from original package')
+                primary_role, primary_path = source_plan_operand(primary_args[0], roots, exact=True)
                 facts[stage][index] = {'unit_id': unit_id, 'package_id': unit.get('package_id'),
                                        'target_kind': unit.get('target_kind'),
                                        'selected_features': features,
@@ -485,6 +487,27 @@ def compiler_static_arguments(stage, compile_step, steps):
                                      'producer_step': invocation_id, 'template_step': template_id}, document
 
 
+def exact_primary_source_consumed(arguments, inputs, fact):
+    """Mirror validate_primary_source's single typed input and lexical Path equality."""
+    if not isinstance(arguments, list) or not isinstance(inputs, dict) or not isinstance(fact, dict):
+        return False
+    role, expected = fact.get('primary_role'), fact.get('primary_path')
+    if not isinstance(role, str) or not isinstance(expected, str):
+        return False
+    for word in arguments:
+        if not part(word, 'input'):
+            continue
+        operand = word['parts'][0]
+        name, member = operand.get('name'), operand.get('path')
+        reference = inputs.get(name) if isinstance(name, str) else None
+        if not isinstance(reference, dict) or reference.get('kind') != 'source' or reference.get('role') != role:
+            continue
+        prefix = reference.get('path')
+        if isinstance(prefix, str) and isinstance(member, str) and Path(prefix) / member == Path(expected):
+            return True
+    return False
+
+
 def audit_data(recipes, unit_facts=None, source_member=None):
     """Audit actual decoded recipes; facts must be independently source-derived.
 
@@ -497,6 +520,7 @@ def audit_data(recipes, unit_facts=None, source_member=None):
     result = {'per_stage': {}, 'coverage': {name: counters() for name in ('package_exclusions', 'feature_environment', 'feature_cfg')},
               'diagnostics': [], 'uncovered_obligations': [], 'symbolic_contracts': [],
               'fact_provenance': 'independent source-derived unit facts required; recipe selectors never stand in for facts'}
+    result['coverage']['primary_sources'] = counters()
 
     def observe(stage, category, identity, reason=None, missing=False):
         count = result['coverage'][category]
@@ -693,6 +717,11 @@ def audit_data(recipes, unit_facts=None, source_member=None):
                            fact.get('package_role') == source_role and fact.get('package_path') == source_path and
                            len(primary) == 1 and primary[0].get('name') == fact.get('primary_role') and
                            primary[0].get('path') == fact.get('primary_path'))))
+            primary_consumed = exact_primary_source_consumed(args, inputs, fact)
+            if not isinstance(fact, dict) or projection_error is not None:
+                observe(stage, 'primary_sources', index, projection_error or 'source-planned primary operand absent', missing=True)
+            else:
+                observe(stage, 'primary_sources', index, None if primary_consumed else 'compiler does not consume its exact admitted primary source')
             validated_facts[index] = fact if fact_valid else None
             if fact_valid and projection_error is None:
                 cfg_reason = None if not malformed and collections.Counter(selected) == collections.Counter(fact['selected_features']) else 'compile cfg differs from independently bound selected unit features or is malformed'
@@ -732,6 +761,7 @@ def audit_data(recipes, unit_facts=None, source_member=None):
                 observe(stage, 'feature_environment', index, 'nickel source compile has no original script', missing=True)
             local['unit_evidence'].append({'ordinal': index,
                                            'source_package': original, 'source_owned_primary': original_owned,
+                                           'exact_primary_source_consumed': primary_consumed,
                                            'fact_available': fact_valid, 'fact_unit_id': fact.get('unit_id') if fact_valid else None,
                                            'compiler_selector_projection': projection,
                                            'projection_error': projection_error,
@@ -864,6 +894,7 @@ def main():
     source_identity = immutable_root_source_check(plan_documents, source_root, subject['inert_tools']['b3sum'])
     consumer_names = ('src/source_built_mantle_programs_graph.rs', 'src/source_built_mantle_programs.rs',
                       'src/source_built_mantle_programs_metadata.rs', 'src/source_built_mantle_programs_metadata_helper.rs',
+                      'src/source_built_fixed_point_mantle_actions.rs',
                       'src/rust_plan.rs', 'crates/mantle-rust-plan-core/src/features.rs', 'src/source_built_recipe.rs')
     consumers = {name: {'path': name, 'size_bytes': (source / name).stat().st_size, 'blake3': g['b3'](source / name)}
                  for name in consumer_names}

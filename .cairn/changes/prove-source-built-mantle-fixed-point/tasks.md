@@ -1323,3 +1323,36 @@ successful current proof, verified v2 receipt and reviewed adoption report.
 These static acceptances do not complete I3-I5, proof-dependent V2/V3 or any
 native row.
 
+## Cold1714 primary-source rejection and producer correction (2026-11-17)
+
+Actual cold task1714 failed closed on
+`0:path+native#snix-build@0.1.0:build-script-build:custom-build:build`:
+the compiler did not consume its exact admitted primary source. Attempt
+`51bdefb05b7324bc84953c4d5cc75e4c54f5c1d587e928a7c47c6731ba939630`
+and its failed staging tree are retained. Successful aliases remain absent;
+no provider/stage success, verified v2 receipt or native row is accepted.
+
+The planner retained accumulated manifest parent segments, while recipe
+lowering used the canonical `vendor/snix-build/build.rs` typed source member.
+`push_native_target` now canonicalizes readable primary files at their common
+producer. Runtime lexical admission, source hashing, independent topology and
+semantic-unit equality remain unchanged. ADR0159 records the boundary.
+
+The inert inspector no longer normalizes primary operands into agreement.
+Retained-data task1717 visits all 2,098 compiler obligations: 1,972 are covered,
+126 invalid and none uncovered. It reproduces the actual snix-build failure,
+confirms the same physical file, and rejects the unequal lexical operands.
+Two valid typed-source cases and five missing/untyped/concatenated/foreign/wrong
+member cases pass their assertions. Exact transcripts and report transport
+parity are retained under `evidence/2026-11-17-primary-source-paths/`.
+
+Developer task1715 passed four existing source-only tests but rejected the new
+regression's incidental relative-path expectation. The corrected regression
+compares admitted physical source identities and still rejects every parent
+component. Corrected task1716 passed all five focused tests, formatting, strict
+Clippy and the release binary build with unchanged planner bytes. New source
+publication, separate absent-target qualifications, complete regeneration and
+both full fresh independent reviews remain required. The regenerated snix-build
+unit must pass exact primary comparison before a protected retry; old b3a39a01
+reviews cannot authorize changed-source execution.
+

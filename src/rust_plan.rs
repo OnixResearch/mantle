@@ -6192,15 +6192,12 @@ fn push_native_target(inputs: PushNativeTargetInputs<'_>) {
         path,
         edition,
     } = inputs;
-    let readable = path.is_file();
+    let source = path.canonicalize().ok().filter(|source| source.is_file());
+    let readable = source.is_some();
     targets.push(mantle_rust_plan_core::NativeTargetCandidate {
         name: name.to_string(),
         kind: kind.to_string(),
-        source_path: if readable {
-            normalize_path_string(path)
-        } else {
-            String::new()
-        },
+        source_path: source.as_deref().map(normalize_path_string).unwrap_or_default(),
         edition: edition.to_string(),
         source_failure_display: (!readable).then(|| path.display().to_string()),
     });
@@ -19998,6 +19995,52 @@ esac
             no_cargo_oracle: true,
             ..options(root)
         }
+    }
+
+    #[test]
+    fn source_only_topology_canonicalizes_primary_sources_from_parent_paths() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let options = source_only_topology_fixture(&root);
+        std::fs::create_dir_all(root.join("vendor/nested/src")).unwrap();
+        std::fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"static-topology\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"src/../build.rs\"\n[lib]\npath = \"src/../src/lib.rs\"\n[dependencies]\nnested = { path = \"src/../vendor/nested\" }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("vendor/nested/Cargo.toml"),
+            "[package]\nname = \"nested\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"src/../build.rs\"\n[lib]\npath = \"src/../src/lib.rs\"\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("vendor/nested/src/lib.rs"), "pub const VALUE: u32 = 1;\n").unwrap();
+        std::fs::write(root.join("vendor/nested/build.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(
+            root.join("Cargo.lock"),
+            "version = 4\n\n[[package]]\nname = \"static-topology\"\nversion = \"0.1.0\"\ndependencies = [\"nested\"]\n\n[[package]]\nname = \"nested\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        let topology = plan_cargo_free_unit_topology(&options, &[]).unwrap();
+        let primary_sources = topology
+            .effects
+            .iter()
+            .map(|effect| {
+                let source = rustc_source_path(&effect.arguments).unwrap();
+                assert!(!source.components().any(|part| matches!(part, std::path::Component::ParentDir)));
+                let materialized = root.join(&source);
+                assert_eq!(materialized.canonicalize().unwrap(), materialized);
+                ((effect.package_id.as_str(), effect.target_kind.as_str()), materialized)
+            })
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            primary_sources,
+            BTreeMap::from([
+                (("path+native#nested@0.1.0", "custom-build"), root.join("vendor/nested/build.rs")),
+                (("path+native#nested@0.1.0", "lib"), root.join("vendor/nested/src/lib.rs")),
+                (("path+native#static-topology@0.1.0", "custom-build"), root.join("build.rs")),
+                (("path+native#static-topology@0.1.0", "lib"), root.join("src/lib.rs")),
+            ])
+        );
     }
 
     #[test]

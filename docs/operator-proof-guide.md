@@ -308,6 +308,15 @@ Cargo unit identities. A selector in the compiler source tree is not a ready
 cold-proof input. Refreshing only the Mantle record does not prepare the program
 record; regenerate old expanded cohorts instead of reusing their reviews.
 
+Primary target files must be canonicalized by the source-only planner before
+recipe lowering. Runtime still compares the independently planned primary
+source with its exact typed source-role/member input; parent-directory aliases
+are not normalized into acceptance. The inert selector report must account for
+every selected compiler in `primary_sources`, with zero invalid or uncovered
+obligations. Regenerate old noncanonical plans and repeat complete review;
+same-file resolution alone is not exact admission
+([ADR 0159](../adr/0159-canonicalize-primary-sources-before-recipe-lowering.md)).
+
 The v2 core receipt's `source_blake3` identifies the declared Mantle source
 record, not the aggregate source-authority-set digest. The plan and receipt
 extension retain `source_authority_digest_blake3` for the complete seven-role

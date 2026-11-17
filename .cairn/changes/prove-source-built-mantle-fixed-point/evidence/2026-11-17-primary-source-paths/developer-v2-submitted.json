@@ -1,0 +1,21 @@
+{
+  "task": 1716,
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117",
+    "--label",
+    "primary-source-paths-developer-v2",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/check-primary-source-paths-dev-20261117-v2.sh"
+  ],
+  "source_base_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "planner_bytes_blake3": "19a69880e0b071de85c17d41b0b530bbd9a2452abec7ed203bf4ab6a4c1b0323",
+  "developer_source": "/home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace",
+  "transfer_equal": true,
+  "scope": "Warm-target developer regressions and strict Clippy/build only; no frozen isolated qualification or proof."
+}

@@ -1,0 +1,111 @@
+{
+  "actual_failed_unit": {
+    "compiler_input": {
+      "kind": "source",
+      "path": "",
+      "role": "mantle-source"
+    },
+    "compiler_source_file_blake3": "8329a8a31733aa168800e798fcadd32589cdf946dce86549249f5be7585184ec",
+    "compiler_source_member": "vendor/snix-build/build.rs",
+    "compiler_word": {
+      "parts": [
+        {
+          "kind": "input",
+          "name": "mantle-source",
+          "path": "vendor/snix-build/build.rs"
+        }
+      ]
+    },
+    "exact_admission_rejected": true,
+    "ordinal": "00000",
+    "planned_primary_member_unmodified": "crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build/build.rs",
+    "planned_primary_role": "mantle-source",
+    "same_physical_file": true,
+    "unit_id": "0:path+native#snix-build@0.1.0:build-script-build:custom-build:build"
+  },
+  "all_assertions_passed": true,
+  "inspector_blake3": "4a29b0c42a50f257f59e9c7187f37d2440911ae263ebd684c4925f6cd6522b3b",
+  "predicate_cases": [
+    {
+      "accepted": true,
+      "case": "actual_canonical_primary"
+    },
+    {
+      "case": "missing_primary_word",
+      "rejected": true
+    },
+    {
+      "case": "literal_instead_of_typed_input",
+      "rejected": true
+    },
+    {
+      "case": "concatenated_instead_of_single_input",
+      "rejected": true
+    },
+    {
+      "case": "foreign_source_role",
+      "rejected": true
+    },
+    {
+      "case": "different_existing_source_member",
+      "rejected": true
+    },
+    {
+      "accepted": true,
+      "case": "declared_source_prefix_and_member_join"
+    }
+  ],
+  "retained_data_per_stage_primary_sources": {
+    "mantle-stage1": {
+      "covered": 986,
+      "invalid": 63,
+      "total": 1049,
+      "uncovered": 0
+    },
+    "mantle-stage2": {
+      "covered": 986,
+      "invalid": 63,
+      "total": 1049,
+      "uncovered": 0
+    }
+  },
+  "retained_data_primary_source_coverage": {
+    "covered": 1972,
+    "invalid": 126,
+    "total": 2098,
+    "uncovered": 0
+  },
+  "scope": "Inert retained cold1714 data and in-memory operand mutations only. No source/cohort/pin changes, recipe/product/helper/compiler/provider/controller execution, qualification or proof acceptance.",
+  "source_plan_projections": {
+    "mantle-stage1": {
+      "mapped_compile_units": 1049,
+      "metadata_identity_fallbacks": 2,
+      "orphan_derivations": 0,
+      "plan_derivations_total": 1047,
+      "source_plan_digest_blake3": "503bc38c6bdab2320d439c1fe0f8b0e678738431d1162fc7319837dc5865525b",
+      "uncovered": [],
+      "uncovered_count": 0
+    },
+    "mantle-stage2": {
+      "mapped_compile_units": 1049,
+      "metadata_identity_fallbacks": 2,
+      "orphan_derivations": 0,
+      "plan_derivations_total": 1047,
+      "source_plan_digest_blake3": "f185790ae9abb10c55568f9a4613d890be37a97af665c07d8016233242aee9c9",
+      "uncovered": [],
+      "uncovered_count": 0
+    }
+  },
+  "source_plans": {
+    "mantle-stage1": {
+      "blake3": "38afff9234271f0dad44777f95e25a52b99c1928266964f3b425282b3d8a2a58",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source/program-sources/source-built-mantle-programs/bootstrap/source-built/mantle-stage1.unit-plan.json"
+    },
+    "mantle-stage2": {
+      "blake3": "016d822abc39cb6b88530863b2b1b1e7ab237d59c7a9156bd099c0043ad5e967",
+      "path": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source/program-sources/source-built-mantle-programs/bootstrap/source-built/mantle-stage2.unit-plan.json"
+    }
+  },
+  "source_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "subject_blake3": "d28fbde59ae0de59479155f31a9d133c991b608ed7f7969a36dcd8c878557919"
+}

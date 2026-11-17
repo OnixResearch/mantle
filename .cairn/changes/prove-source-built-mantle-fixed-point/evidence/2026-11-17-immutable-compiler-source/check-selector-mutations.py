@@ -118,6 +118,42 @@ root_key = 'build-script:' + unit_id
 saved_root = recipe['semantic_roots'].pop(root_key)
 try: rejected('missing-source-selected-build-script-root', 'feature_environment')
 finally: recipe['semantic_roots'][root_key] = saved_root
+primary_index = next(index for index, fact in facts[stages[0]].items()
+                     if fact['package_id'] == 'path+native#snix-build@0.1.0' and fact['target_kind'] == 'custom-build')
+primary_compile = next(step for step in recipe['steps'] if step['id'] == f'unit-{primary_index}-compile')
+primary_arguments = primary_compile['operation']['arguments']
+primary_fact = facts[stages[0]][primary_index]
+primary_word_index = next(i for i, word in enumerate(primary_arguments)
+                          if a['exact_primary_source_consumed']([word], primary_compile['inputs'], primary_fact))
+primary_word = primary_arguments[primary_word_index]
+primary_arguments[primary_word_index] = {'parts': [{'kind': 'literal', 'text': primary_fact['primary_path']}]}
+try: rejected('literal-primary-source-has-no-input-authority', 'primary_sources')
+finally: primary_arguments[primary_word_index] = primary_word
+primary_arguments[primary_word_index] = {'parts': [*primary_word['parts'], {'kind': 'literal', 'text': ''}]}
+try: rejected('concatenated-primary-source-is-not-exact-input', 'primary_sources')
+finally: primary_arguments[primary_word_index] = primary_word
+primary_name = primary_word['parts'][0]['name']
+primary_reference = primary_compile['inputs'][primary_name]
+primary_compile['inputs'][primary_name] = dict(primary_reference, role='vendor-inputs')
+try: rejected('foreign-primary-source-role', 'primary_sources')
+finally: primary_compile['inputs'][primary_name] = primary_reference
+planned_unit = next(unit for unit in documents[stages[0]]['unit_graph']['derivations']
+                    if unit['unit_id'] == primary_fact['unit_id'])
+planned_arguments = planned_unit['derivation']['args']
+planned_primary_index = next(i for i, arg in enumerate(planned_arguments) if not arg.startswith('-') and arg.endswith('.rs'))
+planned_primary = planned_arguments[planned_primary_index]
+planned_path = PurePosixPath(planned_primary)
+assert planned_path.parent.name, 'actual snix-build primary must identify its owning source directory'
+planned_arguments[planned_primary_index] = (planned_path.parent / '..' / planned_path.parent.name / planned_path.name).as_posix()
+saved_facts = facts
+try:
+    facts, mutated_projection = a['unit_plan_facts'](documents, recipes)
+    assert not any(row.get('uncovered_count', len(row.get('uncovered', []))) for row in mutated_projection.values())
+    assert '..' in PurePosixPath(facts[stages[0]][primary_index]['primary_path']).parts
+    rejected('source-plan-parent-path-alias-cannot-pass-as-canonical-primary', 'primary_sources')
+finally:
+    facts = saved_facts
+    planned_arguments[planned_primary_index] = planned_primary
 record['negative_cases'] = cases
 record['all_assertions_passed'] = True
 with output.open('x') as stream: json.dump(record, stream, indent=2); stream.write('\n')

@@ -1,0 +1,1173 @@
+{
+  "recipe": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-b3a39a01-immutable-source/program-sources/source-built-mantle-programs/bootstrap/source-built/mantle-stage1.json",
+  "recipe_blake3": "8366b907527ad0bc18c0ab59005cfaf05a0a5649b28422e8fd47aedb809dcf02",
+  "source_roots": {
+    "stagex-seed": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/stagex-seed/hex0-seed",
+    "stagex-lineage": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/stagex-lineage/stagex-transition-lineage.json",
+    "stagex-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/stagex-source-bundle/stagex-source-closure.json",
+    "native-source-bundle": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/native-source-authority/native-source-closure.json",
+    "rust-source-archive-set": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/rust-source-archives",
+    "mantle-source": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/mantle-source",
+    "vendor-inputs": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/vendor-deps"
+  },
+  "unit_count": 2,
+  "units": [
+    {
+      "unit_id": "0:path+native#snix-build@0.1.0:build-script-build:custom-build:build",
+      "package_id": "path+native#snix-build@0.1.0",
+      "target_name": "build-script-build",
+      "target_kind": "custom-build",
+      "execution_kind": "host",
+      "selected_triple": "x86_64-unknown-linux-musl",
+      "rustc_metadata_hash": "f5365eeafec578ed",
+      "crate_types": [
+        "custom-build"
+      ],
+      "mode": "build",
+      "profile": "dev",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "965e31c5be766eb8d799265e9af2e2f7b20c1da04a88eba9f20dfb6fb6db7903"
+      },
+      "dependency_artifacts": [],
+      "consumed_host_artifacts": [],
+      "metadata_dependencies": [],
+      "generated_metadata": {
+        "out_dir": "host-metadata:path+native#snix-build@0.1.0:build-script-build:OUT_DIR",
+        "rustc_cfg": [],
+        "rustc_env": {},
+        "rustc_link_lib": [],
+        "rustc_link_search": [],
+        "rerun_if_changed": [],
+        "metadata": {},
+        "digest_blake3": "fda77b1df94f634ba4b693ad9c75f9e148cdfd525ff6854642ddd08167b3a719"
+      },
+      "derivation": {
+        "name": "rust-unit-0-build_script_build",
+        "builder": "rustc",
+        "system": "x86_64-linux",
+        "args": [
+          "--crate-name",
+          "build_script_build",
+          "--edition",
+          "2024",
+          "crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build/build.rs",
+          "--emit=link",
+          "--crate-type",
+          "bin",
+          "-C",
+          "opt-level=0",
+          "-C",
+          "debuginfo=0",
+          "-C",
+          "debug-assertions=true",
+          "-C",
+          "overflow-checks=true",
+          "-C",
+          "codegen-units=256",
+          "-C",
+          "metadata=f5365eeafec578ed",
+          "--cfg",
+          "feature=\"default\"",
+          "--remap-path-prefix",
+          "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/cargo-free-fixed-point/stage1/recipe=/mantle/release/execution",
+          "--remap-path-prefix",
+          "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/mantle-source=/mantle/release/source"
+        ],
+        "outputs": [
+          "out"
+        ],
+        "env": {
+          "CARGO_MANIFEST_DIR": "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/mantle-source/crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build",
+          "CARGO_MANIFEST_LINKS": "",
+          "CARGO_PKG_AUTHORS": "",
+          "CARGO_PKG_DESCRIPTION": "",
+          "CARGO_PKG_HOMEPAGE": "",
+          "CARGO_PKG_LICENSE": "",
+          "CARGO_PKG_LICENSE_FILE": "",
+          "CARGO_PKG_NAME": "snix-build",
+          "CARGO_PKG_README": "",
+          "CARGO_PKG_REPOSITORY": "",
+          "CARGO_PKG_RUST_VERSION": "",
+          "CARGO_PKG_VERSION": "0.1.0",
+          "CARGO_PKG_VERSION_MAJOR": "0",
+          "CARGO_PKG_VERSION_MINOR": "1",
+          "CARGO_PKG_VERSION_PATCH": "0",
+          "CARGO_PKG_VERSION_PRE": "",
+          "CRATE_KIND": "custom-build",
+          "HOST": "x86_64-unknown-linux-musl",
+          "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE": "true",
+          "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE_DUAL_USE": "false",
+          "MANTLE_CARGO_PROFILE_DUAL_HOST_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":true,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"true\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}",
+          "MANTLE_CARGO_PROFILE_HOST_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":false,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"false\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}",
+          "MANTLE_CARGO_PROFILE_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":false,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"false\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}",
+          "MANTLE_RUST_UNIT_EXECUTION_KIND": "host",
+          "MODE": "build",
+          "PACKAGE_ID": "path+native#snix-build@0.1.0",
+          "PROFILE": "dev",
+          "SNIX_BUILD_SANDBOX_SHELL": "/mantle/release/provider/sandbox-shell",
+          "SOURCE_CLOSURE_DIGEST": "bdc66a7ee19a22c049907c974f8b7184eda8f1943b46edb80d2aad0bf9beb2f9",
+          "TARGET": "x86_64-unknown-linux-musl"
+        },
+        "inputs": [
+          "source:path+native#snix-build@0.1.0:965e31c5be766eb8d799265e9af2e2f7b20c1da04a88eba9f20dfb6fb6db7903"
+        ],
+        "addressing_mode": "content-addressed"
+      },
+      "rustc_args_digest_blake3": "a600253fcdc87ef0ad585d09b2fb30cefd3af202d7f9d3b5739c9f2c00f67bcd"
+    },
+    {
+      "unit_id": "native:4eb04807244b864682d2659c765dc290e83cff78e612fcbccb51f4dd2d0ceb49:path+native#snix-build@0.1.0:snix-build:lib:build",
+      "package_id": "path+native#snix-build@0.1.0",
+      "target_name": "snix-build",
+      "target_kind": "lib",
+      "execution_kind": "target",
+      "selected_triple": "x86_64-unknown-linux-musl",
+      "rustc_metadata_hash": "9f6e79ce5543b4e9",
+      "crate_types": [
+        "lib"
+      ],
+      "mode": "build",
+      "profile": "dev",
+      "source_digest": {
+        "algorithm": "blake3-tree-v1",
+        "value": "965e31c5be766eb8d799265e9af2e2f7b20c1da04a88eba9f20dfb6fb6db7903"
+      },
+      "dependency_artifacts": [
+        {
+          "package_id": "path+native#snix-castore@0.1.0",
+          "name": "snix_castore",
+          "artifact": "artifact:path+native#snix-castore@0.1.0:snix_castore"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
+          "name": "anyhow",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102:anyhow"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "name": "blake3",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5:blake3"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1",
+          "name": "bstr",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1:bstr"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1",
+          "name": "bytes",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1:bytes"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#clap@4.6.0",
+          "name": "clap",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#clap@4.6.0:clap"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#data-encoding@2.10.0",
+          "name": "data_encoding",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#data-encoding@2.10.0:data_encoding"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#futures@0.3.32",
+          "name": "futures",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#futures@0.3.32:futures"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#irpc@0.13.0",
+          "name": "irpc",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#irpc@0.13.0:irpc"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#itertools@0.12.1",
+          "name": "itertools",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#itertools@0.12.1:itertools"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
+          "name": "mimalloc",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48:mimalloc"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#nix@0.29.0",
+          "name": "nix",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#nix@0.29.0:nix"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#oci-spec@0.7.1",
+          "name": "oci_spec",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#oci-spec@0.7.1:oci_spec"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#postcard@1.1.3",
+          "name": "postcard",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#postcard@1.1.3:postcard"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "name": "serde",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228:serde"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_bytes@0.11.19",
+          "name": "serde_bytes",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#serde_bytes@0.11.19:serde_bytes"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
+          "name": "serde_json",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149:serde_json"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
+          "name": "tempfile",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0:tempfile"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
+          "name": "thiserror",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18:thiserror"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.51.0",
+          "name": "tokio",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#tokio@1.51.0:tokio"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
+          "name": "tracing",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44:tracing"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#typed-builder@0.22.0",
+          "name": "typed_builder",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#typed-builder@0.22.0:typed_builder"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#url@2.5.8",
+          "name": "url",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#url@2.5.8:url"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.0",
+          "name": "uuid",
+          "artifact": "artifact:registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.0:uuid"
+        }
+      ],
+      "consumed_host_artifacts": [
+        {
+          "package_id": "path+native#snix-build@0.1.0",
+          "target_name": "build-script-build",
+          "target_kind": "custom-build",
+          "producer_unit_id": "0:path+native#snix-build@0.1.0:build-script-build:custom-build:build",
+          "artifact": "host-artifact:0:custom-build:build_script_build",
+          "metadata_digest_blake3": "fda77b1df94f634ba4b693ad9c75f9e148cdfd525ff6854642ddd08167b3a719"
+        },
+        {
+          "package_id": "registry+https://github.com/rust-lang/crates.io-index#async-trait@0.1.89",
+          "target_name": "async_trait",
+          "target_kind": "proc-macro",
+          "producer_unit_id": "11:registry+https://github.com/rust-lang/crates.io-index#async-trait@0.1.89:async_trait:proc-macro:build",
+          "artifact": "host-artifact:11:proc-macro:async_trait",
+          "metadata_digest_blake3": null
+        }
+      ],
+      "metadata_dependencies": [],
+      "generated_metadata": null,
+      "derivation": {
+        "name": "rust-unit-0-snix_build",
+        "builder": "rustc",
+        "system": "x86_64-linux",
+        "args": [
+          "--crate-name",
+          "snix_build",
+          "--edition",
+          "2024",
+          "crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build/src/lib.rs",
+          "--emit=link",
+          "--crate-type",
+          "lib",
+          "-C",
+          "opt-level=0",
+          "-C",
+          "debuginfo=2",
+          "-C",
+          "debug-assertions=true",
+          "-C",
+          "overflow-checks=true",
+          "-C",
+          "codegen-units=256",
+          "-C",
+          "metadata=9f6e79ce5543b4e9",
+          "--cfg",
+          "feature=\"default\"",
+          "--extern",
+          "snix_castore=artifact:path+native#snix-castore@0.1.0:snix_castore",
+          "--extern",
+          "anyhow=artifact:registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102:anyhow",
+          "--extern",
+          "blake3=artifact:registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5:blake3",
+          "--extern",
+          "bstr=artifact:registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1:bstr",
+          "--extern",
+          "bytes=artifact:registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1:bytes",
+          "--extern",
+          "clap=artifact:registry+https://github.com/rust-lang/crates.io-index#clap@4.6.0:clap",
+          "--extern",
+          "data_encoding=artifact:registry+https://github.com/rust-lang/crates.io-index#data-encoding@2.10.0:data_encoding",
+          "--extern",
+          "futures=artifact:registry+https://github.com/rust-lang/crates.io-index#futures@0.3.32:futures",
+          "--extern",
+          "irpc=artifact:registry+https://github.com/rust-lang/crates.io-index#irpc@0.13.0:irpc",
+          "--extern",
+          "itertools=artifact:registry+https://github.com/rust-lang/crates.io-index#itertools@0.12.1:itertools",
+          "--extern",
+          "mimalloc=artifact:registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48:mimalloc",
+          "--extern",
+          "nix=artifact:registry+https://github.com/rust-lang/crates.io-index#nix@0.29.0:nix",
+          "--extern",
+          "oci_spec=artifact:registry+https://github.com/rust-lang/crates.io-index#oci-spec@0.7.1:oci_spec",
+          "--extern",
+          "postcard=artifact:registry+https://github.com/rust-lang/crates.io-index#postcard@1.1.3:postcard",
+          "--extern",
+          "serde=artifact:registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228:serde",
+          "--extern",
+          "serde_bytes=artifact:registry+https://github.com/rust-lang/crates.io-index#serde_bytes@0.11.19:serde_bytes",
+          "--extern",
+          "serde_json=artifact:registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149:serde_json",
+          "--extern",
+          "tempfile=artifact:registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0:tempfile",
+          "--extern",
+          "thiserror=artifact:registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18:thiserror",
+          "--extern",
+          "tokio=artifact:registry+https://github.com/rust-lang/crates.io-index#tokio@1.51.0:tokio",
+          "--extern",
+          "tracing=artifact:registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44:tracing",
+          "--extern",
+          "typed_builder=artifact:registry+https://github.com/rust-lang/crates.io-index#typed-builder@0.22.0:typed_builder",
+          "--extern",
+          "url=artifact:registry+https://github.com/rust-lang/crates.io-index#url@2.5.8:url",
+          "--extern",
+          "uuid=artifact:registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.0:uuid",
+          "--remap-path-prefix",
+          "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/cargo-free-fixed-point/stage1/recipe=/mantle/release/execution",
+          "--remap-path-prefix",
+          "/home/brittonr/sbfp-20261113-berdKH/.prepared-cohort-b3a39a01-immutable-source.source-built-fixed-point-staging-1229833/inputs/mantle-source=/mantle/release/source"
+        ],
+        "outputs": [
+          "out"
+        ],
+        "env": {
+          "CARGO_MANIFEST_DIR": "/mantle/release/source/crates/crunch-pipeline/../crunch-build/../crunch-rustc-wrapper/../crunch-rust-cache/../crunch-store/../../vendor/snix-build",
+          "CARGO_MANIFEST_LINKS": "",
+          "CARGO_PKG_AUTHORS": "",
+          "CARGO_PKG_DESCRIPTION": "",
+          "CARGO_PKG_HOMEPAGE": "",
+          "CARGO_PKG_LICENSE": "",
+          "CARGO_PKG_LICENSE_FILE": "",
+          "CARGO_PKG_NAME": "snix-build",
+          "CARGO_PKG_README": "",
+          "CARGO_PKG_REPOSITORY": "",
+          "CARGO_PKG_RUST_VERSION": "",
+          "CARGO_PKG_VERSION": "0.1.0",
+          "CARGO_PKG_VERSION_MAJOR": "0",
+          "CARGO_PKG_VERSION_MINOR": "1",
+          "CARGO_PKG_VERSION_PATCH": "0",
+          "CARGO_PKG_VERSION_PRE": "",
+          "CRATE_KIND": "lib",
+          "HOST": "x86_64-unknown-linux-musl",
+          "MANTLE_CARGO_PROFILE_DUAL_HOST_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":true,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"true\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}",
+          "MANTLE_CARGO_PROFILE_HOST_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":false,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"false\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}",
+          "MANTLE_CARGO_PROFILE_POLICY": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false}",
+          "MANTLE_RUST_UNIT_EXECUTION_KIND": "target",
+          "MODE": "build",
+          "PACKAGE_ID": "path+native#snix-build@0.1.0",
+          "PROFILE": "dev",
+          "SNIX_BUILD_SANDBOX_SHELL": "/mantle/release/provider/sandbox-shell",
+          "SOURCE_CLOSURE_DIGEST": "bdc66a7ee19a22c049907c974f8b7184eda8f1943b46edb80d2aad0bf9beb2f9",
+          "TARGET": "x86_64-unknown-linux-musl"
+        },
+        "inputs": [
+          "artifact:path+native#snix-castore@0.1.0:snix_castore",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102:anyhow",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5:blake3",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#bstr@1.12.1:bstr",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1:bytes",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#clap@4.6.0:clap",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#data-encoding@2.10.0:data_encoding",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#futures@0.3.32:futures",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#irpc@0.13.0:irpc",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#itertools@0.12.1:itertools",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48:mimalloc",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#nix@0.29.0:nix",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#oci-spec@0.7.1:oci_spec",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#postcard@1.1.3:postcard",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228:serde",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#serde_bytes@0.11.19:serde_bytes",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149:serde_json",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0:tempfile",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18:thiserror",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#tokio@1.51.0:tokio",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44:tracing",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#typed-builder@0.22.0:typed_builder",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#url@2.5.8:url",
+          "artifact:registry+https://github.com/rust-lang/crates.io-index#uuid@1.23.0:uuid",
+          "host-artifact:0:custom-build:build_script_build",
+          "host-artifact:11:proc-macro:async_trait",
+          "source:path+native#snix-build@0.1.0:965e31c5be766eb8d799265e9af2e2f7b20c1da04a88eba9f20dfb6fb6db7903"
+        ],
+        "addressing_mode": "content-addressed"
+      },
+      "rustc_args_digest_blake3": "f0c434693c5e900f3675eaf5fa23ba0d90d9f3057b809ad17515a23a32b50fa8"
+    }
+  ],
+  "compiler_steps": [
+    {
+      "id": "unit-00000-compile",
+      "inputs": {
+        "image-data-000038": {
+          "kind": "produced",
+          "action_id": "mantle-stage1/image-data-000038",
+          "output_id": "text"
+        },
+        "image-data-000039": {
+          "kind": "produced",
+          "action_id": "mantle-stage1/image-data-000039",
+          "output_id": "text"
+        },
+        "image-data-000040": {
+          "kind": "produced",
+          "action_id": "mantle-stage1/image-data-000040",
+          "output_id": "text"
+        },
+        "mantle-source": {
+          "kind": "source",
+          "role": "mantle-source",
+          "path": ""
+        },
+        "native-binutils-runtime": {
+          "kind": "produced",
+          "action_id": "full-source-native-provider/original-66d14a2a57b45ae248a4dc6c84e0208fd8fc2bd27a679dcf4d7840f4a2c09daa.host.original.install-out",
+          "output_id": "result"
+        },
+        "native-gcc-runtime": {
+          "kind": "produced",
+          "action_id": "full-source-native-provider/original-e36e0b4cda3a23c3b55c97d3800c366552948db7ab46d6dc8b5c9479dbc693c4.host.original.install-out",
+          "output_id": "result"
+        },
+        "native-musl-runtime": {
+          "kind": "produced",
+          "action_id": "full-source-native-provider/original-8cb1e5c03d80911cb0b7797433715bf8103e0c4ab7bce077c1ac781124284753.host.original.install-out",
+          "output_id": "result"
+        },
+        "native-provider-runtime": {
+          "kind": "produced",
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.canonical-provider",
+          "output_id": "full-source-native-provider"
+        },
+        "native-sysroot": {
+          "kind": "produced",
+          "action_id": "full-source-native-provider/original-b9edcd162fd6bdb1c88573a74c36ac3da03805bcd971ec0f004db5ce9e1fb15d.canonical-provider",
+          "output_id": "full-source-native-provider"
+        },
+        "package": {
+          "kind": "produced",
+          "action_id": "full-source-rust-provider/successor-1.94.1.tools.world-4",
+          "output_id": "tree"
+        },
+        "rust-provider": {
+          "kind": "produced",
+          "action_id": "full-source-rust-provider/successor-1.94.1.provider",
+          "output_id": "full-source-rust-provider"
+        },
+        "rust-runtime": {
+          "kind": "produced",
+          "action_id": "full-source-rust-provider/rust-runtime.tree",
+          "output_id": "tree"
+        },
+        "rustc": {
+          "kind": "produced",
+          "action_id": "full-source-rust-provider/successor-1.94.1.compiler.compiler.rustc-main.0.0.0.target.bin.rustc-main.link.native-products",
+          "output_id": "artifact"
+        },
+        "source-overlay": {
+          "kind": "produced",
+          "action_id": "mantle-stage1/unit-00000-source-overlay",
+          "output_id": "source-overlay"
+        },
+        "source-package": {
+          "kind": "source",
+          "role": "mantle-source",
+          "path": "vendor/snix-build"
+        }
+      },
+      "outputs": {
+        "link-work": {
+          "kind": "tree",
+          "bytes_max": 200000000000
+        },
+        "stderr": {
+          "kind": "text",
+          "bytes_max": 200000000000
+        },
+        "stdout": {
+          "kind": "text",
+          "bytes_max": 200000000000
+        }
+      },
+      "operation": {
+        "kind": "exec",
+        "executable_input": "rustc",
+        "arguments": [
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--crate-name"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "build_script_build"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--edition"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "2024"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "input",
+                "name": "mantle-source",
+                "path": "vendor/snix-build/build.rs"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--emit=link"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--crate-type"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "bin"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-C"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "opt-level=0"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-C"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "debuginfo=0"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-C"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "debug-assertions=true"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-C"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "overflow-checks=true"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-C"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "codegen-units=256"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-C"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "metadata=f5365eeafec578ed"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--cfg"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "feature=\"default\""
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--remap-path-prefix"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "text_input",
+                "name": "image-data-000038"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--remap-path-prefix"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "input",
+                "name": "mantle-source",
+                "path": ""
+              },
+              {
+                "kind": "literal",
+                "text": "="
+              },
+              {
+                "kind": "text_input",
+                "name": "image-data-000039"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--sysroot"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "input",
+                "name": "rust-provider",
+                "path": ""
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-Ctarget-feature=-crt-static"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-Csave-temps"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-Clinker-flavor=gcc"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-Clinker="
+              },
+              {
+                "kind": "input",
+                "name": "package",
+                "path": "target-wrappers/cc"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "--out-dir"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "output",
+                "name": "link-work",
+                "path": ""
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "-o"
+              }
+            ]
+          },
+          {
+            "parts": [
+              {
+                "kind": "output",
+                "name": "link-work",
+                "path": "product"
+              }
+            ]
+          }
+        ],
+        "environment": {
+          "CARGO_MANIFEST_DIR": {
+            "parts": [
+              {
+                "kind": "input",
+                "name": "source-package",
+                "path": ""
+              }
+            ]
+          },
+          "CARGO_MANIFEST_LINKS": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_AUTHORS": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_DESCRIPTION": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_HOMEPAGE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_LICENSE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_LICENSE_FILE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_NAME": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "snix-build"
+              }
+            ]
+          },
+          "CARGO_PKG_README": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_REPOSITORY": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_RUST_VERSION": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CARGO_PKG_VERSION": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "0.1.0"
+              }
+            ]
+          },
+          "CARGO_PKG_VERSION_MAJOR": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "0"
+              }
+            ]
+          },
+          "CARGO_PKG_VERSION_MINOR": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "1"
+              }
+            ]
+          },
+          "CARGO_PKG_VERSION_PATCH": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "0"
+              }
+            ]
+          },
+          "CARGO_PKG_VERSION_PRE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": ""
+              }
+            ]
+          },
+          "CRATE_KIND": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "custom-build"
+              }
+            ]
+          },
+          "HOST": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "x86_64-unknown-linux-musl"
+              }
+            ]
+          },
+          "LD_LIBRARY_PATH": {
+            "parts": [
+              {
+                "kind": "runtime",
+                "mount": "/mantle-rust-runtime",
+                "path": ""
+              },
+              {
+                "kind": "literal",
+                "text": ":"
+              },
+              {
+                "kind": "input",
+                "name": "rust-provider",
+                "path": "lib"
+              },
+              {
+                "kind": "literal",
+                "text": ":"
+              },
+              {
+                "kind": "input",
+                "name": "rust-provider",
+                "path": "lib/rustlib/x86_64-unknown-linux-musl/lib"
+              }
+            ]
+          },
+          "MANTLE_CAIRN_LINK_RESPONSE": {
+            "parts": [
+              {
+                "kind": "output",
+                "name": "link-work",
+                "path": "native-link.argv"
+              }
+            ]
+          },
+          "MANTLE_CAIRN_LINK_WORK": {
+            "parts": [
+              {
+                "kind": "output",
+                "name": "link-work",
+                "path": ""
+              }
+            ]
+          },
+          "MANTLE_CAIRN_SOURCE_OVERLAY": {
+            "parts": [
+              {
+                "kind": "input",
+                "name": "source-overlay",
+                "path": "overlay.frame"
+              }
+            ]
+          },
+          "MANTLE_CAIRN_TARGET_CC": {
+            "parts": [
+              {
+                "kind": "input",
+                "name": "package",
+                "path": "target-wrappers/cc"
+              }
+            ]
+          },
+          "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "true"
+              }
+            ]
+          },
+          "MANTLE_CARGO_PROFILE_BUILD_OVERRIDE_DUAL_USE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "false"
+              }
+            ]
+          },
+          "MANTLE_CARGO_PROFILE_DUAL_HOST_POLICY": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":true,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"true\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}"
+              }
+            ]
+          },
+          "MANTLE_CARGO_PROFILE_HOST_POLICY": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":false,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"false\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}"
+              }
+            ]
+          },
+          "MANTLE_CARGO_PROFILE_POLICY": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "{\"selected_profile\":\"dev\",\"settings\":{\"opt_level\":\"0\",\"debuginfo\":2,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"incremental\":false,\"build_override\":{\"dual_use\":false,\"settings\":{\"opt_level\":\"0\",\"debuginfo\":0,\"debug_assertions\":true,\"overflow_checks\":true,\"lto\":\"false\",\"panic\":\"unwind\",\"cargo_incremental\":true,\"codegen_units\":256,\"rpath\":false,\"strip\":\"none\",\"split_debuginfo\":\"platform-default\"},\"environment\":{\"DEBUG\":\"false\",\"NUM_JOBS\":\"1\",\"OPT_LEVEL\":\"0\"}}}"
+              }
+            ]
+          },
+          "MANTLE_RUST_UNIT_EXECUTION_KIND": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "host"
+              }
+            ]
+          },
+          "MODE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "build"
+              }
+            ]
+          },
+          "PACKAGE_ID": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "path+native#snix-build@0.1.0"
+              }
+            ]
+          },
+          "PROFILE": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "dev"
+              }
+            ]
+          },
+          "SNIX_BUILD_SANDBOX_SHELL": {
+            "parts": [
+              {
+                "kind": "text_input",
+                "name": "image-data-000040"
+              }
+            ]
+          },
+          "TARGET": {
+            "parts": [
+              {
+                "kind": "literal",
+                "text": "x86_64-unknown-linux-musl"
+              }
+            ]
+          },
+          "TMPDIR": {
+            "parts": [
+              {
+                "kind": "output",
+                "name": "link-work",
+                "path": ""
+              }
+            ]
+          }
+        },
+        "runtime_mounts": {
+          "/mantle-rust-runtime": "rust-runtime",
+          "/mantle/store/07wnnb4m2xra2684p4marar57a5riq27-binutils-2.41-gcc10-v1": "native-binutils-runtime",
+          "/mantle/store/83lzwlvvk8y05qzgi5clv82482jrqn02-full-source-seed-toolchain": "native-provider-runtime",
+          "/mantle/store/9229ybqv8249h60nx6nzxy6ywc6y1ybw-musl-1.2.5-gcc10-v1": "native-musl-runtime",
+          "/mantle/store/yk6wfibr1qa4jari6rbq11gpfhwa4hi0-gcc-10.5.0-musl-final-v1": "native-gcc-runtime"
+        },
+        "cwd_input": "mantle-source",
+        "cwd_output": null,
+        "stdin_input": null,
+        "merge_stderr": false,
+        "invocation_input": null,
+        "exit_policy": {
+          "kind": "exact",
+          "code": 0
+        },
+        "guard": null,
+        "output_seeds": {}
+      }
+    }
+  ],
+  "similar_step_ids": [
+    "unit-00000-source-overlay-source-data-00000",
+    "unit-00000-source-overlay",
+    "unit-00000-compile",
+    "unit-00000-link.empty-tmp",
+    "unit-00000-link.logical-output",
+    "unit-00000-link.native-entry",
+    "unit-00000-link.native.program",
+    "unit-00000-link.native.scripts",
+    "unit-00000-link.native.roots",
+    "unit-00000-link.native.zero",
+    "unit-00000-link.native.original",
+    "unit-00000-link.native-products",
+    "unit-00000-script"
+  ]
+}

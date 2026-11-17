@@ -1,0 +1,22 @@
+{
+  "task": 26,
+  "command": [
+    "pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/git/OnixResearch/mantle",
+    "--label",
+    "primary-source-paths-publication-cairn",
+    "--",
+    "nix",
+    "develop",
+    "--offline",
+    "--no-write-lock-file",
+    "-c",
+    "bash",
+    "/home/brittonr/git/OnixResearch/mantle/.cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-primary-source-paths/publication-cairn.sh"
+  ],
+  "root": "/home/brittonr/git/OnixResearch/mantle",
+  "scope": "Current source publication validation and proposal/design/tasks gates only. No proof acceptance or archive."
+}

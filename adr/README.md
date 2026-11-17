@@ -156,3 +156,4 @@ compatibility surface, crate name, or historical decision.
 | [0156](0156-adopt-only-verified-cold-stagex-outputs-for-native-rows.md) | Adopt only verified cold StageX outputs for native rows | Accepted |
 | [0157](0157-retain-source-unit-plans-before-recipe-lowering.md) | Retain source-owned unit plans before recipe lowering | Accepted |
 | [0158](0158-keep-authored-programs-outside-compiler-source-identity.md) | Keep authored source programs outside compiler source identity | Accepted |
+| [0159](0159-canonicalize-primary-sources-before-recipe-lowering.md) | Canonicalize primary sources before recipe lowering | Accepted |

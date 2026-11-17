@@ -105,6 +105,22 @@ establish the required original-source identity. Changed source still requires
 new publication, isolated qualification, regeneration and complete independent
 current-data review before any protected launch.
 
+### Decision: canonicalize primary targets at their source-only producer
+
+**Choice:** The shell planner resolves readable primary target files canonically
+before producing native target candidates. Runtime source-role/member equality
+and independent semantic-unit planning remain strict. The inert inspector keeps
+package-ownership normalization separate from exact primary operands and counts
+every selected compiler's exact typed source consumption. ADR 0159 owns this
+boundary.
+
+**Rationale:** Cold1714's source plan retained accumulated manifest parent
+segments while the authored compiler consumed the canonical source member.
+Resolving those aliases in the semantic comparison or its inspector would hide
+the producer defect. Changed planner and inspector bytes require publication,
+isolated qualification, regeneration and complete fresh review before retry.
+
+
 ## Risks / Trade-offs
 
 - A clean proof can run for many hours and require substantial disk; preflight must bound both before construction.

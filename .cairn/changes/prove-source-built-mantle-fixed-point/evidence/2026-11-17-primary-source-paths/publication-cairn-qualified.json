@@ -1,0 +1,31 @@
+{
+  "task": 26,
+  "result": "Success",
+  "reports": [
+    {
+      "label": "validation",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-primary-source-paths/publication-cairn-validation.json",
+      "valid": true
+    },
+    {
+      "label": "proposal",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-primary-source-paths/publication-cairn-proposal.json",
+      "valid": true
+    },
+    {
+      "label": "design",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-primary-source-paths/publication-cairn-design.json",
+      "valid": true
+    },
+    {
+      "label": "tasks",
+      "path": ".cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-17-primary-source-paths/publication-cairn-tasks.json",
+      "valid": true
+    }
+  ],
+  "transcript": "publication-cairn.log",
+  "developer_qualification": "developer-qualified.json",
+  "retained_failed_unit_regression": "primary-source-admission-regression.json",
+  "source_diff_check": "git diff --check succeeded before the subsequent representation-independent mutation-fixture adjustment; staged changed files require the final check before commit",
+  "scope": "Source publication lifecycle observations only; proof and native-row criteria remain open. Fresh frozen-source canonical gates, isolated runner, regeneration, actual corrected unit agreement and complete independent review are still required."
+}

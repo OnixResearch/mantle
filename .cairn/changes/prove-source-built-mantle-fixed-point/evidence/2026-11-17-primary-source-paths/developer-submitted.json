@@ -1,0 +1,21 @@
+{
+  "task": 1715,
+  "command": [
+    "/nix/store/c4khxwf5169c0m01gmz5hlflqpqihhz7-pueue-4.0.1/bin/pueue",
+    "add",
+    "--print-task-id",
+    "--working-directory",
+    "/home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117",
+    "--label",
+    "primary-source-paths-developer",
+    "--",
+    "/run/current-system/sw/bin/bash",
+    "/home/brittonr/sbfp-20261113-berdKH/check-primary-source-paths-dev-20261117.sh"
+  ],
+  "source_base_revision": "b3a39a0118839fd6f7267c9b1c99258155ff40af",
+  "developer_source": "/home/brittonr/sbfp-20261113-berdKH/primary-source-paths-dev-20261117",
+  "target": "/home/brittonr/sbfp-20261113-berdKH/canonical-target-869a461d-request-workspace",
+  "planner_bytes_blake3": "b57071015d3630f99f248cb1eafc8ace36e9db3b7cc7055b02842d294223a5bd",
+  "transfer_equal": true,
+  "scope": "Fresh mutable developer extraction of the previously qualified source plus the exact planner correction. Reused warm Cargo target is developer-only, not isolated runner or proof qualification."
+}
