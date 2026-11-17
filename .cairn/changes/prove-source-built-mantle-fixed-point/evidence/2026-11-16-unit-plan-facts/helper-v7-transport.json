@@ -1,8 +1,12 @@
 {
   "files": [
     {
-      "file": "helper-authority-audit-v7.json",
-      "blake3": "981897c9524bad821137990831e1ae57fd983c49591be199f08ebbc995ae246a",
+      "file": "helper-authority-audit-v7.json.gz",
+      "blake3": "d0a3e638ab04ff8ea07e23366e8f0259377b9e1d8dbc397a590f099262dac69c",
+      "size_bytes": 3062316,
+      "decompressed_blake3": "981897c9524bad821137990831e1ae57fd983c49591be199f08ebbc995ae246a",
+      "decompressed_size_bytes": 76570198,
+      "compression_roundtrip_equal": true,
       "transfer_equal": true
     },
     {
