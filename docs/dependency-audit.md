@@ -295,7 +295,7 @@ proof: T1.2, T4.6, and T4.7 remain unchecked.
 
 The four now allowlisted sources are:
 
-- `ssh://git@github.com/OnixResearch/onix-artifact.git`
+- `https://github.com/OnixResearch/onix-artifact.git`
   (`artifact-auth-core` and `artifact-auth-ed25519`, revision
   `5f3962d7471d1547e044f57daeda72f56621fd52`; current declaration,
   not a new audit result)

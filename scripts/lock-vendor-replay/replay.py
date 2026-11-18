@@ -308,7 +308,7 @@ def prepare_git_sidecars(a, rows):
         require(len(matches) == 1, f"ambiguous or missing pinned Git checkout: {source}")
         db, checkout = matches[0]
         private_mirrors = {
-            "ssh://git@github.com/OnixResearch/onix-artifact.git":
+            "https://github.com/OnixResearch/onix-artifact.git":
                 DEFAULT_ROOT / "inputs/onix-artifact.git",
             "https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git":
                 DEFAULT_ROOT / "inputs/durable-file-publication.git",

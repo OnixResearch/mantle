@@ -1,6 +1,6 @@
 # Artifact-auth compatibility for action results
 
-Mantle declares `artifact-auth-core` and `artifact-auth-ed25519` from `ssh://git@github.com/OnixResearch/onix-artifact.git` at revision `5f3962d7471d1547e044f57daeda72f56621fd52`. Cargo and the non-flake Nix input must resolve that revision. Flake evaluation checks the complete four-package AGPL-3.0-or-later source workspace and limits Mantle's consumer graph to the two authentication packages. It rejects mixed sources, sibling paths, widened graphs, and incompatible licensing. The predecessor Radicle source remains historical evidence only.
+Mantle declares `artifact-auth-core` and `artifact-auth-ed25519` from `https://github.com/OnixResearch/onix-artifact.git` at revision `5f3962d7471d1547e044f57daeda72f56621fd52`. Cargo and the non-flake Nix input must resolve that revision. Flake evaluation checks the complete four-package AGPL-3.0-or-later source workspace and limits Mantle's consumer graph to the two authentication packages. It rejects mixed sources, sibling paths, widened graphs, and incompatible licensing. The predecessor Radicle source remains historical evidence only.
 
 The published cohort contains `artifact-auth-core`, `artifact-auth-ed25519`,
 `artifact-binding-core`, and `artifact-transfer-core`; the latter two are not

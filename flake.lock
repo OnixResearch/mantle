@@ -58,12 +58,12 @@
         "rev": "e41340bec587b6d049b5cc518ec7db925dde84be",
         "revCount": 13,
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
+        "url": "https://github.com/OnixResearch/onix-artifact.git"
       },
       "original": {
         "rev": "e41340bec587b6d049b5cc518ec7db925dde84be",
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
+        "url": "https://github.com/OnixResearch/onix-artifact.git"
       }
     },
     "artifactAuthSource": {
@@ -75,12 +75,12 @@
         "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "revCount": 21,
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
+        "url": "https://github.com/OnixResearch/onix-artifact.git"
       },
       "original": {
         "rev": "5f3962d7471d1547e044f57daeda72f56621fd52",
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/onix-artifact.git"
+        "url": "https://github.com/OnixResearch/onix-artifact.git"
       }
     },
     "bounded-exec": {
@@ -949,12 +949,12 @@
         "rev": "0bbab77e23ab95caa4e4184b9945cfaa5c8040e2",
         "revCount": 2607,
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/mantle.git"
+        "url": "https://github.com/OnixResearch/mantle.git"
       },
       "original": {
         "rev": "0bbab77e23ab95caa4e4184b9945cfaa5c8040e2",
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/mantle.git"
+        "url": "https://github.com/OnixResearch/mantle.git"
       }
     },
     "mathlib-src": {
@@ -1973,12 +1973,12 @@
         "rev": "bbf5fbb60679668ca8c42593fd617db2d0f89b43",
         "revCount": 91,
         "type": "git",
-        "url": "ssh://git@github.com/brittonr/tigerstyle-rs.git"
+        "url": "https://github.com/brittonr/tigerstyle-rs.git"
       },
       "original": {
         "ref": "main",
         "type": "git",
-        "url": "ssh://git@github.com/brittonr/tigerstyle-rs.git"
+        "url": "https://github.com/brittonr/tigerstyle-rs.git"
       }
     },
     "transactionalReconciliationSource": {

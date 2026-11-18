@@ -1,6 +1,6 @@
 # Typed evidence for Mantle's unified Artifact source migration.
 let SourceRevision = "c932138d880ddf4c2967f4c024b489b5c0022bf1" in
-let SourceRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git" in
+let SourceRepository = "https://github.com/OnixResearch/onix-artifact.git" in
 {
   schema_version = 1,
   receipt_type = "mantle.artifact-source-migration.v1",

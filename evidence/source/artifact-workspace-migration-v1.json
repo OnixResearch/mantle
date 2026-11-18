@@ -1,7 +1,7 @@
 {
   "consumer": {
     "binding_package_resolved": false,
-    "cargo_lock_source": "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1",
+    "cargo_lock_source": "git+https://github.com/OnixResearch/onix-artifact.git?rev=c932138d880ddf4c2967f4c024b489b5c0022bf1#c932138d880ddf4c2967f4c024b489b5c0022bf1",
     "cargo_nix_aligned": true,
     "packages": [
       "artifact-auth-core",
@@ -51,7 +51,7 @@
       "artifact-transfer-core"
     ],
     "profile_repository": "https://github.com/OnixResearch/onix-artifact",
-    "repository": "ssh://git@github.com/OnixResearch/onix-artifact.git",
+    "repository": "https://github.com/OnixResearch/onix-artifact.git",
     "revision": "c932138d880ddf4c2967f4c024b489b5c0022bf1",
     "source_archive_blake3": "3878cdb892bfd4a8eac5779023ba32871d61bc3e8ec7c9ef5f7ab790a8acfeb9"
   },

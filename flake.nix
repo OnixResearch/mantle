@@ -11,7 +11,7 @@
     };
     flake-utils.url = "github:numtide/flake-utils";
     tigerstyle = {
-      url = "git+ssh://git@github.com/brittonr/tigerstyle-rs.git?ref=main";
+      url = "git+https://github.com/brittonr/tigerstyle-rs.git?ref=main";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.crane.follows = "crane";
       inputs.rust-overlay.follows = "rust-overlay";
@@ -26,7 +26,7 @@
       flake = false;
     };
     artifactAuthSource = {
-      url = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52";
+      url = "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52";
       flake = false;
     };
     secretSpecSource = {
@@ -184,7 +184,7 @@
             rustToolchain;
         cargoManifest = builtins.fromTOML (builtins.readFile ./Cargo.toml);
         artifactAuthRevision = "5f3962d7471d1547e044f57daeda72f56621fd52";
-        artifactAuthRepository = "ssh://git@github.com/OnixResearch/onix-artifact.git";
+        artifactAuthRepository = "https://github.com/OnixResearch/onix-artifact.git";
         artifactAuthNarHash = "sha256-Xr7ocFkPN15XYb6NA4bv3I9Q42NvoSYtXWfsrj7I3WY=";
         artifactAuthExpectedPackages = [
           "artifact-auth-core"
@@ -1703,7 +1703,7 @@
                 expected_migration_hash="$(tr -d '\n' < evidence/source/artifact-workspace-migration-v1.blake3)"
                 test "$migration_hash" = "$expected_migration_hash"
 
-                source_url='ssh://git@github.com/OnixResearch/onix-artifact.git'
+                source_url='https://github.com/OnixResearch/onix-artifact.git'
                 source_rev='5f3962d7471d1547e044f57daeda72f56621fd52'
                 source_nar_hash='${artifactAuthNarHash}'
                 wrong_source_rev='1111111111111111111111111111111111111111'

@@ -6,7 +6,7 @@ let SourcePackageCount = 4 in
 let Blake3Regex = "^[0-9a-f]{%{std.to_string DigestHexChars}}$" in
 let GitOidRegex = "^[0-9a-f]{%{std.to_string GitOidHexChars}}$" in
 let Expected = {
-  repository = "ssh://git@github.com/OnixResearch/onix-artifact.git",
+  repository = "https://github.com/OnixResearch/onix-artifact.git",
   profile_repository = "https://github.com/OnixResearch/onix-artifact",
   revision = "c932138d880ddf4c2967f4c024b489b5c0022bf1",
   nar_hash = "sha256-XGQLG60DNeY9FUYcOmn6cfYnhCIJzyqf+VW9yofDYFU=",

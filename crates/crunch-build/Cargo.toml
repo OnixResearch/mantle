@@ -8,8 +8,8 @@ license.workspace = true
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)"] }
 
 [dependencies]
-artifact-auth-core = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
-artifact-auth-ed25519 = { git = "ssh://git@github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
+artifact-auth-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
+artifact-auth-ed25519 = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52", version = "0.1.0" }
 async-trait = "0.1"
 crunch-action-result-core = { path = "../crunch-action-result-core" }
 mantle-causal-trace-core = { path = "../mantle-causal-trace-core" }
