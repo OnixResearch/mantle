@@ -1559,6 +1559,35 @@ canonical and runner qualifications, complete source-only regeneration, fresh
 full current-data independent review and a fresh protected attempt. I3-I5,
 proof-dependent V2/V3 and all genuine native rows remain open.
 
+## Next protected cycle from def26d414 (planned)
+
+Published source `def26d4143ff29e3ef27b63ca092e457b657ec35` carries the repair.
+Its cycle cannot reuse the 70db0868 drivers: every stage script pins the previous
+revision's archive, profile, program-record and report digests, and the
+inspection scripts pin the previous reports' bytes. Rebuild in this order, each
+step detached on Leviathan and each identity taken from that step's own output:
+
+1. Deterministic code archive of `def26d414`, plus the unchanged AWS original
+   capture pins, assembled into a new complete-source snapshot.
+2. Canonical qualification on a fresh absent Cargo target, then an isolated
+   runner qualification building `mantle`, `adopt-source-built-stagex` and
+   `check-native-row-receipts` from that frozen tree.
+3. Complete source-only preparation producing the new profile, both Mantle
+   recipes and both unit plans; then the subject-facts capture.
+4. Fresh graph, identity and preauthor inspections plus the selector, helper and
+   seed negative campaigns, all re-pinned to the new report bytes. Re-run the
+   strict template invariants and the admission rehearsal on the new recipes
+   before spending review time.
+5. Two fresh complete `underclass/gpt-6-sol` reviews (criteria 1-6 and 7-8) with
+   parent byte/counter reconciliation and exact transport parity.
+6. Fresh sealed acceptance, all four Cairn reports, one genuine cold attempt,
+   then signed adoption and the five native rows only after a verified v2
+   receipt.
+
+No old output, review, expected pin or alias may be re-used. The rehearsal from
+step 4 is the cheap gate that would have caught the cold1736 blocker; run it
+before every protected attempt.
+
 ## Templated compiler-action admission repair (2026-11-18)
 
 ADR 0161 records the boundary. `source_built_mantle_programs_metadata` now owns
