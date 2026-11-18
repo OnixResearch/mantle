@@ -1,5 +1,5 @@
 {
-  description = "crunch — Rust project built with Crane";
+  description = "Mantle — Nickel-authored Rust build system on the Nix store protocol";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

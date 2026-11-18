@@ -579,15 +579,6 @@ These observations cover only the named artifacts and declared limits; they do
 not establish source authenticity beyond admitted metadata or any downstream
 build result.
 
-Source commands admit bounded read, optional connected-fetch, publication, and
-state-observation effects before executing them. Export, bootstrap-profile
-publication, and profile refresh read back their published bundle; import and
-hydration check durable records and pins, and hydration rechecks the published
-vendor tree. A successful write alone is not a completed source operation.
-These observations cover only the named artifacts and declared limits; they do
-not establish source authenticity beyond admitted metadata or any downstream
-build result.
-
 ## Mantlepkgs catalogs
 
 Mantlepkgs generates a bounded package catalog from locked, concrete Nixpkgs

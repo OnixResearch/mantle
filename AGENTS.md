@@ -79,17 +79,17 @@ Layering facts an assistant must not get wrong:
 | Directory | Purpose |
 |---|---|
 | `src/` | Binary crate (package `mantle`). One `*_cmd.rs` module per command family; `main.rs` holds only clap defs + thin dispatch. `src/lib.rs` re-exports shell modules for integration tests. |
-| `crates/` | 37 library crates: crunch-pipeline, crunch-build (scheduler/sandbox), crunch-store, crunch-eval, crunch-glue, crunch-nar, crunch-delta, crunch-project, crunch-attestation, crunch-shell + their `*-core` pairs; mantlepkgs-core, mantle-build-contract, wasm/hardware-simulation research crates. |
+| `crates/` | First-party library crates: crunch-pipeline, crunch-build (scheduler/sandbox), crunch-store, crunch-eval, crunch-glue, crunch-nar, crunch-delta, crunch-project, crunch-attestation, crunch-shell + their `*-core` pairs; mantlepkgs-core, mantle-build-contract, wasm/hardware-simulation research crates. |
 | `vendor/` | Vendored snix fork — workspace members (`nix-compat`(+derive), `snix-build`, `snix-castore`, `snix-store`, `snix-tracing`) plus `fuse-backend-rs` via `[patch.crates-io]`. Modified (BLAKE3 support in nix-compat), `publish=false`, excluded from first-party gates. |
 | `vendor-deps/` | Full crates.io + git vendored registry; consumed only through `.cargo/vendor-config.toml`. Never merge or hand-edit. |
-| `lib/` | Nickel stdlib (18 files), embedded at compile time via `include_str!` in `crates/crunch-eval/src/stdlib.rs`. Editing `lib/` changes the binary. |
+| `lib/` | Nickel stdlib, embedded at compile time via `include_str!` in `crates/crunch-eval/src/stdlib.rs`. Editing `lib/` changes the binary. |
 | `builders/` | `mk_derivation.ncl` / mkStdenv Nickel builders — eval-time imports, not embedded. |
 | `config/` | Typed Nickel policy sources + `generated/*.json` embedded via `include_str!` in crunch-store/crunch-build. Regenerate with `nix run nixpkgs#nickel -- export --format json config/<area>/default.ncl > config/<area>/generated/<policy>.json`. Never edit generated JSON directly. |
-| `bootstrap/` | ~200 self-hosting bootstrap recipes (`.ncl`) + `evidence/`, `seeds/`, `patches/`. |
-| `tests/` | 55 integration suites + `support/` helpers + `fixtures/` tree. |
+| `bootstrap/` | Self-hosting bootstrap recipes (`.ncl`) + `evidence/`, `seeds/`, `patches/`. |
+| `tests/` | Root integration suites + `support/` helpers + `fixtures/` tree. |
 | `scripts/` | Proof drivers (bash), single-file `cargo -Zscript` guard rails, quality wrappers. |
-| `docs/` | ~57 guides + `generated/` (checked-in, drift-gated) + release-notes. Root `README.md` is the documentation index. |
-| `adr/` | Numbered decision records 0001–0082; ADR 0082 (explicit store backends, Casita) is Proposed; index in `adr/README.md`. |
+| `docs/` | Guides + `generated/` (checked-in, drift-gated) + release-notes. Root `README.md` is the documentation index. |
+| `adr/` | Numbered decision records; ADR 0082 (explicit store backends, Casita) is Proposed; index in `adr/README.md`. |
 | `.cairn/` | Active Cairn lifecycle tree (prose writes `cairn/`): `changes/`, dated `archive/`, `specs/`. |
 | `openspec/` | Legacy spec system; still hosts functional-core validation assets consumed by the no-std rail. |
 | `tools/` | Generator bins (`generate-operator-command-contract`) + `tracey_refs.rs` coverage bridges. |
@@ -224,8 +224,8 @@ leaf files or revert the churn immediately.
 | `crates/crunch-eval/src/session.rs`, `stdlib.rs` | Nickel session (root discovery, bounded workers), embedded stdlib table |
 | `crates/crunch-glue/src/convert.rs` | `CrunchDerivation` → `nix_compat::Derivation` + `StorePath` |
 | `scripts/quality-gate-common.sh` | Canonical first-party / vendored-exclusion package lists |
-| `Cargo.toml` | 44-member workspace; pins `blake3 =1.8.5`, `digest =0.10.7` for SHA/Nix interoperability, and `bstr =1.12.1`; Snix BLAKE3 streaming uses the native hasher rather than `traits-preview` (ADR 0122) |
-| `deny.toml` | cargo-deny policy (reasoned advisory ignores, license allowlist, `private.ignore`) |
+| `Cargo.toml` | First-party and vendored workspace members; pins `blake3 =1.8.5`, `digest =0.10.7` for SHA/Nix interoperability, and `bstr =1.12.1`; Snix BLAKE3 streaming uses the native hasher rather than `traits-preview` (ADR 0122) |
+| `deny.toml` | cargo-deny policy (reasoned advisory ignores, license allowlist, private workspace members evaluated) |
 
 ## Runtime/Tooling Preferences
 
@@ -265,10 +265,10 @@ leaf files or revert the churn immediately.
 
 ## Testing & QA
 
-Three layers: (1) root `tests/*.rs` — 55 integration suites driving built
+Three layers: (1) root `tests/*.rs` — integration suites driving built
 binaries via `Command::cargo_bin("mantle")` / `cargo_bin("crunch")` or calling
 library APIs directly; (2) embedded `#[cfg(test)] mod tests` across `src/` and
-`crates/*/src` (~337 files); (3) shared helpers — `tests/audit_support.rs`
+`crates/*/src`; (3) shared helpers — `tests/audit_support.rs`
 (audit bundles, schema `crunch-test-audit-v1`, written under
 `target/test-audit/<suite>/`), `tests/support/oci_registry.rs` (in-process OCI
 registry). Key suites: `smoke.rs` (CLI e2e over the `crunch-build-report-v1`
