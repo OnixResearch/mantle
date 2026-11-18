@@ -1,0 +1,6 @@
+This directory contains a Mantle-owned fork of Snix-derived code distributed
+under GPL-3.0-only. See LICENSE for the license text and upstream.json for the
+exact Mantle base tree, the four tracked patches and the recorded uncertainty.
+
+Modifications by Mantle: pidfd watch teardown, compile socket service, rust wait
+socket and command factory boundary, applied as patches in the recorded order.

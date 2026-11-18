@@ -945,8 +945,18 @@ is a compile-time limit, not a runtime setting.
 ## License
 
 Repository-owned Mantle source is licensed under
-[AGPL-3.0-or-later](LICENSE). Vendored code retains its upstream licenses and
-notices.
+[AGPL-3.0-or-later](LICENSE).
+
+The vendored Snix data layer (`vendor/nix-compat`, `vendor/nix-compat-derive`,
+`vendor/snix-build`, `vendor/snix-castore`, `vendor/snix-store`,
+`vendor/snix-tracing`) is Snix-derived code under its upstream terms,
+`GPL-3.0-only`. Each directory carries `LICENSE`, `NOTICE` and `upstream.json`;
+the combined binary is offered under AGPL-3.0-or-later with those notices
+retained. The recorded upstream base revisions are unresolved for five of the six
+directories because the upstream host is unreachable from this environment; see
+[ADR 0162](adr/0162-keep-the-vendored-snix-data-layer-with-upstream-terms.md)
+and each `upstream.json`. Other vendored code retains its own upstream licenses
+and notices.
 
 ## References
 

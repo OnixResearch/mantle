@@ -1,0 +1,27 @@
+{
+  "component": "vendor/snix-build",
+  "division": "snix",
+  "upstream_repository": "https://git.snix.dev/snix/snix",
+  "upstream_revision": null,
+  "candidate_range": null,
+  "method": "Reconstructed from a pinned Mantle tree, not from a known upstream revision. scripts/import-snix-build-fork.py records SOURCE_REV da00f58425740adea559ef926c9dfa97b2cb8240, SOURCE_TREE a0979715301705e77c8567cb1bea054dc996000c, four tracked patches and the postimage digest 77df2195fe99d5e9707685dfac1abac8af5b11f6384a6208beb66b32d92ccc58. The original upstream import mechanism is unknown.",
+  "uncertainty": "high: the Mantle base tree is exact, but its upstream Snix provenance is not recorded",
+  "mantle_base_revision": "da00f58425740adea559ef926c9dfa97b2cb8240",
+  "mantle_base_tree": "a0979715301705e77c8567cb1bea054dc996000c",
+  "patches": [
+    "patches/snix-build-watch-pidfd.patch",
+    "patches/snix-build-compile-socket.patch",
+    "patches/snix-build-rust-wait-socket.patch",
+    "patches/snix-build-command-factory.patch"
+  ],
+  "license": "GPL-3.0-only",
+  "license_text": "LICENSE",
+  "modifications": [
+    "pidfd watch teardown",
+    "compile socket service",
+    "rust wait socket",
+    "command factory boundary"
+  ],
+  "modification_diff": "enumerable as the four tracked patch files above",
+  "counsel_review": "pending; engineering provenance only, not legal advice"
+}

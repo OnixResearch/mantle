@@ -1,0 +1,6 @@
+This directory contains Snix-derived code distributed under GPL-3.0-only.
+See LICENSE for the license text and upstream.json for the recorded base,
+uncertainty and modifications.
+
+No Mantle-specific modification is recorded for this crate; that is unverified
+while the upstream base revision is unresolved.

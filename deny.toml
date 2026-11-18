@@ -24,6 +24,8 @@ allow = [
   "BSD-3-Clause",
   "CC0-1.0",
   "CDLA-Permissive-2.0",
+  # The vendored Snix data layer keeps its upstream GPL-3.0 terms (ADR 0162).
+  "GPL-3.0-only",
   "ISC",
   "LGPL-3.0-only",
   "MIT",
@@ -40,7 +42,10 @@ confidence-threshold = 0.8
 exceptions = []
 
 [licenses.private]
-ignore = true
+# Evaluate every workspace member, including `publish = false` crates. The
+# vendored Snix data layer declares its upstream GPL-3.0-only terms instead of
+# inheriting the workspace expression (ADR 0162).
+ignore = false
 registries = []
 
 [bans]

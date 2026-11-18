@@ -1,0 +1,7 @@
+This directory contains Snix-derived code distributed under GPL-3.0-only.
+See LICENSE for the license text and upstream.json for the recorded base,
+uncertainty and modifications.
+
+Modifications by Mantle: BLAKE3 content hashing support (ADR 0122).
+The full modification diff is not yet enumerable because the upstream base
+revision is unresolved.

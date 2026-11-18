@@ -1,0 +1,14 @@
+{
+  "component": "vendor/nix-compat-derive",
+  "division": "snix",
+  "upstream_repository": "https://git.snix.dev/snix/snix",
+  "upstream_revision": null,
+  "candidate_range": null,
+  "method": "Local import history inspected: commit 457fee24aac8b997c8db7881f036e56cf79d6e02 added this directory with no upstream revision. The upstream host was unreachable from the recording host, so no content comparison was possible.",
+  "uncertainty": "high: base revision unknown; a nearest-revision search against upstream is still required",
+  "license": "GPL-3.0-only",
+  "license_text": "LICENSE",
+  "modifications": [],
+  "modification_diff": "no Mantle-specific change recorded; unverified without the upstream base revision",
+  "counsel_review": "pending; engineering provenance only, not legal advice"
+}

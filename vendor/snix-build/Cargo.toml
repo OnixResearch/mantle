@@ -3,6 +3,7 @@ name = "snix-build"
 version = "0.1.0"
 edition = "2024"
 publish = false
+license = "GPL-3.0-only"
 
 [dependencies]
 bytes = { version = "1.7.1", features = ["serde"] }
