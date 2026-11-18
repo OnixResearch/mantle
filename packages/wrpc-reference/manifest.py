@@ -54,10 +54,11 @@ manifest = {
                    "not-runtime-sandboxing", "not-release-eligibility"],
 }
 if telemetry:
+    cohort = manifest["source"]
     manifest.update({
         "telemetry": bundle_entry(root, "telemetry"),
-        "effect_interface": "wasi:otel/tracing@0.2.0-rc.2",
-        "type_only_dependencies": ["wasi:otel/types@0.2.0-rc.2", "wasi:clocks/wall-clock@0.2.0"],
+        "effect_interface": cohort["effect_interface"],
+        "type_only_dependencies": cohort["type_only_dependencies"],
         "entrypoint": "run", "modes": {"0": "safe-span", "1": "secret-attribute", "2": "33-spans"},
         "expected_result": 42,
         "comparison_only": ["telemetry/artifacts/runtime-composed.wasm", "comparison/sink.wasm"],

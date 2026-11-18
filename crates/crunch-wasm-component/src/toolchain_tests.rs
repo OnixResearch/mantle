@@ -29,8 +29,9 @@ fn cohort_identity_matches_sorted_compact_json_with_line_terminator() {
     let octet = test_octet_identity();
     let octet_digest = octet.config_digest_blake3.clone().into_hex();
     let octet_revision = OCTET_SOURCE_REVISION;
+    let octet_version = OCTET_PACKAGE_VERSION;
     let canonical = format!(
-        "{{\"octet\":{{\"config_digest_blake3\":\"{octet_digest}\",\"config_path\":\"share/octet/profiles.json\",\"package_name\":\"cargo-octet\",\"package_version\":\"0.1.0\",\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\",\"profiles\":[{{\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\"}}],\"source_repository\":\"https://github.com/OnixResearch/octet\",\"source_revision\":\"{octet_revision}\",\"wasm_tools_cohort_identity_blake3\":\"{octet_digest}\"}},\"rust_target\":\"wasm32-wasip2\",\"schema\":\"mantle-wasm-component-toolchain-v1\",\"tools\":[]}}\n"
+        "{{\"octet\":{{\"config_digest_blake3\":\"{octet_digest}\",\"config_path\":\"share/octet/profiles.json\",\"package_name\":\"cargo-octet\",\"package_version\":\"{octet_version}\",\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\",\"profiles\":[{{\"profile_id\":\"portable-component-baseline\",\"profile_identity_blake3\":\"{octet_digest}\"}}],\"source_repository\":\"https://github.com/OnixResearch/octet\",\"source_revision\":\"{octet_revision}\",\"wasm_tools_cohort_identity_blake3\":\"{octet_digest}\"}},\"rust_target\":\"wasm32-wasip2\",\"schema\":\"mantle-wasm-component-toolchain-v1\",\"tools\":[]}}\n"
     );
     let identity = Blake3Identity::from_slice(canonical.as_bytes());
     let manifest = ToolchainManifest {
@@ -96,6 +97,15 @@ fn selectable_cohort_rejects_missing_duplicate_and_misbound_profiles() {
     octet.profiles.push(OctetProfileIdentity {
         profile_id: crate::OCTET_WRPC_REFERENCE_PROFILE_ID.to_string(),
         profile_identity_blake3: Blake3Identity::parse(crate::OCTET_WRPC_REFERENCE_PROFILE_IDENTITY_BLAKE3.to_string())
+            .unwrap(),
+    });
+    assert!(
+        super::verify_octet_profiles(&octet).is_err(),
+        "wrpc-telemetry-reference profile is required in the closed cohort"
+    );
+    octet.profiles.push(OctetProfileIdentity {
+        profile_id: crate::OCTET_WRPC_TELEMETRY_PROFILE_ID.to_string(),
+        profile_identity_blake3: Blake3Identity::parse(crate::OCTET_WRPC_TELEMETRY_PROFILE_IDENTITY_BLAKE3.to_string())
             .unwrap(),
     });
     octet.profiles.swap(0, 1);

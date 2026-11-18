@@ -17,21 +17,24 @@ pub const PIPELINE_REQUEST_SCHEMA: &str = "mantle-wasm-component-pipeline-reques
 pub const PIPELINE_EXECUTION_REPORT_SCHEMA: &str = "mantle-wasm-component-pipeline-execution-report-v1";
 pub const TOOLCHAIN_MANIFEST_SCHEMA: &str = "mantle-wasm-component-toolchain-v1";
 pub const OCTET_SOURCE_REPOSITORY: &str = "https://github.com/OnixResearch/octet";
-pub const OCTET_SOURCE_REVISION: &str = "f081ed9682d478e585f4cede89bb89b542755ab9";
+pub const OCTET_SOURCE_REVISION: &str = "f43a1d9e81a45b15b830930be9ec5c54bfd6db00";
 pub const OCTET_PACKAGE_NAME: &str = "cargo-octet";
-pub const OCTET_PACKAGE_VERSION: &str = "0.1.0";
+pub const OCTET_PACKAGE_VERSION: &str = "0.1.1-rc.1";
 pub const OCTET_PROFILE_ID: &str = "portable-component-baseline";
 pub const OCTET_MOLTEN_PROFILE_ID: &str = "molten-component-baseline";
 pub const OCTET_MOLTEN_EFFECTS_PROFILE_ID: &str = "molten-component-effects-v1";
 pub const OCTET_WRPC_REFERENCE_PROFILE_ID: &str = "wrpc-reference";
 pub const OCTET_WRPC_REFERENCE_PROFILE_IDENTITY_BLAKE3: &str =
-    "f7c26c93f643fc8d277de8c8b9a0ee34e386d8ac6e3159726b1bbecbd4919f23";
-pub const OCTET_CONFIG_BLAKE3: &str = "39d88464323c9b14bbd408271138741470837643ea750c73eeda6a9c2b1b69ab";
-pub const OCTET_PROFILE_IDENTITY_BLAKE3: &str = "e8fbf118b283d63a3662af4853a2ce5f4a1777c18fe37e0be0dc1e235fd707bd";
+    "1b28d739a99d5fe6de915eb57151fb1c6a71d85d1bd99349ceba514a75184712";
+pub const OCTET_WRPC_TELEMETRY_PROFILE_ID: &str = "wrpc-telemetry-reference";
+pub const OCTET_WRPC_TELEMETRY_PROFILE_IDENTITY_BLAKE3: &str =
+    "e63085dd4f4d006348635ea40589c807282aa8377dd262d244bb6373c507ba20";
+pub const OCTET_CONFIG_BLAKE3: &str = "dcc7fec0e9fad86b607c1b3d5ef6ff402b3a38f3f5c5dc543d02f95eec29a396";
+pub const OCTET_PROFILE_IDENTITY_BLAKE3: &str = "8c4e752b30431a14a61c25554e101681ce4db73513477c82035f01e8281fab36";
 pub const OCTET_MOLTEN_PROFILE_IDENTITY_BLAKE3: &str =
-    "24dc3346b817ee2645b000922a612a1988f63914b49688a8b72ebb758316c846";
+    "c93eb7f4607f0a1223e4eb7e125cb62b562c77af5c7197dda38bfda906933e86";
 pub const OCTET_MOLTEN_EFFECTS_PROFILE_IDENTITY_BLAKE3: &str =
-    "a3ad131b214390c9e0ab515e0a63698067dcdd15f2fd4abbc1fd2d120726292e";
+    "b2c257ab2acb98f15313488899b092bf6c18efb643b64eb6eb79baa756e7ef08";
 pub const OCTET_WASM_TOOLS_COHORT_BLAKE3: &str = "c50e2d7f0e8c49de4a1d44afae196bdf96bb14e67e7de0a153de146a6207449a";
 
 pub const REQUIRED_TOOL_NAMES: [&str; 12] = [

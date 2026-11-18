@@ -187,15 +187,24 @@ fn export_statements(role: &str) -> &'static str {
 }
 
 /// The wrpc reference components are admitted by the exact wrpc-reference
-/// artifact profile, not the toolchain's generic default profile.
-fn wrpc_profile_identity(toolchain: &ToolchainManifest) -> AuthorResult<crunch_wasm_component_core::Blake3Identity> {
+/// artifact profile and the telemetry emitter by the exact
+/// wrpc-telemetry-reference profile, not the toolchain's generic default profile.
+fn wrpc_profile_identity(
+    toolchain: &ToolchainManifest,
+    role: &str,
+) -> AuthorResult<crunch_wasm_component_core::Blake3Identity> {
+    let profile_id = if role == "telemetry" {
+        crunch_wasm_component::OCTET_WRPC_TELEMETRY_PROFILE_ID
+    } else {
+        crunch_wasm_component::OCTET_WRPC_REFERENCE_PROFILE_ID
+    };
     toolchain
         .octet
         .profiles
         .iter()
-        .find(|profile| profile.profile_id == crunch_wasm_component::OCTET_WRPC_REFERENCE_PROFILE_ID)
+        .find(|profile| profile.profile_id == profile_id)
         .map(|profile| profile.profile_identity_blake3.clone())
-        .ok_or_else(|| "toolchain omits the wrpc-reference artifact profile".to_string().into())
+        .ok_or_else(|| format!("toolchain omits the {profile_id} artifact profile").into())
 }
 
 fn manifest(role: &str, toolchain: &ToolchainManifest, facts: Value) -> AuthorResult<Value> {
@@ -218,7 +227,7 @@ fn manifest(role: &str, toolchain: &ToolchainManifest, facts: Value) -> AuthorRe
                 "artifact":facts["compiled"], "required_imports":[]}],
             "edges":[], "output_world":role, "import_dependencies":false},
         "virtualization":{"defaults_overridden":true, "rules":[], "expected_remaining_imports":remaining_imports(role)},
-        "validation_profiles":{"octet_artifact_profile_identity_blake3":wrpc_profile_identity(toolchain)?,
+        "validation_profiles":{"octet_artifact_profile_identity_blake3":wrpc_profile_identity(toolchain, role)?,
             "expected_runtime_profile_identity_blake3":facts["profile"]},
         "wizer":{"mode":"disabled", "initialization_entrypoint":null, "deterministic_virtual_imports":[],
             "linker_split":null, "componentization":null},

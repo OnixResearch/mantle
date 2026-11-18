@@ -44,10 +44,13 @@ and is retained verbatim. The isolated consumer Wasmtime/wasmtime-wasi cohort is
 equivalence is implied.
 
 The 2026-10-30 integration run built the components, but the bundle pipeline
-stopped at `wasi-virt-failed`. See
-`.cairn/changes/materialize-wrpc-producer/evidence/integration-2026-10-30.md`.
-No bundle, emitter receipt, trusted host observation, consumer telemetry export
-or publication identity is claimed.
+stopped at `wasi-virt-failed`. ADR 0160 keeps type-only WASI imports outside
+virtualization; the bundle then stopped at `octet-report-not-admitted` until
+Octet's `wrpc-telemetry-reference` artifact profile admitted the emitter's
+imports. With that profile the bundle materializes; the
+[2026-11-18 integration record](../../.cairn/changes/materialize-wrpc-telemetry/evidence/integration-2026-11-18.md)
+retains the observed imports, output identities and acceptance results. No
+trusted host observation or consumer telemetry export is claimed here.
 
 ## Standalone emitter contract
 
@@ -109,3 +112,19 @@ capability. This producer is not native OTLP, does not claim the OTLP protocol,
 and is not evidence that trusted consumer telemetry export was executed. Missing,
 mismatched, substituted, locally rebuilt or closed-comparison artifacts must not
 repair or satisfy the optional published-producer admission requirement.
+
+## Parent execution acceptance
+
+After materializing the real package, the parent can run the opt-in real-byte rail:
+
+```sh
+MANTLE_WRPC_TELEMETRY_REFERENCE_BUNDLE="$IMMUTABLE_BUNDLE" \
+  cargo test -p mantle-wasm-consumer-verifier --features std \
+  --test wrpc-telemetry -- --ignored --test-threads 1
+```
+
+It covers the actual emitter bundle and its declared import boundary, a missing
+emitter without local rebuilding, same-length drift, each comparison-only
+artifact in place of the emitter, and a local replacement symlink. A
+consistently re-sealed bundle around other bytes carries a different bundle
+identity, so admission must pin the published `telemetry.bundle_identity_blake3`.
