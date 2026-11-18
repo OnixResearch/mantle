@@ -827,10 +827,16 @@ fn expand_pass_as_file(mut environment_vars: BTreeMap<String, Vec<u8>>) -> Resul
     };
     let names = std::str::from_utf8(raw_names)
         .map_err(|_| crate::Error::Store("passAsFile contains non-UTF-8 bytes".to_string()))?
-        .to_string();
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
     let mut additional_files = BTreeMap::new();
 
-    for name in names.split(' ') {
+    // Nix treats the declaration as a whitespace-separated set: an empty or
+    // whitespace-only list selects no files, and a repeated name yields one
+    // payload and one path variable. Payload bytes, hashed paths and removal of
+    // each selected variable from the environment are unchanged.
+    for name in &names {
         let contents = environment_vars.remove(name).ok_or_else(|| {
             crate::Error::Store(format!("passAsFile refers to missing environment variable '{name}'"))
         })?;
@@ -843,7 +849,7 @@ fn expand_pass_as_file(mut environment_vars: BTreeMap<String, Vec<u8>>) -> Resul
 
     let additional_files: Vec<AdditionalFile> =
         additional_files.into_iter().map(|(path, contents)| AdditionalFile { path, contents }).collect();
-    debug_assert_eq!(additional_files.len(), names.split(' ').count());
+    debug_assert_eq!(additional_files.len(), names.len());
     debug_assert!(environment_vars.contains_key(PASS_AS_FILE_ENV));
     Ok(PassAsFileExpansion {
         environment_vars,
@@ -1632,6 +1638,66 @@ mod tests {
         let error = expand_pass_as_file(environment_vars).unwrap_err();
 
         assert!(error.to_string().contains("passAsFile contains non-UTF-8 bytes"));
+    }
+
+    #[test]
+    fn pass_as_file_expansion_accepts_empty_and_whitespace_lists() {
+        for declaration in ["", " ", " \t\n "] {
+            let environment_vars = BTreeMap::from([
+                (PASS_AS_FILE_ENV.to_string(), declaration.as_bytes().to_vec()),
+                ("untouched".to_string(), b"kept".to_vec()),
+            ]);
+
+            let expansion = expand_pass_as_file(environment_vars).unwrap();
+
+            assert!(expansion.additional_files.is_empty(), "declaration {declaration:?} selects no files");
+            assert_eq!(expansion.environment_vars.get("untouched"), Some(&b"kept".to_vec()));
+            assert_eq!(expansion.environment_vars[PASS_AS_FILE_ENV], declaration.as_bytes());
+            assert!(
+                !expansion.environment_vars.keys().any(|key| key.ends_with(PASS_AS_FILE_PATH_SUFFIX)),
+                "declaration {declaration:?} declares no path variables"
+            );
+        }
+    }
+
+    #[test]
+    fn pass_as_file_expansion_normalizes_whitespace_and_deduplicates_names() {
+        let declared = |value: &str| {
+            BTreeMap::from([
+                ("bar".to_string(), b"baz".to_vec()),
+                ("baz".to_string(), b"bar".to_vec()),
+                (PASS_AS_FILE_ENV.to_string(), value.as_bytes().to_vec()),
+            ])
+        };
+        let normalized = expand_pass_as_file(declared("bar baz")).unwrap();
+        let messy = expand_pass_as_file(declared("  bar\tbaz\nbar  baz ")).unwrap();
+        let project = |expansion: &PassAsFileExpansion| {
+            expansion
+                .additional_files
+                .iter()
+                .map(|file| (file.path.clone(), file.contents.to_vec()))
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(project(&messy), project(&normalized));
+        assert_eq!(messy.additional_files.len(), 2, "repeated names materialize one payload");
+        assert_eq!(messy.environment_vars["barPath"], BAR_PASS_AS_FILE_PATH.as_bytes());
+        assert_eq!(messy.environment_vars["bazPath"], BAZ_PASS_AS_FILE_PATH.as_bytes());
+        assert_eq!(messy.environment_vars.get("bar"), None);
+        assert_eq!(messy.environment_vars.get("baz"), None);
+    }
+
+    #[test]
+    fn build_request_accepts_empty_serialized_pass_as_file_list() {
+        let mut drv = test_derivation();
+        drv.environment.insert(PASS_AS_FILE_ENV.to_string(), "".into());
+
+        let request = derivation_to_build_request(&drv, &BTreeMap::new(), NIX_STORE_DIR, HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
+
+        assert!(request.additional_files.is_empty(), "an empty serialized list declares no payload files");
+        assert!(!request.environment_vars.iter().any(|entry| entry.key.ends_with(PASS_AS_FILE_PATH_SUFFIX)));
     }
 
     #[test]
