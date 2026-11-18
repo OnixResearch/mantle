@@ -1522,3 +1522,83 @@ static acceptance did not reproduce the consumer's compiler-action selection.
 The census, exact unit101 recipe structure and retained failure bytes are in
 `evidence/2026-11-17-leviathan-70db0868/cold1736-compiler-action-facts.json`
 and `cold-proof-1736-*.json`.
+
+## Cold1736 templated compiler-action admission repair (2026-11-17)
+
+The failing boundary is repaired without relaxing any admission rule. The
+metadata module now owns one `CompilerInvocationTemplate` type plus the
+compiler-invocation vocabulary and the compile action's `-invocation`,
+`-invocation-template` and `-invocation-data` identities. Authoring serializes
+that type; admission strictly deserializes the same type and rejects unknown
+fields. ADR 0161 records the decision.
+
+`compiler_words` resolves the words each compiler action actually receives: a
+direct action contributes its literal arguments unchanged, and a templated
+action contributes its template's arguments only when its own arguments and
+environment are empty, it binds the exact `<step>-invocation` and
+`<step>-invocation-data` products, its helper is the stage-produced executable
+run with exactly the authored `--compiler-invocation` operands over
+`<step>-invocation-template#template`, that template action is a stage-local
+`WriteText` with no inputs, and the template's data name, inputs, outputs and
+runtime mounts equal exactly that compile action's own typed scope. Unit
+selection and `validate_primary_source` use those resolved words. Direct
+compilation, the runtime executor, the helper source, typed-input admission and
+source hashing are unchanged.
+
+Evidence and captured results are in
+`evidence/2026-11-17-leviathan-70db0868/cold1736-compiler-action-admission-repair.md`.
+Focused positive and negative tests, an authoring/admission helper-contract
+test, a strict invariant check over both frozen stage recipes, and an opt-in
+rehearsal that runs the real admission over the frozen recipes and unit plans
+all pass. The rehearsal selects each unit by its own frozen disambiguator and
+asserts only structural facts.
+
+This repair is source-evidence and fixture verification only. A changed source
+tree still requires a new published frozen source, separate absent-target
+canonical and runner qualifications, complete source-only regeneration, fresh
+full current-data independent review and a fresh protected attempt. I3-I5,
+proof-dependent V2/V3 and all genuine native rows remain open.
+
+## Templated compiler-action admission repair (2026-11-18)
+
+ADR 0161 records the boundary. `source_built_mantle_programs_metadata` now owns
+one `CompilerInvocationTemplate` plus the compiler-invocation vocabulary:
+mode, template/invocation/data output names, the `<step>-invocation*` identity
+helper, and the helper's exact operand list. Authoring serializes that type;
+admission strictly deserializes the same type with unknown fields rejected, so
+the two sides cannot describe different formats.
+
+`compiler_words` resolves the words a compiler action actually receives. A
+direct action contributes its literal arguments unchanged. A templated action
+contributes its template's arguments only when its own arguments and environment
+are empty, it reads the `<step>-invocation` and `<step>-invocation-data` outputs
+of the action its `invocation_input` names, that helper is the stage-produced
+executable with exactly the authored `--compiler-invocation` operands reading
+the `<step>-invocation-template` text, that template action is a stage-local
+input-free `WriteText`, and the template's data name, inputs, outputs and
+runtime mounts equal exactly that compile action's own typed scope. Unit
+selection matches these resolved words, and `validate_primary_source` compares
+the planned primary against a typed word from the same resolved set. Direct
+compiles, the runtime executor and the helper source are unchanged.
+
+Focused verification on 2026-11-18: six templated-admission tests, one helper
+template-contract test, and `cargo fmt --check -p mantle` all pass. An opt-in
+rehearsal (`MANTLE_COLD_RECIPE_DIR`) ran the real admission over the frozen
+stage recipes `296bc261…` and `a78ee751…` twice with identical results — 1121
+rustc actions, 1047 units and 119 templated units per stage — proving every unit
+resolves exactly one compiler action and no action serves two units. An
+independent inert Python enumeration of unit101's 62-action ancestry finds
+exactly one compiler action carrying `metadata=d4deb81969bf70e4`.
+
+One earlier rehearsal invocation reported its own "ambiguous" assertion. The
+cause was the rehearsal filter matching any `metadata=` word, so a unit's own
+compile and the build-script compile in its ancestry both counted. The rehearsal
+now selects each unit by that unit's own frozen `rustc_metadata_hash`, which is
+the disambiguator the consumer matches; consecutive reruns then agree on unique
+selection.
+
+This repair is not proof of protected execution. A new frozen source, separate
+absent-target qualifications, complete source-only regeneration, full
+current-data inspection and both fresh complete reviews are still required
+before another genuine cold attempt, and I3-I5, the verified v2 receipt and the
+native rows remain open.

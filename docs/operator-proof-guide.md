@@ -317,6 +317,33 @@ obligations. Regenerate old noncanonical plans and repeat complete review;
 same-file resolution alone is not exact admission
 ([ADR 0159](../adr/0159-canonicalize-primary-sources-before-recipe-lowering.md)).
 
+A compile whose environment depends on build-script metadata authors its words
+into a template instead of the compiler action. Authoring writes
+`<step>-invocation-template` plus a `metadata-helper --compiler-invocation`
+action and leaves the compiler action's own arguments empty. The helper copies
+the template's words one-for-one, and build-script flags reach the compiler
+through the typed `@metadata/compiler.rsp` input. Admission therefore resolves
+each compiler action's effective words — literal arguments for a direct action,
+the template's arguments for a templated one, and only after its helper,
+template identity, data name, and typed inputs, outputs and runtime mounts all
+match that compile action. A consumer that reads only the compiler action's own
+arguments rejects every templated unit
+([ADR 0161](../adr/0161-admit-build-metadata-compiler-actions-through-their-authored-template.md)).
+
+Rehearse that admission against a frozen stage recipe and unit-plan pair
+without preparing prior recipes or executing anything:
+
+```bash
+MANTLE_COLD_RECIPE_DIR=<cohort>/program-sources/source-built-mantle-programs/bootstrap/source-built \
+  cargo test -p mantle --bin mantle \
+  frozen_stage_recipes_admit_one_compiler_action_per_unit -- --ignored --nocapture
+```
+
+It asserts structural facts on the actual recipe bytes (every unit resolves
+exactly one compiler action, no action serves two units, both direct and
+templated paths are exercised) and reports observed counts; it never adopts a
+prior run's totals.
+
 The v2 core receipt's `source_blake3` identifies the declared Mantle source
 record, not the aggregate source-authority-set digest. The plan and receipt
 extension retain `source_authority_digest_blake3` for the complete seven-role

@@ -15,6 +15,7 @@ use crate::source_built_fixed_point_action_trust::ActionExecutable;
 use crate::source_built_fixed_point_action_trust::ActionInput;
 use crate::source_built_fixed_point_action_trust::ActionSpec;
 use crate::source_built_fixed_point_action_trust::StageActionAdapter;
+use crate::source_built_mantle_programs::metadata;
 use crate::source_built_recipe::ArtifactKind;
 use crate::source_built_recipe::ArtifactRef;
 use crate::source_built_recipe::PreparedRecipe;
@@ -283,6 +284,8 @@ fn validate_unit_inventory(
         .iter()
         .map(|step| (format!("{}/{}", recipe.adapter().stage_id, step.id), step))
         .collect::<BTreeMap<_, _>>();
+    let stage = recipe.adapter().stage_id.as_str();
+    let compilers = compiler_actions(stage, &steps, compiler)?;
     let mut claimed = BTreeSet::new();
     for effect in &topology.effects {
         let references = &recipe.semantic_roots()[&format!("rust-unit:{}", effect.unit_id.0)];
@@ -295,30 +298,18 @@ fn validate_unit_inventory(
             .iter()
             .find(|argument| argument.starts_with("metadata="))
             .ok_or_else(|| failure("source unit lacks compiler disambiguator".into()))?;
-        let mut compiles =
-            ancestry.iter().filter_map(|id| steps.get(id).map(|step| (id, *step))).filter(|(_, step)| {
-                match &step.operation {
-                    RecipeOperation::Exec {
-                        executable_input,
-                        arguments,
-                        ..
-                    } => {
-                        step.inputs.get(executable_input) == Some(compiler)
-                            && arguments
-                                .iter()
-                                .filter_map(literal_word)
-                                .any(|argument| argument == *metadata || argument == format!("-C{metadata}"))
-                    }
-                    _ => false,
-                }
-            });
-        let (compile_id, compile) = compiles.next().ok_or_else(|| {
+        let prefixed = format!("-C{metadata}");
+        let mut compiles = ancestry
+            .iter()
+            .filter_map(|id| compilers.get(id))
+            .filter(|action| action.literal_words.iter().any(|word| word == metadata || word == &prefixed));
+        let compile = compiles.next().ok_or_else(|| {
             failure(format!("unit {} has no actual source-produced compiler action", effect.unit_id.0))
         })?;
-        if compiles.next().is_some() || !claimed.insert(compile_id.clone()) {
+        if compiles.next().is_some() || !claimed.insert(compile.step.id.clone()) {
             return Err(failure("ambiguous or shared compiler unit action".into()));
         }
-        validate_primary_source(effect, compile, paths)?;
+        validate_primary_source(effect, compile.step, &compile.words, paths)?;
         for dependency in &effect.dependency_unit_ids {
             let key = format!("rust-unit:{}", dependency.0);
             let products = recipe
@@ -375,6 +366,137 @@ fn ancestors(references: &[ArtifactRef], steps: &BTreeMap<String, &RecipeStep>) 
     Ok(visited)
 }
 
+/// A stage-local action that runs the source-produced compiler, with the words
+/// that compiler actually receives.
+struct CompilerAction<'a> {
+    step: &'a RecipeStep,
+    words: Vec<RecipeWord>,
+    literal_words: Vec<String>,
+}
+
+/// Every stage-local action that runs the source-produced compiler. A
+/// build-metadata compile authors its words into a helper-read template and
+/// leaves its own arguments empty, so admission decodes the same authored
+/// template the helper copies one-for-one. Admission proves which source-authored
+/// words and typed products reach the compiler; it does not execute the helper,
+/// so that helper's own I/O behaviour remains a measured-action obligation.
+fn compiler_actions<'a>(
+    stage: &str,
+    steps: &BTreeMap<String, &'a RecipeStep>,
+    compiler: &ArtifactRef,
+) -> Result<BTreeMap<String, CompilerAction<'a>>, RunError> {
+    assert!(!stage.is_empty(), "compiler admission requires a stage identity");
+    let mut actions = BTreeMap::new();
+    for (id, step) in steps {
+        let RecipeOperation::Exec { executable_input, .. } = &step.operation else {
+            continue;
+        };
+        if step.inputs.get(executable_input) != Some(compiler) {
+            continue;
+        }
+        let words = compiler_words(stage, id, step, steps)?;
+        let literal_words = words.iter().filter_map(literal_word).collect();
+        actions.insert(id.clone(), CompilerAction {
+            step,
+            words,
+            literal_words,
+        });
+    }
+    Ok(actions)
+}
+
+/// The words the compiler receives. A templated compile's words are the source
+/// template's arguments, admitted only after that template names exactly this
+/// action's own typed inputs, outputs and runtime mounts.
+fn compiler_words(
+    stage: &str,
+    action: &str,
+    step: &RecipeStep,
+    steps: &BTreeMap<String, &RecipeStep>,
+) -> Result<Vec<RecipeWord>, RunError> {
+    let RecipeOperation::Exec {
+        invocation_input,
+        arguments,
+        environment,
+        runtime_mounts,
+        ..
+    } = &step.operation
+    else {
+        return Err(failure(format!("compiler action {action} is not executable")));
+    };
+    let Some(name) = invocation_input else {
+        return Ok(arguments.clone());
+    };
+    if !arguments.is_empty() || !environment.is_empty() {
+        return Err(failure(format!("templated compiler action {action} also carries literal words")));
+    }
+    let ids = metadata::compiler_invocation_ids(&step.id);
+    let produced = |output: &str| ArtifactRef::Produced {
+        action_id: format!("{stage}/{}", ids.invocation),
+        output_id: output.into(),
+    };
+    if name != &ids.invocation
+        || step.inputs.get(name) != Some(&produced(metadata::COMPILER_INVOCATION_OUTPUT))
+        || step.inputs.get(&ids.data) != Some(&produced(metadata::COMPILER_INVOCATION_DATA_OUTPUT))
+    {
+        return Err(failure(format!("templated compiler action {action} lacks its authored invocation products")));
+    }
+    let helper = steps
+        .get(&format!("{stage}/{}", ids.invocation))
+        .ok_or_else(|| failure(format!("templated compiler action {action} lacks its helper action")))?;
+    let template_ref = ArtifactRef::Produced {
+        action_id: format!("{stage}/{}", ids.template),
+        output_id: metadata::COMPILER_TEMPLATE_OUTPUT.into(),
+    };
+    let RecipeOperation::Exec {
+        executable_input,
+        arguments: helper_arguments,
+        invocation_input: None,
+        ..
+    } = &helper.operation
+    else {
+        return Err(failure(format!(
+            "templated compiler action {action} helper does not run the authored invocation mode"
+        )));
+    };
+    if helper_arguments != &metadata::compiler_invocation_arguments()
+        || helper.inputs.get(metadata::COMPILER_TEMPLATE_OUTPUT) != Some(&template_ref)
+        || !matches!(
+            helper.inputs.get(executable_input),
+            Some(ArtifactRef::Produced { action_id, .. }) if action_id.starts_with(&format!("{stage}/"))
+        )
+    {
+        return Err(failure(format!(
+            "templated compiler action {action} helper is not the stage-produced authored invocation helper"
+        )));
+    }
+    let template = steps
+        .get(&format!("{stage}/{}", ids.template))
+        .ok_or_else(|| failure(format!("templated compiler action {action} lacks its template action")))?;
+    let RecipeOperation::WriteText { output, text } = &template.operation else {
+        return Err(failure(format!("templated compiler action {action} template is not source-written text")));
+    };
+    if output.as_str() != metadata::COMPILER_TEMPLATE_OUTPUT || !template.inputs.is_empty() {
+        return Err(failure(format!("templated compiler action {action} template is not the authored text output")));
+    }
+    let template: metadata::CompilerInvocationTemplate = serde_json::from_str(text).map_err(|error| {
+        failure(format!("templated compiler action {action} has an invalid invocation template: {error}"))
+    })?;
+    let inputs = step.inputs.keys().filter(|key| *key != name && **key != ids.data).cloned().collect::<Vec<_>>();
+    let outputs = step.outputs.keys().cloned().collect::<Vec<_>>();
+    let runtime = runtime_mounts.keys().cloned().collect::<Vec<_>>();
+    if template.data_name != ids.data
+        || template.inputs != inputs
+        || template.outputs != outputs
+        || template.runtime != runtime
+    {
+        return Err(failure(format!(
+            "templated compiler action {action} template does not name its exact typed inputs, outputs and runtime"
+        )));
+    }
+    Ok(template.invocation.arguments)
+}
+
 fn literal_word(word: &RecipeWord) -> Option<String> {
     let mut text = String::new();
     for part in &word.parts {
@@ -386,9 +508,14 @@ fn literal_word(word: &RecipeWord) -> Option<String> {
     Some(text)
 }
 
+/// The unit's own primary source must be one literal word of the compiler action,
+/// and that word's typed source member must be the independently planned file.
+/// Templated compiles pass the template's words, which the helper copies
+/// byte-for-byte; direct compiles pass their own literal arguments.
 fn validate_primary_source(
     effect: &mantle_rust_plan_core::ExistingUnitEffect,
     step: &RecipeStep,
+    words: &[RecipeWord],
     paths: &RecipePaths<'_>,
 ) -> Result<(), RunError> {
     let source = effect
@@ -408,10 +535,7 @@ fn validate_primary_source(
         materialized = root.join(source);
         &materialized
     };
-    let RecipeOperation::Exec { arguments, .. } = &step.operation else {
-        return Err(failure("compiler unit is not executable".into()));
-    };
-    let literal_arguments = arguments.iter().filter_map(literal_word).collect::<Vec<_>>();
+    let literal_arguments = words.iter().filter_map(literal_word).collect::<Vec<_>>();
     let crate_name = effect.target_name.replace('-', "_");
     if !literal_arguments.windows(2).any(|pair| pair[0] == "--crate-name" && pair[1] == crate_name)
         && !literal_arguments.iter().any(|argument| argument == &format!("--crate-name={crate_name}"))
@@ -425,7 +549,7 @@ fn validate_primary_source(
         let Ok(relative) = source.strip_prefix(root) else {
             continue;
         };
-        for word in arguments {
+        for word in words {
             if let [WordPart::Input { name, path }] = word.parts.as_slice()
                 && let Some(ArtifactRef::Source {
                     role: input_role,
@@ -1189,5 +1313,347 @@ mod tests {
         });
         assert!(result.err().unwrap().to_string().contains("different executable identity"));
         assert_eq!(observed, [actual]);
+    }
+
+    const TEMPLATED_STAGE: &str = "mantle-stage1";
+    const TEMPLATED_UNIT: &str = "unit-00002-compile";
+
+    fn compiler_reference() -> ArtifactRef {
+        ArtifactRef::Produced {
+            action_id: "full-source-rust-provider/rustc.link.products".into(),
+            output_id: "artifact".into(),
+        }
+    }
+
+    fn literal(text: &str) -> RecipeWord {
+        RecipeWord {
+            parts: vec![WordPart::Literal { text: text.into() }],
+        }
+    }
+
+    fn input(name: &str, path: &str) -> RecipeWord {
+        RecipeWord {
+            parts: vec![WordPart::Input {
+                name: name.into(),
+                path: path.into(),
+            }],
+        }
+    }
+
+    fn text(kind: ArtifactKind) -> crate::source_built_recipe::RecipeOutput {
+        crate::source_built_recipe::RecipeOutput {
+            kind,
+            bytes_max: 1 << 20,
+        }
+    }
+
+    fn executed(arguments: Vec<RecipeWord>) -> RecipeOperation {
+        RecipeOperation::Exec {
+            command_state: None,
+            executable_input: "rustc".into(),
+            arguments,
+            environment: BTreeMap::new(),
+            runtime_mounts: BTreeMap::new(),
+            cwd_input: None,
+            cwd_output: None,
+            stdin_input: None,
+            merge_stderr: false,
+            invocation_input: None,
+            exit_policy: crate::source_built_recipe::RecipeExitPolicy::Exact { code: 0 },
+            guard: None,
+            output_seeds: BTreeMap::new(),
+        }
+    }
+
+    fn program() -> crate::source_built_recipe::SourceRecipe {
+        crate::source_built_recipe::SourceRecipe {
+            schema: "test-source-built-recipe-v1".into(),
+            stage_id: TEMPLATED_STAGE.into(),
+            preparation: crate::source_built_recipe::RecipePreparation {
+                tool: "test".into(),
+                provenance: "test".into(),
+            },
+            steps: Vec::new(),
+            timeout_groups: Vec::new(),
+            roots: Vec::new(),
+            exports: BTreeMap::new(),
+            semantic_roots: BTreeMap::new(),
+        }
+    }
+
+    /// The authored build-metadata compile: the compiler action keeps no words of
+    /// its own and authoring writes them into the helper-read template.
+    fn templated_compile(arguments: Vec<RecipeWord>) -> (RecipeStep, Vec<RecipeStep>) {
+        let metadata = ArtifactRef::Produced {
+            action_id: format!("{TEMPLATED_STAGE}/unit-00002-metadata"),
+            output_id: "metadata".into(),
+        };
+        let mut step = RecipeStep {
+            id: TEMPLATED_UNIT.into(),
+            inputs: BTreeMap::from([
+                ("rustc".into(), compiler_reference()),
+                ("metadata".into(), metadata.clone()),
+                ("vendor-inputs".into(), ArtifactRef::Source {
+                    role: SourceAuthorityRole::VendorInputs,
+                    path: String::new(),
+                }),
+            ]),
+            outputs: BTreeMap::from([
+                ("link-work".into(), text(ArtifactKind::Tree)),
+                ("stdout".into(), text(ArtifactKind::Text)),
+                ("stderr".into(), text(ArtifactKind::Text)),
+            ]),
+            operation: executed(arguments),
+        };
+        let mut program = program();
+        metadata::append_metadata_invocation(
+            &mut program,
+            &mut step,
+            ArtifactRef::Produced {
+                action_id: format!("{TEMPLATED_STAGE}/helper"),
+                output_id: "helper".into(),
+            },
+            metadata,
+            &BTreeMap::new(),
+        )
+        .expect("authoring a templated compile");
+        assert_eq!(program.steps.len(), 2, "authoring adds exactly the template and helper");
+        (step, program.steps)
+    }
+
+    fn compile_arguments() -> Vec<RecipeWord> {
+        vec![
+            literal("--crate-name"),
+            literal("proc_macro_hack"),
+            input("vendor-inputs", "proc-macro-hack/src/lib.rs"),
+            literal("-C"),
+            literal("metadata=d4deb81969bf70e4"),
+            RecipeWord {
+                parts: vec![WordPart::Literal { text: "@".into() }, WordPart::Input {
+                    name: "metadata".into(),
+                    path: "compiler.rsp".into(),
+                }],
+            },
+        ]
+    }
+
+    /// The words admission resolves for one stage-local compiler action.
+    fn admitted(step: &RecipeStep, extra: &[RecipeStep]) -> Result<(Vec<RecipeWord>, Vec<String>), RunError> {
+        let owned = std::iter::once(step).chain(extra.iter()).collect::<Vec<_>>();
+        let steps = owned
+            .iter()
+            .map(|step| (format!("{TEMPLATED_STAGE}/{}", step.id), *step))
+            .collect::<BTreeMap<_, _>>();
+        let actions = compiler_actions(TEMPLATED_STAGE, &steps, &compiler_reference())?;
+        let action = actions
+            .get(&format!("{TEMPLATED_STAGE}/{}", step.id))
+            .ok_or_else(|| failure("admitted compiler action is absent".into()))?;
+        Ok((action.words.clone(), action.literal_words.clone()))
+    }
+
+    fn rewrite_template(extra: &mut [RecipeStep], edit: impl FnOnce(&mut serde_json::Value)) {
+        let template = extra.iter_mut().find(|step| step.id.ends_with("-template")).expect("template action");
+        let RecipeOperation::WriteText { text, .. } = &mut template.operation else {
+            panic!("template must be source-written text");
+        };
+        let mut value = serde_json::from_str::<serde_json::Value>(text).expect("valid template JSON");
+        edit(&mut value);
+        *text = value.to_string();
+    }
+
+    #[test]
+    fn templated_compile_admits_the_authored_template_words() {
+        let (step, extra) = templated_compile(compile_arguments());
+        let (words, literals) = admitted(&step, &extra).expect("the authored template must be admitted");
+        assert!(literals.iter().any(|word| word == "metadata=d4deb81969bf70e4"));
+        assert!(literals.windows(2).any(|pair| pair[0] == "--crate-name" && pair[1] == "proc_macro_hack"));
+        assert!(
+            words
+                .iter()
+                .any(|word| matches!(word.parts.as_slice(), [WordPart::Input { name, .. }] if name == "vendor-inputs")),
+            "the template's typed primary-source word must survive admission"
+        );
+    }
+
+    #[test]
+    fn templated_probe_without_a_metadata_word_is_admitted_but_not_a_compiler_unit_action() {
+        let (step, extra) = templated_compile(vec![literal("--version")]);
+        let (words, literals) = admitted(&step, &extra).expect("a probe template is still authored text");
+        assert_eq!(words.len(), 1);
+        assert!(literals.iter().all(|word| !word.starts_with("metadata=")));
+    }
+
+    #[test]
+    fn templated_compile_rejects_its_own_literal_words() {
+        let (mut step, extra) = templated_compile(compile_arguments());
+        let RecipeOperation::Exec { arguments, .. } = &mut step.operation else {
+            panic!("templated compile must be executable");
+        };
+        arguments.push(literal("--extra"));
+        let error = admitted(&step, &extra).expect_err("mixed static words must be rejected");
+        assert!(error.to_string().contains("literal words"), "{error}");
+    }
+
+    #[test]
+    fn templated_compile_rejects_a_substituted_helper_template() {
+        let (step, mut extra) = templated_compile(compile_arguments());
+        let helper = extra.iter_mut().find(|step| step.id.ends_with("-invocation")).expect("helper action");
+        helper.inputs.insert(metadata::COMPILER_TEMPLATE_OUTPUT.into(), ArtifactRef::Produced {
+            action_id: format!("{TEMPLATED_STAGE}/other-template"),
+            output_id: "template".into(),
+        });
+        let error = admitted(&step, &extra).expect_err("a substituted template must be rejected");
+        assert!(error.to_string().contains("authored invocation helper"), "{error}");
+    }
+
+    #[test]
+    fn templated_compile_rejects_template_scope_drift() {
+        let (step, mut extra) = templated_compile(compile_arguments());
+        rewrite_template(&mut extra, |value| {
+            value["inputs"].as_array_mut().expect("inputs").push(serde_json::Value::from("extra-input"));
+        });
+        let error = admitted(&step, &extra).expect_err("an extra template input must be rejected");
+        assert!(error.to_string().contains("exact typed inputs"), "{error}");
+
+        let (step, mut extra) = templated_compile(compile_arguments());
+        rewrite_template(&mut extra, |value| {
+            value["undeclared"] = serde_json::Value::from(true);
+        });
+        let error = admitted(&step, &extra).expect_err("an unknown template field must be rejected");
+        assert!(error.to_string().contains("invalid invocation template"), "{error}");
+    }
+
+    fn unit_effect(primary: &str) -> mantle_rust_plan_core::ExistingUnitEffect {
+        mantle_rust_plan_core::ExistingUnitEffect {
+            effect_id: mantle_rust_plan_core::EffectId("effect".into()),
+            unit_id: mantle_rust_plan_core::UnitId("101:test:proc-macro-hack".into()),
+            package_id: "test".into(),
+            target_name: "proc-macro-hack".into(),
+            target_kind: "proc-macro".into(),
+            execution_kind: "compile".into(),
+            dependency_unit_ids: Vec::new(),
+            arguments: vec![primary.into(), "metadata=d4deb81969bf70e4".into()],
+            environment: Vec::new(),
+            input_identities: Vec::new(),
+            expected_outputs: Vec::new(),
+            execution_order: 0,
+        }
+    }
+
+    #[test]
+    fn templated_primary_source_requires_its_exact_typed_member() {
+        let (step, extra) = templated_compile(compile_arguments());
+        let (words, _) = admitted(&step, &extra).expect("authored template");
+        let roots = BTreeMap::from([
+            (SourceAuthorityRole::MantleSource, PathBuf::from("/src")),
+            (SourceAuthorityRole::VendorInputs, PathBuf::from("/src/vendor")),
+        ]);
+        let paths = RecipePaths {
+            source_roots: &roots,
+            runtime_root: Path::new("/run"),
+            sandbox_binary: Path::new("/bwrap"),
+        };
+        validate_primary_source(&unit_effect("vendor/proc-macro-hack/src/lib.rs"), &step, &words, &paths)
+            .expect("the templated word must satisfy exact primary admission");
+        let error = validate_primary_source(&unit_effect("vendor/proc-macro-hack/src/other.rs"), &step, &words, &paths)
+            .expect_err("a different primary file must be rejected");
+        assert!(error.to_string().contains("exact admitted primary source"), "{error}");
+    }
+
+    /// Opt-in rehearsal of this consumer over the actual frozen cohort, without
+    /// preparing prior recipes or executing anything. Set
+    /// `MANTLE_COLD_RECIPE_DIR` to the frozen
+    /// `<cohort>/program-sources/source-built-mantle-programs/bootstrap/source-built`.
+    /// It proves every unit resolves exactly one compiler action — selected by
+    /// that unit's own frozen disambiguator — that no action serves two units,
+    /// and that every rustc action's authored words resolve on the real bytes.
+    #[test]
+    #[ignore = "reads a frozen 176MB stage recipe pair named by MANTLE_COLD_RECIPE_DIR"]
+    fn frozen_stage_recipes_admit_one_compiler_action_per_unit() {
+        let directory = PathBuf::from(
+            std::env::var_os("MANTLE_COLD_RECIPE_DIR")
+                .expect("MANTLE_COLD_RECIPE_DIR must name the frozen source-built stage recipe directory"),
+        );
+        assert!(Path::new(&directory).is_dir(), "MANTLE_COLD_RECIPE_DIR must be an existing directory");
+        for stage in ["mantle-stage1", "mantle-stage2"] {
+            let path = Path::new(&directory).join(format!("{stage}.json"));
+            let bytes = std::fs::read(&path).expect("frozen stage recipe is readable");
+            let recipe = serde_json::from_slice::<crate::source_built_recipe::SourceRecipe>(&bytes)
+                .expect("frozen stage recipe decodes as a source recipe");
+            assert_eq!(recipe.stage_id, stage, "recipe stage identity differs");
+            #[derive(serde::Deserialize)]
+            struct UnitPlan {
+                unit_graph: UnitGraph,
+            }
+            #[derive(serde::Deserialize)]
+            struct UnitGraph {
+                derivations: Vec<UnitDerivation>,
+            }
+            #[derive(serde::Deserialize)]
+            struct UnitDerivation {
+                unit_id: String,
+                rustc_metadata_hash: String,
+            }
+            let plan_path = Path::new(&directory).join(format!("{stage}.unit-plan.json"));
+            let plan =
+                serde_json::from_slice::<UnitPlan>(&std::fs::read(&plan_path).expect("frozen unit plan is readable"))
+                    .expect("frozen unit plan decodes");
+            let hashes = plan
+                .unit_graph
+                .derivations
+                .iter()
+                .map(|derivation| (derivation.unit_id.clone(), derivation.rustc_metadata_hash.clone()))
+                .collect::<BTreeMap<_, _>>();
+            assert_eq!(hashes.len(), plan.unit_graph.derivations.len(), "{stage} unit plan repeats a unit identity");
+            let steps =
+                recipe.steps.iter().map(|step| (format!("{stage}/{}", step.id), step)).collect::<BTreeMap<_, _>>();
+            let rustc_actions = recipe
+                .steps
+                .iter()
+                .filter(|step| {
+                    matches!(&step.operation, RecipeOperation::Exec { executable_input, .. } if executable_input == "rustc")
+                })
+                .collect::<Vec<_>>();
+            let first = rustc_actions.first().expect("frozen stage recipe has compiler actions");
+            let compiler = first.inputs.get("rustc").expect("compiler action names its compiler").clone();
+            let compilers =
+                compiler_actions(stage, &steps, &compiler).expect("every rustc action must resolve its authored words");
+            assert_eq!(compilers.len(), rustc_actions.len(), "{stage} compiler actions must all name one compiler");
+            let mut units = 0_u32;
+            let mut templated_units = 0_u32;
+            let mut serving = BTreeMap::<String, u32>::new();
+            for (key, references) in recipe.semantic_roots.iter().filter(|(key, _)| key.starts_with("rust-unit:")) {
+                let unit = key.strip_prefix("rust-unit:").expect("unit key prefix");
+                let hash = hashes.get(unit).unwrap_or_else(|| panic!("unit {unit} has no frozen plan derivation"));
+                let expected = format!("metadata={hash}");
+                let expected_prefixed = format!("-Cmetadata={hash}");
+                let ancestry = ancestors(references, &steps).expect("semantic root ancestry");
+                let mut matches = ancestry.iter().filter_map(|id| compilers.get(id)).filter(|action| {
+                    action.literal_words.iter().any(|word| word == &expected || word == &expected_prefixed)
+                });
+                let action = matches
+                    .next()
+                    .unwrap_or_else(|| panic!("unit {key} has no compiler action carrying its disambiguator"));
+                if let Some(second) = matches.next() {
+                    panic!("unit {key} has ambiguous compiler actions: {} and {}", action.step.id, second.step.id);
+                }
+                assert!(
+                    serving.insert(action.step.id.clone(), 1).is_none(),
+                    "compiler action {} is shared between units",
+                    action.step.id
+                );
+                units += 1;
+                if matches!(&action.step.operation, RecipeOperation::Exec {
+                    invocation_input: Some(_),
+                    ..
+                }) {
+                    templated_units += 1;
+                }
+            }
+            assert_eq!(units as usize, hashes.len(), "{stage} admits a different unit set than its frozen plan");
+            assert!(templated_units > 0, "{stage} must exercise the templated compiler-action path");
+            assert!(units > templated_units, "{stage} must still admit direct compiler actions");
+            println!("{stage}: rustc_actions={} units={units} templated_units={templated_units}", compilers.len());
+        }
     }
 }

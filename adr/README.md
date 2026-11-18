@@ -158,3 +158,4 @@ compatibility surface, crate name, or historical decision.
 | [0158](0158-keep-authored-programs-outside-compiler-source-identity.md) | Keep authored source programs outside compiler source identity | Accepted |
 | [0159](0159-canonicalize-primary-sources-before-recipe-lowering.md) | Canonicalize primary sources before recipe lowering | Accepted |
 | [0160](0160-classify-type-only-wasi-imports-outside-virtualization.md) | Classify type-only WASI imports outside deny-all virtualization | Accepted |
+| [0161](0161-admit-build-metadata-compiler-actions-through-their-authored-template.md) | Admit build-metadata compiler actions through their authored template | Accepted |

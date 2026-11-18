@@ -34,6 +34,62 @@ pub(crate) const COMPILE_ENVIRONMENT_VARIABLE: &str = "MANTLE_CAIRN_COMPILE_ENV"
 pub(crate) const SCRIPT_ENVIRONMENT_VARIABLE: &str = "MANTLE_CAIRN_SCRIPT_ENV";
 pub(crate) const SOURCE_OVERLAY_VARIABLE: &str = "MANTLE_CAIRN_SOURCE_OVERLAY";
 pub(crate) const SCRIPT_OUT_DIR_BYTES_MAX: u64 = 2 * 1024 * 1024 * 1024;
+/// Executable input naming the source-produced metadata helper.
+pub(crate) const METADATA_HELPER_INPUT: &str = "metadata-helper";
+/// Helper mode that turns a source-authored compiler template into the actual
+/// compiler invocation.
+pub(crate) const COMPILER_INVOCATION_MODE: &str = "--compiler-invocation";
+/// The template's WriteText output and the helper input that reads it.
+pub(crate) const COMPILER_TEMPLATE_OUTPUT: &str = "template";
+pub(crate) const COMPILER_INVOCATION_OUTPUT: &str = "invocation";
+pub(crate) const COMPILER_INVOCATION_DATA_OUTPUT: &str = "environment-data";
+
+/// A build-metadata compile's source-authored words. Authoring moves the
+/// compiler's arguments and environment here and leaves the compiler action's
+/// own arguments empty. The metadata helper copies `invocation.arguments`
+/// one-for-one into the runtime invocation: non-empty literal parts become
+/// same-byte data slices and typed parts are unchanged. Only the environment is
+/// extended from the actual metadata frame. Cargo-free unit admission decodes
+/// this same type, so authoring and admission share one template contract.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CompilerInvocationTemplate {
+    pub(crate) invocation: RecipeInvocation,
+    pub(crate) inputs: Vec<String>,
+    pub(crate) outputs: Vec<String>,
+    pub(crate) runtime: Vec<String>,
+    pub(crate) data_name: String,
+}
+
+/// Stage-local identities authored for one templated compile step.
+pub(crate) struct CompilerInvocationIds {
+    /// Helper action and the compile step's invocation input name.
+    pub(crate) invocation: String,
+    /// WriteText template action.
+    pub(crate) template: String,
+    /// Compile step input carrying the helper's literal data.
+    pub(crate) data: String,
+}
+
+pub(crate) fn compiler_invocation_ids(step_id: &str) -> CompilerInvocationIds {
+    let invocation = format!("{step_id}-invocation");
+    CompilerInvocationIds {
+        template: format!("{invocation}-template"),
+        data: format!("{invocation}-data"),
+        invocation,
+    }
+}
+
+/// The helper action's exact operands.
+pub(crate) fn compiler_invocation_arguments() -> Vec<RecipeWord> {
+    vec![
+        literal(COMPILER_INVOCATION_MODE),
+        input(COMPILER_TEMPLATE_OUTPUT, ""),
+        input("actual-metadata", "compiler.env"),
+        output(COMPILER_INVOCATION_OUTPUT),
+        output(COMPILER_INVOCATION_DATA_OUTPUT),
+    ]
+}
 
 fn literal(text: impl Into<String>) -> RecipeWord {
     RecipeWord {
@@ -246,7 +302,7 @@ pub(crate) fn metadata_response(
 ) -> Result<MetadataProducts, RunError> {
     require_produced(&executable, "metadata phase helper")?;
     let mut inputs = runtime_inputs;
-    bind_frame_input(&mut inputs, "metadata-helper", executable);
+    bind_frame_input(&mut inputs, METADATA_HELPER_INPUT, executable);
     let mut generated_inputs = BTreeMap::new();
     let mut arguments = vec![output("metadata")];
     for (index, metadata) in metadata_inputs.iter().enumerate() {
@@ -257,7 +313,7 @@ pub(crate) fn metadata_response(
         for alias in [name, package] {
             if alias.is_empty()
                 || alias.len() > 256
-                || matches!(alias.as_str(), "." | ".." | "metadata" | "metadata-helper")
+                || matches!(alias.as_str(), "." | ".." | "metadata" | METADATA_HELPER_INPUT)
                 || !alias.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b':' | b'.'))
             {
                 return Err(error("invalid metadata source/output input alias"));
@@ -297,7 +353,7 @@ pub(crate) fn metadata_response(
             ]),
             operation: RecipeOperation::Exec {
                 command_state: None,
-                executable_input: "metadata-helper".into(),
+                executable_input: METADATA_HELPER_INPUT.into(),
                 invocation_input: None,
                 merge_stderr: false,
                 arguments,
@@ -361,7 +417,7 @@ pub(crate) fn rustc_request(
     require_produced(&helper_executable, "compiler request helper")?;
     require_produced(&original_request, "original script compiler request")?;
     require_produced(&compiler, "source compiler query executable")?;
-    bind_frame_input(&mut runtime_inputs, "metadata-helper", helper_executable);
+    bind_frame_input(&mut runtime_inputs, METADATA_HELPER_INPUT, helper_executable);
     bind_frame_input(&mut runtime_inputs, "request", original_request);
     bind_frame_input(&mut runtime_inputs, "rustc", compiler);
     let mut arguments = vec![
@@ -393,7 +449,7 @@ pub(crate) fn rustc_request(
             ]),
             operation: RecipeOperation::Exec {
                 command_state: None,
-                executable_input: "metadata-helper".into(),
+                executable_input: METADATA_HELPER_INPUT.into(),
                 invocation_input: None,
                 merge_stderr: false,
                 arguments,
@@ -474,7 +530,7 @@ fn unprepared_library_overlays(
     if sources.is_empty() {
         return Err(error("library overlay requires original sources"));
     }
-    bind_frame_input(&mut runtime_inputs, "metadata-helper", executable);
+    bind_frame_input(&mut runtime_inputs, METADATA_HELPER_INPUT, executable);
     let mut arguments = vec![literal("--library-overlays"), output("source-overlay")];
     for (index, source) in sources.iter().enumerate() {
         if !matches!(&source.original, ArtifactRef::Source { .. } | ArtifactRef::ManifestSource { .. }) {
@@ -509,7 +565,7 @@ fn unprepared_library_overlays(
             ]),
             operation: RecipeOperation::Exec {
                 command_state: None,
-                executable_input: "metadata-helper".into(),
+                executable_input: METADATA_HELPER_INPUT.into(),
                 invocation_input: None,
                 merge_stderr: false,
                 arguments,
@@ -739,38 +795,31 @@ pub(crate) fn append_metadata_invocation(
     }
     used.extend(generated_inputs.keys().map(String::as_str));
     step.inputs.retain(|name, _| used.contains(name.as_str()));
-    let id = format!("{}-invocation", step.id);
-    let template_id = format!("{id}-template");
-    let data_name = format!("{id}-data");
-    #[derive(serde::Serialize)]
-    struct Template<'a> {
-        invocation: &'a RecipeInvocation,
-        inputs: Vec<&'a str>,
-        outputs: Vec<&'a str>,
-        runtime: Vec<&'a str>,
-        data_name: &'a str,
-    }
-    let template = serde_json::to_string(&Template {
-        invocation: &invocation,
-        inputs: step.inputs.keys().map(String::as_str).collect(),
-        outputs: step.outputs.keys().map(String::as_str).collect(),
-        runtime: runtime_mounts.keys().map(String::as_str).collect(),
-        data_name: &data_name,
+    let ids = compiler_invocation_ids(&step.id);
+    let template = serde_json::to_string(&CompilerInvocationTemplate {
+        invocation,
+        inputs: step.inputs.keys().cloned().collect(),
+        outputs: step.outputs.keys().cloned().collect(),
+        runtime: runtime_mounts.keys().cloned().collect(),
+        data_name: ids.data.clone(),
     })
     .map_err(|failure| error(format!("serializing source invocation template: {failure}")))?;
     program.steps.push(RecipeStep {
-        id: template_id.clone(),
+        id: ids.template.clone(),
         inputs: BTreeMap::new(),
-        outputs: BTreeMap::from([("template".into(), spec(ArtifactKind::Text, template.len() as u64))]),
+        outputs: BTreeMap::from([(COMPILER_TEMPLATE_OUTPUT.into(), spec(ArtifactKind::Text, template.len() as u64))]),
         operation: RecipeOperation::WriteText {
-            output: "template".into(),
+            output: COMPILER_TEMPLATE_OUTPUT.into(),
             text: template,
         },
     });
     let mut inputs = BTreeMap::from([
-        ("metadata-helper".into(), executable),
+        (METADATA_HELPER_INPUT.into(), executable),
         ("actual-metadata".into(), metadata),
-        ("template".into(), produced(&program.stage_id, &template_id, "template")),
+        (
+            COMPILER_TEMPLATE_OUTPUT.into(),
+            produced(&program.stage_id, &ids.template, COMPILER_TEMPLATE_OUTPUT),
+        ),
     ]);
     for name in runtime_mounts.values() {
         let reference = step.inputs.get(name).ok_or_else(|| error("metadata invocation runtime input absent"))?;
@@ -781,25 +830,19 @@ pub(crate) fn append_metadata_invocation(
         }
     }
     program.steps.push(RecipeStep {
-        id: id.clone(),
+        id: ids.invocation.clone(),
         inputs,
         outputs: BTreeMap::from([
-            ("invocation".into(), spec(ArtifactKind::Text, 32 * 1024 * 1024)),
-            ("environment-data".into(), spec(ArtifactKind::Text, 32 * 1024 * 1024)),
+            (COMPILER_INVOCATION_OUTPUT.into(), spec(ArtifactKind::Text, 32 * 1024 * 1024)),
+            (COMPILER_INVOCATION_DATA_OUTPUT.into(), spec(ArtifactKind::Text, 32 * 1024 * 1024)),
             ("stdout".into(), spec(ArtifactKind::Text, 1024 * 1024)),
             ("stderr".into(), spec(ArtifactKind::Text, 1024 * 1024)),
             ("exit-status".into(), spec(ArtifactKind::Text, 4)),
         ]),
         operation: RecipeOperation::Exec {
             command_state: None,
-            executable_input: "metadata-helper".into(),
-            arguments: vec![
-                literal("--compiler-invocation"),
-                input("template", ""),
-                input("actual-metadata", "compiler.env"),
-                output("invocation"),
-                output("environment-data"),
-            ],
+            executable_input: METADATA_HELPER_INPUT.into(),
+            arguments: compiler_invocation_arguments(),
             environment: BTreeMap::new(),
             runtime_mounts: runtime_mounts.clone(),
             cwd_input: None,
@@ -812,8 +855,60 @@ pub(crate) fn append_metadata_invocation(
             invocation_input: None,
         },
     });
-    insert(&mut step.inputs, &data_name, produced(&program.stage_id, &id, "environment-data"))?;
-    insert(&mut step.inputs, &id, produced(&program.stage_id, &id, "invocation"))?;
-    *invocation_input = Some(id);
+    insert(
+        &mut step.inputs,
+        &ids.data,
+        produced(&program.stage_id, &ids.invocation, COMPILER_INVOCATION_DATA_OUTPUT),
+    )?;
+    insert(
+        &mut step.inputs,
+        &ids.invocation,
+        produced(&program.stage_id, &ids.invocation, COMPILER_INVOCATION_OUTPUT),
+    )?;
+    *invocation_input = Some(ids.invocation);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compiled_helper_matches_the_shared_compiler_invocation_contract() {
+        let source = metadata_helper_source_with_native(
+            crate::source_built_mantle_programs::native::CC_PROCESS_SOURCE,
+            crate::source_built_mantle_programs::compression::NATIVE_REQUEST_HELPER_SOURCE,
+        );
+        assert!(
+            source.contains(COMPILER_INVOCATION_MODE),
+            "the compiled helper must dispatch the shared invocation mode"
+        );
+        // The helper's operand order must stay template, metadata frame,
+        // invocation, then data; admission trusts exactly this order.
+        let operands = [
+            ("missing invocation template", "missing actual metadata environment"),
+            ("missing actual metadata environment", "missing invocation output"),
+            ("missing invocation output", "missing invocation data output"),
+        ];
+        let mut cursor = 0;
+        for (first, second) in operands {
+            let Some(start) = source[cursor..].find(first) else {
+                panic!("the compiled helper must require its {first} operand");
+            };
+            let next = cursor + start;
+            assert!(source[next..].contains(second), "the compiled helper must require {second} after {first}");
+            cursor = next;
+        }
+        assert!(
+            compiler_invocation_arguments().first().is_some_and(|word| word.parts
+                == [WordPart::Literal {
+                    text: COMPILER_INVOCATION_MODE.into()
+                }]),
+            "the helper's first operand must carry the shared mode"
+        );
+        let ids = compiler_invocation_ids("unit-00002-compile");
+        assert_eq!(ids.invocation, "unit-00002-compile-invocation");
+        assert_eq!(ids.template, "unit-00002-compile-invocation-template");
+        assert_eq!(ids.data, "unit-00002-compile-invocation-data");
+    }
 }
