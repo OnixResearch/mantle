@@ -1,0 +1,15 @@
+{
+  "scope": "The def26d414 frozen source cohort containing the cold1736 templated compiler-action admission repair",
+  "previous_cohort": "def26d4143ff29e3ef27b63ca092e457b657ec35",
+  "authorized_review_model": "underclass/gpt-6-sol",
+  "authorization_date": "2026-11-18",
+  "authorization_source": "Standing continuation in this session, under the reviewer-model authorization recorded at .cairn/changes/prove-source-built-mantle-fixed-point/evidence/2026-11-16-signed-stagex-adoption/replacement-review-model-authorization.json (BLAKE3 b4020ccf2534924baffd3169edc4afbf12a633e8dfe6a9be347593bc45462884). No new model question was asked for this cohort.",
+  "submitted_field": "review_model_authority",
+  "submitted_value": "approve-gpt-6-sol-replacement-cohort",
+  "authorized_action": "Two fresh independent reviews using the complete existing graph/template and physical/source criteria, bound to this cohort's actual frozen identities and reports.",
+  "coverage_reduced": false,
+  "qualification_gates_relaxed": false,
+  "launch_gates_relaxed": false,
+  "old_reviews_reused": false,
+  "non_claim": "Model authorization is not review acceptance, source qualification, protected execution, v2 proof, native-row acceptance or release eligibility."
+}
