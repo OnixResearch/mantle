@@ -356,6 +356,13 @@ chapter-tgz = "=0.1.0"
 [patch.crates-io]
 fuse-backend-rs = { path = "vendor/fuse-backend-rs" }
 
+# The pinned valence revision still names onix-artifact over SSH. Redirect that
+# transitive source to the identical HTTPS revision so a clean runner never
+# needs an SSH agent, key, or Git URL rewrite.
+[patch."ssh://git@github.com/OnixResearch/onix-artifact.git"]
+artifact-auth-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52" }
+artifact-auth-ed25519 = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52" }
+
 [dev-dependencies]
 casita = { git = "https://github.com/cachix/casita", rev = "90404fcb1cfb3d83f2233715448dfefe913f5fd1", default-features = false, features = ["native", "experimental"] }
 crunch-android-core = { path = "crates/crunch-android-core" }

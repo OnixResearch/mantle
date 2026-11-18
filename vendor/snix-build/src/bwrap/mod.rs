@@ -16,11 +16,41 @@ use crate::sandbox::InputsProvider;
 use crate::sandbox::SandboxSpec;
 #[cfg(target_os = "linux")]
 pub(crate) mod watch_cancel;
+pub(crate) mod capture;
 
 const BWRAP_PROGRAM: &str = "bwrap";
 const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
 
-/// Complete execution-only invocation, available after inputs are populated.
+/// Convert a sandbox environment value to an argument without assuming UTF-8.
+///
+/// Unix preserves the declared bytes; platforms whose process arguments are
+/// Unicode require valid UTF-8. NUL is never admissible in either case.
+fn sandbox_env_value(value: &[u8]) -> std::io::Result<OsString> {
+    if value.len() > 16 * 1024 * 1024 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "sandbox environment value exceeds the 16 MiB bound",
+        ));
+    }
+    if value.contains(&0) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "sandbox environment value contains NUL",
+        ));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Ok(OsStr::from_bytes(value).to_owned())
+    }
+    #[cfg(not(unix))]
+    {
+        std::str::from_utf8(value).map(OsString::from).map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "sandbox environment value is not UTF-8 on this platform")
+        })
+    }
+}
+
 /// All paths are host paths except `inputs_dir`, which is the relative guest
 /// input directory supplied by [`InputsProvider::inputs_dir`].
 pub struct BwrapInvocation<'a> {
@@ -421,7 +451,13 @@ impl Bwrap {
         command.stdin(Stdio::null());
         set_sandbox_umask(&mut command);
         let output = match (cancellation, gate, lease) {
-            (None, None, None) => command.output().await.map_err(|error| annotate_bwrap_spawn_error(&program, error))?,
+            (None, None, None) => {
+                // `Command::output` would retain unbounded bytes. Pipe both
+                // streams and drain them under the shared capture bound.
+                command.stdout(Stdio::piped()).stderr(Stdio::piped());
+                let child = command.spawn().map_err(|error| annotate_bwrap_spawn_error(&program, error))?;
+                capture::capture_child_output(child).await?
+            }
             (Some(receiver), Some(gate), Some(lease)) => {
                 #[cfg(test)]
                 {
@@ -456,11 +492,13 @@ impl Bwrap {
             args.push("--unshare-net".into());
         }
         for env in spec.env_vars() {
-            args.extend([
-                "--setenv".into(),
-                env.key.clone().into(),
-                str::from_utf8(&env.value).expect("invalid string in env").into(),
-            ]);
+            if env.key.is_empty() || env.key.as_bytes().contains(&0) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "sandbox environment variable name is empty or contains NUL",
+                ));
+            }
+            args.extend(["--setenv".into(), env.key.clone().into(), sandbox_env_value(&env.value)?]);
         }
 
         let host_inputs_dir = spec.host_workdir().join("host_inputs_dir");
@@ -603,6 +641,51 @@ mod tests {
         args.windows(3)
             .find(|window| window[0] == "--ro-bind" && window[2] == dest)
             .map(|window| window[1].clone())
+    }
+
+    #[test]
+    fn initialize_preserves_non_utf8_env_values() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let spec = SandboxSpec::builder()
+            .host_workdir(tempdir.path())
+            .command(["/bin/sh", "-c", "true"])
+            .sandbox_workdir("build")
+            .scratches(["build"])
+            .env_vars(vec![crate::buildservice::EnvVar {
+                key: "MANTLE_BYTES".to_string(),
+                value: bytes::Bytes::from_static(&[0xff, 0xfe, 0x80]),
+            }])
+            .build();
+        let bwrap = Bwrap::initialize(spec).expect("non-UTF-8 env bytes must not panic");
+        let index = bwrap.args.iter().position(|arg| arg == "--setenv").expect("setenv argument exists");
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            assert_eq!(bwrap.args[index + 2], OsStr::from_bytes(&[0xff, 0xfe, 0x80]));
+        }
+        #[cfg(not(unix))]
+        assert_eq!(bwrap.args[index + 2], OsStr::new(""));
+    }
+
+    #[test]
+    fn initialize_rejects_nul_env_value_before_spawn() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let spec = SandboxSpec::builder()
+            .host_workdir(tempdir.path())
+            .command(["/bin/sh", "-c", "true"])
+            .sandbox_workdir("build")
+            .scratches(["build"])
+            .env_vars(vec![crate::buildservice::EnvVar {
+                key: "MANTLE_BYTES".to_string(),
+                value: bytes::Bytes::from_static(b"a\0b"),
+            }])
+            .build();
+        let error = match Bwrap::initialize(spec) {
+            Ok(_) => panic!("NUL env value was accepted"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("NUL"));
     }
 
     #[test]

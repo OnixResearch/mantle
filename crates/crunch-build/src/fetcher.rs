@@ -28,6 +28,40 @@ use crate::trust_boundary_nominal::bounded_text_prefix;
 /// from a misbehaving or malicious server.
 const MAX_DOWNLOAD_BYTES: u64 = 4_294_967_296;
 
+/// Maximum decompressed archive size accepted before tar parsing.
+const MAX_DECOMPRESSED_ARCHIVE_BYTES: u64 = 16_106_127_360;
+/// Maximum bytes accepted from one expanded archive entry.
+const MAX_EXPANDED_FILE_BYTES: u64 = 8_589_934_592;
+/// Maximum bytes accepted across all expanded regular entries.
+const MAX_EXPANDED_TOTAL_BYTES: u64 = 32_212_254_720;
+
+const _: () = assert!(MAX_EXPANDED_TOTAL_BYTES >= MAX_EXPANDED_FILE_BYTES);
+const _: () = assert!(MAX_EXPANDED_TOTAL_BYTES >= MAX_DECOMPRESSED_ARCHIVE_BYTES);
+
+/// Explicit acquisition budgets. Each is enforced while consuming bytes.
+#[derive(Clone, Copy, Debug)]
+struct FetchLimits {
+    /// Compressed bytes accepted from the transport or local archive.
+    compressed_input_bytes: u64,
+    /// Bytes accepted after decompression before tar parsing.
+    decompressed_archive_bytes: u64,
+    /// Bytes accepted from one expanded regular archive entry.
+    expanded_file_bytes: u64,
+    /// Bytes accepted across all expanded regular archive entries.
+    expanded_total_bytes: u64,
+}
+
+impl Default for FetchLimits {
+    fn default() -> Self {
+        Self {
+            compressed_input_bytes: MAX_DOWNLOAD_BYTES,
+            decompressed_archive_bytes: MAX_DECOMPRESSED_ARCHIVE_BYTES,
+            expanded_file_bytes: MAX_EXPANDED_FILE_BYTES,
+            expanded_total_bytes: MAX_EXPANDED_TOTAL_BYTES,
+        }
+    }
+}
+
 /// One castore root node is added around the bounded archive entries.
 const CASTORE_ROOT_NODE_ALLOWANCE: u32 = 1;
 /// Maximum number of entries to extract from a tar archive.
@@ -132,6 +166,9 @@ pub enum FetchError {
 
     #[error("decompression failed: {0}")]
     DecompressError(String),
+
+    #[error("{resource} exceeds the {limit_bytes}-byte limit")]
+    LimitExceeded { resource: String, limit_bytes: u64 },
 
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
@@ -486,7 +523,72 @@ fn http_transport_error(url: &str, error: ureq::Error) -> FetchError {
     }
 }
 
-/// Download a URL and write the raw content to a file.
+/// Build a distinct over-limit error naming the exhausted budget.
+fn limit_exceeded(resource: &str, limit_bytes: u64) -> FetchError {
+    assert!(!resource.is_empty(), "limit resource must be named");
+    FetchError::LimitExceeded {
+        resource: resource.to_string(),
+        limit_bytes,
+    }
+}
+
+/// Copy at most `limit_bytes`, probing one extra byte to distinguish an exact
+/// fit from an over-limit input.
+fn copy_bounded(
+    reader: &mut impl Read,
+    writer: &mut impl Write,
+    limit_bytes: u64,
+    resource: &str,
+) -> Result<u64, FetchError> {
+    let mut limited = reader.take(limit_bytes.saturating_add(1));
+    let copied = io::copy(&mut limited, writer)?;
+    if copied > limit_bytes {
+        return Err(limit_exceeded(resource, limit_bytes));
+    }
+    Ok(copied)
+}
+
+/// Writer that refuses to exceed a byte budget and records the attempted overrun.
+struct LimitedWriter<'a> {
+    inner: &'a mut dyn Write,
+    written_bytes: u64,
+    limit_bytes: u64,
+    exceeded: bool,
+}
+
+impl<'a> LimitedWriter<'a> {
+    fn new(inner: &'a mut dyn Write, limit_bytes: u64) -> Self {
+        assert!(limit_bytes > 0, "limited writer budget must be positive");
+        Self {
+            inner,
+            written_bytes: 0,
+            limit_bytes,
+            exceeded: false,
+        }
+    }
+
+    fn exceeded(&self) -> bool {
+        self.exceeded
+    }
+}
+
+impl Write for LimitedWriter<'_> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        let requested = u64::try_from(buffer.len()).unwrap_or(u64::MAX);
+        if self.written_bytes.saturating_add(requested) > self.limit_bytes {
+            self.exceeded = true;
+            return Err(io::Error::other("decompressed byte budget exceeded"));
+        }
+        let written = self.inner.write(buffer)?;
+        self.written_bytes = self.written_bytes.saturating_add(u64::try_from(written).unwrap_or(u64::MAX));
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 /// Tiger Style: bounded read — stops at MAX_DOWNLOAD_BYTES.
 #[allow(
     tigerstyle::ambiguous_params,
@@ -531,12 +633,22 @@ fn fetch_flat_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError> {
 }
 
 fn fetch_flat_once_with(request: FetchOnceRequest<'_>, policy: FetchTimeoutPolicy) -> Result<(), FetchError> {
+    fetch_flat_once_with_limit(request, policy, MAX_DOWNLOAD_BYTES)
+}
+
+fn fetch_flat_once_with_limit(
+    request: FetchOnceRequest<'_>,
+    policy: FetchTimeoutPolicy,
+    limit_bytes: u64,
+) -> Result<(), FetchError> {
     let started = std::time::Instant::now();
     let reader: Box<dyn Read + Send> = open_url_reader_with(request.url, policy)?;
-    let mut bounded_reader = reader.take(MAX_DOWNLOAD_BYTES);
+    let mut bounded_reader = reader.take(limit_bytes.saturating_add(1));
     let mut file = std::fs::File::create(request.out)?;
     let bytes_written = copy_with_body_deadlines(&mut bounded_reader, &mut file, request.url, policy, started)?;
-    debug_assert!(bytes_written <= MAX_DOWNLOAD_BYTES);
+    if bytes_written > limit_bytes {
+        return Err(limit_exceeded("flat download", limit_bytes));
+    }
     Ok(())
 }
 
@@ -632,10 +744,13 @@ pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), FetchError> {
 }
 
 fn fetch_and_unpack_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError> {
+    fetch_and_unpack_once_with_limits(request, FetchLimits::default())
+}
+
+fn fetch_and_unpack_once_with_limits(request: FetchOnceRequest<'_>, limits: FetchLimits) -> Result<(), FetchError> {
     let reader = open_url_reader(request.url)?;
-    let decompressed = decompress_reader(request.url, reader)?;
-    extract_tar(decompressed, request.out)?;
-    Ok(())
+    let decompressed = decompress_reader_with_limits(request.url, reader, limits)?;
+    extract_tar_with_limits(decompressed, request.out, limits)
 }
 
 /// Unpack already-acquired archive bytes using the same bounded extractor as a live fetch.
@@ -654,8 +769,13 @@ pub fn unpack_archive_file(url: &str, archive_path: &Path, out: &str) -> Result<
         .to_str()
         .ok_or_else(|| FetchError::InvalidBoundary("output-path-not-utf8".to_string()))?;
     let reader = std::fs::File::open(archive.as_path())?;
-    let decompressed = decompress_reader(url.as_str(), reader)?;
-    extract_tar(decompressed, output)
+    let limits = FetchLimits::default();
+    let result = decompress_reader_with_limits(url.as_str(), reader, limits)
+        .and_then(|decompressed| extract_tar_with_limits(decompressed, output, limits));
+    if result.is_err() {
+        cleanup_fetch_output(output);
+    }
+    result
 }
 
 fn fetch_with_retry<F, S>(mut operation: F, mut sleep_ms: S) -> Result<(), FetchError>
@@ -822,43 +942,76 @@ fn open_url_reader_with(url: &str, policy: FetchTimeoutPolicy) -> Result<Box<dyn
 /// Select a decompressor based on URL suffix. Falls back to gzip magic
 /// detection, then raw read.
 pub fn decompress_reader(url: &str, reader: impl Read + Send + 'static) -> Result<Box<dyn Read + Send>, FetchError> {
+    decompress_reader_with_limits(url, reader, FetchLimits::default())
+}
+
+fn decompress_reader_with_limits(
+    url: &str,
+    mut reader: impl Read + Send + 'static,
+    limits: FetchLimits,
+) -> Result<Box<dyn Read + Send>, FetchError> {
     assert!(!url.is_empty(), "url must not be empty for decompression");
     debug_assert!(url.contains('.') || url.contains('/'), "url should contain a path separator or extension");
+    // Validate the compressed stream under an explicit budget before any
+    // decoder can allocate from attacker-controlled input.
+    let mut compressed = tempfile::tempfile()?;
+    copy_bounded(&mut reader, &mut compressed, limits.compressed_input_bytes, "compressed fetch input")?;
+    compressed.seek(SeekFrom::Start(0))?;
     if url.ends_with(".gz") || url.ends_with(".tgz") {
-        return Ok(Box::new(flate2::read::GzDecoder::new(reader)));
+        return Ok(Box::new(flate2::read::GzDecoder::new(compressed)));
     }
     if url.ends_with(".xz") || url.ends_with(".txz") {
-        let mut input = io::BufReader::new(reader);
-        let mut output = Vec::new();
-        lzma_rs::xz_decompress(&mut input, &mut output).map_err(|e| FetchError::DecompressError(format!("xz: {e}")))?;
-        return Ok(Box::new(io::Cursor::new(output)));
+        return decompress_lzma_to_temp(compressed, true, limits);
     }
     if url.ends_with(".lzma") || url.ends_with(".tlz") {
-        let mut input = io::BufReader::new(reader);
-        let mut output = Vec::new();
-        lzma_rs::lzma_decompress(&mut input, &mut output)
-            .map_err(|e| FetchError::DecompressError(format!("lzma: {e}")))?;
-        return Ok(Box::new(io::Cursor::new(output)));
+        return decompress_lzma_to_temp(compressed, false, limits);
     }
     if url.ends_with(".bz2") || url.ends_with(".tbz2") {
-        return Ok(Box::new(bzip2_rs::DecoderReader::new(reader)));
+        return Ok(Box::new(bzip2_rs::DecoderReader::new(compressed)));
     }
     if url.ends_with(".zst") || url.ends_with(".zstd") {
         return Ok(Box::new(
-            ruzstd::decoding::StreamingDecoder::new(reader)
+            ruzstd::decoding::StreamingDecoder::new(compressed)
                 .map_err(|e| FetchError::DecompressError(format!("zstd: {e}")))?,
         ));
     }
     if url.ends_with(".tar") || url.ends_with(".nar") {
-        return Ok(Box::new(reader));
+        return Ok(Box::new(compressed));
     }
-    // Unknown suffix — try gzip magic, fall back to raw.
-    let mut compressed = Vec::new();
-    io::BufReader::new(reader).read_to_end(&mut compressed)?;
-    if compressed.len() >= 2 && compressed[0] == 0x1f && compressed[1] == 0x8b {
-        return Ok(Box::new(flate2::read::GzDecoder::new(io::Cursor::new(compressed))));
+    // Unknown suffix — inspect only the magic prefix, then rewind.
+    let mut magic = [0_u8; 2];
+    let magic_len = compressed.read(&mut magic)?;
+    compressed.seek(SeekFrom::Start(0))?;
+    if magic_len == 2 && magic == [0x1f, 0x8b] {
+        return Ok(Box::new(flate2::read::GzDecoder::new(compressed)));
     }
-    Ok(Box::new(io::Cursor::new(compressed)))
+    Ok(Box::new(compressed))
+}
+
+fn decompress_lzma_to_temp(
+    compressed: std::fs::File,
+    is_xz: bool,
+    limits: FetchLimits,
+) -> Result<Box<dyn Read + Send>, FetchError> {
+    assert!(limits.decompressed_archive_bytes > 0, "decompressed budget must be positive");
+    let mut input = io::BufReader::new(compressed);
+    let mut output = tempfile::tempfile()?;
+    {
+        let mut writer = LimitedWriter::new(&mut output, limits.decompressed_archive_bytes);
+        let result = if is_xz {
+            lzma_rs::xz_decompress(&mut input, &mut writer)
+        } else {
+            lzma_rs::lzma_decompress(&mut input, &mut writer)
+        };
+        if writer.exceeded() {
+            return Err(limit_exceeded("decompressed archive", limits.decompressed_archive_bytes));
+        }
+        let label = if is_xz { "xz" } else { "lzma" };
+        result.map_err(|e| FetchError::DecompressError(format!("{label}: {e}")))?;
+        writer.flush()?;
+    }
+    output.seek(SeekFrom::Start(0))?;
+    Ok(Box::new(output))
 }
 
 // ── Tar extraction ─────────────────────────────────────────────────────
@@ -866,14 +1019,23 @@ pub fn decompress_reader(url: &str, reader: impl Read + Send + 'static) -> Resul
 /// Extract a tar archive to a directory, stripping the top-level path
 /// component (GitHub-style tarballs where all entries are under
 /// `project-v1.0/`).
-pub fn extract_tar<R: Read>(mut reader: R, out: &str) -> Result<(), FetchError> {
+pub fn extract_tar<R: Read>(reader: R, out: &str) -> Result<(), FetchError> {
+    extract_tar_with_limits(reader, out, FetchLimits::default())
+}
+
+struct ExtractionBudget {
+    limits: FetchLimits,
+    expanded_total_bytes: u64,
+}
+
+fn extract_tar_with_limits<R: Read>(mut reader: R, out: &str, limits: FetchLimits) -> Result<(), FetchError> {
     assert!(!out.is_empty(), "output path must not be empty");
     let out_path = Path::new(out);
     assert!(!out_path.as_os_str().is_empty(), "output path must not be empty");
     std::fs::create_dir_all(out_path)?;
 
     let mut staged_tar = tempfile::tempfile()?;
-    io::copy(&mut reader, &mut staged_tar)?;
+    copy_bounded(&mut reader, &mut staged_tar, limits.decompressed_archive_bytes, "decompressed archive")?;
     let prefix_to_strip = detect_common_tar_prefix(&mut staged_tar)?;
     staged_tar.seek(SeekFrom::Start(0))?;
 
@@ -881,6 +1043,10 @@ pub fn extract_tar<R: Read>(mut reader: R, out: &str) -> Result<(), FetchError> 
     archive.set_preserve_mtime(false);
     let mut entry_count: u32 = 0;
     let mut deferred_hardlinks: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+    let mut budget = ExtractionBudget {
+        limits,
+        expanded_total_bytes: 0,
+    };
 
     for entry_result in archive.entries().map_err(|e| FetchError::TarError(e.to_string()))? {
         entry_count = entry_count.saturating_add(1);
@@ -888,9 +1054,9 @@ pub fn extract_tar<R: Read>(mut reader: R, out: &str) -> Result<(), FetchError> 
         let mut entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
         let entry_path = entry.path().map_err(|e| FetchError::TarError(e.to_string()))?.into_owned();
         validate_entry_not_absolute(&entry_path)?;
-        extract_tar_entry(&mut entry, &entry_path, out_path, &prefix_to_strip, &mut deferred_hardlinks)?;
+        extract_tar_entry(&mut entry, &entry_path, out_path, &prefix_to_strip, &mut deferred_hardlinks, &mut budget)?;
     }
-    replay_deferred_hardlinks(&deferred_hardlinks)?;
+    replay_deferred_hardlinks(&deferred_hardlinks, &mut budget)?;
     Ok(())
 }
 
@@ -909,8 +1075,11 @@ fn detect_common_tar_prefix<R: Read + Seek>(reader: &mut R) -> Result<Option<std
 
     let mut common_prefix: Option<std::path::PathBuf> = None;
     let mut has_multi_component_entry = false;
+    let mut entry_count: u32 = 0;
 
     for entry_result in archive.entries().map_err(|e| FetchError::TarError(e.to_string()))? {
+        entry_count = entry_count.saturating_add(1);
+        validate_tar_entry_count(entry_count)?;
         let entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
         let entry_path = entry.path().map_err(|e| FetchError::TarError(e.to_string()))?.into_owned();
         validate_entry_not_absolute(&entry_path)?;
@@ -944,6 +1113,7 @@ fn extract_tar_entry<R: Read>(
     out_path: &Path,
     prefix_to_strip: &Option<std::path::PathBuf>,
     deferred_hardlinks: &mut Vec<(std::path::PathBuf, std::path::PathBuf)>,
+    budget: &mut ExtractionBudget,
 ) -> Result<(), FetchError> {
     let relative = strip_tar_prefix(entry_path, prefix_to_strip);
     if relative.as_os_str().is_empty() || relative == Path::new(".") {
@@ -955,20 +1125,37 @@ fn extract_tar_entry<R: Read>(
     discard_shadowed_deferred_hardlinks(deferred_hardlinks, &resolved_dest);
     debug_assert!(resolved_dest.starts_with(out_path), "dest {resolved_dest:?} escapes out_path {out_path:?}");
     match entry.header().entry_type() {
-        tar::EntryType::Regular | tar::EntryType::GNUSparse => write_regular_tar_entry(entry, &resolved_dest),
+        tar::EntryType::Regular | tar::EntryType::GNUSparse => write_regular_tar_entry(entry, &resolved_dest, budget),
         tar::EntryType::Directory => prepare_directory_entry_dest(&resolved_dest),
         tar::EntryType::Symlink => create_tar_symlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative),
         tar::EntryType::Link => {
-            copy_tar_hardlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative, deferred_hardlinks)
+            copy_tar_hardlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative, deferred_hardlinks, budget)
         }
         _ => Ok(()),
     }
 }
 
-fn write_regular_tar_entry<R: Read>(entry: &mut tar::Entry<'_, R>, dest: &Path) -> Result<(), FetchError> {
+fn write_regular_tar_entry<R: Read>(
+    entry: &mut tar::Entry<'_, R>,
+    dest: &Path,
+    budget: &mut ExtractionBudget,
+) -> Result<(), FetchError> {
+    let declared_bytes = entry.size();
+    if declared_bytes > budget.limits.expanded_file_bytes {
+        return Err(limit_exceeded("expanded file", budget.limits.expanded_file_bytes));
+    }
+    let remaining_total = budget.limits.expanded_total_bytes.saturating_sub(budget.expanded_total_bytes);
+    if declared_bytes > remaining_total {
+        return Err(limit_exceeded("expanded tree", budget.limits.expanded_total_bytes));
+    }
+
     prepare_non_directory_entry_dest(dest)?;
     let mut file = std::fs::File::create(dest)?;
-    io::copy(entry, &mut file)?;
+    let copied = copy_bounded(entry, &mut file, declared_bytes, "expanded file")?;
+    budget.expanded_total_bytes = budget.expanded_total_bytes.saturating_add(copied);
+    if budget.expanded_total_bytes > budget.limits.expanded_total_bytes {
+        return Err(limit_exceeded("expanded tree", budget.limits.expanded_total_bytes));
+    }
 
     #[cfg(unix)]
     {
@@ -1008,6 +1195,7 @@ fn copy_tar_hardlink<R: Read>(
     prefix_to_strip: &Option<std::path::PathBuf>,
     relative: &Path,
     deferred_hardlinks: &mut Vec<(std::path::PathBuf, std::path::PathBuf)>,
+    budget: &mut ExtractionBudget,
 ) -> Result<(), FetchError> {
     prepare_non_directory_entry_dest(dest)?;
     if let Some(link_target) = entry.link_name().map_err(|e| FetchError::TarError(e.to_string()))? {
@@ -1017,10 +1205,39 @@ fn copy_tar_hardlink<R: Read>(
         };
         let target_path = validate_hardlink_target(out_path, &stripped_target, relative)?;
         if target_path.exists() {
-            std::fs::copy(&target_path, dest)?;
+            copy_existing_file_bounded(&target_path, dest, budget, "expanded hardlink")?;
         } else {
             deferred_hardlinks.push((target_path, dest.to_path_buf()));
         }
+    }
+    Ok(())
+}
+
+/// Copy an already-extracted file while charging the expansion budget.
+fn copy_existing_file_bounded(
+    source: &Path,
+    dest: &Path,
+    budget: &mut ExtractionBudget,
+    resource: &str,
+) -> Result<(), FetchError> {
+    let mut input = std::fs::File::open(source)?;
+    let declared_bytes = input.metadata()?.len();
+    if declared_bytes > budget.limits.expanded_file_bytes {
+        return Err(limit_exceeded(resource, budget.limits.expanded_file_bytes));
+    }
+    let remaining_total = budget.limits.expanded_total_bytes.saturating_sub(budget.expanded_total_bytes);
+    if declared_bytes > remaining_total {
+        return Err(limit_exceeded("expanded tree", budget.limits.expanded_total_bytes));
+    }
+    prepare_non_directory_entry_dest(dest)?;
+    let mut output = std::fs::File::create(dest)?;
+    let copied = copy_bounded(&mut input, &mut output, declared_bytes, resource)?;
+    budget.expanded_total_bytes = budget.expanded_total_bytes.saturating_add(copied);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = input.metadata()?.permissions().mode();
+        std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode))?;
     }
     Ok(())
 }
@@ -1035,6 +1252,7 @@ fn discard_shadowed_deferred_hardlinks(
 
 fn replay_deferred_hardlinks(
     deferred_hardlinks: &[(std::path::PathBuf, std::path::PathBuf)],
+    budget: &mut ExtractionBudget,
 ) -> Result<(), FetchError> {
     let deferred_count_u32 = u32::try_from(deferred_hardlinks.len())
         .map_err(|_| FetchError::TarError("too many deferred tar hardlinks".to_owned()))?;
@@ -1049,7 +1267,7 @@ fn replay_deferred_hardlinks(
         if rounds_remaining == 0 {
             return Err(missing_deferred_hardlink_target_error(&pending_hardlinks[0].0));
         }
-        pending_hardlinks = replay_deferred_hardlink_round(pending_hardlinks)?;
+        pending_hardlinks = replay_deferred_hardlink_round(pending_hardlinks, budget)?;
         rounds_remaining = rounds_remaining.saturating_sub(1);
     }
     Ok(())
@@ -1057,6 +1275,7 @@ fn replay_deferred_hardlinks(
 
 fn replay_deferred_hardlink_round(
     pending_hardlinks: Vec<(std::path::PathBuf, std::path::PathBuf)>,
+    budget: &mut ExtractionBudget,
 ) -> Result<Vec<(std::path::PathBuf, std::path::PathBuf)>, FetchError> {
     assert!(!pending_hardlinks.is_empty(), "deferred hardlink round must have work");
     let pending_len = pending_hardlinks.len();
@@ -1068,7 +1287,7 @@ fn replay_deferred_hardlink_round(
             unresolved_hardlinks.push((target_path, dest_path));
             continue;
         }
-        copy_replayed_hardlink(&target_path, &dest_path)?;
+        copy_replayed_hardlink(&target_path, &dest_path, budget)?;
         copied_count = copied_count.saturating_add(1);
     }
 
@@ -1079,14 +1298,17 @@ fn replay_deferred_hardlink_round(
     Ok(unresolved_hardlinks)
 }
 
-fn copy_replayed_hardlink(target_path: &Path, dest_path: &Path) -> Result<(), FetchError> {
+fn copy_replayed_hardlink(
+    target_path: &Path,
+    dest_path: &Path,
+    budget: &mut ExtractionBudget,
+) -> Result<(), FetchError> {
     assert!(target_path.exists(), "replayed hardlink target must exist before copy");
     assert!(!dest_path.as_os_str().is_empty(), "replayed hardlink destination must not be empty");
     if let Some(parent) = dest_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::copy(target_path, dest_path)?;
-    Ok(())
+    copy_existing_file_bounded(target_path, dest_path, budget, "expanded hardlink")
 }
 
 fn missing_deferred_hardlink_target_error(target_path: &Path) -> FetchError {
@@ -2682,6 +2904,113 @@ mod tests {
         let error = unpack_archive_file(ARCHIVE_URL, &archive, out.to_str().unwrap()).unwrap_err();
 
         assert!(matches!(error, FetchError::TarError(_)));
+        assert!(!out.join("payload.txt").exists());
+    }
+
+    fn generous_limits() -> FetchLimits {
+        FetchLimits {
+            compressed_input_bytes: 1_048_576,
+            decompressed_archive_bytes: 1_048_576,
+            expanded_file_bytes: 1_048_576,
+            expanded_total_bytes: 1_048_576,
+        }
+    }
+
+    #[test]
+    fn extract_tar_rejects_decompressed_archive_over_budget() {
+        let tar_data = build_raw_tar(&[RawTarEntry::file("pkg/payload.txt", b"payload")]);
+        let mut limits = generous_limits();
+        limits.decompressed_archive_bytes = u64::try_from(tar_data.len()).unwrap() - 1;
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("out");
+
+        let error = extract_tar_with_limits(io::Cursor::new(tar_data), out.to_str().unwrap(), limits).unwrap_err();
+        assert!(matches!(error, FetchError::LimitExceeded { .. }), "expected a limit error: {error}");
+        assert!(error.to_string().contains("decompressed archive"));
+        assert!(!out.join("payload.txt").exists());
+    }
+
+    #[test]
+    fn extract_tar_rejects_single_entry_over_file_budget_before_creating_it() {
+        let tar_data = build_raw_tar(&[RawTarEntry::file("pkg/payload.txt", b"0123456789")]);
+        let mut limits = generous_limits();
+        limits.expanded_file_bytes = 4;
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("out");
+
+        let error = extract_tar_with_limits(io::Cursor::new(tar_data), out.to_str().unwrap(), limits).unwrap_err();
+        assert!(error.to_string().contains("expanded file"));
+        assert!(!out.join("payload.txt").exists(), "over-budget entry must not be materialized");
+    }
+
+    #[test]
+    fn extract_tar_rejects_cumulative_expansion_over_total_budget() {
+        let tar_data = build_raw_tar(&[
+            RawTarEntry::file("pkg/a.txt", b"01234567"),
+            RawTarEntry::file("pkg/b.txt", b"89abcdef"),
+        ]);
+        let mut limits = generous_limits();
+        limits.expanded_total_bytes = 12;
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("out");
+
+        let error = extract_tar_with_limits(io::Cursor::new(tar_data), out.to_str().unwrap(), limits).unwrap_err();
+        assert!(error.to_string().contains("expanded tree"));
+        assert!(out.join("a.txt").exists(), "entries below the total budget remain valid");
+        assert!(!out.join("b.txt").exists(), "the entry crossing the total budget must not be created");
+    }
+
+    #[test]
+    fn extract_tar_accepts_exact_byte_budgets() {
+        let tar_data = build_raw_tar(&[RawTarEntry::file("pkg/payload.txt", b"payload")]);
+        let mut limits = generous_limits();
+        limits.decompressed_archive_bytes = u64::try_from(tar_data.len()).unwrap();
+        limits.expanded_file_bytes = 7;
+        limits.expanded_total_bytes = 7;
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("out");
+
+        extract_tar_with_limits(io::Cursor::new(tar_data), out.to_str().unwrap(), limits).unwrap();
+        assert_eq!(std::fs::read_to_string(out.join("payload.txt")).unwrap(), "payload");
+    }
+
+    #[test]
+    fn flat_download_probes_one_byte_past_the_limit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = tmp.path().join("input.bin");
+        let output = tmp.path().join("output.bin");
+        std::fs::write(&input, b"0123456789").unwrap();
+        let url = Url::from_file_path(&input).unwrap().to_string();
+        let request = || FetchOnceRequest {
+            url: &url,
+            out: output.to_str().unwrap(),
+        };
+
+        let error =
+            fetch_flat_once_with_limit(request(), FetchTimeoutPolicy::defaults(), 9).expect_err("overflow must fail");
+        assert!(error.to_string().contains("flat download"), "expected flat download limit: {error}");
+        std::fs::remove_file(&output).unwrap();
+        fetch_flat_once_with_limit(request(), FetchTimeoutPolicy::defaults(), 10).expect("exact limit succeeds");
+        assert_eq!(std::fs::read(&output).unwrap(), b"0123456789");
+    }
+
+    #[test]
+    fn unpack_rejects_compressed_input_over_budget() {
+        let tar_data = build_raw_tar(&[RawTarEntry::file("pkg/payload.txt", b"payload")]);
+        let tmp = tempfile::tempdir().unwrap();
+        let archive = tmp.path().join("source.tar");
+        let out = tmp.path().join("out");
+        std::fs::write(&archive, &tar_data).unwrap();
+        let url = Url::from_file_path(&archive).unwrap().to_string();
+        let request = FetchOnceRequest {
+            url: &url,
+            out: out.to_str().unwrap(),
+        };
+        let mut limits = generous_limits();
+        limits.compressed_input_bytes = u64::try_from(tar_data.len()).unwrap() - 1;
+
+        let error = fetch_and_unpack_once_with_limits(request, limits).unwrap_err();
+        assert!(error.to_string().contains("compressed fetch input"), "expected compressed input limit: {error}");
         assert!(!out.join("payload.txt").exists());
     }
 

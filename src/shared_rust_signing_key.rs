@@ -7,12 +7,10 @@
 use std::path::Path;
 
 use crate::RunError;
+use crate::signing_key::read_private_key_file;
 
 /// Largest admitted shared Rust signing key file.
 const SHARED_RUST_SIGNING_KEY_MAX_BYTES: u64 = 4_096;
-
-/// Permission bits a shared Rust signing key must not carry.
-const SHARED_RUST_SIGNING_KEY_FORBIDDEN_MODE_BITS: u32 = 0o077;
 
 /// Secret half of an Ed25519 keypair.
 const ED25519_SECRET_KEY_BYTES: usize = 32;
@@ -24,49 +22,7 @@ const ED25519_PUBLIC_KEY_BYTES: usize = 32;
 const ED25519_KEYPAIR_BYTES: usize = ED25519_SECRET_KEY_BYTES + ED25519_PUBLIC_KEY_BYTES;
 
 pub(crate) fn load_shared_rust_signing_key(path: &Path) -> Result<(String, ed25519_dalek::SigningKey), RunError> {
-    let metadata = std::fs::symlink_metadata(path)
-        .map_err(|error| RunError::Internal(format!("reading shared Rust signing key metadata: {error}")))?;
-    if !metadata.file_type().is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() > SHARED_RUST_SIGNING_KEY_MAX_BYTES
-    {
-        return Err(RunError::Internal("shared Rust signing key must be a bounded regular file".to_string()));
-    }
-    let mode = {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.permissions().mode()
-    };
-    if mode & SHARED_RUST_SIGNING_KEY_FORBIDDEN_MODE_BITS != 0 {
-        return Err(RunError::Internal("shared Rust signing key permissions are not private".to_string()));
-    }
-    let mut file = {
-        use std::os::unix::fs::OpenOptionsExt;
-        std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(path)
-            .map_err(|error| RunError::Internal(format!("opening shared Rust signing key: {error}")))?
-    };
-    let opened_metadata = file
-        .metadata()
-        .map_err(|error| RunError::Internal(format!("checking shared Rust signing key: {error}")))?;
-    let same_file = {
-        use std::os::unix::fs::MetadataExt;
-        metadata.dev() == opened_metadata.dev()
-            && metadata.ino() == opened_metadata.ino()
-            && metadata.len() == opened_metadata.len()
-    };
-    if !same_file {
-        return Err(RunError::Internal("shared Rust signing key changed before reading".to_string()));
-    }
-    let capacity = usize::try_from(opened_metadata.len())
-        .map_err(|_| RunError::Internal("shared Rust signing key is too large".to_string()))?;
-    let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(capacity));
-    std::io::Read::read_to_end(&mut file, &mut bytes)
-        .map_err(|error| RunError::Internal(format!("reading shared Rust signing key: {error}")))?;
-    if bytes.len() != capacity {
-        return Err(RunError::Internal("shared Rust signing key size changed while reading".to_string()));
-    }
+    let bytes = read_private_key_file(path, "shared Rust signing key", SHARED_RUST_SIGNING_KEY_MAX_BYTES)?;
     let text = std::str::from_utf8(&bytes)
         .map_err(|_| RunError::Internal("shared Rust signing key is not UTF-8".to_string()))?
         .trim();

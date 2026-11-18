@@ -3560,9 +3560,12 @@ impl StoreHandle {
 
     /// Persist a signed PathInfo and export it to disk when needed.
     ///
-    /// StoreHandle refuses to persist unsigned PathInfos. That keeps the
-    /// "always sign before persist" invariant at the storage boundary,
-    /// even if a caller constructs the PathInfo itself.
+    /// This build-output boundary refuses to persist unsigned PathInfos. That
+    /// keeps the "always sign build outputs before persist" invariant, even if
+    /// a caller constructs the PathInfo itself. The invariant is scoped to
+    /// build outputs: store imports admitted through an explicit
+    /// `--trust-unsigned` policy may persist unsigned PathInfo directly, and
+    /// GC must preserve those records without signing them.
     pub async fn persist_and_export_signed_output(&mut self, req: PersistOutputRequest<'_>) -> Result<PathInfo, Error> {
         if req.output_name.is_empty() {
             return Err(Error::Store("output name must not be empty".to_string()));

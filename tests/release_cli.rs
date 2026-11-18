@@ -204,6 +204,14 @@ fn write_file(path: &Path, content: &[u8]) {
     std::fs::write(path, content).unwrap();
 }
 
+fn make_private(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+}
+
 fn run_git(repo_root: &Path, args: &[&str]) -> Output {
     ProcessCommand::new("git").args(args).current_dir(repo_root).output().unwrap()
 }
@@ -1720,11 +1728,13 @@ fn release_keypair() -> KeyPair {
 
 fn write_release_signing_key(path: &Path) {
     write_file(path, format!("{RELEASE_SIGNING_KEY}\n").as_bytes());
+    make_private(path);
 }
 
 fn write_generated_signing_key(path: &Path) -> KeyPair {
     let (keypair, key_line) = crunch_build::generate_keypair();
     write_file(path, format!("{key_line}\n").as_bytes());
+    make_private(path);
     keypair
 }
 

@@ -18,6 +18,15 @@ use mantle::oci_registry::verify_push_report;
 use support::oci_registry::TestRegistry;
 use tempfile::TempDir;
 
+fn write_private_key(path: &Path, contents: impl AsRef<[u8]>) {
+    std::fs::write(path, contents).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+}
+
 const EXAMPLE_ROOT: &str = "examples/projects/kernel-bundle-oci-local";
 const KERNEL_RELATIVE_PATH: &str = "fixtures/vmlinuz";
 const MODULES_RELATIVE_PATH: &str = "fixtures/modules";
@@ -141,7 +150,7 @@ fn write_trust_policy(path: &Path, encoded_keypair: &str, repository: &str, revo
 fn write_trust_inputs(root: &Path) -> (PathBuf, PathBuf) {
     let signing_key_file = root.join("registry-signing-key");
     let trust_policy_file = root.join("registry-trust-policy.ncl");
-    std::fs::write(&signing_key_file, format!("{TEST_KEYPAIR}\n")).unwrap();
+    write_private_key(&signing_key_file, format!("{TEST_KEYPAIR}\n"));
     write_trust_policy(&trust_policy_file, TEST_KEYPAIR, REPOSITORY, &[]);
     assert!(signing_key_file.is_file());
     assert!(trust_policy_file.is_file());

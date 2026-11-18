@@ -26,6 +26,16 @@ const TEST_NAR_PIPE_BYTES: usize = 65_536;
 const NARIO_WIRE_WORD_BYTES: usize = 8;
 const NARIO_TRUNCATION_BYTES: usize = NARIO_WIRE_WORD_BYTES + 1;
 
+fn write_private_key(path: impl AsRef<Path>, contents: impl AsRef<[u8]>) {
+    let path = path.as_ref();
+    std::fs::write(path, contents).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+}
+
 fn mantle_cmd() -> Command {
     Command::cargo_bin("mantle").expect("mantle binary should be built")
 }
@@ -991,16 +1001,15 @@ fn independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key(
     for state in [&first_state, &second_state, &third_state] {
         std::fs::create_dir_all(state).unwrap();
     }
-    std::fs::write(first_state.join("signing-key"), TEST_KEYPAIR).unwrap();
-    std::fs::write(second_state.join("signing-key"), TEST_KEYPAIR).unwrap();
+    write_private_key(first_state.join("signing-key"), TEST_KEYPAIR);
+    write_private_key(second_state.join("signing-key"), TEST_KEYPAIR);
     let alternate_raw = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
     let mut alternate_keypair = Vec::from(alternate_raw.to_bytes());
     alternate_keypair.extend_from_slice(alternate_raw.verifying_key().as_bytes());
-    std::fs::write(
+    write_private_key(
         third_state.join("signing-key"),
         format!("archive-cli-2:{}", data_encoding::BASE64.encode(&alternate_keypair)),
-    )
-    .unwrap();
+    );
     let third_store = root.path().join("third-store");
     let first = run_async(seed_signed_file(&first_store, &first_state, "key-parity", fixture, true));
     let second = run_async(seed_signed_file(&second_store, &second_state, "key-parity", fixture, true));
@@ -1078,7 +1087,7 @@ fn legacy_and_populated_identityless_snix_reopen_preserve_signed_output_and_unre
         let state = root.path().join(format!("{case}-state"));
         let output = root.path().join(format!("{case}-store"));
         std::fs::create_dir_all(&state).unwrap();
-        std::fs::write(state.join("signing-key"), TEST_KEYPAIR).unwrap();
+        write_private_key(state.join("signing-key"), TEST_KEYPAIR);
         let original = run_async(seed_signed_file(&output, &state, case, b"preserved signed output\n", true));
         let identity_path = state.join("store-identity.json");
         if legacy {
@@ -1144,7 +1153,7 @@ fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
         let state = root.join("state");
         let store = root.join("store");
         std::fs::create_dir_all(&state).unwrap();
-        std::fs::write(state.join("signing-key"), TEST_KEYPAIR).unwrap();
+        write_private_key(state.join("signing-key"), TEST_KEYPAIR);
         let kept = run_async(seed_signed_file(&store, &state, "baseline-keep", b"kept NAR\n", true));
         let candidate = run_async(seed_signed_file(&store, &state, "baseline-candidate", b"candidate NAR\n", true));
         assert_eq!(kept.store_path.to_string(), golden["kept_store_path"].as_str().unwrap());
@@ -1194,7 +1203,7 @@ fn default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts() {
         let fresh_state = root.join("fresh-state");
         let fresh_store = root.join("fresh-store");
         std::fs::create_dir_all(&fresh_state).unwrap();
-        std::fs::write(fresh_state.join("signing-key"), TEST_KEYPAIR).unwrap();
+        write_private_key(fresh_state.join("signing-key"), TEST_KEYPAIR);
         let listing = cli_json(&fresh_state, &fresh_store, &["store", "list"]);
         assert_eq!(
             listing,
@@ -1263,12 +1272,11 @@ fn rail_seed(
     fixture_key: &str,
 ) -> (PathInfo, PathInfo, PathInfo) {
     std::fs::create_dir_all(state).unwrap();
-    std::fs::write(state.join("signing-key"), TEST_KEYPAIR).unwrap();
+    write_private_key(state.join("signing-key"), TEST_KEYPAIR);
     let alternate_raw = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
     let mut alternate_keypair = Vec::from(alternate_raw.to_bytes());
     alternate_keypair.extend_from_slice(alternate_raw.verifying_key().as_bytes());
-    std::fs::write(second_signer, format!("archive-cli-2:{}", data_encoding::BASE64.encode(&alternate_keypair)))
-        .unwrap();
+    write_private_key(second_signer, format!("archive-cli-2:{}", data_encoding::BASE64.encode(&alternate_keypair)));
     if backend == crunch_store::StoreBackend::Casita {
         std::fs::write(state.join("casita-trusted-public-keys"), format!("{fixture_key}\n")).unwrap();
     }
@@ -1540,7 +1548,7 @@ fn rail_archive_roundtrip(
     assert!(listed.status.success(), "{}", String::from_utf8_lossy(&listed.stderr));
     let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
     std::fs::create_dir_all(&imported_state).unwrap();
-    std::fs::write(imported_state.join("signing-key"), TEST_KEYPAIR).unwrap();
+    write_private_key(imported_state.join("signing-key"), TEST_KEYPAIR);
     if backend == crunch_store::StoreBackend::Casita {
         std::fs::write(imported_state.join("casita-trusted-public-keys"), format!("{fixture_key}\n{alternate_key}\n"))
             .unwrap();

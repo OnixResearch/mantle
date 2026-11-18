@@ -160,3 +160,4 @@ compatibility surface, crate name, or historical decision.
 | [0160](0160-classify-type-only-wasi-imports-outside-virtualization.md) | Classify type-only WASI imports outside deny-all virtualization | Accepted |
 | [0161](0161-admit-build-metadata-compiler-actions-through-their-authored-template.md) | Admit build-metadata compiler actions through their authored template | Accepted |
 | [0162](0162-keep-the-vendored-snix-data-layer-with-upstream-terms.md) | Keep the vendored Snix data layer with upstream terms | Proposed |
+| [0163](0163-bound-untrusted-acquisition-secrets-and-sandbox-diagnostics.md) | Bound untrusted acquisition, secrets, and sandbox diagnostics at their boundaries | Proposed |

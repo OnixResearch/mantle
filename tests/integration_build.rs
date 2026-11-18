@@ -20,6 +20,15 @@ const CLI_TEST_KEYPAIR: &str =
     "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
 const CLI_FETCH_PAYLOAD: &[u8] = b"durable CLI fresh-process cache fixture\n";
 
+fn write_private_key(path: &Path, contents: impl AsRef<[u8]>) {
+    std::fs::write(path, contents).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+}
+
 #[test]
 fn typed_nickel_workspace_policy_matches_rust_and_rejects_invalid_bounds() {
     let temp = tempfile::tempdir().unwrap();
@@ -1101,7 +1110,7 @@ fn signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes() {
         std::fs::create_dir(&state).unwrap();
         std::fs::create_dir(&store).unwrap();
         let signer = state.join("signing-key");
-        std::fs::write(&signer, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+        write_private_key(&signer, format!("{CLI_TEST_KEYPAIR}\n"));
         let policy = state.join("casita-trusted-public-keys");
         if backend == "casita" {
             std::fs::write(&policy, &policy_bytes).unwrap();
@@ -1368,7 +1377,7 @@ let source = mantle.fetchurl {{ url = "{url}", hash = "{hash}", name = "offline-
         // populate its state directory; an identityless nonempty Casita state must fail closed.
         run(&["store", "roots"]);
         let signing_key = state.join("signing-key");
-        std::fs::write(&signing_key, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+        write_private_key(&signing_key, format!("{CLI_TEST_KEYPAIR}\n"));
         let bundle_path = bundle.to_str().unwrap();
         run(&["source", "bundle", "import", "--from", bundle_path, "--pin"]);
         assert!(state.join("source-bundles/records").is_dir(), "{backend} source records remain Mantle-owned");
@@ -1478,7 +1487,7 @@ fn casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_s
     std::fs::create_dir(&state).unwrap();
     std::fs::create_dir_all(&store).unwrap();
     let signer = state.join("signing-key");
-    std::fs::write(&signer, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    write_private_key(&signer, format!("{CLI_TEST_KEYPAIR}\n"));
     let public_key = test_keypair().verifying_key.to_string();
     let policy = state.join("casita-trusted-public-keys");
     let run = |args: &[&str]| {
@@ -1748,7 +1757,7 @@ fn casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes() {
     std::fs::create_dir(&state).unwrap();
     std::fs::create_dir(&store).unwrap();
     let signer = state.join("signing-key");
-    std::fs::write(&signer, format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    write_private_key(&signer, format!("{CLI_TEST_KEYPAIR}\n"));
     let local_key = test_keypair().verifying_key.to_string();
     let different_signer = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
     let other_key =
@@ -1908,17 +1917,16 @@ fn casita_explicit_external_signing_key_outside_policy_cannot_publish() {
     let store = root.path().join("store");
     std::fs::create_dir(&state).unwrap();
     std::fs::create_dir_all(&store).unwrap();
-    std::fs::write(state.join("signing-key"), format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    write_private_key(&state.join("signing-key"), format!("{CLI_TEST_KEYPAIR}\n"));
     let policy = state.join("casita-trusted-public-keys");
     let policy_bytes = format!("{}\n", test_keypair().verifying_key);
     std::fs::write(&policy, &policy_bytes).unwrap();
     let external_raw = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
     let external_signer = root.path().join("external-signing-key");
-    std::fs::write(
+    write_private_key(
         &external_signer,
         format!("external-1:{}\n", data_encoding::BASE64.encode(&external_raw.to_keypair_bytes())),
-    )
-    .unwrap();
+    );
     let run = |args: &[&str]| {
         assert_cmd::Command::cargo_bin("mantle")
             .unwrap()
@@ -1994,18 +2002,17 @@ fn casita_external_signer_policy_removal_rejects_fresh_lookup_verify_gc() {
     let store = root.path().join("store");
     std::fs::create_dir(&state).unwrap();
     std::fs::create_dir_all(&store).unwrap();
-    std::fs::write(state.join("signing-key"), format!("{CLI_TEST_KEYPAIR}\n")).unwrap();
+    write_private_key(&state.join("signing-key"), format!("{CLI_TEST_KEYPAIR}\n"));
     let local_key = test_keypair().verifying_key.to_string();
     let external_raw = ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]);
     let external_key =
         nix_compat::narinfo::VerifyingKey::new("external-1".to_string(), external_raw.verifying_key()).to_string();
     assert_ne!(external_key, local_key);
     let external_signer = root.path().join("external-signing-key");
-    std::fs::write(
+    write_private_key(
         &external_signer,
         format!("external-1:{}\n", data_encoding::BASE64.encode(&external_raw.to_keypair_bytes())),
-    )
-    .unwrap();
+    );
     let policy = state.join("casita-trusted-public-keys");
     let allowed_policy = format!("{external_key}\n");
     let denied_policy = format!("{local_key}\n");
@@ -2102,7 +2109,7 @@ fn casita_external_config_signer_requires_destination_policy_for_build_and_read(
     std::fs::create_dir(&config).unwrap();
     let signing_key = config.join("signing-key");
     let key_bytes = format!("{CLI_TEST_KEYPAIR}\n");
-    std::fs::write(&signing_key, &key_bytes).unwrap();
+    write_private_key(&signing_key, &key_bytes);
     let public_key = test_keypair().verifying_key.to_string();
     let policy = state.join("casita-trusted-public-keys");
     let run = |args: &[&str]| {

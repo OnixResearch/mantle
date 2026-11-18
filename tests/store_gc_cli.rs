@@ -16,6 +16,15 @@ const STORE_DIR: &str = "/nix/store";
 const NAR_SHA256_BYTES: usize = 32;
 const RUST_CACHE_OUTPUT_BYTES: &[u8] = b"retained Rust unit artifact";
 
+fn write_private_key(path: &Path, contents: impl AsRef<[u8]>) {
+    std::fs::write(path, contents).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+}
+
 fn crunch_cmd(state_dir: &Path, output_dir: &Path) -> Command {
     let mut cmd = Command::cargo_bin("crunch").unwrap();
     cmd.arg("--state-dir").arg(state_dir).arg("--store").arg(output_dir).arg("--nix-compat");
@@ -1424,8 +1433,7 @@ fn selected_backends_reopen_the_same_signed_ca_closure_and_plan_the_same_gc_cand
             first_info = Some(info.clone());
         }
         let signing_key = root.path().join("signing-key");
-        std::fs::write(&signing_key, format!("{signing_name}:{}\n", data_encoding::BASE64.encode(&keypair_bytes)))
-            .unwrap();
+        write_private_key(&signing_key, format!("{signing_name}:{}\n", data_encoding::BASE64.encode(&keypair_bytes)));
         // An in-place signature update must preserve the signed PathInfo facts.
         let signed = command()
             .args(["store", "sign", "--signing-key"])

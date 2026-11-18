@@ -72,6 +72,13 @@ A declared capability is not validated behavior.
 | `unsigned-admission` | `true` | `false` | `casita-trust-unsigned-unsupported` |
 | `max-root-changes` | `unbounded-by-backend` | `1024` | `casita-batch-limit` |
 
+On `snix`, a PathInfo admitted through an explicit unsigned policy retains its
+empty signature list through GC: GC preserves the operator's declared trust
+choice verbatim and never signs remote content. The build-output boundary
+`persist_and_export_signed_output` still refuses unsigned build outputs;
+`--trust-unsigned` is the separate import boundary. Casita refuses unsigned
+admission before state mutation.
+
 JSON field names use underscores, and `max_root_changes` is `null` for `snix`.
 The 1,024 bound is the number of root changes that one Casita commit accepts at the pinned defaults; it does not cap how many outputs a store holds.
 It is separate from the 100,000-record limit of the Nario v2 reader.

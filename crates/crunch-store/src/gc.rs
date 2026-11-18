@@ -2040,7 +2040,11 @@ async fn rewrite_pathinfo_db(state_dir: &Path, live_pathinfos: &[PathInfo]) -> R
     use snix_store::pathinfoservice::RedbPathInfoServiceConfig;
 
     assert!(state_dir.is_dir(), "rewrite_pathinfo_db: state_dir must exist");
-    assert!(live_pathinfos.iter().all(|pi| !pi.signatures.is_empty()), "all retained PathInfos must be signed");
+    // Retained PathInfo may be unsigned when the operator admitted it through
+    // an explicit `--trust-unsigned` import. GC preserves the stored trust
+    // status verbatim: it must not sign remote content, drop a live path, or
+    // require every stored record to satisfy the build-output signing
+    // invariant. See `StoreHandle::persist_and_export_signed_output`.
 
     let final_path = state_dir.join("pathinfo.redb");
     let tmp_path = state_dir.join("pathinfo.redb.gc-tmp");
@@ -2378,6 +2382,39 @@ mod tests {
         let listed = crate::store_list(reopened.pathinfo_service().as_ref()).await.unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].0, keep_path.to_string());
+    }
+
+    #[tokio::test]
+    async fn unsigned_retained_pathinfo_survives_real_gc() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let mut store = open_store(state_dir.path(), output_dir.path()).await;
+        let retained_path = store_path("unsigned-retained", 21);
+        let dropped_path = store_path("unsigned-dropped", 22);
+        let retained_node = write_blob(&store, b"unsigned-retained").await;
+        let dropped_node = write_blob(&store, b"unsigned-dropped").await;
+
+        let mut retained_info = signed_pathinfo(retained_path.clone(), retained_node, vec![]);
+        retained_info.signatures.clear();
+        store.pathinfo_service().put(retained_info.clone()).await.unwrap();
+        let mut dropped_info = signed_pathinfo(dropped_path.clone(), dropped_node, vec![]);
+        dropped_info.signatures.clear();
+        store.pathinfo_service().put(dropped_info).await.unwrap();
+        store.register_retained_root(&retained_path, GcRootSource::Build).await.unwrap();
+
+        let plan = store.garbage_collect(None).await.unwrap();
+        assert_eq!(plan.candidate_paths, vec![dropped_path.to_absolute_path()]);
+        assert!(plan.retention_explanations.iter().any(|item| item.path == retained_path.to_absolute_path()));
+
+        let report = store.garbage_collect(Some(&plan.plan_id)).await.unwrap();
+        assert!(report.execution_complete);
+
+        let reopened = reopen_store(state_dir.path(), output_dir.path()).await;
+        let listed = crate::store_list(reopened.pathinfo_service().as_ref()).await.unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].0, retained_path.to_string());
+        let stored = reopened.pathinfo_service().get(*retained_path.digest()).await.unwrap().unwrap();
+        assert!(stored.signatures.is_empty(), "GC must not sign or otherwise change an unsigned retained PathInfo");
     }
 
     #[test]

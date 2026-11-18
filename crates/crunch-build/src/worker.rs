@@ -4001,32 +4001,17 @@ impl Worker {
                             .catch_unwind()
                             .await
                         {
-                            Err(_) => {
-                                // The service may have handed off a child before its
-                                // panic. Neither its teardown nor slot release is proven.
-                                std::future::pending().await
-                            }
+                            Err(_) => Err(Error::Store(
+                                "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains quarantined"
+                                    .to_string(),
+                            )),
                             Ok(Ok(result)) => Ok(result),
                             Ok(Err(error)) => {
-                                let is_unobserved_fetch = error
-                                    .get_ref()
-                                    .and_then(|inner| {
-                                        inner.downcast_ref::<crate::fetch_build_service::UnobservedWatchFetch>()
-                                    })
-                                    .is_some();
-                                #[cfg(target_os = "linux")]
-                                let is_unobserved_sandbox = error
-                                    .get_ref()
-                                    .and_then(|inner| {
-                                        inner.downcast_ref::<snix_build::buildservice::UnobservedWatchSandbox>()
-                                    })
-                                    .is_some();
-                                #[cfg(not(target_os = "linux"))]
-                                let is_unobserved_sandbox = false;
-                                if is_unobserved_fetch || is_unobserved_sandbox {
-                                    // Retain JoinSet ownership and acquired reservation.
-                                    std::future::pending::<()>().await;
-                                }
+                                // An unobserved fetch or sandbox reports this
+                                // classification itself. The service owns the
+                                // quarantine and releases it when teardown is
+                                // finally observed; the worker must not park a
+                                // JoinSet task forever waiting for that.
                                 Err(Error::Store(format!("build: {error}")))
                             }
                         }
@@ -5230,6 +5215,75 @@ mod tests {
             // The ordinary worker must not finish/sign/admit that stale result.
             self.mock.do_build(request).await
         }
+    }
+
+    struct PanicBuildService;
+
+    #[async_trait::async_trait]
+    impl BuildService for PanicBuildService {
+        async fn do_build(
+            &self,
+            _request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            panic!("injected non-cancellable build service panic")
+        }
+
+        async fn do_build_cancellable(
+            &self,
+            _request: snix_build::buildservice::BuildRequest,
+            _cancellation: watch::Receiver<bool>,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            panic!("injected cancellable build service panic before spawn")
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellable_build_service_panic_completes_without_parking_the_worker() {
+        let blobs = MemoryBlobService::default();
+        let pis: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary("panic-shutdown-pis".into(), RedbPathInfoServiceConfig::default())
+                .unwrap(),
+        );
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            PanicBuildService,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+        let mut paths = DerivationRegistry::default();
+        let (root, _) = build_and_register("panic-before-spawn", &[], &mut paths);
+        let output = paths.get_output_path(&root.to_absolute_path(), "out").unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        tx.send(EvalMessage {
+            label: root.name().to_string(),
+            drv_path: root,
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
+        drop(tx);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let mut worker = Worker::new(1);
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            worker.run_streaming_cancellable(&mut builder, &mut paths, &mut rx, None, cancel_rx),
+        )
+        .await
+        .expect("a build-service panic must not park the worker")
+        .expect("the worker reports the failed goal");
+
+        assert!(result.outcomes.is_empty(), "panicked build published an outcome");
+        assert!(result.all_outcomes.is_empty(), "panicked build published a supporting outcome");
+        assert_eq!(result.failed.len(), 1, "the panicked root must be classified as failed");
+        assert!(pis.get(*output.digest()).await.unwrap().is_none(), "panicked build published PathInfo");
     }
 
     #[tokio::test]

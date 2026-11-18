@@ -64,26 +64,37 @@ pub fn parse_keypair(input: &str) -> Result<(SigningKey<ed25519_dalek::SigningKe
         }
         Ok(_) => unreachable!(),
         // keeping DecodePartial gets annoying lifetime-wise
-        Err(_) => return Err(Error::DecodeError(input.to_string())),
+        Err(_) => {
+            // Never retain or render the encoded input: it contains the secret
+            // half of the keypair.
+            buf.fill(0);
+            bytes.fill(0);
+            return Err(Error::DecodeError);
+        }
+    }
+    buf.fill(0);
+
+    let mut bytes_signing_key: [u8; SECRET_KEY_LENGTH] = [0u8; SECRET_KEY_LENGTH];
+    bytes_signing_key.copy_from_slice(&bytes[0..SECRET_KEY_LENGTH]);
+    let mut bytes_verifying_key: [u8; PUBLIC_KEY_LENGTH] = [0u8; PUBLIC_KEY_LENGTH];
+    bytes_verifying_key.copy_from_slice(&bytes[SECRET_KEY_LENGTH..]);
+    bytes.fill(0);
+
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&bytes_signing_key);
+    bytes_signing_key.fill(0);
+    // A keypair whose declared public half does not match the secret half is
+    // malformed and must not be admitted.
+    if signing_key.verifying_key().as_bytes() != &bytes_verifying_key {
+        bytes_verifying_key.fill(0);
+        return Err(Error::PublicKeyMismatch);
     }
 
-    let bytes_signing_key: [u8; SECRET_KEY_LENGTH] = {
-        let mut b = [0u8; SECRET_KEY_LENGTH];
-        b.copy_from_slice(&bytes[0..SECRET_KEY_LENGTH]);
-        b
-    };
-    let bytes_verifying_key: [u8; PUBLIC_KEY_LENGTH] = {
-        let mut b = [0u8; PUBLIC_KEY_LENGTH];
-        b.copy_from_slice(&bytes[SECRET_KEY_LENGTH..]);
-        b
-    };
+    let signing_key = SigningKey::new(name.to_string(), signing_key);
 
-    let signing_key = SigningKey::new(name.to_string(), ed25519_dalek::SigningKey::from_bytes(&bytes_signing_key));
-
-    let verifying_key = VerifyingKey::new(
-        name.to_string(),
-        ed25519_dalek::VerifyingKey::from_bytes(&bytes_verifying_key).map_err(Error::InvalidVerifyingKey)?,
-    );
+    let dalek_verifying = ed25519_dalek::VerifyingKey::from_bytes(&bytes_verifying_key)
+        .map_err(Error::InvalidVerifyingKey)?;
+    bytes_verifying_key.fill(0);
+    let verifying_key = VerifyingKey::new(name.to_string(), dalek_verifying);
 
     Ok((signing_key, verifying_key))
 }
@@ -96,15 +107,26 @@ pub enum Error {
     MissingSeparator,
     #[error("Invalid signing key len: {0}")]
     InvalidSigningKeyLen(usize),
-    #[error("Unable to base64-decode signing key: {0}")]
-    DecodeError(String),
+    #[error("Unable to base64-decode signing key")]
+    DecodeError,
     #[error("VerifyingKey error: {0}")]
     InvalidVerifyingKey(ed25519_dalek::SignatureError),
+    #[error("Public key does not match secret key")]
+    PublicKeyMismatch,
 }
 
 #[cfg(test)]
 mod test {
+    use data_encoding::BASE64;
+
     use crate::narinfo::DUMMY_KEYPAIR;
+
+    fn parse_error(input: &str) -> super::Error {
+        match super::parse_keypair(input) {
+            Ok(_) => panic!("malformed keypair unexpectedly parsed"),
+            Err(error) => error,
+        }
+    }
     #[test]
     fn parse() {
         let (_signing_key, _verifying_key) = super::parse_keypair(DUMMY_KEYPAIR).expect("must succeed");
@@ -114,5 +136,32 @@ mod test {
     fn parse_fail() {
         assert!(super::parse_keypair("cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JE").is_err());
         assert!(super::parse_keypair("cache.example.com-1cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JE").is_err());
+    }
+
+    #[test]
+    fn decode_error_does_not_echo_key_material() {
+        let (name, encoded) = DUMMY_KEYPAIR.split_once(':').expect("dummy keypair has a separator");
+        let mut chars = encoded.chars().collect::<Vec<_>>();
+        let index = chars.len() / 2;
+        chars[index] = '!';
+        let malformed = format!("{name}:{}", chars.into_iter().collect::<String>());
+
+        let error = parse_error(&malformed);
+        assert!(matches!(error, super::Error::DecodeError));
+        let rendered = format!("{error}");
+        assert!(!rendered.contains(encoded), "parser error must not echo the encoded keypair: {rendered}");
+        assert!(!rendered.contains(&malformed), "parser error must not echo the input: {rendered}");
+    }
+
+    #[test]
+    fn public_half_must_match_secret_half() {
+        let (name, encoded) = DUMMY_KEYPAIR.split_once(':').expect("dummy keypair has a separator");
+        let mut decoded = BASE64.decode(encoded.as_bytes()).expect("dummy keypair decodes");
+        decoded[0] ^= 1;
+        let mismatched = format!("{name}:{}", BASE64.encode(&decoded));
+
+        let error = parse_error(&mismatched);
+        assert!(matches!(error, super::Error::PublicKeyMismatch));
+        assert!(!format!("{error}").contains(&BASE64.encode(&decoded)));
     }
 }

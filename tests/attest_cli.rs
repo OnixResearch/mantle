@@ -53,6 +53,15 @@ use tempfile::TempDir;
 
 const STORE_DIR: &str = "/mantle/store";
 
+fn write_private_key(path: &Path, contents: impl AsRef<[u8]>) {
+    std::fs::write(path, contents).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+}
+
 fn can_build() -> bool {
     Path::new("/nix/store").exists()
         && std::process::Command::new("bwrap").arg("--version").output().is_ok_and(|o| o.status.success())
@@ -561,7 +570,7 @@ fn casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy() {
     let local_key = load_keypair(&local_key_file).unwrap().verifying_key.to_string();
     assert_ne!(cache_key, local_key);
     let signing_key_path = destination_state.path().join("signing-key");
-    std::fs::write(&signing_key_path, &local_key_file).unwrap();
+    write_private_key(&signing_key_path, &local_key_file);
     let policy = destination_state.path().join("casita-trusted-public-keys");
     let excluded_policy = format!("{local_key}\n");
     std::fs::write(&policy, &excluded_policy).unwrap();

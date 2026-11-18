@@ -20,6 +20,8 @@ use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, watch};
 use tokio::time::{sleep, Instant as TokioInstant};
 
+use super::capture;
+
 const PID1_DISCOVERY_REPORT_DEADLINE: Duration = Duration::from_secs(5);
 const PID1_DISCOVERY_POLL: Duration = Duration::from_millis(10);
 const TEARDOWN_WAIT: Duration = Duration::from_secs(5);
@@ -465,7 +467,7 @@ async fn classify_unbound_child(
         child.try_wait().ok().flatten().is_some()
     };
     if readers_closed && outer_exited {
-        let output = child.wait_with_output().await?;
+        let output = capture::capture_child_output(child).await?;
         return Err(io::Error::other(format!(
             "bubblewrap exited before watch PID1 ownership ({reason}): status={} stderr={}",
             output.status,
@@ -484,7 +486,7 @@ async fn classify_unbound_child(
                 child.try_wait().ok().flatten().is_some()
             };
             if outer_exited && gate.no_readers().unwrap_or(false) {
-                let _ = child.wait_with_output().await;
+                let _ = capture::capture_child_output(child).await;
                 break;
             }
             sleep(PID1_DISCOVERY_POLL).await;
@@ -568,7 +570,7 @@ async fn supervise_child(
         panic!("injected supervisor failure after caller abort before payload release");
     }
 
-    let wait_future = child.wait_with_output();
+    let wait_future = capture::capture_child_output(child);
     tokio::pin!(wait_future);
     if *cancellation.borrow() || cancellation.has_changed().is_err() || abort.try_recv().is_ok() {
         terminate_until_observed(&pid1).await;

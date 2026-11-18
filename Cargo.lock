@@ -250,15 +250,6 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 [[package]]
 name = "artifact-auth-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
-dependencies = [
- "blake3",
- "serde",
-]
-
-[[package]]
-name = "artifact-auth-core"
-version = "0.1.0"
 source = "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 dependencies = [
  "blake3",
@@ -268,19 +259,9 @@ dependencies = [
 [[package]]
 name = "artifact-auth-ed25519"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
-dependencies = [
- "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
- "blake3",
- "ed25519-dalek",
-]
-
-[[package]]
-name = "artifact-auth-ed25519"
-version = "0.1.0"
 source = "git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7471d1547e044f57daeda72f56621fd52"
 dependencies = [
- "artifact-auth-core 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
+ "artifact-auth-core",
  "blake3",
  "ed25519-dalek",
 ]
@@ -1698,7 +1679,7 @@ dependencies = [
 name = "crunch-action-result-core"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
+ "artifact-auth-core",
  "blake3",
  "pretty_assertions",
  "serde",
@@ -1776,8 +1757,8 @@ dependencies = [
 name = "crunch-build"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
- "artifact-auth-ed25519 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "async-trait",
  "blake3",
  "bstr",
@@ -1820,6 +1801,7 @@ dependencies = [
  "tracing",
  "ureq",
  "url",
+ "zeroize",
  "zstd",
 ]
 
@@ -2207,8 +2189,8 @@ dependencies = [
 name = "crunch-release-core"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
- "artifact-auth-ed25519 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "blake3",
  "bounded-tree-core",
  "crunch-source-core",
@@ -5880,8 +5862,8 @@ dependencies = [
 name = "mantle"
 version = "0.1.0"
 dependencies = [
- "artifact-auth-core 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
- "artifact-auth-ed25519 0.1.0 (git+https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "assert_cmd",
  "async-trait",
  "basalt",
@@ -10573,8 +10555,8 @@ name = "valence-core"
 version = "0.1.0"
 source = "git+https://github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a330b08139ac7c809ac31e7e87f825b22"
 dependencies = [
- "artifact-auth-core 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
- "artifact-auth-ed25519 0.1.0 (git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52)",
+ "artifact-auth-core",
+ "artifact-auth-ed25519",
  "blake3",
  "iddqd",
  "serde",
