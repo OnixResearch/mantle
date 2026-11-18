@@ -20,6 +20,9 @@ use tracing::info;
 use tracing::warn;
 use url::Url;
 
+use crate::trust_boundary_nominal::SHORT_REVISION_BYTES_MAX;
+use crate::trust_boundary_nominal::bounded_text_prefix;
+
 /// Maximum download size: 4 GiB. Prevents unbounded memory/disk use
 /// from a misbehaving or malicious server.
 const MAX_DOWNLOAD_BYTES: u64 = 4_294_967_296;
@@ -1282,7 +1285,7 @@ pub(crate) fn fetch_git(url: &str, rev: &str, out: &str) -> Result<(), FetchErro
     }
     std::fs::rename(&staged_out, out_path)?;
 
-    let short_rev = &rev[..rev.len().min(12)];
+    let short_rev = bounded_text_prefix(rev, SHORT_REVISION_BYTES_MAX);
     info!(url = url, rev = short_rev, out = out, "git fetch complete");
     Ok(())
 }
@@ -2007,6 +2010,25 @@ mod tests {
         let drv = make_drv("builtin:fetchurl", vec![("url", "https://example.com/file.txt")], None);
         let fetch = parse_fetch(&drv).unwrap();
         assert!(matches!(fetch, Fetch::Url { exp_hash: None, .. }));
+    }
+
+    #[test]
+    fn fetch_git_accepts_a_non_ascii_reference_without_splitting_its_log_field() {
+        let _path_lock = PATH_MUTEX.lock().unwrap();
+        let (_tempdir, repo, first_rev, _second_rev) = create_git_repo_with_history();
+        let reference = "refs/heads/ééééééééé";
+        run_git(&repo, &["update-ref", reference, &first_rev]);
+        // `refs/heads/` is 11 bytes, so the former byte slice at 12 split the first `é`.
+        assert!(!reference.is_char_boundary(SHORT_REVISION_BYTES_MAX));
+        let out_root = tempfile::tempdir().unwrap();
+        let out = out_root.path().join("git-checkout");
+
+        fetch_git(&file_url(&repo), reference, out.to_str().unwrap()).unwrap();
+
+        assert_eq!(std::fs::read_to_string(out.join("hello.txt")).unwrap(), "first revision\n");
+        let logged = bounded_text_prefix(reference, SHORT_REVISION_BYTES_MAX);
+        assert!(reference.starts_with(logged), "log field must be a prefix of the admitted revision");
+        assert!(!logged.is_empty() && logged.len() <= SHORT_REVISION_BYTES_MAX);
     }
 
     #[test]

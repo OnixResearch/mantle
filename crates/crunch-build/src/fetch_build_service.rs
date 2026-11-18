@@ -27,6 +27,8 @@ use url::Url;
 
 use crate::fetcher::FetchError;
 use crate::fetcher::{self};
+use crate::trust_boundary_nominal::SHORT_REVISION_BYTES_MAX;
+use crate::trust_boundary_nominal::bounded_text_prefix;
 
 /// The builder string that identifies builtin fetcher derivations.
 pub const FETCH_BUILDER: &str = "builtin:fetchurl";
@@ -294,7 +296,7 @@ fn execute_fetch(kind: &FetchKind, out_path: &str) -> Result<(), FetchError> {
             }
         }
         FetchKind::Git { url, rev } => {
-            let short_rev = &rev[..rev.len().min(12)];
+            let short_rev = bounded_text_prefix(rev, SHORT_REVISION_BYTES_MAX);
             info!(url = %url, rev = %short_rev, "fetching git");
             fetcher::fetch_git(url, rev, out_path)?;
         }

@@ -6,6 +6,9 @@ use std::path::PathBuf;
 
 const MAX_FETCH_URL_BYTES: usize = 4_096;
 const MAX_GIT_REVISION_BYTES: usize = 256;
+/// Log fields shorten revisions to this many bytes; the helper below never
+/// splits a UTF-8 character at that bound.
+pub(crate) const SHORT_REVISION_BYTES_MAX: usize = 12;
 const MAX_BUILD_NAME_BYTES: usize = 256;
 const MAX_STORE_PATH_BYTES: usize = 4_096;
 
@@ -58,10 +61,36 @@ macro_rules! bounded_text {
 }
 
 bounded_text!(FetchUrl, MAX_FETCH_URL_BYTES);
+// An admitted git revision is either an object id or a reference name:
+// `rev-parse` resolves both, so only non-empty text up to
+// `MAX_GIT_REVISION_BYTES` without control characters is required. Hexadecimal
+// form is deliberately not required; non-ASCII reference names are legitimate.
 bounded_text!(GitRevision, MAX_GIT_REVISION_BYTES);
 bounded_text!(DerivationName, MAX_BUILD_NAME_BYTES);
 bounded_text!(OutputName, MAX_BUILD_NAME_BYTES);
 bounded_text!(DerivationKey, MAX_STORE_PATH_BYTES);
+
+/// A bounded prefix of admitted text that never splits a UTF-8 character.
+///
+/// `bytes_max` must admit at least one maximum-width character. Empty input
+/// yields an empty prefix, so logging an unvalidated operand cannot panic;
+/// a non-empty input always yields at least one character. Admitted git
+/// revisions use this for log fields instead of a byte-index slice.
+pub(crate) fn bounded_text_prefix(text: &str, bytes_max: usize) -> &str {
+    assert!(bytes_max >= 4, "prefix bound must admit one maximum-width UTF-8 character");
+    if text.is_empty() {
+        return text;
+    }
+    let mut end = text.len().min(bytes_max);
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let prefix = &text[..end];
+    // Tiger Style: post-conditions.
+    assert!(prefix.len() <= bytes_max, "prefix exceeds the requested bound");
+    assert!(!prefix.is_empty(), "prefix keeps at least one character of non-empty text");
+    prefix
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LogicalStorePrefix(String);
@@ -203,6 +232,39 @@ mod tests {
         assert_eq!(GitRevision::new("bad\nrevision"), Err(TrustBoundaryNominalError::ControlCharacter));
         assert_eq!(FinalStorePath::new("relative"), Err(TrustBoundaryNominalError::PathNotAbsolute));
         assert_eq!(ArchiveInputPath::new(PathBuf::new()), Err(TrustBoundaryNominalError::Empty));
+    }
+
+    #[test]
+    fn git_revision_admits_object_ids_and_reference_names() {
+        let object_id = GitRevision::new(VALID_REVISION).unwrap();
+        let reference = GitRevision::new("refs/heads/ééééééééé").unwrap();
+        assert_eq!(object_id.as_str(), VALID_REVISION);
+        assert_eq!(reference.as_str(), "refs/heads/ééééééééé");
+        // `refs/heads/` is 11 bytes, so the 12-byte bound stops before the first `é`.
+        assert_eq!(bounded_text_prefix(reference.as_str(), SHORT_REVISION_BYTES_MAX), "refs/heads/");
+        assert_eq!(GitRevision::new("").expect_err("empty revision"), TrustBoundaryNominalError::Empty);
+        assert_eq!(
+            GitRevision::new("a".repeat(MAX_GIT_REVISION_BYTES + 1)).expect_err("oversized revision"),
+            TrustBoundaryNominalError::Oversized
+        );
+    }
+
+    #[test]
+    fn revision_prefix_stops_on_character_boundaries() {
+        let boundary_case = "aééééééééé";
+        assert!(!boundary_case.is_char_boundary(SHORT_REVISION_BYTES_MAX), "fixture must split a character");
+        assert_eq!(bounded_text_prefix(boundary_case, SHORT_REVISION_BYTES_MAX), "aééééé");
+        assert_eq!(bounded_text_prefix("😀😀😀", 6), "😀");
+        assert_eq!(bounded_text_prefix("😀abc", 4), "😀");
+        assert_eq!(bounded_text_prefix("abc", SHORT_REVISION_BYTES_MAX), "abc");
+        assert_eq!(bounded_text_prefix("", SHORT_REVISION_BYTES_MAX), "");
+        assert_eq!(bounded_text_prefix("0123456789ab", SHORT_REVISION_BYTES_MAX), "0123456789ab");
+        for text in [boundary_case, "😀😀😀", "😀abc", "abc", "0123456789ab"] {
+            let prefix = bounded_text_prefix(text, SHORT_REVISION_BYTES_MAX);
+            assert!(text.starts_with(prefix), "prefix must come from the admitted text");
+            assert!(!prefix.is_empty(), "prefix keeps a character");
+            assert!(prefix.len() <= SHORT_REVISION_BYTES_MAX, "prefix stays bounded");
+        }
     }
 
     /// Provisional and final store paths cannot cross roles implicitly.
