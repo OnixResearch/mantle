@@ -69,11 +69,15 @@ the parent consumer rail; their outcomes are requirements, not observed results.
 
 Only `wasi:otel/tracing@0.2.0-rc.2` effect functions are approved. The consumer
 may resolve `wasi:otel/types@0.2.0-rc.2` and
-`wasi:clocks/wall-clock@0.2.0` **only as type-only dependencies**, checking that
+`wasi:clocks/wall-clock@0.2.3` **only as type-only dependencies**, checking that
 all exported component items are types, with zero functions/resources. That does
-not permit `now`, clock effects, randomness, stdout, filesystem or network.
-The actual generated import inventory remains subject to the exporter inspection
-receipt and consumer structural checking; no unexecuted inventory is asserted.
+not permit `now`, clock effects, randomness, stdout, filesystem or network. The
+vendored upstream dependency is `wasi:clocks@0.2.0`; `wasm-tools component wit`
+on the compiled emitter shows the `0.2.3` clock import. Type-only WASI imports
+carry no capability, so the producer does not run WASI-Virt for them; they stay
+in the exact expected remaining-import set. The actual generated import
+inventory remains subject to the exporter inspection receipt and consumer
+structural checking; no unexecuted inventory is asserted.
 
 ## Capability handoff
 

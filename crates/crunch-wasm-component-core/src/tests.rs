@@ -500,6 +500,68 @@ fn remaining_imports_must_match_post_composition_inspection() {
     assert!(negative.blockers.iter().any(|item| item.code == "remaining-import-drift"));
 }
 
+fn callable(name: &str) -> ObservedImport {
+    ObservedImport {
+        name: String::from(name),
+        is_type_only: false,
+    }
+}
+
+fn type_only(name: &str) -> ObservedImport {
+    ObservedImport {
+        name: String::from(name),
+        is_type_only: true,
+    }
+}
+
+#[test]
+fn only_callable_wasi_subsystem_imports_require_virtualization() {
+    let tracing = vec![
+        callable("wasi:otel/tracing@0.2.0-rc.2"),
+        type_only("wasi:otel/types@0.2.0-rc.2"),
+    ];
+    let host_only = vec![callable("wrpc-examples:hello/handler")];
+    let stdout = vec![callable("wasi:cli/stdout@0.2.3")];
+    let mixed = vec![
+        callable("wasi:otel/tracing@0.2.0-rc.2"),
+        callable("wasi:filesystem/types@0.2.3"),
+    ];
+    let preview1 = vec![callable("wasi_snapshot_preview1")];
+    let datetime_only = vec![
+        callable("wasi:otel/tracing@0.2.0-rc.2"),
+        type_only("wasi:clocks/wall-clock@0.2.3"),
+    ];
+    let clock_reader = vec![
+        callable("wasi:otel/tracing@0.2.0-rc.2"),
+        callable("wasi:clocks/wall-clock@0.2.3"),
+    ];
+
+    assert!(!requires_wasi_virtualization(&tracing));
+    assert!(!requires_wasi_virtualization(&host_only));
+    assert!(!requires_wasi_virtualization(&[]));
+    assert!(!requires_wasi_virtualization(&datetime_only), "a type-only WASI dependency grants no capability");
+    assert!(requires_wasi_virtualization(&clock_reader), "the same interface with a function is denied");
+    assert!(requires_wasi_virtualization(&stdout));
+    assert!(requires_wasi_virtualization(&mixed), "a declared effect import cannot hide a subsystem import");
+    assert!(requires_wasi_virtualization(&preview1));
+}
+
+#[test]
+fn effect_only_component_still_matches_remaining_imports_exactly() {
+    let mut config = virtualization_config();
+    config.expected_remaining_imports = vec![String::from("wasi:otel/tracing@0.2.0-rc.2")];
+    let plan = plan_virtualization(config).plan.unwrap();
+    let declared = validate_remaining_imports(plan.clone(), vec![String::from("wasi:otel/tracing@0.2.0-rc.2")]);
+    let undeclared = validate_remaining_imports(plan, vec![
+        String::from("wasi:otel/tracing@0.2.0-rc.2"),
+        String::from("wasi:otel/metrics@0.2.0-rc.2"),
+    ]);
+
+    assert!(declared.matches_plan);
+    assert!(!undeclared.matches_plan);
+    assert!(undeclared.blockers.iter().any(|item| item.code == "remaining-import-drift"));
+}
+
 #[test]
 fn portable_admission_binds_same_bytes_to_both_validation_layers() {
     let admission = portable_admission();

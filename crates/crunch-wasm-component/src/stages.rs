@@ -8,12 +8,14 @@ use crunch_wasm_component_core::BoundedComponentClaim;
 use crunch_wasm_component_core::BuildValidationBinding;
 use crunch_wasm_component_core::ComponentStageKind;
 use crunch_wasm_component_core::ComponentStageStatus;
+use crunch_wasm_component_core::ObservedImport;
 use crunch_wasm_component_core::StoreObject;
 use crunch_wasm_component_core::ValidationDecision;
 use crunch_wasm_component_core::VirtualizationAction;
 use crunch_wasm_component_core::VirtualizationPlan;
 use crunch_wasm_component_core::WasiSubsystem;
 use crunch_wasm_component_core::plan_virtualization;
+use crunch_wasm_component_core::requires_wasi_virtualization;
 use crunch_wasm_component_core::validate_remaining_imports;
 
 use crate::CompositionDependencySource;
@@ -35,6 +37,8 @@ const GENERATED_WKG_CONFIG: &str = ".mantle/wasm-component/wkg-config.toml";
 const GENERATED_WAC_SOURCE: &str = ".mantle/wasm-component/composition.wac";
 const MAX_EXPECTED_RUNTIME_STDOUT_BYTES: usize = 1024 * 1024;
 const MAX_WKG_LOCK_BYTES: u64 = 1024 * 1024;
+/// Printed package interfaces one WIT inspection may classify; more fails the inspection.
+const MAX_PRINTED_INTERFACES: u32 = 1024;
 
 pub(crate) struct StageWorkspace {
     pub root: PathBuf,
@@ -420,8 +424,9 @@ pub(crate) fn run_virtualization_stage(
     else {
         return Ok(None);
     };
-    if input_imports.iter().all(|name| !name.starts_with("wasi:") && !name.starts_with("wasi_")) {
-        return copy_non_wasi_virtualization(workspace, state, plan, input_imports, composed_path);
+    if !requires_wasi_virtualization(&input_imports) {
+        let names = input_imports.into_iter().map(|import| import.name).collect();
+        return copy_non_wasi_virtualization(workspace, state, plan, names, composed_path);
     }
     let output = workspace.root.join("virtualized.wasm");
     let args = virtualization_args(&plan, composed_path, &output)?;
@@ -620,7 +625,7 @@ fn inspect_remaining_imports(
     else {
         return Ok(false);
     };
-    let validation = validate_remaining_imports(plan.clone(), observed);
+    let validation = validate_remaining_imports(plan.clone(), observed.into_iter().map(|import| import.name).collect());
     if !validation.matches_plan {
         for blocker in validation.blockers {
             state.block(&blocker.code, "virtualization", blocker.message);
@@ -635,7 +640,7 @@ fn read_component_imports(
     state: &mut ExecutionState,
     stage_key: &str,
     component: &Path,
-) -> Result<Option<Vec<String>>, Error> {
+) -> Result<Option<Vec<ObservedImport>>, Error> {
     let args = vec![
         "component".to_string(),
         "wit".to_string(),
@@ -656,11 +661,10 @@ fn read_component_imports(
     }
     let wit = String::from_utf8(run.stdout)
         .map_err(|error| Error::Tool(format!("wasm-tools WIT inspection was not UTF-8: {error}")))?;
-    let observed_interfaces =
-        wit.lines().filter_map(|line| parse_import_line(line).transpose()).collect::<Result<Vec<_>, _>>()?;
+    let observed = parse_component_imports(&wit)?;
     debug_assert!(stage_key.starts_with("virtualization-"));
     debug_assert!(component.is_absolute());
-    Ok(Some(observed_interfaces))
+    Ok(Some(observed))
 }
 
 fn parse_import_line(line: &str) -> Result<Option<String>, Error> {
@@ -682,6 +686,96 @@ fn parse_import_line(line: &str) -> Result<Option<String>, Error> {
     debug_assert!(!name.is_empty());
     debug_assert!(!name.contains(char::is_whitespace));
     Ok(Some(name.to_string()))
+}
+
+/// Imports in `wasm-tools component wit` output. An import is type-only when its printed package
+/// interface declares no function or resource; an import without a printed interface stays
+/// callable.
+fn parse_component_imports(wit: &str) -> Result<Vec<ObservedImport>, Error> {
+    let type_only = type_only_interfaces(wit)?;
+    let names = wit.lines().filter_map(|line| parse_import_line(line).transpose()).collect::<Result<Vec<_>, _>>()?;
+    let classified: Vec<_> = names
+        .into_iter()
+        .map(|name| ObservedImport {
+            is_type_only: type_only.contains(&name),
+            name,
+        })
+        .collect();
+    debug_assert!(classified.iter().filter(|entry| entry.is_type_only).all(|entry| type_only.contains(&entry.name)));
+    debug_assert!(classified.iter().all(|entry| !entry.name.contains(char::is_whitespace)));
+    Ok(classified)
+}
+
+/// Qualified `namespace:package/interface@version` names of printed package interfaces that declare
+/// no function or resource. Comment lines are skipped so their braces cannot shift the depth.
+fn type_only_interfaces(wit: &str) -> Result<BTreeSet<String>, Error> {
+    let mut type_only = BTreeSet::new();
+    let mut interfaces_seen: u32 = 0;
+    let mut package = None;
+    let mut interface: Option<(String, bool)> = None;
+    let mut depth: u32 = 0;
+    for line in wit.lines().map(str::trim) {
+        if line.starts_with("//") {
+            continue;
+        }
+        if depth == 0 {
+            package = line.strip_suffix(" {").and_then(|header| header.strip_prefix("package "));
+        } else if depth == 1 {
+            interface = opened_interface(package, line);
+            interfaces_seen = interfaces_seen.saturating_add(u32::from(interface.is_some()));
+        } else if let Some((_, is_callable)) = interface.as_mut() {
+            *is_callable |= declares_callable(line);
+        }
+        if interfaces_seen > MAX_PRINTED_INTERFACES {
+            return Err(Error::Invalid("printed WIT exceeds the interface bound".to_string()));
+        }
+        depth = depth.saturating_add(char_count(line, '{')?).saturating_sub(char_count(line, '}')?);
+        if let Some(name) = closed_type_only(depth, &mut interface) {
+            type_only.insert(name);
+        }
+    }
+    debug_assert!(u32::try_from(type_only.len()).is_ok_and(|count| count <= interfaces_seen));
+    debug_assert!(type_only.iter().all(|name| name.contains('/')));
+    Ok(type_only)
+}
+
+/// The qualified interface a package-level `interface <name> {` line opens, not yet seen to be
+/// callable. A `namespace:package@version` header yields `namespace:package/name@version`.
+fn opened_interface(package: Option<&str>, line: &str) -> Option<(String, bool)> {
+    let package = package?;
+    let name = line.strip_suffix(" {")?.strip_prefix("interface ")?;
+    let qualified = match package.split_once('@') {
+        Some((package_name, version)) => format!("{package_name}/{name}@{version}"),
+        None => format!("{package}/{name}"),
+    };
+    debug_assert!(qualified.contains('/'));
+    debug_assert!(qualified.len() > name.len());
+    Some((qualified, false))
+}
+
+/// Whether a printed interface line declares a function or resource.
+fn declares_callable(line: &str) -> bool {
+    if line.starts_with("resource ") {
+        return true;
+    }
+    if line.contains(": func(") {
+        return true;
+    }
+    line.contains(": async func(")
+}
+
+/// The open interface's name once `depth` closes it, when it declared nothing callable.
+fn closed_type_only(depth: u32, interface: &mut Option<(String, bool)>) -> Option<String> {
+    if depth > 1 {
+        return None;
+    }
+    interface.take().and_then(|(name, is_callable)| (!is_callable).then_some(name))
+}
+
+/// Occurrences of `needle` in one printed line.
+fn char_count(line: &str, needle: char) -> Result<u32, Error> {
+    u32::try_from(line.matches(needle).count())
+        .map_err(|_| Error::Invalid("printed WIT line exceeds the brace bound".to_string()))
 }
 
 fn virtualization_args(plan: &VirtualizationPlan, input: &Path, output: &Path) -> Result<Vec<String>, Error> {
@@ -952,7 +1046,41 @@ fn stderr_summary(stderr: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::parse_component_imports;
     use super::parse_import_line;
+    use super::requires_wasi_virtualization;
+
+    /// The standalone emitter's actual inventory shape: an approved effect plus type-only OTel and
+    /// clock dependencies, with braces inside a documentation comment.
+    const EMITTER_WIT: &str = "package root:component;
+world root {
+  import wasi:otel/types@0.2.0-rc.2;
+  import wasi:clocks/wall-clock@0.2.3;
+  import wasi:otel/tracing@0.2.0-rc.2;
+  export run: func(mode: u32) -> u32;
+}
+package wasi:clocks@0.2.3 {
+  interface wall-clock {
+    record datetime {
+      seconds: u64,
+      nanoseconds: u32,
+    }
+  }
+}
+package wasi:otel@0.2.0-rc.2 {
+  interface types {
+    use wasi:clocks/wall-clock@0.2.3.{datetime};
+    /// Braces in docs, such as {a span}, do not move the scan.
+    record span-data {
+      start-time: datetime,
+    }
+  }
+  interface tracing {
+    use types.{span-data};
+    on-start: func(span: span-data);
+  }
+}
+";
 
     #[test]
     fn remaining_host_surface_includes_root_functions_and_named_instances() {
@@ -970,5 +1098,42 @@ mod tests {
         assert!(parse_import_line("import ambiguous declaration;").is_err());
         assert!(parse_import_line("import missing-terminator").is_err());
         assert_eq!(parse_import_line("type preserves-payload = list<u8>;").unwrap(), None);
+    }
+
+    #[test]
+    fn type_only_wasi_dependencies_are_distinguished_from_callable_imports() {
+        let imports = parse_component_imports(EMITTER_WIT).unwrap();
+        let flags: Vec<_> = imports.iter().map(|import| (import.name.as_str(), import.is_type_only)).collect();
+        assert_eq!(flags, vec![
+            ("wasi:otel/types@0.2.0-rc.2", true),
+            ("wasi:clocks/wall-clock@0.2.3", true),
+            ("wasi:otel/tracing@0.2.0-rc.2", false),
+        ]);
+        assert!(!requires_wasi_virtualization(&imports));
+
+        let clock_reader =
+            EMITTER_WIT.replace("    record datetime {", "    now: func() -> datetime;\n    record datetime {");
+        let imports = parse_component_imports(&clock_reader).unwrap();
+        assert!(!imports[1].is_type_only, "a clock function makes the import callable");
+        assert!(requires_wasi_virtualization(&imports));
+    }
+
+    #[test]
+    fn resources_and_unprinted_interfaces_stay_callable() {
+        let wit = "world root {\n  import wasi:io/streams@0.2.3;\n  import wasi:random/random@0.2.3;\n}\n\
+                   package wasi:io@0.2.3 {\n  interface streams {\n    resource output-stream;\n  }\n}\n";
+        let imports = parse_component_imports(wit).unwrap();
+        assert!(imports.iter().all(|import| !import.is_type_only));
+        assert!(requires_wasi_virtualization(&imports));
+    }
+
+    #[test]
+    fn printed_interfaces_past_the_bound_fail_the_inspection() {
+        let package = |count: u32| {
+            let interfaces: String = (0..count).map(|index| format!("  interface i{index} {{\n  }}\n")).collect();
+            format!("package wasi:clocks@0.2.3 {{\n{interfaces}}}\n")
+        };
+        assert!(parse_component_imports(&package(super::MAX_PRINTED_INTERFACES)).is_ok());
+        assert!(parse_component_imports(&package(super::MAX_PRINTED_INTERFACES + 1)).is_err());
     }
 }

@@ -23,6 +23,19 @@ pub const WASI_SUBSYSTEM_COUNT: usize = 10;
 
 const MAX_VIRTUALIZATION_RULES: u32 = 64;
 const MAX_REMAINING_IMPORTS: u32 = 1024;
+/// WASI packages whose interfaces WASI-Virt classifies into the supported subsystems. Other `wasi:`
+/// packages, such as `wasi:otel`, are declared effect imports the plan lists as remaining imports.
+const VIRTUALIZED_WASI_PACKAGES: [&str; 7] = [
+    "wasi:cli/",
+    "wasi:clocks/",
+    "wasi:filesystem/",
+    "wasi:http/",
+    "wasi:io/",
+    "wasi:random/",
+    "wasi:sockets/",
+];
+/// Preview 1 core-module namespaces such as `wasi_snapshot_preview1`.
+const PREVIEW1_IMPORT_PREFIX: &str = "wasi_";
 
 const ALL_WASI_SUBSYSTEMS: [WasiSubsystem; WASI_SUBSYSTEM_COUNT] = [
     WasiSubsystem::Cli,
@@ -147,6 +160,32 @@ pub fn plan_virtualization(mut config: VirtualizationConfig) -> VirtualizationPl
         }),
         blockers: Vec::new(),
     }
+}
+
+/// One import of an inspected component. It is type-only when its interface declares no function
+/// or resource, such as a clock interface imported only for its `datetime` record.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ObservedImport {
+    pub name: String,
+    pub is_type_only: bool,
+}
+
+/// Whether any observed import can call into a WASI subsystem that deny-all virtualization must
+/// classify. A type-only WASI dependency grants no capability and gives WASI-Virt nothing to
+/// compose; like every other remaining import, it must match the plan exactly.
+// r[impl materialize_wrpc_telemetry.producer]
+pub fn requires_wasi_virtualization(imports: &[ObservedImport]) -> bool {
+    let is_required = imports.iter().any(|import| !import.is_type_only && is_virtualized_wasi_import(&import.name));
+    debug_assert!(!is_required || !imports.is_empty());
+    debug_assert!(!is_required || imports.iter().any(|import| !import.is_type_only));
+    is_required
+}
+
+fn is_virtualized_wasi_import(name: &str) -> bool {
+    if name.starts_with(PREVIEW1_IMPORT_PREFIX) {
+        return true;
+    }
+    VIRTUALIZED_WASI_PACKAGES.iter().any(|package| name.starts_with(package))
 }
 
 pub fn validate_remaining_imports(

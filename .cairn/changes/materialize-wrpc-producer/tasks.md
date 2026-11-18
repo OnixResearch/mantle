@@ -15,7 +15,7 @@ Unchecked items are not claimed from code inspection alone.
 
 - [x] [serial] Integrate the source-closure directory capability verifier prerequisite. r[materialize_wrpc_producer.consumer_contract]
   - Upstream `main` already carries it: implementation `4a1d1eec63f01814affc34d79636e628a037af72`, archived as `verify-wasm-source-closure-trees` in `cf7623b81`. The local re-implementation in `restore-wasm-source-closure-intake` was dropped during integration.
-- [ ] [serial] Materialize the package and exercise positive/negative acceptance. r[materialize_wrpc_producer.component_pair] r[materialize_wrpc_producer.consumer_contract]
-  - Blocked: see [integration run](evidence/integration-2026-10-30.md). Components build; `wrpc-reference-bundle` stops at `octet-report-not-admitted`.
+- [x] [serial] Materialize the package and exercise positive/negative acceptance. r[materialize_wrpc_producer.component_pair] r[materialize_wrpc_producer.consumer_contract]
+  - Materialized and accepted on 2026-11-18; see [integration run](evidence/integration-2026-11-18.md). Admission is bound to the pinned Octet revision, which is not on Octet's current `main`.
 - [ ] [serial] Record actual remote fabric RPC evidence separately from comparison. r[materialize_wrpc_producer.runtime_binding]
 - [ ] [serial] Publish the producer revision and record the exact immutable package address. r[materialize_wrpc_producer.component_pair]

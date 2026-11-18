@@ -12,7 +12,7 @@ Unchecked items are not claimed from code inspection alone.
 ## Parent execution and publication
 
 - [ ] [serial] Materialize the standalone emitter and inspect actual imports and type-only dependencies. r[materialize_wrpc_telemetry.producer]
-  - Blocked: see [integration run](../materialize-wrpc-producer/evidence/integration-2026-10-30.md). Components build; the bundle stops at `wasi-virt-failed` because the `no_std` emitter has no WASI imports.
+  - Blocked: see [integration run](../materialize-wrpc-producer/evidence/integration-2026-11-18.md). The actual imports are the `wasi:otel/tracing` effect plus type-only `wasi:otel/types` and `wasi:clocks/wall-clock@0.2.3`; virtualization now passes, and the bundle stops at `octet-report-not-admitted` because no Octet profile admits those imports.
 - [ ] [serial] Run safe span, secret-redaction and 33rd-span queue rejection on the consumer's actual UCAN host. r[materialize_wrpc_telemetry.emitter]
 - [ ] [serial] Reject missing, mismatched, substituted, locally built and comparison artifact admission. r[materialize_wrpc_telemetry.producer]
 - [ ] [serial] Publish the source revision and record actual immutable output identities. r[materialize_wrpc_telemetry.producer]

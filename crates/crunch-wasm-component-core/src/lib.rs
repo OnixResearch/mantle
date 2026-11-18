@@ -151,6 +151,7 @@ pub use report::StageReportNode;
 pub use report::build_component_report;
 pub use report::stage_report_identity;
 pub use report::verify_component_report;
+pub use virtualization::ObservedImport;
 pub use virtualization::RemainingImportValidation;
 pub use virtualization::VIRTUALIZATION_PLAN_SCHEMA;
 pub use virtualization::VirtualizationAction;
@@ -159,6 +160,7 @@ pub use virtualization::VirtualizationPlan;
 pub use virtualization::VirtualizationPlanResult;
 pub use virtualization::WASI_SUBSYSTEM_COUNT;
 pub use virtualization::plan_virtualization;
+pub use virtualization::requires_wasi_virtualization;
 pub use virtualization::validate_remaining_imports;
 
 #[cfg(test)]

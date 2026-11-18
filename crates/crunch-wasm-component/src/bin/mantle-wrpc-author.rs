@@ -238,7 +238,12 @@ fn configure_telemetry(request: &mut Value, sink: &Path) -> AuthorResult<()> {
     request["manifest"]["composition"]["nodes"][0]["world"] = json!("emitter");
     request["manifest"]["composition"]["output_world"] = json!("emitter");
     request["manifest"]["package_resolution"]["registries"][0]["namespace"] = json!("wasi");
-    request["manifest"]["virtualization"]["expected_remaining_imports"] = json!(["wasi:otel/tracing@0.2.0-rc.2"]);
+    // The emitter's clock and OTel type imports are type-only dependencies of the tracing effect.
+    request["manifest"]["virtualization"]["expected_remaining_imports"] = json!([
+        "wasi:clocks/wall-clock@0.2.3",
+        "wasi:otel/tracing@0.2.0-rc.2",
+        "wasi:otel/types@0.2.0-rc.2"
+    ]);
     request["runtime_invoke"] = json!("run(0)");
     request["runtime_composition"] = json!({
         "source_wac": "package mantle:otel-smoke;\nlet sink = new pilot:sink { ... };\nlet emitter = new pilot:emitter { \"wasi:otel/tracing@0.2.0-rc.2\": sink[\"wasi:otel/tracing@0.2.0-rc.2\"], ... };\nexport emitter.run;\n",
