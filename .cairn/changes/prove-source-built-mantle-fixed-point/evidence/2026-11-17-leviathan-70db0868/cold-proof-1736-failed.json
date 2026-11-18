@@ -1,0 +1,25 @@
+{
+  "task": 1736,
+  "result": {
+    "Failed": 1
+  },
+  "start": "2026-11-17T16:22:26.330730354-05:00",
+  "end": "2026-11-17T20:33:03.520830697-05:00",
+  "proof_parent": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol",
+  "preserved_attempt": "/home/brittonr/sbfp-20261113-berdKH/cold-proof-70db0868-primary-sources-gpt6sol/.proof.source-built-fixed-point-staging-3808945",
+  "plan_digest_blake3": "268cd29da41f47b41354fbf9998d6c4214d8842e84b3700e9aff777076daed3e",
+  "blocker": "source-built Mantle actions: unit 101:registry+https://github.com/rust-lang/crates.io-index#proc-macro-hack@0.5.20+deprecated:proc-macro-hack:proc-macro:build has no actual source-produced compiler action",
+  "acceptance_bytes_blake3": "59ac07605425ed3f3a31e716ca6e3d739425b8a973192e35d93ad9d97ae4a992",
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "subject_bytes_blake3": "2081b08f4933319c236800f1b709144c2581d1423c6b1d8a9a8077f50a33652d",
+  "retained_bytes": {
+    "cold-proof-1736-driver.log": "d3c8c18333950876cadba07c6ca120196aeff22ce03656a0d81162cdeb00f5b9",
+    "cold-proof-1736-driver.exit": "50cc1102b1c612e6962547aacdcef9a400d4416ef8dd9388e885991853c400c9",
+    "cold-proof-1736-attempt-status.json": "2ea2b7ccfce980f411fa12c1921718fcc3df3e854d1974e5e7d17fccd511674c",
+    "cold-proof-1736-plan.json": "cba2ab200e2da7341bcafcf7515c8b69ea12f9614c707199c2885dcd6ebe00e9"
+  },
+  "phase_observed": "Pre-execution admission. Hydration finished by 16:31 and source-bundle import by 16:34; no staging file was written until the 20:33 failure. native-store is empty, no cold-runtime or fixed-point execution root exists, and plan_actions documents that both Mantle inventories are admitted before either stage executes.",
+  "success_aliases_absent_after": true,
+  "verified_v2_receipt": false,
+  "scope": "Actual failed closed cold attempt only; no protected stage execution, provider/stage success, fixed point, signed adoption, native rows or release accepted."
+}

@@ -1,0 +1,6 @@
+{
+  "schema": "mantle-source-built-fixed-point-attempt-v1",
+  "status": "failed",
+  "plan_digest_blake3": "268cd29da41f47b41354fbf9998d6c4214d8842e84b3700e9aff777076daed3e",
+  "blocker": "error: build failed\nsource-built Mantle actions: unit 101:registry+https://github.com/rust-lang/crates.io-index#proc-macro-hack@0.5.20+deprecated:proc-macro-hack:proc-macro:build has no actual source-produced compiler action"
+}

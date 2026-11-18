@@ -1,0 +1,95 @@
+{
+  "schema": "mantle-cold1736-compiler-action-facts-v1",
+  "source_code_revision": "70db08685c0c5fa5c326bfe32db78576d7e2e182",
+  "cohort": "/home/brittonr/sbfp-20261113-berdKH/prepared-cohort-70db0868-primary-sources",
+  "frozen_consumer": {
+    "path": "src/source_built_fixed_point_mantle_actions.rs",
+    "function": "validate_unit_inventory",
+    "rule": "Each Cargo-free unit must have exactly one Exec in its semantic-root ancestry whose executable input is the Rust provider rustc export and whose literal arguments contain the unit's metadata= word (or -Cmetadata=). validate_primary_source also reads only the Exec's literal arguments.",
+    "failing_line": "src/source_built_fixed_point_mantle_actions.rs:316"
+  },
+  "authoring": {
+    "path": "src/source_built_mantle_programs_metadata.rs",
+    "function": "append_metadata_invocation",
+    "rule": "A compile whose environment depends on actual build-script metadata moves its arguments and environment into a WriteText <step>-invocation-template, adds an Exec <step>-invocation running metadata-helper --compiler-invocation <template> <actual-metadata:compiler.env> <invocation> <environment-data>, and leaves the compiler Exec with empty arguments/environment and invocation_input=<step>-invocation."
+  },
+  "runtime_helper": {
+    "path": "src/source_built_mantle_programs_metadata_helper.rs",
+    "function": "compiler_invocation",
+    "rule": "Template arguments are copied one-for-one: non-empty literal parts become same-byte text slices of the environment-data output and typed parts are unchanged. Only the environment is extended from the actual metadata frame; build-script flags reach rustc through the typed @metadata/compiler.rsp input."
+  },
+  "census_per_stage": {
+    "mantle-stage1": {
+      "recipe_blake3": "296bc2617a773f1ed63a642a9a723cf1f72b6dda97e426723496883705e45817",
+      "rustc_execs": 1121,
+      "direct_with_metadata": 930,
+      "direct_without_metadata": 3,
+      "invocation_execs": 188,
+      "invocation_nonempty_arguments": 0,
+      "template_with_metadata": 119,
+      "template_without_metadata": 69,
+      "invocation_other_producers": 0,
+      "semantic_units": 1047
+    },
+    "mantle-stage2": {
+      "recipe_blake3": "a78ee751ea39db1729758c78b9bce484c128d069b922171744d1e97270ce4ecb",
+      "rustc_execs": 1121,
+      "direct_with_metadata": 930,
+      "direct_without_metadata": 3,
+      "invocation_execs": 188,
+      "invocation_nonempty_arguments": 0,
+      "template_with_metadata": 119,
+      "template_without_metadata": 69,
+      "invocation_other_producers": 0,
+      "semantic_units": 1047
+    }
+  },
+  "failing_unit": {
+    "unit_id": "101:registry+https://github.com/rust-lang/crates.io-index#proc-macro-hack@0.5.20+deprecated:proc-macro-hack:proc-macro:build",
+    "semantic_root": {
+      "kind": "produced",
+      "action_id": "mantle-stage1/unit-00002-link.native-products",
+      "output_id": "product"
+    },
+    "compile_step": {
+      "id": "unit-00002-compile",
+      "executable_input": "rustc",
+      "rustc": {
+        "kind": "produced",
+        "action_id": "full-source-rust-provider/successor-1.94.1.compiler.compiler.rustc-main.0.0.0.target.bin.rustc-main.link.native-products",
+        "output_id": "artifact"
+      },
+      "arguments": [],
+      "invocation_input": "unit-00002-compile-invocation",
+      "invocation_ref": {
+        "kind": "produced",
+        "action_id": "mantle-stage1/unit-00002-compile-invocation",
+        "output_id": "invocation"
+      },
+      "data_ref": {
+        "kind": "produced",
+        "action_id": "mantle-stage1/unit-00002-compile-invocation",
+        "output_id": "environment-data"
+      }
+    },
+    "invocation_step": {
+      "id": "unit-00002-compile-invocation",
+      "executable_input": "metadata-helper",
+      "helper": {
+        "kind": "produced",
+        "action_id": "mantle-stage1/helper-metadata-link.native-products",
+        "output_id": "helper"
+      },
+      "arguments": ["--compiler-invocation", "<input:template:>", "<input:actual-metadata:compiler.env>", "<output:invocation>", "<output:environment-data>"],
+      "template_ref": {
+        "kind": "produced",
+        "action_id": "mantle-stage1/unit-00002-compile-invocation-template",
+        "output_id": "template"
+      }
+    },
+    "template_words_selected": ["--crate-name", "proc_macro_hack", "<input:vendor-inputs:proc-macro-hack/src/lib.rs>", "--crate-type", "proc-macro", "-C", "metadata=d4deb81969bf70e4", "@<input:metadata:compiler.rsp>"],
+    "template_data_name": "unit-00002-compile-invocation-data"
+  },
+  "inspection_gap": "The current inert inspectors and both independent reviews counted these units through a static-template projection. The frozen consumer accepted only direct literal Exec arguments, so the inspector model did not reproduce the consumer's compiler-action selection rule.",
+  "non_claim": "Static recipe/source facts and actual failure diagnosis only. No repaired admission, stage execution, proof or review acceptance is claimed."
+}

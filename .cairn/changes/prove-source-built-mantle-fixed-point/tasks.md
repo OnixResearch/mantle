@@ -1495,3 +1495,30 @@ exact review transport and current source/resource/tool/namespace checks remain
 required before protected execution. I3-I5, proof-dependent V2/V3 and all genuine
 native rows remain open; static review establishes no stage success, fixed-point
 equality, verified v2 receipt, signing, native-row acceptance or release claim.
+
+## Cold1736 templated compiler-action rejection (2026-11-17)
+
+Genuine cold task1736 ran the reviewed launch authority59ac0760 on Leviathan.
+All fresh driver preflights passed. It failed closed after4h10m of
+pre-execution admission on
+`101:registry+https://github.com/rust-lang/crates.io-index#proc-macro-hack@0.5.20+deprecated:proc-macro-hack:proc-macro:build`:
+the unit had no actual source-produced compiler action. Plan
+`268cd29da41f47b41354fbf9998d6c4214d8842e84b3700e9aff777076daed3e` and the
+failed staging tree are retained. `native-store` is empty, no execution root
+exists and all success aliases stayed absent. No provider/stage execution,
+stage equality, verified v2 receipt or native row is accepted.
+
+`append_metadata_invocation` moves each build-metadata compile's words into a
+WriteText template. The metadata helper copies those words one-for-one into the
+runtime invocation and leaves the compiler Exec's own arguments empty.
+`validate_unit_inventory` and `validate_primary_source` read only literal Exec
+arguments. Each frozen stage has930 direct and119 templated metadata-bearing
+rustc actions, so all119 templated units in each stage were inadmissible.
+Unit101 was simply the first in topology order.
+
+The inert inspectors and both independent reviews accepted these units through
+a static-template projection that the frozen consumer did not implement. Their
+static acceptance did not reproduce the consumer's compiler-action selection.
+The census, exact unit101 recipe structure and retained failure bytes are in
+`evidence/2026-11-17-leviathan-70db0868/cold1736-compiler-action-facts.json`
+and `cold-proof-1736-*.json`.
