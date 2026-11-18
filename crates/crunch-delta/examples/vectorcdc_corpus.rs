@@ -1,5 +1,20 @@
+//! Deterministic VectorCDC benchmark corpus generator.
+//!
+//! Usage:
+//! `vectorcdc_corpus [OUTPUT_DIR] [--rlib PATH] [--depfile PATH] [--require-build-artifacts]`
+//!
+//! Selection contract:
+//! - Repo artifacts are fixed inputs and always required.
+//! - Compiled artifacts are never discovered by scanning a build directory and never chosen by
+//!   modification time. Supply an rlib and an optional depfile explicitly; each class is
+//!   independent, so a caller may provide one without the other unless `--require-build-artifacts`
+//!   is set.
+//! - Without explicit paths the run is a deliberate source-only corpus and the manifest records the
+//!   omitted classes and the reason.
+//! - `--require-build-artifacts` fails when either class is missing instead of silently producing a
+//!   source-only corpus.
+
 use std::env;
-use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -9,6 +24,77 @@ const DEFAULT_OUTPUT_DIR: &str = "target/vectorcdc-corpus";
 const MUTATION_WINDOW: usize = 64;
 const MUTATION_INSERT: &[u8] = b"\n# vectorcdc-corpus deterministic insertion\n";
 const MUTATION_APPEND_BYTES: usize = 4096;
+
+#[derive(Debug)]
+struct Arguments {
+    output_dir: String,
+    rlib: Option<PathBuf>,
+    depfile: Option<PathBuf>,
+}
+
+fn parse_arguments(args: impl Iterator<Item = String>) -> io::Result<Arguments> {
+    let mut output_dir: Option<String> = None;
+    let mut rlib: Option<PathBuf> = None;
+    let mut depfile: Option<PathBuf> = None;
+    let mut require_build_artifacts = false;
+    let mut arguments = args;
+    while let Some(argument) = arguments.next() {
+        match argument.as_str() {
+            "--rlib" => {
+                let value = arguments.next().ok_or_else(|| invalid("--rlib needs a path"))?;
+                rlib = Some(explicit_artifact_path("rlib", &value)?);
+            }
+            "--depfile" => {
+                let value = arguments.next().ok_or_else(|| invalid("--depfile needs a path"))?;
+                depfile = Some(explicit_artifact_path("depfile", &value)?);
+            }
+            "--require-build-artifacts" => require_build_artifacts = true,
+            other if other.starts_with("--") => {
+                return Err(invalid(format!("unknown argument {other}")));
+            }
+            other => {
+                if output_dir.replace(other.to_string()).is_some() {
+                    return Err(invalid("output directory given more than once"));
+                }
+            }
+        }
+    }
+    if require_build_artifacts {
+        for (class, path) in [("rlib", &rlib), ("depfile", &depfile)] {
+            if path.is_none() {
+                return Err(invalid(format!(
+                    "--require-build-artifacts needs --{class}; a source-only corpus must be requested explicitly by omitting the flag"
+                )));
+            }
+        }
+    }
+    Ok(Arguments {
+        output_dir: output_dir.unwrap_or_else(|| DEFAULT_OUTPUT_DIR.to_string()),
+        rlib,
+        depfile,
+    })
+}
+
+fn explicit_artifact_path(class: &str, value: &str) -> io::Result<PathBuf> {
+    let path = PathBuf::from(value);
+    let metadata =
+        fs::metadata(&path).map_err(|error| invalid(format!("{class} path {value} is not readable: {error}")))?;
+    if !metadata.is_file() {
+        return Err(invalid(format!("{class} path {value} is not a regular file")));
+    }
+    Ok(path)
+}
+
+fn invalid(message: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, message.into())
+}
+
+#[derive(Debug)]
+struct ArtifactSelection {
+    rlib: Option<PathBuf>,
+    depfile: Option<PathBuf>,
+    omitted: Vec<&'static str>,
+}
 
 #[derive(Debug)]
 struct SourceCandidate {
@@ -31,15 +117,24 @@ struct CorpusEntry {
 }
 
 fn main() -> io::Result<()> {
-    let output_dir = env::args().nth(1).unwrap_or_else(|| DEFAULT_OUTPUT_DIR.to_string());
+    let arguments = parse_arguments(env::args().skip(1))?;
     let repo_root = repo_root();
-    let output_dir = repo_root.join(output_dir);
+    let output_dir = repo_root.join(&arguments.output_dir);
 
     let mut entries = Vec::new();
     let corpus_dir = output_dir.join("files");
     fs::create_dir_all(&corpus_dir)?;
 
-    for candidate in source_candidates(&repo_root) {
+    let selection = ArtifactSelection {
+        rlib: arguments.rlib.clone(),
+        depfile: arguments.depfile.clone(),
+        omitted: [("rlib", &arguments.rlib), ("depfile", &arguments.depfile)]
+            .into_iter()
+            .filter_map(|(class, path)| path.is_none().then_some(class))
+            .collect(),
+    };
+
+    for candidate in source_candidates(&repo_root, &selection) {
         match fs::read(&candidate.path) {
             Ok(bytes) => {
                 add_entry(&mut entries, &corpus_dir, &candidate, "base", bytes.clone())?;
@@ -56,7 +151,7 @@ fn main() -> io::Result<()> {
         return Err(io::Error::new(io::ErrorKind::NotFound, "no corpus sources were available"));
     }
 
-    let manifest = render_manifest(&repo_root, &output_dir, &entries);
+    let manifest = render_manifest(&repo_root, &output_dir, &entries, &selection);
     fs::write(output_dir.join("manifest.json"), manifest)?;
 
     println!("wrote {} corpus entries to {}", entries.len(), output_dir.display());
@@ -71,7 +166,7 @@ fn repo_root() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn source_candidates(repo_root: &Path) -> Vec<SourceCandidate> {
+fn source_candidates(repo_root: &Path, selection: &ArtifactSelection) -> Vec<SourceCandidate> {
     let mut candidates = vec![
         SourceCandidate {
             id: "cargo-lock",
@@ -93,52 +188,26 @@ fn source_candidates(repo_root: &Path) -> Vec<SourceCandidate> {
         },
     ];
 
-    if let Some(path) = newest_matching(&repo_root.join("target/debug/deps"), "libsnix_castore", Some("rlib")) {
+    // Compiled artifacts come only from explicit inputs; no directory scan and
+    // no modification-time choice can mix two build configurations.
+    if let Some(path) = &selection.rlib {
         candidates.push(SourceCandidate {
             id: "snix-castore-rlib",
             kind: "local-build-artifact",
-            path,
-            required: false,
+            path: path.clone(),
+            required: true,
         });
     }
-
-    if let Some(path) = newest_matching(&repo_root.join("target/debug/deps"), "snix_castore", Some("d")) {
+    if let Some(path) = &selection.depfile {
         candidates.push(SourceCandidate {
             id: "snix-castore-depfile",
             kind: "local-build-artifact",
-            path,
-            required: false,
+            path: path.clone(),
+            required: true,
         });
     }
 
     candidates
-}
-
-fn newest_matching(dir: &Path, prefix: &str, extension: Option<&str>) -> Option<PathBuf> {
-    let mut best: Option<(std::time::SystemTime, PathBuf)> = None;
-    let entries = fs::read_dir(dir).ok()?;
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(OsStr::to_str) else {
-            continue;
-        };
-        if !name.starts_with(prefix) {
-            continue;
-        }
-        if let Some(expected) = extension
-            && path.extension().and_then(OsStr::to_str) != Some(expected)
-        {
-            continue;
-        }
-        let modified = entry.metadata().and_then(|metadata| metadata.modified()).unwrap_or(std::time::UNIX_EPOCH);
-        match &best {
-            Some((best_modified, _)) if *best_modified >= modified => {}
-            _ => best = Some((modified, path)),
-        }
-    }
-
-    best.map(|(_, path)| path)
 }
 
 fn add_entry(
@@ -209,13 +278,45 @@ fn sanitize_file_name(value: &str) -> String {
         .collect()
 }
 
-fn render_manifest(repo_root: &Path, output_dir: &Path, entries: &[CorpusEntry]) -> String {
+fn render_manifest(
+    repo_root: &Path,
+    output_dir: &Path,
+    entries: &[CorpusEntry],
+    selection: &ArtifactSelection,
+) -> String {
     let mut json = String::new();
     json.push_str("{\n");
     json.push_str("  \"schema\": \"crunch.vectorcdc-corpus.v1\",\n");
-    json.push_str("  \"purpose\": \"Representative CDC benchmark corpus: repo artifacts, local build artifacts, and deterministic small-delta mutations.\",\n");
+    json.push_str("  \"purpose\": \"Representative CDC benchmark corpus: fixed repo artifacts, explicitly supplied build artifacts, and deterministic small-delta mutations.\",\n");
     json.push_str(&format!("  \"repo_root\": \"{}\",\n", escape_json(&repo_root.display().to_string())));
     json.push_str(&format!("  \"output_dir\": \"{}\",\n", escape_json(&output_dir.display().to_string())));
+    json.push_str("  \"artifact_selection\": {\n");
+    let mode = if selection.omitted.is_empty() {
+        "build-artifacts"
+    } else {
+        "source-only"
+    };
+    json.push_str(&format!("    \"mode\": \"{mode}\",\n"));
+    json.push_str(&format!(
+        "    \"rlib\": {},\n",
+        selection
+            .rlib
+            .as_ref()
+            .map_or("null".to_string(), |path| format!("\"{}\"", escape_json(&path.display().to_string())))
+    ));
+    json.push_str(&format!(
+        "    \"depfile\": {},\n",
+        selection
+            .depfile
+            .as_ref()
+            .map_or("null".to_string(), |path| format!("\"{}\"", escape_json(&path.display().to_string())))
+    ));
+    let omitted = selection.omitted.iter().map(|class| format!("\"{class}\"")).collect::<Vec<_>>().join(", ");
+    json.push_str(&format!("    \"omitted_classes\": [{omitted}],\n"));
+    json.push_str(
+        "    \"contract\": \"Explicit inputs only; no build-directory scan and no modification-time selection. Omitted classes make this a source-only corpus unless --require-build-artifacts rejected the run.\"\n",
+    );
+    json.push_str("  },\n");
     json.push_str("  \"identity_invariant\": \"Corpus files are benchmark inputs only; blob identity remains BLAKE3(raw bytes).\",\n");
     json.push_str("  \"mutation_policy\": {\n");
     json.push_str(
