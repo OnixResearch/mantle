@@ -253,6 +253,35 @@ reproducibility, or bootstrap correctness. Fixed-output verification still runs
 on materialized source-bundle inputs; final outputs need separate build/cache and
 attestation evidence.
 
+## Fetch transport deadlines
+
+HTTP fetches use explicit phase deadlines instead of one end-to-end timeout:
+
+| Phase | Default | Override |
+|---|---|---|
+| DNS resolve | 60 s | none |
+| Connect and TLS | 60 s | none |
+| Response headers | 60 s | none |
+| Body read-idle | 60 s | none |
+| Total fetch | 600 s | `MANTLE_FETCH_TOTAL_DEADLINE_SECS` (1–86400 s) |
+
+The body read-idle budget is reset by every read that makes progress, so a
+healthy but slow large transfer keeps running as long as each read returns
+inside it. The total budget is end-to-end, from DNS resolution to the last body
+byte. A server that stops sending mid-body fails at the idle budget even when
+the total is large; a transfer that keeps progressing past the total fails at
+the total. Raise `MANTLE_FETCH_TOTAL_DEADLINE_SECS` for large sources.
+
+An expired deadline is reported as a typed `Timeout` carrying the phase
+(`resolve`, `connect`, `response-headers`, `body-idle`, `body-total`), so the
+operator sees which budget expired instead of a generic I/O error.
+
+Transient transport, header, idle, and 5xx failures are retried up to 5 total
+attempts (4 retries) with exponential backoff starting at 1 s. A `body-total`
+expiry is not retried: the budget is already spent, so repeating the attempt
+would only re-download the same body. Permanent failures (for example 404 or a
+hash mismatch) are never retried.
+
 ## Offline bootstrap source-bundle profile
 
 Use `mantle source bundle bootstrap-profile` to enumerate and verify every

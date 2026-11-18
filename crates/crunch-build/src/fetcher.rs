@@ -7,6 +7,7 @@
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
+use std::io::Write;
 use std::io::{self};
 use std::path::Path;
 use std::path::PathBuf;
@@ -62,6 +63,37 @@ pub enum Fetch {
     },
 }
 
+/// Which transport deadline expired for an HTTP fetch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FetchTimeoutPhase {
+    /// DNS resolution did not finish inside the connect budget.
+    Resolve,
+    /// The connection or TLS handshake did not finish inside the connect budget.
+    Connect,
+    /// Response headers did not arrive inside the header budget.
+    ResponseHeaders,
+    /// No body bytes arrived inside the read-idle budget. Progress resets it.
+    BodyIdle,
+    /// The whole fetch exceeded the operator total budget.
+    BodyTotal,
+    /// A transport phase without a dedicated classification.
+    Other,
+}
+
+impl std::fmt::Display for FetchTimeoutPhase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Resolve => "resolve",
+            Self::Connect => "connect",
+            Self::ResponseHeaders => "response-headers",
+            Self::BodyIdle => "body-idle",
+            Self::BodyTotal => "body-total",
+            Self::Other => "other",
+        };
+        write!(f, "{name}")
+    }
+}
+
 /// Errors specific to fetch operations.
 #[derive(Debug, thiserror::Error)]
 pub enum FetchError {
@@ -88,6 +120,9 @@ pub enum FetchError {
 
     #[error("HTTP fetch failed for {url}: {reason}")]
     HttpError { url: String, reason: String },
+
+    #[error("HTTP fetch deadline expired for {url}: {phase}")]
+    Timeout { url: String, phase: FetchTimeoutPhase },
 
     #[error("tar extraction failed: {0}")]
     TarError(String),
@@ -330,9 +365,17 @@ fn hash_algo_prefix(algo: HashAlgo) -> &'static str {
 
 /// Connect timeout for HTTP fetches (seconds).
 const FETCH_CONNECT_TIMEOUT_SECS: u64 = 60;
-/// Total read timeout for HTTP fetches (seconds).
-const FETCH_READ_TIMEOUT_SECS: u64 = 600;
-/// Maximum attempts for transient HTTP transport/server failures.
+/// Response-header deadline for HTTP fetches (seconds).
+const FETCH_RESPONSE_HEADERS_TIMEOUT_SECS: u64 = 60;
+/// Default total fetch budget for HTTP fetches (seconds).
+const FETCH_TOTAL_DEADLINE_SECS_DEFAULT: u64 = 600;
+/// Read-idle budget for the response body (seconds); progress resets it.
+const FETCH_BODY_IDLE_TIMEOUT_SECS: u64 = 60;
+/// Largest accepted operator-selected total body budget (seconds).
+const FETCH_TOTAL_DEADLINE_SECS_MAX: u64 = 86_400;
+/// Operator override for the total body budget.
+const FETCH_TOTAL_DEADLINE_ENV: &str = "MANTLE_FETCH_TOTAL_DEADLINE_SECS";
+/// Attempts for transient HTTP transport/server failures: 5 total, 4 retries.
 const FETCH_MAX_ATTEMPTS: u32 = 5;
 /// Initial retry backoff for transient HTTP fetch failures.
 const FETCH_RETRY_BASE_DELAY_MS: u64 = 1_000;
@@ -356,12 +399,91 @@ const RETRYABLE_HTTP_STATUS_CODES: &[u16] = &[
     HTTP_STATUS_GATEWAY_TIMEOUT,
 ];
 
-fn fetch_agent() -> ureq::Agent {
+/// Transport deadlines for one HTTP fetch.
+///
+/// `total` is the end-to-end budget from resolve to the last body byte.
+/// `body_idle` is reset by every read that makes progress, so a steadily slow
+/// large transfer can outlive it while a stalled server cannot. Large-source
+/// callers raise the total with `MANTLE_FETCH_TOTAL_DEADLINE_SECS` (seconds,
+/// `1..=86400`, default 600).
+#[derive(Clone, Copy, Debug)]
+struct FetchTimeoutPolicy {
+    connect: std::time::Duration,
+    response_headers: std::time::Duration,
+    body_idle: std::time::Duration,
+    total: std::time::Duration,
+}
+
+impl FetchTimeoutPolicy {
+    const fn defaults() -> Self {
+        Self {
+            connect: std::time::Duration::from_secs(FETCH_CONNECT_TIMEOUT_SECS),
+            response_headers: std::time::Duration::from_secs(FETCH_RESPONSE_HEADERS_TIMEOUT_SECS),
+            body_idle: std::time::Duration::from_secs(FETCH_BODY_IDLE_TIMEOUT_SECS),
+            total: std::time::Duration::from_secs(FETCH_TOTAL_DEADLINE_SECS_DEFAULT),
+        }
+    }
+
+    fn from_environment() -> Self {
+        let mut policy = Self::defaults();
+        let Ok(raw) = std::env::var(FETCH_TOTAL_DEADLINE_ENV) else {
+            return policy;
+        };
+        match total_deadline_seconds(&raw) {
+            Some(seconds) => policy.total = std::time::Duration::from_secs(seconds),
+            None => warn!(
+                variable = FETCH_TOTAL_DEADLINE_ENV,
+                value = %raw,
+                max_seconds = FETCH_TOTAL_DEADLINE_SECS_MAX,
+                "ignoring invalid fetch total deadline; keeping the default"
+            ),
+        }
+        policy
+    }
+}
+
+/// Parse an operator total-deadline value without touching the environment.
+fn total_deadline_seconds(raw: &str) -> Option<u64> {
+    assert!(!raw.is_empty(), "deadline parsing expects a non-empty value");
+    let seconds = raw.trim().parse::<u64>().ok()?;
+    (1..=FETCH_TOTAL_DEADLINE_SECS_MAX).contains(&seconds).then_some(seconds)
+}
+
+fn fetch_agent(policy: FetchTimeoutPolicy) -> ureq::Agent {
+    // The transport's idle timeout is the only read deadline it reliably
+    // enforces, so cap it by the total: a stalled read then wakes no later than
+    // the total budget and our copy loop attributes and reports it.
+    let transport_idle = policy.body_idle.min(policy.total);
     ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_secs(FETCH_READ_TIMEOUT_SECS)))
-        .timeout_connect(Some(std::time::Duration::from_secs(FETCH_CONNECT_TIMEOUT_SECS)))
+        .timeout_resolve(Some(policy.connect))
+        .timeout_connect(Some(policy.connect))
+        .timeout_recv_response(Some(policy.response_headers))
+        .timeout_recv_body(Some(transport_idle))
         .build()
         .new_agent()
+}
+
+/// Classify a transport failure without inspecting rendered text.
+fn http_transport_error(url: &str, error: ureq::Error) -> FetchError {
+    let phase = match &error {
+        ureq::Error::Timeout(ureq::Timeout::Resolve) => Some(FetchTimeoutPhase::Resolve),
+        ureq::Error::Timeout(ureq::Timeout::Connect) => Some(FetchTimeoutPhase::Connect),
+        ureq::Error::Timeout(ureq::Timeout::RecvResponse) => Some(FetchTimeoutPhase::ResponseHeaders),
+        ureq::Error::Timeout(ureq::Timeout::RecvBody) => Some(FetchTimeoutPhase::BodyIdle),
+        ureq::Error::Timeout(ureq::Timeout::Global) => Some(FetchTimeoutPhase::BodyTotal),
+        ureq::Error::Timeout(_) => Some(FetchTimeoutPhase::Other),
+        _ => None,
+    };
+    match phase {
+        Some(phase) => FetchError::Timeout {
+            url: url.to_string(),
+            phase,
+        },
+        None => FetchError::HttpError {
+            url: url.to_string(),
+            reason: error.to_string(),
+        },
+    }
 }
 
 /// Download a URL and write the raw content to a file.
@@ -405,12 +527,83 @@ pub fn fetch_raw_to_file(url: &str, out: &str) -> Result<(), FetchError> {
 }
 
 fn fetch_flat_once(request: FetchOnceRequest<'_>) -> Result<(), FetchError> {
-    let reader: Box<dyn Read + Send> = open_url_reader(request.url)?;
+    fetch_flat_once_with(request, FetchTimeoutPolicy::from_environment())
+}
+
+fn fetch_flat_once_with(request: FetchOnceRequest<'_>, policy: FetchTimeoutPolicy) -> Result<(), FetchError> {
+    let started = std::time::Instant::now();
+    let reader: Box<dyn Read + Send> = open_url_reader_with(request.url, policy)?;
     let mut bounded_reader = reader.take(MAX_DOWNLOAD_BYTES);
     let mut file = std::fs::File::create(request.out)?;
-    let bytes_written = io::copy(&mut bounded_reader, &mut file)?;
+    let bytes_written = copy_with_body_deadlines(&mut bounded_reader, &mut file, request.url, policy, started)?;
     debug_assert!(bytes_written <= MAX_DOWNLOAD_BYTES);
     Ok(())
+}
+
+/// Grace for transport timer granularity when attributing a wake-up to the idle
+/// budget rather than to an unrelated socket error.
+const FETCH_DEADLINE_GRACE_MS: u64 = 100;
+
+/// Copy the body while enforcing the idle and total budgets ourselves.
+///
+/// The pinned transport enforces its body idle timeout but does not terminate a
+/// progressing transfer at a global budget, and its timeout surfaces as an
+/// opaque I/O error. So the total is checked between reads, and a stalled read
+/// is attributed by elapsed time: total when the end-to-end budget is spent,
+/// otherwise idle when the last progress is older than the idle budget.
+fn copy_with_body_deadlines(
+    reader: &mut impl Read,
+    file: &mut std::fs::File,
+    url: &str,
+    policy: FetchTimeoutPolicy,
+    started: std::time::Instant,
+) -> Result<u64, FetchError> {
+    assert!(!url.is_empty(), "body copy requires the fetch url for diagnostics");
+    let mut written: u64 = 0;
+    let mut last_progress = std::time::Instant::now();
+    let mut buffer = [0_u8; 64 * 1024];
+    let grace = std::time::Duration::from_millis(FETCH_DEADLINE_GRACE_MS);
+    loop {
+        if started.elapsed() >= policy.total {
+            return Err(FetchError::Timeout {
+                url: url.to_string(),
+                phase: FetchTimeoutPhase::BodyTotal,
+            });
+        }
+        match reader.read(&mut buffer) {
+            Ok(0) => return Ok(written),
+            Ok(count) => {
+                file.write_all(&buffer[..count])?;
+                written = written
+                    .checked_add(count as u64)
+                    .ok_or_else(|| FetchError::Io(io::Error::other("fetch byte count overflow")))?;
+                last_progress = std::time::Instant::now();
+            }
+            Err(error) => {
+                let stalled = last_progress.elapsed();
+                let socket_closed = matches!(
+                    error.kind(),
+                    io::ErrorKind::ConnectionReset
+                        | io::ErrorKind::ConnectionAborted
+                        | io::ErrorKind::UnexpectedEof
+                        | io::ErrorKind::BrokenPipe
+                );
+                return Err(if started.elapsed() >= policy.total {
+                    FetchError::Timeout {
+                        url: url.to_string(),
+                        phase: FetchTimeoutPhase::BodyTotal,
+                    }
+                } else if !socket_closed && stalled.saturating_add(grace) >= policy.body_idle {
+                    FetchError::Timeout {
+                        url: url.to_string(),
+                        phase: FetchTimeoutPhase::BodyIdle,
+                    }
+                } else {
+                    FetchError::Io(error)
+                });
+            }
+        }
+    }
 }
 
 /// Download a tarball, decompress, and extract to a directory.
@@ -499,6 +692,18 @@ fn should_retry_fetch_error(error: &FetchError, attempt_number: u32) -> bool {
 
     match error {
         FetchError::HttpError { reason, .. } => is_transient_http_reason(reason),
+        FetchError::Timeout { phase, .. } => {
+            // A fresh attempt can plausibly clear resolve, connect, header and
+            // idle stalls. A total expiry already spent its budget; retrying
+            // repeats the same large transfer.
+            matches!(
+                phase,
+                FetchTimeoutPhase::Resolve
+                    | FetchTimeoutPhase::Connect
+                    | FetchTimeoutPhase::ResponseHeaders
+                    | FetchTimeoutPhase::BodyIdle
+            )
+        }
         FetchError::Io(err) => is_transient_io_error(err),
         _ => false,
     }
@@ -583,8 +788,13 @@ fn cleanup_fetch_output(path: &str) {
     }
 }
 
-/// Open a reader for a URL. Supports http(s):// and file:// schemes.
+/// Open a reader for a URL with the default transport deadlines.
 fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
+    open_url_reader_with(url, FetchTimeoutPolicy::from_environment())
+}
+
+/// Open a reader for a URL. Supports http(s):// and file:// schemes.
+fn open_url_reader_with(url: &str, policy: FetchTimeoutPolicy) -> Result<Box<dyn Read + Send>, FetchError> {
     if url.starts_with("file://") {
         // Project-local sources use file://./path relative to the caller's CWD.
         // Absolute file URLs still need percent decoding and a local-host check.
@@ -602,10 +812,7 @@ fn open_url_reader(url: &str) -> Result<Box<dyn Read + Send>, FetchError> {
         })?;
         Ok(Box::new(io::BufReader::new(file)))
     } else {
-        let resp = fetch_agent().get(url).call().map_err(|e| FetchError::HttpError {
-            url: url.to_string(),
-            reason: e.to_string(),
-        })?;
+        let resp = fetch_agent(policy).get(url).call().map_err(|error| http_transport_error(url, error))?;
         Ok(Box::new(resp.into_body().into_reader()))
     }
 }
@@ -1909,6 +2116,204 @@ mod tests {
         assert!(result.is_err(), "permanent failures must not be hidden");
         assert_eq!(calls, 1);
         assert!(observed_delays.is_empty(), "permanent failures must not sleep before returning");
+    }
+
+    #[test]
+    fn fetch_total_deadline_parsing_is_bounded() {
+        assert_eq!(total_deadline_seconds("1"), Some(1));
+        assert_eq!(total_deadline_seconds(" 600 "), Some(600));
+        assert_eq!(total_deadline_seconds("86400"), Some(86_400));
+        assert_eq!(total_deadline_seconds("0"), None);
+        assert_eq!(total_deadline_seconds("86401"), None);
+        assert_eq!(total_deadline_seconds("soon"), None);
+        assert_eq!(FetchTimeoutPolicy::defaults().total, std::time::Duration::from_secs(600));
+        assert_eq!(FetchTimeoutPolicy::defaults().body_idle, std::time::Duration::from_secs(60));
+    }
+
+    #[test]
+    fn fetch_timeout_phases_are_typed_and_retried_only_where_a_retry_can_help() {
+        let timeout = |phase| FetchError::Timeout {
+            url: "https://mirror.example/src.tar.gz".to_string(),
+            phase,
+        };
+
+        assert!(timeout(FetchTimeoutPhase::Resolve).to_string().contains("resolve"));
+        assert!(timeout(FetchTimeoutPhase::Connect).to_string().contains("connect"));
+        assert!(timeout(FetchTimeoutPhase::ResponseHeaders).to_string().contains("response-headers"));
+        assert!(timeout(FetchTimeoutPhase::BodyIdle).to_string().contains("body-idle"));
+        assert!(timeout(FetchTimeoutPhase::BodyTotal).to_string().contains("body-total"));
+        for phase in [
+            FetchTimeoutPhase::Resolve,
+            FetchTimeoutPhase::Connect,
+            FetchTimeoutPhase::ResponseHeaders,
+            FetchTimeoutPhase::BodyIdle,
+        ] {
+            assert!(should_retry_fetch_error(&timeout(phase), 1), "phase {phase} is retryable");
+        }
+        for phase in [FetchTimeoutPhase::BodyTotal, FetchTimeoutPhase::Other] {
+            assert!(!should_retry_fetch_error(&timeout(phase), 1), "phase {phase} must not repeat a spent budget");
+        }
+    }
+
+    #[test]
+    fn fetch_retry_core_exhausts_attempts_without_hiding_the_failure() {
+        let mut calls: u32 = 0;
+        let mut observed_delays = Vec::new();
+
+        let result = fetch_with_retry(
+            || {
+                calls = calls.checked_add(1).unwrap();
+                Err(FetchError::HttpError {
+                    url: "https://mirror.example/src.tar.gz".to_string(),
+                    reason: "status: 503".to_string(),
+                })
+            },
+            |delay_ms| observed_delays.push(delay_ms),
+        );
+
+        assert!(result.is_err(), "retry exhaustion must surface the failure");
+        assert_eq!(calls, FETCH_MAX_ATTEMPTS, "attempts stay bounded at 5 total (4 retries)");
+        assert_eq!(observed_delays.len(), (FETCH_MAX_ATTEMPTS - 1) as usize);
+    }
+
+    fn spawn_http_server(
+        handler: impl FnOnce(std::net::TcpStream) + Send + 'static,
+    ) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::Read;
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let addr = listener.local_addr().unwrap();
+        assert_ne!(addr.port(), 0, "test server must bind a real port");
+        let thread = std::thread::spawn(move || {
+            if let Ok((mut stream, _peer)) = listener.accept() {
+                let mut request = [0_u8; 1024];
+                let _ = stream.read(&mut request);
+                handler(stream);
+            }
+        });
+        (format!("http://{addr}/source.bin"), thread)
+    }
+
+    fn trickle_response(mut stream: std::net::TcpStream) {
+        use std::io::Write;
+        let body = b"0123456789";
+        let header = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+        if stream.write_all(header.as_bytes()).is_err() {
+            return;
+        }
+        for byte in body {
+            if stream.write_all(&[*byte]).is_err() || stream.flush().is_err() {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+    }
+
+    fn test_policy(body_idle: std::time::Duration, total: std::time::Duration) -> FetchTimeoutPolicy {
+        FetchTimeoutPolicy {
+            connect: std::time::Duration::from_secs(5),
+            response_headers: std::time::Duration::from_secs(5),
+            body_idle,
+            total,
+        }
+    }
+
+    #[test]
+    fn fetch_steady_transfer_outlives_the_idle_budget_but_obeys_the_total() {
+        let root = tempfile::tempdir().unwrap();
+
+        // 150 ms per byte is inside a 400 ms idle budget but needs ~1.5 s total.
+        let steady = root.path().join("steady.bin");
+        let (url, server) = spawn_http_server(trickle_response);
+        fetch_flat_once_with(
+            FetchOnceRequest {
+                url: &url,
+                out: steady.to_str().unwrap(),
+            },
+            test_policy(std::time::Duration::from_millis(400), std::time::Duration::from_secs(10)),
+        )
+        .expect("progress must reset the idle budget until the total");
+        server.join().unwrap();
+        assert_eq!(std::fs::read(&steady).unwrap(), b"0123456789");
+
+        let tight = root.path().join("tight.bin");
+        let (url, server) = spawn_http_server(trickle_response);
+        let error = fetch_flat_once_with(
+            FetchOnceRequest {
+                url: &url,
+                out: tight.to_str().unwrap(),
+            },
+            test_policy(std::time::Duration::from_secs(10), std::time::Duration::from_millis(300)),
+        )
+        .expect_err("the total budget must bound a slow transfer");
+        assert!(
+            matches!(error, FetchError::Timeout {
+                phase: FetchTimeoutPhase::BodyTotal,
+                ..
+            }),
+            "total expiry must be typed, got {error}"
+        );
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn fetch_stalled_body_fails_inside_the_idle_budget() {
+        let root = tempfile::tempdir().unwrap();
+        let out = root.path().join("stalled-body.bin");
+        let (url, server) = spawn_http_server(|mut stream| {
+            use std::io::Write;
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 10\r\nConnection: close\r\n\r\n01");
+            let _ = stream.flush();
+            std::thread::sleep(std::time::Duration::from_millis(900));
+        });
+        let started = std::time::Instant::now();
+        let error = fetch_flat_once_with(
+            FetchOnceRequest {
+                url: &url,
+                out: out.to_str().unwrap(),
+            },
+            test_policy(std::time::Duration::from_millis(200), std::time::Duration::from_secs(10)),
+        )
+        .expect_err("a body stall must expire the idle budget");
+        assert!(
+            matches!(error, FetchError::Timeout {
+                phase: FetchTimeoutPhase::BodyIdle,
+                ..
+            }),
+            "idle expiry must be typed, got {error}"
+        );
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(900),
+            "the idle budget must fail before the stalled server finishes"
+        );
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn fetch_response_header_stall_is_typed() {
+        let root = tempfile::tempdir().unwrap();
+        let out = root.path().join("stalled.bin");
+        let (url, server) = spawn_http_server(|stream| {
+            std::thread::sleep(std::time::Duration::from_millis(900));
+            drop(stream);
+        });
+        let mut policy = test_policy(std::time::Duration::from_secs(10), std::time::Duration::from_secs(10));
+        policy.response_headers = std::time::Duration::from_millis(200);
+        let error = fetch_flat_once_with(
+            FetchOnceRequest {
+                url: &url,
+                out: out.to_str().unwrap(),
+            },
+            policy,
+        )
+        .expect_err("a stalled header phase must expire");
+        assert!(
+            matches!(error, FetchError::Timeout {
+                phase: FetchTimeoutPhase::ResponseHeaders,
+                ..
+            }),
+            "header stall must be typed, got {error}"
+        );
+        server.join().unwrap();
     }
 
     // ── parse_fetch tests ──────────────────────────────────────────
