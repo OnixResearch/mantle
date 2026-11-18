@@ -136,6 +136,20 @@ the same frozen bytes. Output `templated-compiler-action-invariants.json`
 `cargo fmt --check -p mantle` passed after formatting the two edited leaf
 modules.
 
+### Strict Clippy
+
+`cargo clippy -p mantle --all-targets --no-deps -- -D warnings` exited 0 in
+1m 06s. The only notices were the pre-existing binary-cache substitution and the
+shared `src/main.rs` bin-target warning; no lint fired.
+
+One earlier rehearsal invocation reported its own "ambiguous compiler actions"
+assertion, and the same window produced three `E0283` diagnostics, while a
+second cargo build held the shared target directory. Two consecutive reruns
+(53.54s and 38.72s) reproduced identical counts, and an independent inert Python
+enumeration of unit101's 62-action ancestry found exactly one compiler action
+carrying `metadata=d4deb81969bf70e4`. The anomaly is attributed to that build
+contention and is recorded rather than discarded.
+
 ## Scope
 
 This proves the repaired admission resolves and selects compiler actions
