@@ -1479,11 +1479,23 @@ mod tests {
         assert!(serialized.contains("practical-mutable-history"));
     }
 
+    /// Bubblewrap must actually create a sandbox; a `--version` probe is not enough.
+    fn bwrap_can_sandbox() -> bool {
+        std::process::Command::new("bwrap")
+            .args(["--ro-bind", "/", "/", "--", "/bin/true"])
+            .output()
+            .is_ok_and(|output| output.status.success())
+    }
+
     #[tokio::test]
     async fn production_workspace_local_dispatch_stack_reaches_owned_watch_cancel() {
         use crate::dispatch_build_service::DispatchBuildService;
         use crate::fetch_build_service::FetchBuildService;
 
+        if !bwrap_can_sandbox() {
+            eprintln!("skipping: production workspace sandbox requires a working bubblewrap");
+            return;
+        }
         let state = tempfile::tempdir().unwrap();
         let parts =
             crate::test_support::pipeline_store_parts(MemoryBlobService::default(), crate::test_support::tmp_ds());
@@ -1510,16 +1522,30 @@ mod tests {
         workspace.clean_rebuild_enabled = true;
         build.workspace = Some(workspace);
         let (sender, cancellation) = tokio::sync::watch::channel(false);
-        let run = tokio::spawn(async move { service.do_build_cancellable(build, cancellation).await });
+        let mut run = Some(tokio::spawn(async move { service.do_build_cancellable(build, cancellation).await }));
         let workspace_store = WorkspaceStore::new(state.path());
         let content = workspace_store.content_path("cargo-cache").unwrap();
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
         while !content.join("started").is_file() {
+            if run.as_ref().is_some_and(|handle| handle.is_finished()) {
+                let handle = run.take().expect("sandbox task is tracked until it finishes");
+                let detail = match handle.await {
+                    Ok(Ok(_)) => "the build completed before the watch marker".to_string(),
+                    Ok(Err(error)) => format!("the build failed: {error}"),
+                    Err(error) => format!("the build task failed: {error}"),
+                };
+                panic!("{detail}");
+            }
             assert!(tokio::time::Instant::now() < deadline, "watch sandbox did not start");
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
         sender.send(true).unwrap();
-        let error = tokio::time::timeout(std::time::Duration::from_secs(10), run).await.unwrap().unwrap().unwrap_err();
+        let handle = run.take().expect("sandbox task is tracked while it runs");
+        let error = tokio::time::timeout(std::time::Duration::from_secs(10), handle)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
         assert_eq!(error.kind(), std::io::ErrorKind::Interrupted);
         assert_eq!(
             workspace_store.load_record("cargo-cache").unwrap().unwrap().state,

@@ -350,8 +350,6 @@ pub async fn store_sign(
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
-
     use nix_compat::store_path::StorePath;
     use snix_castore::Node;
     use snix_castore::SymlinkTarget;
@@ -634,8 +632,6 @@ mod tests {
     // r[verify store_transports.nix_archive_filesystem_observation]
     #[tokio::test]
     async fn store_verify_read_failure_does_not_persist_pathinfo() {
-        const UNREADABLE_MODE: u32 = 0o000;
-        const RESTORED_MODE: u32 = 0o600;
         let svc = test_pathinfo_service();
         let store_dir = tempfile::tempdir().unwrap();
         let path_info = dummy_pathinfo("verify-read-failure-path");
@@ -643,14 +639,14 @@ mod tests {
         let logical_path = path_info.store_path.to_string();
         svc.put(path_info).await.unwrap();
         let physical_path = store_dir.path().join(&logical_path);
-        std::fs::write(&physical_path, b"unreadable").unwrap();
-        std::fs::set_permissions(&physical_path, std::fs::Permissions::from_mode(UNREADABLE_MODE)).unwrap();
+        // A socket cannot be observed as a NAR node and fails identically for
+        // every effective uid, unlike a mode-000 file that root can still read.
+        let _socket = std::os::unix::net::UnixListener::bind(&physical_path).expect("bind an unobservable store entry");
 
         let result = store_verify(&svc, None, store_dir.path()).await;
-        std::fs::set_permissions(&physical_path, std::fs::Permissions::from_mode(RESTORED_MODE)).unwrap();
         let retained = svc.get(digest).await.unwrap();
-        assert!(result.is_err());
-        assert!(retained.is_some());
+        assert!(result.is_err(), "an unobservable path must fail verification");
+        assert!(retained.is_some(), "PathInfo must be retained after an observation failure");
     }
 
     const CUSTOM_PREFIX: &str = "/mantle/store";
