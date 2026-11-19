@@ -54,6 +54,6 @@ Any such change needs its own race fixtures and distinct audit classifications.
 - The existing race is a known, documented limit rather than a silent claim.
 - A multithreaded tracee or writable path swap can still execute bytes that
   differ from the inspected file; fail-closed admission does not close that
-  window.
-- The regression fixture and receipt non-claim enforcement remain follow-up
-  work tracked by the issue.
+  window. A deterministic rename-swap fixture now records this outcome.
+- The regression fixture and receipt non-claim enforcement are retained; any
+  future preventive mechanism needs its own classification and evidence.

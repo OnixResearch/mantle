@@ -79,7 +79,12 @@ Protected-exec non-claim (#79, partial):
   `cargo test -p mantle --lib protected_exec::tests::protected_exec_audit_receipt_requires_check_to_use_non_claim`
   passed (1 passed; 0 failed). The full `protected_exec::tests` suite passed
   36 tests; the provider suite passed 29 tests.
-- A race-class fixture remains open in Phase 8 task T8.3.
+- A deterministic rename-swap fixture
+  (`seccomp_supervisor_continue_race_executes_replaced_bytes`) holds the
+  supervisor after hashing, replaces the admitted path with `/bin/false`, and
+  confirms the kernel executes the replaced bytes while the audit event records
+  the inspected `/bin/true` digest. This records the documented limit rather
+  than claiming prevention.
 
 Formatting: `rustfmt --edition 2024 --check` on the edited first-party leaf
 files passed. Vendored files are outside the first-party fmt selection and

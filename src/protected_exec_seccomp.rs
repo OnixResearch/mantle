@@ -509,13 +509,52 @@ mod linux {
                     inventory_entry_id: None,
                 }),
             };
+            #[cfg(test)]
+            let race_path = decision.audit_event.resolved_host_path.clone();
             match audit_events.lock() {
                 Ok(mut events) => events.push(decision.audit_event),
                 Err(poisoned) => poisoned.into_inner().push(decision.audit_event),
             }
+            #[cfg(test)]
+            wait_seccomp_test_race_window(&race_path);
             if send_response(listener_fd, notif.id, decision.allowed).is_err() {
                 continue;
             }
+        }
+    }
+
+    #[cfg(test)]
+    #[derive(Clone, Debug)]
+    pub(crate) struct SeccompRaceConfig {
+        pub path: PathBuf,
+        pub root: PathBuf,
+    }
+
+    #[cfg(test)]
+    static SECCOMP_RACE_CONFIG: Mutex<Option<SeccompRaceConfig>> = Mutex::new(None);
+
+    #[cfg(test)]
+    pub(crate) fn set_seccomp_race_config(config: Option<SeccompRaceConfig>) {
+        *SECCOMP_RACE_CONFIG.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = config;
+    }
+
+    #[cfg(test)]
+    fn wait_seccomp_test_race_window(path: &Path) {
+        let config = SECCOMP_RACE_CONFIG.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+        let Some(config) = config else {
+            return;
+        };
+        if config.path != path {
+            return;
+        }
+        let ready = config.root.join("hashed");
+        let swapped = config.root.join("swapped");
+        if std::fs::write(&ready, b"hashed").is_err() {
+            return;
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !swapped.is_file() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(1));
         }
     }
 
@@ -1288,6 +1327,83 @@ mod linux {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
+        }
+
+        #[test]
+        fn seccomp_supervisor_continue_race_executes_replaced_bytes() {
+            if std::env::var(CHILD_MODE_VAR).ok().as_deref() == Some("rename-swap-race") {
+                run_rename_swap_race_child();
+                return;
+            }
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--exact")
+                .arg("protected_exec_seccomp::linux::tests::seccomp_supervisor_continue_race_executes_replaced_bytes")
+                .arg("--nocapture")
+                .env(CHILD_MODE_VAR, "rename-swap-race")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout={}\nstderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        fn run_rename_swap_race_child() {
+            use std::os::unix::fs::PermissionsExt;
+
+            let root = tempfile::tempdir().unwrap();
+            let approved = root.path().join("approved");
+            let shell = root.path().join("shell");
+            let replacement = root.path().join("replacement");
+            std::fs::copy("/bin/true", &approved).unwrap();
+            std::fs::copy("/bin/true", &shell).unwrap();
+            std::fs::copy("/bin/false", &replacement).unwrap();
+            for path in [&approved, &shell, &replacement] {
+                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            let digest = blake3_file_hex(&approved).unwrap();
+            let inventory = Stage0Inventory {
+                executable_entries: vec![
+                    seed_entry("sandbox-entry", "sandbox-entry", &approved, digest.clone(), true),
+                    seed_entry("sandbox-shell", "sandbox-shell", &shell, digest.clone(), true),
+                ],
+                source_entries: Vec::new(),
+            };
+            let policy = ProtectedExecPolicy::from_inventory(inventory).unwrap();
+            let race_root = root.path().join("race");
+            std::fs::create_dir(&race_root).unwrap();
+            set_seccomp_race_config(Some(SeccompRaceConfig {
+                path: approved.clone(),
+                root: race_root.clone(),
+            }));
+            let supervisor = install_current_thread_exec_supervisor(policy).unwrap();
+
+            let racer = {
+                let approved = approved.clone();
+                let replacement = replacement.clone();
+                let race_root = race_root.clone();
+                std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                    while !race_root.join("hashed").is_file() && std::time::Instant::now() < deadline {
+                        std::thread::sleep(std::time::Duration::from_millis(1));
+                    }
+                    std::fs::rename(&replacement, &approved).unwrap();
+                    std::fs::write(race_root.join("swapped"), b"swapped").unwrap();
+                })
+            };
+
+            let status = Command::new(&approved).arg("--version").status().unwrap();
+            racer.join().unwrap();
+            set_seccomp_race_config(None);
+
+            assert!(!status.success(), "raced exec must run the replaced /bin/false bytes");
+            let events = supervisor.audit_events();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].policy_decision, "allowed");
+            assert_eq!(events[0].resolved_host_path, approved);
+            assert_eq!(events[0].digest_hex, digest);
         }
 
         #[test]
