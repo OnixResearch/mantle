@@ -933,6 +933,13 @@ The `mantle` binary crate sets `recursion_limit = "256"` in `src/main.rs` to
 accommodate compiler query depth from the async attestation dispatcher. This
 is a compile-time limit, not a runtime setting.
 
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development shell, gates, Cairn
+lifecycle, evidence rules, and contribution licensing. Report suspected
+vulnerabilities privately through the process in [SECURITY.md](SECURITY.md);
+do not open a public issue for an exploitable finding.
+
 ## License
 
 Repository-owned Mantle source is licensed under
