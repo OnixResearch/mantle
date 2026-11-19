@@ -16,6 +16,9 @@ Current bounds and their origins:
 | `MAX_HASH_DOMAIN_RECORDS` | 4096 | admission (hash-domain records) |
 | `MAX_FOREIGN_READ_CALLS` | 4096 | CLI effect plan (`prepare-sources`) |
 | `MAX_ATERM_BUNDLE_DERIVATIONS` | `MAX_GRAPH_NODES` | ATerm bundle file count |
+| `MAX_GRAPH_EDGES` | 256 | per-node input derivation edges |
+| `MAX_FIELD_BYTES` | 32768 | foreign-import field bytes |
+| `MAX_PLAN_DIAGNOSTICS` | 2048 | executable-plan diagnostic list |
 
 Producers were tightened first: the verification bridge accepts producer tool
 graphs of `MAX_TOOL_DERIVATIONS = 32_768` derivations
@@ -58,19 +61,33 @@ binding, so the admitted budget must cover a maximum-size source set plus the
 fixed reads. The existing `read_limit > MAX_FOREIGN_READ_CALLS` guard then never
 rejects an admissible command.
 
-### Decision: Keep per-node surface limits and byte budgets
+### Decision: Size per-node surface bounds from the measured producer export
 
-**Choice:** Leave `MAX_GRAPH_EDGES` (256 input edges per node),
-`MAX_ATERM_COLLECTION_ITEMS` (256 collection items per derivation),
-`MAX_PACKAGE_INDEX_ENTRIES` (128), `MAX_PLAN_DIAGNOSTICS` (2048), mirrors (16),
-cache hints (16), sandbox capabilities (16), `MAX_FIELD_BYTES` (32 KiB),
-`MAX_ATERM_DERIVATION_BYTES` (16 MiB), `MAX_ATERM_BUNDLE_BYTES` (256 MiB), and
+**Choice:** Raise `MAX_GRAPH_EDGES` to 4,096 (measured maximum 611 input edges
+per node), route parsed ATerm input-derivation lists through
+`MAX_GRAPH_EDGES` instead of the 256-item generic collection bound, and raise
+foreign-import `MAX_FIELD_BYTES` to 262,144 (measured maximum field 102,597
+bytes). Derive `MAX_PLAN_DIAGNOSTICS` from the node bound times the per-node
+capability bound. Leave `MAX_PACKAGE_INDEX_ENTRIES` (128), mirrors (16), cache
+hints (16), sandbox capabilities (16), `MAX_ATERM_DERIVATION_BYTES` (16 MiB),
+`MAX_ATERM_BUNDLE_BYTES` (256 MiB), and
 `DEFAULT_FOREIGN_ARTIFACT_BYTES_MAX` (256 MiB) unchanged.
 
-**Rationale:** These bound one node's surface or the byte size of one artifact;
-none is a function of graph node count. A node with more than 256 input
-derivations, or a closure whose serialized bytes exceed 256 MiB, is rejected as
-an explicit resource decision rather than silently admitted.
+**Rationale:** The frozen Octet producer export measures the real per-node
+surface (611 edges, 102,597-byte `buildCommand`) and stays well inside the
+chosen headroom. Byte budgets for whole artifacts are resource decisions that
+scale with per-derivation size, not node count.
+
+### Decision: Size the scheduler goal bound for total planned units
+
+**Choice:** `crunch-build::goal::MAX_GOALS` becomes 32,768 (the producer
+tool-graph contract) and `registry::MAX_ENTRIES` derives from it.
+
+**Rationale:** `Worker::want` creates one goal per reachable derivation up front,
+so the limit bounds total planned units, not live goals; the frozen
+11,565-derivation producer graph exceeded the old 10,000 bound before any build
+started. The derivation registry holds the same quantity, so it follows the goal
+bound.
 
 ### Decision: Keep one incremental exact-path index during compilation
 

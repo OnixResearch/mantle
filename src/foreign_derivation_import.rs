@@ -47,6 +47,8 @@ const MAX_ATERM_BUNDLE_MEBIBYTES: usize = 256;
 pub(crate) const MAX_ATERM_DERIVATION_BYTES: usize = MAX_ATERM_DERIVATION_MEBIBYTES * MEBIBYTE_BYTES;
 pub(crate) const MAX_ATERM_BUNDLE_BYTES: usize = MAX_ATERM_BUNDLE_MEBIBYTES * MEBIBYTE_BYTES;
 pub(crate) const MAX_ATERM_BUNDLE_DERIVATIONS: usize = MAX_GRAPH_NODES;
+/// Per-collection item bound for parsed ATerm derivations; input derivation lists are the
+/// exception and use `MAX_GRAPH_EDGES`, because real producer nodes exceed 256 inputs.
 const MAX_ATERM_COLLECTION_ITEMS: usize = 256;
 const MAX_ATERM_DYNAMIC_DEPTH: usize = 256;
 const MAX_ATERM_STORE_REFERENCES_PER_FIELD: usize = 256;
@@ -85,9 +87,13 @@ const NIX_BASE32_ALPHABET: &[u8] = b"0123456789abcdfghijklmnpqrsvwxyz";
 /// private, so the tie is the reviewed value recorded in ADR 0166 and asserted below). A real
 /// nixpkgs closure is thousands of derivations, so the bound must admit the whole planned graph.
 pub(crate) const MAX_GRAPH_NODES: usize = 32_768;
-const MAX_GRAPH_EDGES: usize = 256;
+/// Per-node input derivation edge bound. The frozen Octet producer export reaches 611 edges on
+/// two `vendor-registry` derivations, so the bound carries headroom well above that.
+pub(crate) const MAX_GRAPH_EDGES: usize = 4_096;
 const MAX_PACKAGE_INDEX_ENTRIES: usize = 128;
-const MAX_FIELD_BYTES: usize = 32768;
+/// Foreign-import field byte bound. The frozen Octet producer export carries `buildCommand`
+/// env values up to 102,597 bytes, so fields admit 256 KiB with headroom.
+pub(crate) const MAX_FIELD_BYTES: usize = 262_144;
 /// Source payload bound, tied to the producer export contract (Octet's exporter admits 16,384
 /// source objects), so every payload of a planned producer graph fits.
 pub(crate) const MAX_SOURCE_PAYLOADS: usize = 16_384;
@@ -694,14 +700,14 @@ fn parse_prefix_rewritten_aterm_derivation(
     validate_foreign_aterm_limits(&derivation, &input.logical_path)?;
     let node = normalize_prefix_aware_aterm_node(&input.logical_path, derivation, source_prefix)?;
     debug_assert!(input.logical_path.starts_with(source_prefix));
-    debug_assert!(node.input_drvs.len() <= MAX_ATERM_COLLECTION_ITEMS);
+    debug_assert!(node.input_drvs.len() <= MAX_GRAPH_EDGES);
     Ok(node)
 }
 
 fn reviewed_nix_adapter_limits() -> AdapterLimits {
     AdapterLimits {
         derivation_bytes_max: MAX_ATERM_DERIVATION_BYTES,
-        collection_items_max: MAX_ATERM_COLLECTION_ITEMS,
+        collection_items_max: MAX_GRAPH_EDGES,
         input_edges_max: MAX_GRAPH_EDGES,
         field_bytes_max: MAX_FIELD_BYTES,
         structured_attrs_bytes_max: MAX_STRUCTURED_ATTRS_BYTES,
@@ -899,9 +905,15 @@ fn validate_foreign_aterm_limits(
     derivation: &nix_compat::derivation::Derivation,
     logical_path: &str,
 ) -> Result<(), ImportDiagnostic> {
+    if derivation.input_derivations.len() > MAX_GRAPH_EDGES {
+        return Err(diagnostic(
+            "foreign-aterm-collection-limit-exceeded",
+            None,
+            &format!("foreign ATerm input derivation count exceeds limit: {logical_path}"),
+        ));
+    }
     let collections = [
         derivation.outputs.len(),
-        derivation.input_derivations.len(),
         derivation.input_sources.len(),
         derivation.arguments.len(),
         derivation.environment.len(),
@@ -955,6 +967,7 @@ fn validate_foreign_aterm_limits(
         }
     }
     debug_assert!(collections.iter().all(|count| *count <= MAX_ATERM_COLLECTION_ITEMS));
+    debug_assert!(derivation.input_derivations.len() <= MAX_GRAPH_EDGES);
     debug_assert!(input_edge_count <= MAX_GRAPH_EDGES);
     debug_assert!(derivation.builder.len() <= MAX_FIELD_BYTES);
     Ok(())
@@ -1006,7 +1019,7 @@ fn normalize_prefix_aware_aterm_node(
         input_srcs,
     };
     debug_assert!(!node.outputs.is_empty());
-    debug_assert!(node.input_drvs.len() <= MAX_ATERM_COLLECTION_ITEMS);
+    debug_assert!(node.input_drvs.len() <= MAX_GRAPH_EDGES);
     Ok(node)
 }
 
@@ -1038,7 +1051,7 @@ fn normalize_foreign_aterm_outputs(
         return Err(diagnostic("missing-output-declaration", None, "foreign ATerm derivation has no outputs"));
     }
     debug_assert_eq!(normalized.len(), output_count);
-    debug_assert!(normalized.len() <= MAX_ATERM_COLLECTION_ITEMS);
+    debug_assert!(normalized.len() <= MAX_GRAPH_EDGES);
     Ok(normalized)
 }
 
@@ -3678,6 +3691,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn graph_node_bound_matches_the_producer_tool_derivation_contract_value() {
         // The bridge's `producer` module is private; ADR 0166 records 32,768 as the contract value.
         const PRODUCER_TOOL_DERIVATIONS: usize = 32_768;
@@ -3715,7 +3729,13 @@ mod tests {
         assert_eq!(receipt.hash_domains.len(), DERIVATION_COUNT + RECEIPT_HASH_DOMAIN_ADDITIONS);
     }
 
+    /// This graph exceeded 15 minutes in a release build on 2026-11-19 (loaded host), so it stays
+    /// ignored; ADR 0166 records the measured limit. Run it with
+    /// `cargo test --release -p mantle --bin mantle \
+    ///   foreign_derivation_import::tests::foreign_nix_export_admits_the_producer_tool_graph_derivation_bound \
+    ///   -- --ignored --exact`.
     #[test]
+    #[ignore = "max-size producer graph (exceeded 15 min in release on 2026-11-19); run with --release -- --ignored"]
     fn foreign_nix_export_admits_the_producer_tool_graph_derivation_bound() {
         let count = MAX_GRAPH_NODES;
         let export = synthetic_nix_chain_export(count, 0);
@@ -3765,8 +3785,9 @@ mod tests {
         let (translated, _receipt) =
             translate_foreign_graph(&artifacts.graph, Some(&artifacts.package_index), &nixpkgs_fixture_policy())
                 .expect("maximum source payload graph must translate");
-        let plan = plan_mantle_foreign_import(&translated, &artifacts.package_index, &config.package_name, &config.system)
-            .expect("maximum source payload graph must plan");
+        let plan =
+            plan_mantle_foreign_import(&translated, &artifacts.package_index, &config.package_name, &config.system)
+                .expect("maximum source payload graph must plan");
         assert_eq!(plan.source_payloads.len(), count);
     }
 
@@ -3777,9 +3798,8 @@ mod tests {
         let config = synthetic_nix_producer_config(count);
 
         assert_error_class(
-            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export)).and_then(|closure| {
-                lower_nix_derivation_json_closure(&closure, &config).map(|_| ())
-            }),
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+                .and_then(|closure| lower_nix_derivation_json_closure(&closure, &config).map(|_| ())),
             "source-payload-limit-exceeded",
         );
 
@@ -3787,8 +3807,7 @@ mod tests {
         let accepted_config = synthetic_nix_producer_config(MAX_SOURCE_PAYLOADS);
         let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(accepted))
             .expect("accepted export must normalize");
-        let mut artifacts =
-            lower_nix_derivation_json_closure(&closure, &accepted_config).expect("accepted lowering");
+        let mut artifacts = lower_nix_derivation_json_closure(&closure, &accepted_config).expect("accepted lowering");
         let extra_payload = artifacts.graph.source_payloads[0].clone();
         artifacts.graph.source_payloads.push(SourcePayload {
             payload_id: format!("{}-overflow", extra_payload.payload_id),
@@ -3798,8 +3817,93 @@ mod tests {
         assert_error_class(validate_graph(&artifacts.graph).map(|_| ()), "source-payload-limit-exceeded");
     }
 
+    #[test]
+    fn foreign_nix_export_admits_the_per_node_input_edge_bound() {
+        let edges = MAX_GRAPH_EDGES;
+        let export = synthetic_nix_fan_in_export(edges);
+        let config = synthetic_nix_producer_config(edges.checked_add(1).expect("fan-in node count"));
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+            .expect("edge-bound export must normalize");
+
+        let artifacts = lower_nix_derivation_json_closure(&closure, &config).expect("edge-bound lowering");
+        let root = artifacts
+            .graph
+            .nodes
+            .iter()
+            .find(|node| node.original_derivation == config.root_derivation)
+            .expect("edge-bound root node");
+        assert_eq!(root.input_derivations.len(), edges);
+        validate_graph(&artifacts.graph).expect("edge-bound graph must validate");
+    }
+
+    #[test]
+    fn foreign_nix_export_rejects_one_input_edge_past_the_per_node_bound() {
+        let edges = MAX_GRAPH_EDGES.checked_add(1).expect("edge bound increment");
+        let export = synthetic_nix_fan_in_export(edges);
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+            .expect("over-bound export must normalize");
+
+        assert_error_class(
+            lower_nix_derivation_json_closure(&closure, &synthetic_nix_producer_config(edges + 1)).map(|_| ()),
+            "edge-limit-exceeded",
+        );
+    }
+
+    #[test]
+    fn foreign_graph_admits_the_field_byte_bound_and_rejects_one_byte_more() {
+        let (mut graph, _index) = nix_like_hello_fixture();
+        graph.nodes[0].env.insert("syntheticField".to_string(), "a".repeat(MAX_FIELD_BYTES));
+        validate_graph(&graph).expect("field at the byte bound must validate");
+
+        graph.nodes[0].env.insert("syntheticField".to_string(), "a".repeat(MAX_FIELD_BYTES + 1));
+        assert_error_class(validate_graph(&graph).map(|_| ()), "field-limit-exceeded");
+    }
+
+    /// One root plus `edge_count` leaves, where the root declares one input derivation edge per
+    /// leaf.
+    fn synthetic_nix_fan_in_export(edge_count: usize) -> NixDerivationJsonVersionedExport {
+        assert!(edge_count > 0, "synthetic fan-in needs at least one edge");
+        let mut derivations = BTreeMap::new();
+        for index in 0..=edge_count {
+            let drv_path = synthetic_store_path("pkg", index, "drv");
+            let output_path = synthetic_store_path("pkg", index, "");
+            let mut input_drvs = BTreeMap::new();
+            if index == edge_count {
+                for leaf in 0..edge_count {
+                    input_drvs.insert(synthetic_store_path("pkg", leaf, "drv"), NixDerivationJsonInput {
+                        outputs: vec![OUT_OUTPUT_NAME.to_string()],
+                    });
+                }
+            }
+            derivations.insert(drv_path, NixDerivationJsonVersionedNode {
+                name: format!("pkg{index}"),
+                system: SYNTHETIC_NIX_SYSTEM.to_string(),
+                builder: SYNTHETIC_NIX_BUILDER.to_string(),
+                args: vec!["-c".to_string(), "true".to_string()],
+                env: BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), output_path.clone())]),
+                outputs: BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
+                    path: Some(output_path),
+                    hash: None,
+                    hash_algo: None,
+                })]),
+                structured_attrs: None,
+                inputs: NixDerivationJsonVersionedInputs {
+                    drvs: input_drvs,
+                    srcs: Vec::new(),
+                },
+            });
+        }
+        debug_assert_eq!(derivations.len(), edge_count + 1);
+        NixDerivationJsonVersionedExport {
+            derivations,
+            version: 4,
+        }
+    }
+
     const SYNTHETIC_NIX_SYSTEM: &str = "x86_64-linux";
-    const SYNTHETIC_NIX_BUILDER: &str = "/nix/store/33333333333333333333333333333333-bash/bin/bash";
+    /// Interpreter outside any declared foreign store prefix, so compilation needs no builder
+    /// mapping (a real closure carries its shell as an input derivation instead).
+    const SYNTHETIC_NIX_BUILDER: &str = "/bin/sh";
 
     /// One synthetic v4 Nix derivation export: `derivation_count` chained `nix.derivation` nodes
     /// whose root is the last one, and `source_payload_count` distinct `inputSrcs` spread over the

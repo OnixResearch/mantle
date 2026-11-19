@@ -17,6 +17,15 @@ A real nixpkgs closure does not fit the old limits. `produce-nix` over a
 `nix-derivation-count-out-of-range`, so no real producer graph could be
 planned, and the Octet producer job graph had no admitting consumer.
 
+The frozen Octet producer export
+(`convergence-evidence/realization/producer-export/tool-closure.derivation-json.json`)
+measures the real shape: 11,565 derivations, 677 source objects
+(848,923,562 bytes), 5,231 fixed-output derivations, max input derivations per
+node 611 (two cargo `vendor-registry` derivations at 346 and 611), three
+`buildCommand` env values of 36,411 / 64,144 / 102,597 bytes, 1,652
+derivations with structured attributes, max outputs 10, max inputSrcs 23, max
+args 39, max env entries 70, max urls 3.
+
 Two implementation facts matter beyond the constants:
 
 - `nix_hash_domain_records` emits one `nix-compatible` derivation-store-path
@@ -49,9 +58,25 @@ Two implementation facts matter beyond the constants:
   Nix-identity record is produced per node.
 - `MAX_FOREIGN_READ_CALLS` is derived from the source-payload bound plus the
   fixed `prepare-sources` reads (plan JSON plus the bounded Nario archives).
-- Per-node limits that do not scale with node count (input edges per node,
-  package-index entries, diagnostics, mirrors, cache hints, sandbox
-  capabilities) are unchanged; they bound a node's surface, not the graph.
+- `MAX_GRAPH_EDGES` (per-node input derivation edges) becomes 4,096: the frozen
+  export reaches 611 edges, and parsed ATerm input lists use the same bound
+  instead of the 256-item generic collection bound.
+- `MAX_FIELD_BYTES` becomes 262,144 (256 KiB) for foreign-import fields: the
+  frozen export carries a 102,597-byte `buildCommand`. No other crate's field
+  bound changes.
+- `MAX_PLAN_DIAGNOSTICS` is derived from the node bound times the per-node
+  capability bound, because translation emits one diagnostic per declared node
+  capability.
+- Limits that do not scale with node count or with a producer-declared surface
+  (package-index entries, mirrors, cache hints, sandbox capabilities) are
+  unchanged.
+- `crunch-build::goal::MAX_GOALS` becomes 32,768 and
+  `crates/crunch-build/src/registry.rs::MAX_ENTRIES` follows it. `Worker::want`
+  creates one goal per reachable derivation up front, so `MAX_GOALS` bounds
+  total planned units, not concurrently live goals; the old 10,000 blocked
+  realization of the 11,565-derivation frozen producer graph. The registry bound
+  is the same quantity (one registered derivation per planned unit), so it is
+  derived from the goal bound instead of holding its former 16,384.
 - Graph compilation keeps one incrementally grown exact-path index instead of
   rebuilding the combined foreign→target map per node, so a maximum-size graph
   costs `O(n log n)` rather than quadratic time. The admitted-target set that
@@ -67,5 +92,11 @@ Two implementation facts matter beyond the constants:
 - Byte-level limits (ATerm derivation 16 MiB, bundle 256 MiB, JSON artifact
   256 MiB) stay independent resource budgets; they scale with per-derivation
   size, not node count.
+- Known performance limit: the synthetic 32,768-derivation lowering+planning
+  test did not finish within 15 minutes in a release build on the loaded
+  2026-11-19 host (debug builds exceeded 17 minutes before being stopped). The
+  test is `#[ignore]`d with the exact release command recorded in its comment.
+  The real frozen producer export (11,565 derivations) is exercised through the
+  CLI instead; its wall time and peak RSS are recorded in the change evidence.
 - The bridge-contract tie is test-visible, so raising one constant without the
   other fails a unit test rather than drifting silently.

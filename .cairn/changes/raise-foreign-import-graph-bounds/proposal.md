@@ -21,6 +21,14 @@ Two secondary limits were mis-derived from the old node bound:
   `MAX_ATERM_BUNDLE_DERIVATIONS` stays derived from it.
 - `MAX_SOURCE_PAYLOADS` becomes 16,384, with explicit fail-fast lowering
   instead of a debug assertion.
+- `MAX_GRAPH_EDGES` becomes 4,096 and foreign-import `MAX_FIELD_BYTES` 256 KiB,
+  sized from the frozen Octet producer export (611 input edges per node,
+  102,597-byte `buildCommand`). Parsed ATerm input lists use the edge bound.
+- `MAX_PLAN_DIAGNOSTICS` is derived from the node and per-node capability
+  bounds.
+- `crunch-build::goal::MAX_GOALS` becomes 32,768 (one goal per reachable
+  derivation is created up front), with `registry::MAX_ENTRIES` derived from it,
+  so an admitted plan can be realized.
 - `MAX_HASH_DOMAIN_RECORDS` is derived from the node bound with saturating
   arithmetic.
 - `MAX_FOREIGN_READ_CALLS` is derived from the source-payload bound plus the

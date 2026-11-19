@@ -1,0 +1,45 @@
+{
+  "schema": "mantle-foreign-import-cli-v1",
+  "command": "produce-nix",
+  "verdict": "accepted",
+  "accepted": true,
+  "diagnostics": [],
+  "receipt": null,
+  "plan": null,
+  "producer_artifacts": {
+    "graph_path": "/home/brittonr/wt/convergence-evidence/realization/mantle-graph/nixpkgs.graph.json",
+    "package_index_path": "/home/brittonr/wt/convergence-evidence/realization/mantle-graph/nixpkgs.index.json"
+  },
+  "non_claims": [
+    "not-build-success",
+    "not-package-correctness",
+    "not-bootstrap-parity",
+    "not-output-trust",
+    "not-reproducibility",
+    "not-foreign-frontend-availability"
+  ]
+}
+	Command being timed: "target/release/mantle --json foreign-import produce-nix --derivation-json /home/brittonr/wt/convergence-evidence/realization/producer-export/tool-closure.derivation-json.json --root-derivation /nix/store/vl7bqxyz2f86x0vlvxipcvryavckb9wj-octet-mantle-aeneas-consumer-job-v1.drv --producer-identity octet@d5b34c2d64b1227417a46df8ed8427f2d10ed3c8 --producer-revision d5b34c2d64b1227417a46df8ed8427f2d10ed3c8 --package octet-mantle-aeneas-consumer-job --system x86_64-linux --out-dir /home/brittonr/wt/convergence-evidence/realization/mantle-graph"
+	User time (seconds): 0.80
+	System time (seconds): 0.17
+	Percent of CPU this job got: 98%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.99
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 368296
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 98245
+	Voluntary context switches: 57
+	Involuntary context switches: 791
+	Swaps: 0
+	File system inputs: 76040
+	File system outputs: 125056
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+EXIT=0

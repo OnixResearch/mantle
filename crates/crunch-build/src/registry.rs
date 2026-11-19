@@ -27,8 +27,10 @@ use crate::dynamic::RegistryReadyDynamicDerivation;
 use crate::validate_execution_profile;
 use crate::verify_execution_profile_binding;
 
-/// Maximum registry entries. Matches `goal::MAX_GOALS`.
-pub(crate) const MAX_ENTRIES: u32 = 16_384;
+/// Maximum registry entries. Matches `goal::MAX_GOALS`: every admitted plan registers one
+/// derivation per planned unit before goals are created, so a plan that fits the goal bound must
+/// also fit the registry.
+pub(crate) const MAX_ENTRIES: u32 = crate::goal::MAX_GOALS;
 
 /// A derivation registered for building.
 pub struct RegistryEntry {

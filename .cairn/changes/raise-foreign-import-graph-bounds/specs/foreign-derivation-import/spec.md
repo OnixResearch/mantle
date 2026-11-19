@@ -10,8 +10,11 @@ fixture-sized limits. The derivation bound MUST equal the verification bridge
 producer bound (`crunch_verification_bridge_core::producer::MAX_TOOL_DERIVATIONS`,
 32,768), the source-payload bound MUST admit the producer export contract's
 16,384 source objects, the hash-domain record bound MUST be derived from the
-node bound (one Nix-identity record per node), and the `prepare-sources` read
-budget MUST cover the source-payload bound plus the command's fixed reads.
+node bound (one Nix-identity record per node), the `prepare-sources` read budget
+MUST cover the source-payload bound plus the command's fixed reads, the per-node
+input-edge and foreign-import field-byte bounds MUST admit the measured producer
+surface, and the scheduler goal and derivation-registry bounds MUST admit every
+node of an admitted plan (one goal and one registration per planned unit).
 
 #### Scenario: A real nixpkgs closure is admitted
 
@@ -31,6 +34,13 @@ WHEN admission runs
 THEN it MUST reject the input with `nix-derivation-count-out-of-range` or
 `source-payload-limit-exceeded` respectively
 AND it MUST NOT truncate the closure or approximate the surplus records.
+
+#### Scenario: An admitted plan is schedulable end to end
+
+GIVEN an admitted plan with up to 32,768 native units
+WHEN foreign realization registers derivations and creates scheduling goals
+THEN the goal and registry bounds MUST admit every planned unit
+AND neither MUST reject a plan that admission accepted.
 
 #### Scenario: The bound tie is test-visible
 

@@ -19,7 +19,13 @@ use crate::error::Error;
 
 /// Maximum number of goals a Worker can track. Prevents runaway
 /// graphs from pathological inputs.
-pub const MAX_GOALS: u32 = 10_000;
+///
+/// `Worker::want` creates one goal per reachable derivation up front, so this
+/// bounds total planned units, not concurrently live goals. It therefore matches
+/// the producer tool-graph contract (`MAX_TOOL_DERIVATIONS` = 32,768 in
+/// `crunch-verification-bridge-core`), which the frozen Octet producer export
+/// (11,565 derivations) and every admitted foreign plan must fit (ADR 0166).
+pub const MAX_GOALS: u32 = 32_768;
 
 /// Lifecycle state of a build goal.
 ///
@@ -763,6 +769,17 @@ mod tests {
         let err = reg.insert(key, Goal::new(sp, make_drv()));
         assert!(err.is_err());
         assert_eq!(reg.len(), MAX_GOALS);
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn max_goals_admits_the_producer_tool_graph_contract() {
+        // One goal per reachable derivation, so the bound is total units, not live goals.
+        const PRODUCER_TOOL_DERIVATIONS: u32 = 32_768;
+        const FROZEN_PRODUCER_DERIVATIONS: u32 = 11_565;
+
+        assert_eq!(MAX_GOALS, PRODUCER_TOOL_DERIVATIONS);
+        assert!(FROZEN_PRODUCER_DERIVATIONS <= MAX_GOALS);
     }
 
     #[test]

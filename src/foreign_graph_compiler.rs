@@ -76,10 +76,7 @@ struct ExactPathIndex {
 }
 
 impl ExactPathIndex {
-    fn from_path_maps(
-        path_maps: &ExactForeignPathMaps,
-        node_id: Option<&str>,
-    ) -> Result<Self, ImportDiagnostic> {
+    fn from_path_maps(path_maps: &ExactForeignPathMaps, node_id: Option<&str>) -> Result<Self, ImportDiagnostic> {
         let exact = combined_path_map(path_maps, node_id)?;
         let index = Self::from_exact_map(exact);
         debug_assert!(index.exact.len() >= path_maps.sources.len());
@@ -94,12 +91,7 @@ impl ExactPathIndex {
 
     /// Extend the index with one already-validated per-class mapping, rejecting a foreign path
     /// that two object classes map to different targets.
-    fn extend(
-        &mut self,
-        foreign_path: &str,
-        target_path: &str,
-        node_id: Option<&str>,
-    ) -> Result<(), ImportDiagnostic> {
+    fn extend(&mut self, foreign_path: &str, target_path: &str, node_id: Option<&str>) -> Result<(), ImportDiagnostic> {
         match self.exact.get(foreign_path) {
             Some(existing_target) if existing_target == target_path => {}
             Some(_) => {
@@ -323,12 +315,8 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
     validate_compiled_coverage(&dependency_order, &units)?;
 
     for unit in &mut units {
-        unit.declared_references = rewrite_values(
-            &unit.declared_references,
-            &exact_index,
-            &graph.source_store_prefixes,
-            Some(&unit.node_id),
-        )?;
+        unit.declared_references =
+            rewrite_values(&unit.declared_references, &exact_index, &graph.source_store_prefixes, Some(&unit.node_id))?;
         validate_compiled_unit_references(unit, &graph.source_store_prefixes, &exact_index)?;
     }
     let roots = graph
@@ -634,7 +622,8 @@ fn compile_node(
     let builder =
         rewrite_store_objects(&builtin.builder, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
     let arguments = rewrite_values(&builtin.arguments, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
-    let system = rewrite_store_objects(&builtin.system, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
+    let system =
+        rewrite_store_objects(&builtin.system, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
     let outputs = compile_outputs(node)?;
     let input_derivations = compile_input_derivations(node, identities, target_store_prefix)?;
     let input_sources = compile_input_sources(node, payloads, path_maps, target_store_prefix)?;
@@ -1713,8 +1702,9 @@ fn validate_compiled_unit_references(
         })?;
         values.push(text);
     }
-    if let Some(value) =
-        values.iter().find(|value| contains_unmapped_source_store_object(value, source_prefixes, exact_index))
+    if let Some(value) = values
+        .iter()
+        .find(|value| contains_unmapped_source_store_object(value, source_prefixes, exact_index))
     {
         return Err(compiler_diagnostic(
             "foreign-compiler-leftover-reference",
