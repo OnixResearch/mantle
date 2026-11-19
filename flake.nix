@@ -1954,7 +1954,7 @@
               nativeBuildInputs
               buildInputs
               ;
-            cargoClippyExtraArgs = "--workspace --lib --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings";
+            cargoClippyExtraArgs = "--workspace --all-targets --no-deps --exclude fuse-backend-rs --exclude nix-compat --exclude nix-compat-derive --exclude snix-build --exclude snix-castore --exclude snix-store --exclude snix-tracing -- -D warnings";
             SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
           };
 
