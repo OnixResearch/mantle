@@ -64,6 +64,62 @@ pub(crate) struct ExactForeignPathMaps {
     pub(crate) sources: BTreeMap<String, String>,
 }
 
+// r[impl foreign_derivation_import.producer_graph_bounds]
+/// Cumulative exact foreign→target store-path index for one compilation pass: the combined map
+/// the store-object rewriter resolves against, plus the target paths it admits as already
+/// rewritten. Grown incrementally with one node so a maximum-size graph costs `O(n log n)`
+/// instead of rebuilding (and re-scanning) the whole map per node.
+#[derive(Debug, Default)]
+struct ExactPathIndex {
+    exact: BTreeMap<String, String>,
+    targets: BTreeSet<String>,
+}
+
+impl ExactPathIndex {
+    fn from_path_maps(
+        path_maps: &ExactForeignPathMaps,
+        node_id: Option<&str>,
+    ) -> Result<Self, ImportDiagnostic> {
+        let exact = combined_path_map(path_maps, node_id)?;
+        let index = Self::from_exact_map(exact);
+        debug_assert!(index.exact.len() >= path_maps.sources.len());
+        Ok(index)
+    }
+
+    fn from_exact_map(exact: BTreeMap<String, String>) -> Self {
+        let targets = exact.values().cloned().collect::<BTreeSet<_>>();
+        debug_assert_eq!(targets.is_empty(), exact.is_empty());
+        Self { exact, targets }
+    }
+
+    /// Extend the index with one already-validated per-class mapping, rejecting a foreign path
+    /// that two object classes map to different targets.
+    fn extend(
+        &mut self,
+        foreign_path: &str,
+        target_path: &str,
+        node_id: Option<&str>,
+    ) -> Result<(), ImportDiagnostic> {
+        match self.exact.get(foreign_path) {
+            Some(existing_target) if existing_target == target_path => {}
+            Some(_) => {
+                return Err(compiler_diagnostic(
+                    "foreign-compiler-map-collision",
+                    node_id,
+                    "one foreign path has conflicting mappings across object classes",
+                ));
+            }
+            None => {
+                self.exact.insert(foreign_path.to_string(), target_path.to_string());
+            }
+        }
+        self.targets.insert(target_path.to_string());
+        debug_assert!(self.exact.contains_key(foreign_path));
+        debug_assert!(self.targets.contains(target_path));
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct CompiledSourceRequirement {
     pub(crate) payload_id: String,
@@ -203,6 +259,7 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
         .collect::<BTreeMap<_, _>>();
     let (mut path_maps, mut source_requirements) =
         compile_source_requirements(graph, target_store_prefix, preserve_cache_paths)?;
+    let mut exact_index = ExactPathIndex::from_path_maps(&path_maps, None)?;
     let mut identities = BTreeMap::new();
     let mut known_hdms = BTreeMap::new();
     let mut units = Vec::with_capacity(dependency_order.len());
@@ -224,6 +281,7 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
             &identities,
             &known_hdms,
             &path_maps,
+            &exact_index,
             preserve_cache_paths,
         )?;
         let output_paths = exact_output_paths(&unit.derivation, target_store_prefix, &node.node_id)?;
@@ -234,6 +292,7 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
             "derivation",
             Some(&node.node_id),
         )?;
+        exact_index.extend(&node.original_derivation, &unit.target_derivation, Some(&node.node_id))?;
         for (output_name, foreign_output) in &node.outputs {
             let target_output = output_paths.get(output_name).ok_or_else(|| {
                 compiler_diagnostic(
@@ -249,8 +308,8 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
                 "output",
                 Some(&node.node_id),
             )?;
+            exact_index.extend(&foreign_output.path, target_output, Some(&node.node_id))?;
         }
-        validate_cross_map_collisions(&path_maps, Some(&node.node_id))?;
         known_hdms.insert(unit.target_derivation.clone(), unit.hdm);
         identities.insert(node.node_id.clone(), CompiledIdentity {
             target_derivation: unit.target_derivation.clone(),
@@ -260,14 +319,17 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
         units.push(unit);
     }
     compile_fixed_output_seed_requirements(graph, &mut path_maps, &mut source_requirements)?;
-    validate_cross_map_collisions(&path_maps, None)?;
+    let exact_index = ExactPathIndex::from_path_maps(&path_maps, None)?;
     validate_compiled_coverage(&dependency_order, &units)?;
 
-    let exact_map = combined_path_map(&path_maps, None)?;
     for unit in &mut units {
-        unit.declared_references =
-            rewrite_values(&unit.declared_references, &exact_map, &graph.source_store_prefixes, Some(&unit.node_id))?;
-        validate_compiled_unit_references(unit, &graph.source_store_prefixes, &exact_map)?;
+        unit.declared_references = rewrite_values(
+            &unit.declared_references,
+            &exact_index,
+            &graph.source_store_prefixes,
+            Some(&unit.node_id),
+        )?;
+        validate_compiled_unit_references(unit, &graph.source_store_prefixes, &exact_index)?;
     }
     let roots = graph
         .root_derivation_ids
@@ -564,20 +626,20 @@ fn compile_node(
     identities: &BTreeMap<String, CompiledIdentity>,
     known_hdms: &BTreeMap<String, [u8; 32]>,
     path_maps: &ExactForeignPathMaps,
+    exact_index: &ExactPathIndex,
     preserve_cache_paths: bool,
 ) -> Result<CompiledForeignUnit, ImportDiagnostic> {
     validate_node_compile_surface(node)?;
     let builtin = lower_foreign_builtin(node, payloads)?;
-    let exact_map = combined_path_map(path_maps, Some(&node.node_id))?;
     let builder =
-        rewrite_store_objects(&builtin.builder, &exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;
-    let arguments = rewrite_values(&builtin.arguments, &exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;
-    let system = rewrite_store_objects(&builtin.system, &exact_map, &graph.source_store_prefixes, Some(&node.node_id))?;
+        rewrite_store_objects(&builtin.builder, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
+    let arguments = rewrite_values(&builtin.arguments, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
+    let system = rewrite_store_objects(&builtin.system, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
     let outputs = compile_outputs(node)?;
     let input_derivations = compile_input_derivations(node, identities, target_store_prefix)?;
     let input_sources = compile_input_sources(node, payloads, path_maps, target_store_prefix)?;
     let environment =
-        compile_environment(node, graph, target_store_prefix, &exact_map, &builder, &system, &builtin.environment)?;
+        compile_environment(node, graph, target_store_prefix, exact_index, &builder, &system, &builtin.environment)?;
     let mut derivation = Derivation {
         arguments,
         builder,
@@ -1205,7 +1267,7 @@ fn compile_environment(
     node: &ForeignDerivationNode,
     graph: &ForeignDerivationGraph,
     target_store_prefix: &str,
-    exact_map: &BTreeMap<String, String>,
+    exact_index: &ExactPathIndex,
     builder: &str,
     system: &str,
     builtin_environment: &BTreeMap<String, String>,
@@ -1221,7 +1283,7 @@ fn compile_environment(
         }
         let rewritten = rewrite_environment_value(
             value,
-            exact_map,
+            exact_index,
             &graph.source_store_prefixes,
             target_store_prefix,
             Some(&node.node_id),
@@ -1231,7 +1293,7 @@ fn compile_environment(
     for (key, value) in builtin_environment {
         let rewritten = rewrite_environment_value(
             value,
-            exact_map,
+            exact_index,
             &graph.source_store_prefixes,
             target_store_prefix,
             Some(&node.node_id),
@@ -1347,24 +1409,24 @@ fn combined_path_map(
 
 fn rewrite_values(
     values: &[String],
-    exact_map: &BTreeMap<String, String>,
+    exact_index: &ExactPathIndex,
     source_prefixes: &[String],
     node_id: Option<&str>,
 ) -> Result<Vec<String>, ImportDiagnostic> {
     values
         .iter()
-        .map(|value| rewrite_store_objects(value, exact_map, source_prefixes, node_id))
+        .map(|value| rewrite_store_objects(value, exact_index, source_prefixes, node_id))
         .collect()
 }
 
 fn rewrite_environment_value(
     value: &str,
-    exact_map: &BTreeMap<String, String>,
+    exact_index: &ExactPathIndex,
     source_prefixes: &[String],
     target_store_prefix: &str,
     node_id: Option<&str>,
 ) -> Result<String, ImportDiagnostic> {
-    let rewritten = rewrite_store_objects(value, exact_map, source_prefixes, node_id)?;
+    let rewritten = rewrite_store_objects(value, exact_index, source_prefixes, node_id)?;
     Ok(rewrite_known_store_dir_placeholders(&rewritten, source_prefixes, target_store_prefix))
 }
 
@@ -1449,7 +1511,7 @@ fn store_dir_placeholder_has_token_boundary(value: &str, prefix_start: usize, pr
 
 fn rewrite_store_objects(
     value: &str,
-    exact_map: &BTreeMap<String, String>,
+    exact_index: &ExactPathIndex,
     source_prefixes: &[String],
     node_id: Option<&str>,
 ) -> Result<String, ImportDiagnostic> {
@@ -1485,7 +1547,7 @@ fn rewrite_store_objects(
             continue;
         }
         let (matched_foreign_path, target_path, matched_end) =
-            exact_store_object_match(value, start, object_end, exact_map).ok_or_else(|| {
+            exact_store_object_match(value, start, object_end, &exact_index.exact).ok_or_else(|| {
                 compiler_diagnostic(
                     "foreign-compiler-unknown-reference",
                     node_id,
@@ -1497,7 +1559,7 @@ fn rewrite_store_objects(
         cursor = matched_end;
     }
     rewritten.push_str(&value[cursor..]);
-    if contains_unmapped_source_store_object(&rewritten, source_prefixes, exact_map) {
+    if contains_unmapped_source_store_object(&rewritten, source_prefixes, exact_index) {
         return Err(compiler_diagnostic(
             "foreign-compiler-leftover-reference",
             node_id,
@@ -1550,9 +1612,8 @@ fn contains_foreign_store_object(value: &str, source_prefixes: &[String]) -> boo
 fn contains_unmapped_source_store_object(
     value: &str,
     source_prefixes: &[String],
-    exact_map: &BTreeMap<String, String>,
+    exact_index: &ExactPathIndex,
 ) -> bool {
-    let permitted_targets = exact_map.values().map(String::as_str).collect::<BTreeSet<_>>();
     let mut cursor = 0usize;
     while let Some((start, prefix)) = next_store_object(value, cursor, source_prefixes) {
         let object_start = start.saturating_add(prefix.len()).saturating_add(1);
@@ -1566,7 +1627,7 @@ fn contains_unmapped_source_store_object(
             return true;
         }
         let candidate = &value[start..object_end];
-        if is_valid_foreign_store_object(candidate, prefix) && !permitted_targets.contains(candidate) {
+        if is_valid_foreign_store_object(candidate, prefix) && !exact_index.targets.contains(candidate) {
             return true;
         }
         cursor = object_end;
@@ -1634,7 +1695,7 @@ fn validate_target_store_prefix(target_store_prefix: &str) -> Result<(), ImportD
 fn validate_compiled_unit_references(
     unit: &CompiledForeignUnit,
     source_prefixes: &[String],
-    exact_map: &BTreeMap<String, String>,
+    exact_index: &ExactPathIndex,
 ) -> Result<(), ImportDiagnostic> {
     let mut values = Vec::new();
     values.push(unit.target_derivation.as_str());
@@ -1653,7 +1714,7 @@ fn validate_compiled_unit_references(
         values.push(text);
     }
     if let Some(value) =
-        values.iter().find(|value| contains_unmapped_source_store_object(value, source_prefixes, exact_map))
+        values.iter().find(|value| contains_unmapped_source_store_object(value, source_prefixes, exact_index))
     {
         return Err(compiler_diagnostic(
             "foreign-compiler-leftover-reference",
@@ -1695,13 +1756,13 @@ mod tests {
     fn exact_store_mapping_accepts_prefix_map_boundary_but_rejects_name_extension() {
         let foreign = foreign_output("leaf", "out");
         let target = "/mantle/store/mapped-leaf".to_string();
-        let exact_map = BTreeMap::from([(foreign.clone(), target.clone())]);
+        let exact_index = ExactPathIndex::from_exact_map(BTreeMap::from([(foreign.clone(), target.clone())]));
         let source_prefixes = vec![SOURCE_PREFIX.to_string()];
         let prefix_map = format!("-ffile-prefix-map={foreign}=.");
-        let rewritten = rewrite_store_objects(&prefix_map, &exact_map, &source_prefixes, Some("leaf")).unwrap();
+        let rewritten = rewrite_store_objects(&prefix_map, &exact_index, &source_prefixes, Some("leaf")).unwrap();
         assert_eq!(rewritten, format!("-ffile-prefix-map={target}=."));
         assert_class(
-            rewrite_store_objects(&format!("{foreign}-unmapped"), &exact_map, &source_prefixes, Some("leaf")),
+            rewrite_store_objects(&format!("{foreign}-unmapped"), &exact_index, &source_prefixes, Some("leaf")),
             "foreign-compiler-unknown-reference",
         );
     }

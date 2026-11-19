@@ -163,3 +163,4 @@ compatibility surface, crate name, or historical decision.
 | [0163](0163-bound-untrusted-acquisition-secrets-and-sandbox-diagnostics.md) | Bound untrusted acquisition, secrets, and sandbox diagnostics at their boundaries | Proposed |
 | [0164](0164-state-the-protected-exec-check-to-use-non-claim.md) | State the protected-exec check-to-use non-claim | Proposed |
 | [0165](0165-pin-the-primary-rust-compiler-cohort.md) | Pin the primary Rust compiler cohort to a dated nightly | Proposed |
+| [0166](0166-bound-foreign-import-graphs-by-the-producer-tool-graph-contract.md) | Bound foreign-import graphs by the producer tool-graph contract | Accepted |

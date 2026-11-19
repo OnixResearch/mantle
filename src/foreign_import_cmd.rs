@@ -21,6 +21,7 @@ use crate::foreign_derivation_import::ImportReceipt;
 use crate::foreign_derivation_import::MAX_ATERM_BUNDLE_BYTES;
 use crate::foreign_derivation_import::MAX_ATERM_BUNDLE_DERIVATIONS;
 use crate::foreign_derivation_import::MAX_ATERM_DERIVATION_BYTES;
+use crate::foreign_derivation_import::MAX_SOURCE_PAYLOADS;
 use crate::foreign_derivation_import::NixDerivationJsonExport;
 use crate::foreign_derivation_import::NixProducerConfig;
 use crate::foreign_derivation_import::PackageIndex;
@@ -62,7 +63,13 @@ use crate::source_bundle::plan_bound_foreign_source_bundle;
 use crate::source_bundle::plan_empty_source_bundle;
 use crate::source_bundle::write_json_atomically;
 
-const MAX_FOREIGN_READ_CALLS: u32 = 4_096;
+/// Fixed reads a `prepare-sources` run performs around its per-binding source reads: the plan
+/// JSON plus the bounded Nario archive inputs.
+const PREPARE_SOURCES_FIXED_READ_CALLS: u32 = 1 + NARIO_SOURCE_ARCHIVE_COUNT_MAX as u32;
+/// `prepare-sources` reads at most one source binding per graph source payload, so the admitted
+/// read budget covers a maximum-size producer source set plus the fixed reads.
+const MAX_FOREIGN_READ_CALLS: u32 = MAX_SOURCE_PAYLOADS as u32 + PREPARE_SOURCES_FIXED_READ_CALLS;
+const _: () = assert!(MAX_FOREIGN_READ_CALLS >= MAX_SOURCE_PAYLOADS as u32);
 const CLI_REPORT_SCHEMA: &str = "mantle-foreign-import-cli-v1";
 const VALIDATE_COMMAND: &str = "validate";
 const PLAN_COMMAND: &str = "plan";

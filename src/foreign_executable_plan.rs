@@ -16,6 +16,8 @@ use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ForeignDerivationNode;
 use crate::foreign_derivation_import::ImportDiagnostic;
 use crate::foreign_derivation_import::ImportReceipt;
+use crate::foreign_derivation_import::MAX_GRAPH_NODES;
+use crate::foreign_derivation_import::MAX_SANDBOX_CAPABILITIES;
 use crate::foreign_derivation_import::PRESERVE_CACHE_PATHS_MODE;
 use crate::foreign_derivation_import::PackageIndex;
 use crate::foreign_derivation_import::PackageIndexEntry;
@@ -47,7 +49,9 @@ const STORE_PROFILE: &str = "mantle-store-admission-v1";
 const SANDBOX_CLASSIFICATION: &str = "approved-compatibility-capability";
 const SUBSTITUTION_CLASSIFICATION: &str = "cache-hint-policy-data-store-admission-required";
 const BLAKE3_HEX_CHARS: usize = 64;
-const MAX_PLAN_DIAGNOSTICS: usize = 2_048;
+/// One `sandbox-capability-declared` diagnostic can be emitted per declared node capability, so a
+/// maximum-size admitted graph (node bound times the per-node capability bound) must fit.
+const MAX_PLAN_DIAGNOSTICS: usize = MAX_GRAPH_NODES.saturating_mul(MAX_SANDBOX_CAPABILITIES);
 const MAX_PLAN_NON_CLAIMS: usize = 32;
 const MAX_PLAN_FETCH_CANDIDATES: usize = 16;
 const BLAKE3_BYTES: usize = 32;

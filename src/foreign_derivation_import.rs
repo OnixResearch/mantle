@@ -79,16 +79,26 @@ const SOURCE_PAYLOAD_HASH_HEX_CHARS: usize = 32;
 const SHA256_HEX_CHARS: usize = 64;
 const NIX_STORE_BASENAME_HASH_CHARS: usize = 32;
 const NIX_BASE32_ALPHABET: &[u8] = b"0123456789abcdfghijklmnpqrsvwxyz";
-const MAX_GRAPH_NODES: usize = 2048;
+// r[impl foreign_derivation_import.producer_graph_bounds]
+/// Graph node bound, equal to the producer tool-graph contract the verification bridge admits
+/// (`crunch_verification_bridge_core::producer::MAX_TOOL_DERIVATIONS` = 32,768; that module is
+/// private, so the tie is the reviewed value recorded in ADR 0166 and asserted below). A real
+/// nixpkgs closure is thousands of derivations, so the bound must admit the whole planned graph.
+pub(crate) const MAX_GRAPH_NODES: usize = 32_768;
 const MAX_GRAPH_EDGES: usize = 256;
 const MAX_PACKAGE_INDEX_ENTRIES: usize = 128;
 const MAX_FIELD_BYTES: usize = 32768;
-const MAX_SOURCE_PAYLOADS: usize = 512;
+/// Source payload bound, tied to the producer export contract (Octet's exporter admits 16,384
+/// source objects), so every payload of a planned producer graph fits.
+pub(crate) const MAX_SOURCE_PAYLOADS: usize = 16_384;
 const MAX_MIRROR_CANDIDATES: usize = 16;
-const MAX_SANDBOX_CAPABILITIES: usize = 16;
+pub(crate) const MAX_SANDBOX_CAPABILITIES: usize = 16;
 const MAX_CACHE_HINTS: usize = 16;
 const MAX_UNSUPPORTED_FEATURES: usize = 32;
-const MAX_HASH_DOMAIN_RECORDS: usize = 4096;
+/// `nix_hash_domain_records` emits one `nix-compatible` derivation-store-path record per closure
+/// node, so a maximum-size graph must have room for exactly one record per node.
+const HASH_DOMAIN_RECORDS_PER_NODE: usize = 1;
+const MAX_HASH_DOMAIN_RECORDS: usize = MAX_GRAPH_NODES.saturating_mul(HASH_DOMAIN_RECORDS_PER_NODE);
 const EMPTY_OUTPUT_COUNT: usize = 0;
 const EMPTY_COMMAND_INVOCATION_COUNT: usize = 0;
 const REQUIRED_HELLO_ROOT_COUNT: usize = 1;
@@ -1307,6 +1317,13 @@ fn lower_aterm_nodes(
             &lowering_context,
             &mut source_payloads,
         )?);
+        if source_payloads.len() > MAX_SOURCE_PAYLOADS {
+            return Err(diagnostic(
+                "source-payload-limit-exceeded",
+                None,
+                "foreign producer graph exceeds the source payload limit",
+            ));
+        }
     }
     debug_assert_eq!(nodes.len(), closure.len());
     debug_assert!(source_payloads.len() <= MAX_SOURCE_PAYLOADS);
@@ -2988,6 +3005,7 @@ pub(crate) fn foreign_import_non_claims() -> Vec<String> {
     ]
 }
 
+// r[verify foreign_derivation_import.producer_graph_bounds]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3657,6 +3675,215 @@ mod tests {
         let export = NixDerivationJsonExport::Versioned(versioned_nix_export_with_fod_env_path(false));
 
         assert_error_class(normalize_nix_derivation_json_export(export), "missing-nix-output-path");
+    }
+
+    #[test]
+    fn graph_node_bound_matches_the_producer_tool_derivation_contract_value() {
+        // The bridge's `producer` module is private; ADR 0166 records 32,768 as the contract value.
+        const PRODUCER_TOOL_DERIVATIONS: usize = 32_768;
+
+        assert_eq!(MAX_GRAPH_NODES, PRODUCER_TOOL_DERIVATIONS);
+        assert_eq!(MAX_ATERM_BUNDLE_DERIVATIONS, PRODUCER_TOOL_DERIVATIONS);
+        assert!(MAX_HASH_DOMAIN_RECORDS >= PRODUCER_TOOL_DERIVATIONS);
+        assert!(MAX_GRAPH_NODES < 65_536, "graph node bound must stay below the inspection contract ceiling");
+    }
+
+    #[test]
+    fn foreign_nix_export_admits_four_thousand_ninety_six_derivations_through_lowering_and_planning() {
+        const DERIVATION_COUNT: usize = 4_096;
+        let export = synthetic_nix_chain_export(DERIVATION_COUNT, 0);
+        let config = synthetic_nix_producer_config(DERIVATION_COUNT);
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+            .expect("4,096-derivation export must normalize");
+        assert_eq!(closure.len(), DERIVATION_COUNT);
+
+        let artifacts = lower_nix_derivation_json_closure(&closure, &config).expect("4,096-derivation lowering");
+        assert_eq!(artifacts.graph.nodes.len(), DERIVATION_COUNT);
+        assert_eq!(artifacts.graph.hash_domains.len(), DERIVATION_COUNT);
+        validate_graph(&artifacts.graph).expect("4,096-node graph must validate");
+
+        let (plan, receipt) = crate::foreign_executable_plan::compile_foreign_executable_plan(
+            &artifacts.graph,
+            &artifacts.package_index,
+            &nixpkgs_fixture_policy(),
+            &config.package_name,
+            &config.system,
+        )
+        .expect("4,096-node graph must plan");
+        assert_eq!(plan.native_units.len(), DERIVATION_COUNT);
+        assert_eq!(plan.selected_roots.len(), REQUIRED_HELLO_ROOT_COUNT);
+        assert_eq!(receipt.hash_domains.len(), DERIVATION_COUNT + RECEIPT_HASH_DOMAIN_ADDITIONS);
+    }
+
+    #[test]
+    fn foreign_nix_export_admits_the_producer_tool_graph_derivation_bound() {
+        let count = MAX_GRAPH_NODES;
+        let export = synthetic_nix_chain_export(count, 0);
+        let config = synthetic_nix_producer_config(count);
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+            .expect("maximum-size export must normalize");
+        assert_eq!(closure.len(), count);
+
+        let artifacts = lower_nix_derivation_json_closure(&closure, &config).expect("maximum-size lowering");
+        assert_eq!(artifacts.graph.nodes.len(), count);
+        assert_eq!(artifacts.graph.hash_domains.len(), count);
+        validate_graph(&artifacts.graph).expect("maximum-size graph must validate");
+
+        let (plan, _receipt) = crate::foreign_executable_plan::compile_foreign_executable_plan(
+            &artifacts.graph,
+            &artifacts.package_index,
+            &nixpkgs_fixture_policy(),
+            &config.package_name,
+            &config.system,
+        )
+        .expect("maximum-size graph must plan");
+        assert_eq!(plan.native_units.len(), count);
+    }
+
+    #[test]
+    fn foreign_nix_export_rejects_one_derivation_past_the_producer_tool_graph_bound() {
+        let count = MAX_GRAPH_NODES.checked_add(1).expect("node bound increment");
+        let export = synthetic_nix_chain_export(count, 0);
+
+        assert_error_class(
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export)),
+            "nix-derivation-count-out-of-range",
+        );
+    }
+
+    #[test]
+    fn foreign_graph_admits_the_producer_source_payload_bound() {
+        let count = MAX_SOURCE_PAYLOADS;
+        let export = synthetic_nix_chain_export(count, count);
+        let config = synthetic_nix_producer_config(count);
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+            .expect("source-payload bound export must normalize");
+        let artifacts = lower_nix_derivation_json_closure(&closure, &config).expect("source-payload bound lowering");
+
+        assert_eq!(artifacts.graph.source_payloads.len(), count);
+        validate_graph(&artifacts.graph).expect("maximum source payload graph must validate");
+        let (translated, _receipt) =
+            translate_foreign_graph(&artifacts.graph, Some(&artifacts.package_index), &nixpkgs_fixture_policy())
+                .expect("maximum source payload graph must translate");
+        let plan = plan_mantle_foreign_import(&translated, &artifacts.package_index, &config.package_name, &config.system)
+            .expect("maximum source payload graph must plan");
+        assert_eq!(plan.source_payloads.len(), count);
+    }
+
+    #[test]
+    fn foreign_graph_rejects_one_source_payload_past_the_producer_bound() {
+        let count = MAX_SOURCE_PAYLOADS.checked_add(1).expect("source payload bound increment");
+        let export = synthetic_nix_chain_export(count, count);
+        let config = synthetic_nix_producer_config(count);
+
+        assert_error_class(
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export)).and_then(|closure| {
+                lower_nix_derivation_json_closure(&closure, &config).map(|_| ())
+            }),
+            "source-payload-limit-exceeded",
+        );
+
+        let accepted = synthetic_nix_chain_export(MAX_SOURCE_PAYLOADS, MAX_SOURCE_PAYLOADS);
+        let accepted_config = synthetic_nix_producer_config(MAX_SOURCE_PAYLOADS);
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(accepted))
+            .expect("accepted export must normalize");
+        let mut artifacts =
+            lower_nix_derivation_json_closure(&closure, &accepted_config).expect("accepted lowering");
+        let extra_payload = artifacts.graph.source_payloads[0].clone();
+        artifacts.graph.source_payloads.push(SourcePayload {
+            payload_id: format!("{}-overflow", extra_payload.payload_id),
+            ..extra_payload
+        });
+
+        assert_error_class(validate_graph(&artifacts.graph).map(|_| ()), "source-payload-limit-exceeded");
+    }
+
+    const SYNTHETIC_NIX_SYSTEM: &str = "x86_64-linux";
+    const SYNTHETIC_NIX_BUILDER: &str = "/nix/store/33333333333333333333333333333333-bash/bin/bash";
+
+    /// One synthetic v4 Nix derivation export: `derivation_count` chained `nix.derivation` nodes
+    /// whose root is the last one, and `source_payload_count` distinct `inputSrcs` spread over the
+    /// lowest derivation indexes.
+    fn synthetic_nix_chain_export(
+        derivation_count: usize,
+        source_payload_count: usize,
+    ) -> NixDerivationJsonVersionedExport {
+        assert!(derivation_count > 0, "synthetic export needs at least one derivation");
+        assert!(source_payload_count <= derivation_count, "a node can contribute at most one source");
+        let mut derivations = BTreeMap::new();
+        for index in 0..derivation_count {
+            let drv_path = synthetic_store_path("pkg", index, "drv");
+            let output_path = synthetic_store_path("pkg", index, "");
+            let mut env = BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), output_path.clone())]);
+            let mut input_drvs = BTreeMap::new();
+            if index > 0 {
+                input_drvs.insert(synthetic_store_path("pkg", index - 1, "drv"), NixDerivationJsonInput {
+                    outputs: vec![OUT_OUTPUT_NAME.to_string()],
+                });
+            }
+            let input_srcs = if index < source_payload_count {
+                let source_path = synthetic_store_path("src", index, "");
+                env.insert("src".to_string(), source_path.clone());
+                vec![source_path]
+            } else {
+                Vec::new()
+            };
+            derivations.insert(drv_path, NixDerivationJsonVersionedNode {
+                name: format!("pkg{index}"),
+                system: SYNTHETIC_NIX_SYSTEM.to_string(),
+                builder: SYNTHETIC_NIX_BUILDER.to_string(),
+                args: vec!["-c".to_string(), "true".to_string()],
+                env,
+                outputs: BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
+                    path: Some(output_path),
+                    hash: None,
+                    hash_algo: None,
+                })]),
+                structured_attrs: None,
+                inputs: NixDerivationJsonVersionedInputs {
+                    drvs: input_drvs,
+                    srcs: input_srcs,
+                },
+            });
+        }
+        debug_assert_eq!(derivations.len(), derivation_count);
+        NixDerivationJsonVersionedExport {
+            derivations,
+            version: 4,
+        }
+    }
+
+    fn synthetic_nix_producer_config(derivation_count: usize) -> NixProducerConfig {
+        assert!(derivation_count > 0, "synthetic producer config needs a root derivation");
+        NixProducerConfig {
+            package_name: HELLO_PACKAGE_NAME.to_string(),
+            system: SYNTHETIC_NIX_SYSTEM.to_string(),
+            root_derivation: synthetic_store_path("pkg", derivation_count - 1, "drv"),
+            producer_identity: "nixpkgs:synthetic-chain".to_string(),
+            producer_revision: "synthetic-revision".to_string(),
+            cache_hints: Vec::new(),
+            unsupported_metadata_classes: Vec::new(),
+        }
+    }
+
+    /// Deterministic 32-character Nix base32 digest for a synthetic store object.
+    fn synthetic_store_path(prefix: &str, index: usize, suffix: &str) -> String {
+        assert!(!prefix.is_empty(), "synthetic store object needs a name prefix");
+        let mut value = index as u64;
+        let radix = NIX_BASE32_ALPHABET.len() as u64;
+        assert!(radix == 32, "Nix base32 alphabet must have 32 symbols");
+        let mut digest = [NIX_BASE32_ALPHABET[0]; NIX_STORE_BASENAME_HASH_CHARS];
+        for slot in digest.iter_mut().rev() {
+            let symbol = usize::try_from(value % radix).expect("base32 symbol index must fit usize");
+            *slot = NIX_BASE32_ALPHABET[symbol];
+            value /= radix;
+        }
+        let digest = std::str::from_utf8(&digest).expect("Nix base32 digest must be ASCII");
+        if suffix.is_empty() {
+            format!("{NIX_STORE_PREFIX_WITH_SLASH}{digest}-{prefix}{index}")
+        } else {
+            format!("{NIX_STORE_PREFIX_WITH_SLASH}{digest}-{prefix}{index}.{suffix}")
+        }
     }
 
     #[test]
