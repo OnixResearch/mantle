@@ -40,6 +40,7 @@ fn stagex_capability<T>(
 
 use crate::protected_exec::PlannedExecutable;
 use crate::protected_exec::PromotedExecutable;
+use crate::protected_exec::ProtectedExecAuditReceipt;
 use crate::protected_exec::ProtectedExecPolicy;
 use crate::protected_exec::ProtectedSeccompAuditEvent;
 use crate::protected_exec::blake3_file_hex;
@@ -858,8 +859,10 @@ fn load_transition_evidence(request: &StagexProviderRequest<'_>) -> Result<Trans
         .map_err(|error| StagexProviderError::Transition(format!("parsing transition plan: {error}")))?;
     let report: Value = serde_json::from_slice(&report_bytes)
         .map_err(|error| StagexProviderError::Transition(format!("parsing transition report: {error}")))?;
-    let audit_events: Vec<ProtectedSeccompAuditEvent> = serde_json::from_slice(&audit_bytes)
+    let audit_receipt: ProtectedExecAuditReceipt = serde_json::from_slice(&audit_bytes)
         .map_err(|error| StagexProviderError::Transition(format!("parsing protected execution audit: {error}")))?;
+    audit_receipt.validate_non_claims().map_err(StagexProviderError::Transition)?;
+    let audit_events = audit_receipt.events;
     let plan_digest_blake3 =
         stagex_plan_digest_blake3(&plan).map_err(|error| StagexProviderError::Transition(error.to_string()))?;
     validate_transition_headers(&plan, &report, &audit_events, &manifest_digest_blake3, &plan_digest_blake3)?;

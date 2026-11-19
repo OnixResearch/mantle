@@ -181,6 +181,14 @@ const PLAN_FILE_NAME: &str = "transition-plan.json";
 const AUDIT_FILE_NAME: &str = "protected-exec-audit.json";
 const FAILURE_AUDIT_FILE_NAME: &str = "protected-exec-audit-failure.json";
 
+fn write_protected_exec_audit(
+    path: &std::path::Path,
+    events: &[ProtectedSeccompAuditEvent],
+) -> Result<(), StagexTransitionError> {
+    let receipt = crate::protected_exec::ProtectedExecAuditReceipt::new(events.to_vec());
+    write_json_create_new(path, &receipt)
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct StagexTransitionRequest<'a> {
     pub seed_path: &'a Path,
@@ -776,7 +784,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -802,7 +810,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -836,7 +844,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -871,7 +879,7 @@ pub(crate) fn materialize_protected_transition(
                     Err(error) => {
                         thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                         let events = supervisor.audit_events();
-                        write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                        write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                         return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                     }
                 }
@@ -902,7 +910,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -935,7 +943,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -966,7 +974,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -997,7 +1005,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1028,7 +1036,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1060,7 +1068,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1094,7 +1102,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1126,7 +1134,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1157,7 +1165,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1184,7 +1192,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1216,7 +1224,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1243,7 +1251,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1269,7 +1277,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1296,7 +1304,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1322,7 +1330,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1347,7 +1355,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1379,7 +1387,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1413,7 +1421,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1445,7 +1453,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1477,7 +1485,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1510,7 +1518,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1543,7 +1551,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1572,7 +1580,7 @@ pub(crate) fn materialize_protected_transition(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     return Err(StagexTransitionError::ProtectedExec(error.to_string()));
                 }
             }
@@ -1602,7 +1610,7 @@ pub(crate) fn materialize_protected_transition(
     if protected_exec_events.len() != quiescent_event_count {
         return Err(StagexTransitionError::Audit("protected exec audit changed after quiescence".to_string()));
     }
-    write_json_create_new(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
+    write_protected_exec_audit(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
     validate_transition_audit(
         &staged,
         TransitionAuditReports {
@@ -1737,7 +1745,7 @@ fn materialize_binutils_stage(
                 Err(error) => {
                     thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
                     let events = supervisor.audit_events();
-                    write_json_create_new(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
                     Err(StagexTransitionError::ProtectedExec(error.to_string()))
                 }
             }

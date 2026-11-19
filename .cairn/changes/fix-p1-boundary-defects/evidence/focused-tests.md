@@ -72,8 +72,13 @@ Protected-exec non-claim (#79, partial):
   re-resolves the pathname after inspection, so audit events are observations
   of inspected paths under a cooperative-tracee assumption, not proof of the
   executed bytes.
-- Receipt-schema non-claim enforcement and a race-class fixture remain open in
-  Phase 8 tasks T8.2 and T8.3.
+- Audit files now use `mantle-protected-exec-audit-v2` with a required
+  `non_claims` field; the provider rejects a missing, wrong, or legacy schema.
+- Receipt-schema regression:
+  `cargo test -p mantle --lib protected_exec::tests::protected_exec_audit_receipt_requires_check_to_use_non_claim`
+  passed (1 passed; 0 failed). The full `protected_exec::tests` suite passed
+  36 tests; the provider suite passed 29 tests.
+- A race-class fixture remains open in Phase 8 task T8.3.
 
 Formatting: `rustfmt --edition 2024 --check` on the edited first-party leaf
 files passed. Vendored files are outside the first-party fmt selection and

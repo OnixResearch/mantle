@@ -1152,6 +1152,47 @@ pub struct ProtectedSeccompAuditEvent {
     pub policy_decision: String,
 }
 
+/// Schema for a protected-exec audit receipt.
+pub const PROTECTED_EXEC_AUDIT_SCHEMA: &str = "mantle-protected-exec-audit-v2";
+
+/// Non-claims carried by every protected-exec audit receipt.
+pub const PROTECTED_EXEC_AUDIT_NON_CLAIMS: &[&str] =
+    &["seccomp-continue-audit-observes-inspected-paths-not-executed-bytes"];
+
+/// Audit receipt wrapper that binds the continue-based observation limit.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProtectedExecAuditReceipt {
+    pub schema_version: String,
+    pub non_claims: Vec<String>,
+    pub events: Vec<ProtectedSeccompAuditEvent>,
+}
+
+impl ProtectedExecAuditReceipt {
+    pub fn new(events: Vec<ProtectedSeccompAuditEvent>) -> Self {
+        assert!(!PROTECTED_EXEC_AUDIT_SCHEMA.is_empty(), "audit schema must be named");
+        Self {
+            schema_version: PROTECTED_EXEC_AUDIT_SCHEMA.to_string(),
+            non_claims: PROTECTED_EXEC_AUDIT_NON_CLAIMS.iter().map(|claim| (*claim).to_string()).collect(),
+            events,
+        }
+    }
+
+    pub fn validate_non_claims(&self) -> Result<(), String> {
+        if self.schema_version != PROTECTED_EXEC_AUDIT_SCHEMA {
+            return Err(format!(
+                "protected-exec audit schema mismatch: expected {PROTECTED_EXEC_AUDIT_SCHEMA}, got {}",
+                self.schema_version
+            ));
+        }
+        let expected: Vec<String> = PROTECTED_EXEC_AUDIT_NON_CLAIMS.iter().map(|claim| (*claim).to_string()).collect();
+        if self.non_claims != expected {
+            return Err("protected-exec audit receipt lacks the required check-to-use non-claim".to_string());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtectedLaunchAuditEvent {
     pub executable_path: PathBuf,
@@ -2881,5 +2922,28 @@ mod tests {
         };
         let err = policy.decide_exec(&unpromoted_request).unwrap_err();
         assert!(matches!(err, ProtectedExecError::UndeclaredExecutable { .. }));
+    }
+
+    #[test]
+    fn protected_exec_audit_receipt_requires_check_to_use_non_claim() {
+        let receipt = ProtectedExecAuditReceipt::new(Vec::new());
+        receipt.validate_non_claims().expect("canonical receipt is valid");
+
+        let mut missing = serde_json::to_value(&receipt).unwrap();
+        missing.as_object_mut().unwrap().remove("non_claims");
+        let missing_result = serde_json::from_value::<ProtectedExecAuditReceipt>(missing);
+        assert!(
+            missing_result.is_err()
+                || missing_result.as_ref().is_ok_and(|receipt| receipt.validate_non_claims().is_err()),
+            "missing non-claims must be rejected"
+        );
+
+        let mut wrong = receipt.clone();
+        wrong.non_claims = vec!["something-else".to_string()];
+        assert!(wrong.validate_non_claims().is_err(), "wrong non-claims must be rejected");
+
+        let mut wrong_schema = receipt;
+        wrong_schema.schema_version = "legacy-array".to_string();
+        assert!(wrong_schema.validate_non_claims().is_err(), "legacy schema must be rejected");
     }
 }

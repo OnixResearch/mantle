@@ -50,7 +50,7 @@
 ## Phase 8: Protected-exec observation limits
 
 - [x] [serial] T8.1 Add the check-to-use non-claim to the protected-exec documentation and an ADR. r[boundary_hardening.protected_exec_non_claim]
-- [ ] [serial] T8.2 Carry the non-claim in audit/receipt schema and reject a receipt without it. r[boundary_hardening.protected_exec_non_claim]
+- [x] [serial] T8.2 Carry the non-claim in audit/receipt schema and reject a receipt without it. r[boundary_hardening.protected_exec_non_claim]
 - [ ] [serial] T8.3 Add a race-class regression fixture and record the preventive or detective outcome. r[boundary_hardening.protected_exec_non_claim]
 
 ## Phase 9: Remote admission trust
