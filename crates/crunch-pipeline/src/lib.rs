@@ -113,6 +113,77 @@ impl WorkerLiveObservation {
 #[cfg(test)]
 const EVAL_POLICY_TEST_MAX_JOBS: u32 = 4;
 
+/// Default sandbox work-root directory under the store state directory.
+const PRIVATE_BUILD_WORK_ROOT_NAME: &str = "build-work";
+
+/// Explicit operator override for the sandbox work-root parent.
+const PRIVATE_BUILD_WORK_ROOT_ENV: &str = "MANTLE_BUILD_WORK_ROOT";
+
+/// Create or admit a private per-user sandbox work directory.
+///
+/// The default is `<state-dir>/build-work/<category>`; an operator may select
+/// the parent explicitly with `MANTLE_BUILD_WORK_ROOT`. New directories are
+/// created with mode 0700. Existing directories must be real directories owned
+/// by the current user with no group or other permission bits.
+pub fn private_build_work_root(state_dir: &std::path::Path, category: &str) -> std::io::Result<PathBuf> {
+    assert!(!category.is_empty(), "work-root category must not be empty");
+    assert!(!category.contains('/') && !category.contains('\\'), "work-root category must be one path component");
+    let root = std::env::var_os(PRIVATE_BUILD_WORK_ROOT_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| state_dir.join(PRIVATE_BUILD_WORK_ROOT_NAME));
+    let path = root.join(category);
+    match std::fs::symlink_metadata(&root) {
+        Ok(_) => admit_private_work_directory(&root, "build work root")?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    create_private_work_directory(&root)?;
+    admit_private_work_directory(&root, "build work root")?;
+    create_private_work_directory(&path)?;
+    admit_private_work_directory(&path, "sandbox work root")?;
+    Ok(path)
+}
+
+fn create_private_work_directory(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true).mode(0o700);
+        builder.create(path)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir_all(path)
+    }
+}
+
+fn admit_private_work_directory(path: &std::path::Path, label: &str) -> std::io::Result<()> {
+    let metadata = std::fs::symlink_metadata(path)?;
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return Err(std::io::Error::other(format!("{label} must be a real directory: {}", path.display())));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        use std::os::unix::fs::PermissionsExt;
+        let euid = unsafe { libc::geteuid() };
+        if metadata.uid() != euid {
+            return Err(std::io::Error::other(format!(
+                "{label} must be owned by the current user: {}",
+                path.display()
+            )));
+        }
+        if metadata.permissions().mode() & 0o077 != 0 {
+            return Err(std::io::Error::other(format!(
+                "{label} must not grant group or other access: {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub struct BuildConfig {
     pub file: PathBuf,
     pub import_paths: Vec<OsString>,
@@ -900,6 +971,10 @@ fn create_pipeline_builder_with_source_policy(
     let runtime = config.compile_driver_runtime.clone();
     let wait_runtime = config.rust_wait_runtime.clone();
     let runtime_forbidden = config.remote_enabled || config.hermeticity_mode == HermeticityMode::Strict;
+    let local_work_root = private_build_work_root(&config.state_dir, "sandbox-local")
+        .map_err(|error| Error::Internal(format!("create local sandbox work root: {error}")))?;
+    let remote_work_root = private_build_work_root(&config.state_dir, "sandbox-remote")
+        .map_err(|error| Error::Internal(format!("create remote sandbox work root: {error}")))?;
     create_pipeline_builder_with_sandbox(config, store, source_policy, move |build_service_store| {
         use crunch_build::compile_driver::CompileDriverBuildService;
         use crunch_build::compile_driver::CompileDriverExecutionService;
@@ -912,9 +987,10 @@ fn create_pipeline_builder_with_source_policy(
                     .map_err(|error| Error::Build(error.to_string()))?;
             }
             let store = build_service_store.clone();
+            let local_work_root = local_work_root.clone();
             let factory = move |socket: Option<PathBuf>| {
                 let local = store.bubblewrap_build_service_with_runtime(
-                    std::env::temp_dir().join("crunch-builds-local"),
+                    local_work_root.clone(),
                     crunch_store::LocalBuildRuntime {
                         compile_cache_socket: runtime.as_ref().map(|runtime| runtime.host_socket.clone()),
                         rust_wait_socket: socket,
@@ -935,21 +1011,17 @@ fn create_pipeline_builder_with_source_policy(
                 .map_err(|error| Error::Build(error.to_string()))?;
             runtime.validate().map_err(|error| Error::Build(error.to_string()))?;
             let local = build_service_store
-                .bubblewrap_build_service_with_runtime(
-                    std::env::temp_dir().join("crunch-builds-local"),
-                    crunch_store::LocalBuildRuntime {
-                        compile_cache_socket: Some(runtime.host_socket.clone()),
-                        rust_wait_socket: None,
-                        command_factory: runtime.command_factory(),
-                    },
-                )
+                .bubblewrap_build_service_with_runtime(local_work_root.clone(), crunch_store::LocalBuildRuntime {
+                    compile_cache_socket: Some(runtime.host_socket.clone()),
+                    rust_wait_socket: None,
+                    command_factory: runtime.command_factory(),
+                })
                 .map_err(|error| Error::Build(format!("compile driver socket: {error}")))?;
             return CompileDriverBuildService::new(local, Some(runtime))
                 .map(|service| RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Enabled(service)))
                 .map_err(|error| Error::Build(error.to_string()));
         }
-        let workdir = std::env::temp_dir().join("crunch-builds");
-        std::fs::create_dir_all(&workdir).map_err(|error| Error::Internal(format!("create workdir: {error}")))?;
+        let workdir = remote_work_root;
         // Keep remote dispatch inside the lazy scheduler so dedupe, waiter
         // notification, job bounds, fallback, and terminal propagation stay shared.
         // r[impl remote_builds.production_scheduler_realization]
@@ -959,8 +1031,7 @@ fn create_pipeline_builder_with_source_policy(
             capabilities: Vec::new(),
             parameters: std::collections::BTreeMap::new(),
         };
-        let local_bwrap =
-            build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None);
+        let local_bwrap = build_service_store.bubblewrap_build_service(local_work_root.clone(), None);
         let remote_bwrap = build_service_store.bubblewrap_build_service(workdir, None);
         let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
         Ok(RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Default(
@@ -982,8 +1053,10 @@ fn create_watch_pipeline_builder(
     if config.compile_driver_runtime.is_some() {
         return Err(Error::Build("compile driver runtime is unsupported for watch execution".into()));
     }
-    create_pipeline_builder_with_sandbox(config, store, source_policy_for_config(config), |build_service_store| {
-        Ok(build_service_store.bubblewrap_build_service(std::env::temp_dir().join("crunch-builds-local"), None))
+    let watch_work_root = private_build_work_root(&config.state_dir, "sandbox-watch")
+        .map_err(|error| Error::Internal(format!("create watch sandbox work root: {error}")))?;
+    create_pipeline_builder_with_sandbox(config, store, source_policy_for_config(config), move |build_service_store| {
+        Ok(build_service_store.bubblewrap_build_service(watch_work_root.clone(), None))
     })
 }
 
@@ -1358,6 +1431,45 @@ mod tests {
     const MANAGED_TEST_SOURCE_DIGEST_BYTE: u8 = 32;
     const MANAGED_TEST_DRV_DIGEST_BYTE: u8 = 33;
     const MANAGED_TEST_GENERATION: u64 = 1;
+
+    #[cfg(unix)]
+    #[test]
+    fn private_build_work_root_creates_owner_only_directories() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let state = tempfile::tempdir().expect("state");
+        let root = private_build_work_root(state.path(), "sandbox-local").expect("private work root");
+        assert!(root.is_dir());
+        let mode = std::fs::metadata(&root).expect("metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700, "sandbox work root must be private");
+        let parent = root.parent().expect("work root parent");
+        let parent_mode = std::fs::metadata(parent).expect("parent metadata").permissions().mode() & 0o777;
+        assert_eq!(parent_mode, 0o700, "build work parent must be private");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_build_work_root_rejects_group_or_world_accessible_parent() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let state = tempfile::tempdir().expect("state");
+        let root = state.path().join(PRIVATE_BUILD_WORK_ROOT_NAME);
+        std::fs::create_dir_all(&root).expect("root");
+        std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o755)).expect("mode");
+        let error = private_build_work_root(state.path(), "sandbox-local").expect_err("loose root rejected");
+        assert!(error.to_string().contains("group or other access"), "{error}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn private_build_work_root_rejects_symlinked_parent() {
+        let state = tempfile::tempdir().expect("state");
+        let target = tempfile::tempdir().expect("target");
+        let link = state.path().join(PRIVATE_BUILD_WORK_ROOT_NAME);
+        std::os::unix::fs::symlink(target.path(), &link).expect("symlink");
+        let error = private_build_work_root(state.path(), "sandbox-local").expect_err("symlink root rejected");
+        assert!(error.to_string().contains("real directory"), "{error}");
+    }
     const CANCELLATION_WAIT_TIMEOUT_MS: u64 = 30_000;
     const CANCELLATION_POLL_INTERVAL_MS: u64 = 1;
     const SINGLE_EVAL_JOB: u32 = 1;

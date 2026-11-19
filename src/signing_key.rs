@@ -41,7 +41,9 @@ pub fn load_or_generate_signing_keypair(
         }
     }
 
-    // 3. Auto-generate.
+    // 3. Auto-generate. Publish through an atomic no-replace temp-file
+    // persistence so a concurrent caller never observes a partial key and
+    // exactly one generated key wins.
     let config_dir = config_dir_or(state_dir);
     let default_path = default_signing_key_path(state_dir);
     let (keypair, line): (signing::KeyPair, String) = signing::generate_keypair();
@@ -49,27 +51,31 @@ pub fn load_or_generate_signing_keypair(
     std::fs::create_dir_all(&config_dir)
         .map_err(|e| RunError::Internal(format!("creating config dir {}: {e}", config_dir.display())))?;
 
-    // Write with 0600 permissions.
-    #[cfg(unix)]
+    let mut temp = tempfile::Builder::new()
+        .prefix(".signing-key.")
+        .tempfile_in(&config_dir)
+        .map_err(|e| RunError::Internal(format!("creating temporary signing key in {}: {e}", config_dir.display())))?;
     {
-        use std::os::unix::fs::OpenOptionsExt;
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&default_path)
-            .and_then(|mut f| {
-                use std::io::Write;
-                f.write_all(line.as_bytes())?;
-                f.write_all(b"\n")?;
-                Ok(())
-            })
+        use std::io::Write;
+        temp.write_all(line.as_bytes())
+            .and_then(|()| temp.write_all(b"\n"))
+            .and_then(|()| temp.as_file().sync_all())
             .map_err(|e| RunError::Internal(format!("writing signing key {}: {e}", default_path.display())))?;
     }
-    #[cfg(not(unix))]
-    {
-        std::fs::write(&default_path, format!("{line}\n"))
-            .map_err(|e| RunError::Internal(format!("writing signing key {}: {e}", default_path.display())))?;
+    match temp.persist_noclobber(&default_path) {
+        Ok(_) => {}
+        Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            // Another caller won the first-run race. Load the complete key it
+            // published; do not overwrite it or return our losing key.
+            return load_signing_keypair_from_path(&default_path);
+        }
+        Err(error) => {
+            return Err(RunError::Internal(format!(
+                "publishing signing key {}: {}",
+                default_path.display(),
+                error.error
+            )));
+        }
     }
 
     debug_assert!(!line.is_empty());
@@ -289,6 +295,35 @@ mod tests {
 
         let error = load_error(load_signing_keypair_from_path(&path));
         assert!(format!("{error}").contains("permissions are not private"));
+    }
+
+    #[test]
+    fn concurrent_first_run_publishes_one_complete_private_key() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().expect("tempdir");
+        let state = root.path().join("state");
+        std::fs::create_dir_all(&state).expect("state dir");
+
+        let loaded = std::thread::scope(|scope| {
+            let handles: Vec<_> =
+                (0..8).map(|_| scope.spawn(|| load_or_generate_signing_keypair(None, &state, false))).collect();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("thread").expect("key loads"))
+                .collect::<Vec<_>>()
+        });
+
+        let expected = loaded[0].verifying_key.to_string();
+        for keypair in &loaded {
+            assert_eq!(keypair.verifying_key.to_string(), expected, "concurrent callers must share one key");
+        }
+        let path = default_signing_key_path(&state);
+        let mode = std::fs::metadata(&path).expect("published key").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "published key must remain private");
+        let contents = std::fs::read_to_string(&path).expect("read published key");
+        assert_eq!(contents.lines().count(), 1, "published key must be complete");
+        assert!(!contents.trim().is_empty(), "published key must not be empty");
     }
 
     #[test]

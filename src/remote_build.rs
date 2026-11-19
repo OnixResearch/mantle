@@ -212,7 +212,6 @@ const BLAKE3_HEX_LENGTH_CHARS: usize = 64;
 const STORE_PATH_HASH_CHARS: usize = 32;
 const REMOTE_ACTION_SPEC_SCHEMA: &str = "mantle-remote-action-v1";
 const DEFAULT_REMOTE_ACTION_SYSTEM: &str = "x86_64-linux";
-const REMOTE_LOCAL_BUILD_WORKDIR_NAME: &str = "mantle-remote-builds";
 const REMOTE_FAILURE_WORKSPACE_DIR: &str = "remote-failure-workspaces";
 const REMOTE_FAILURE_WORKSPACE_SCAN_MAX: usize = 2;
 const REMOTE_LOCAL_EXECUTOR_THREADS: usize = 2;
@@ -2832,8 +2831,8 @@ async fn execute_remote_local_build_linux(
             .map_err(|err| format!("remote-local-executor-recover-casita-gc: {err}"))?;
     }
     materialize_remote_input_upload(&store, request, input_upload).await?;
-    let workdir = std::env::temp_dir().join(REMOTE_LOCAL_BUILD_WORKDIR_NAME);
-    std::fs::create_dir_all(&workdir).map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
+    let workdir = crunch_pipeline::private_build_work_root(&executor.state_dir, "remote-executor")
+        .map_err(|err| format!("remote-local-executor-workdir: {err}"))?;
     let failure_workspace_root = remote_failure_workspace_root(executor, request)?;
     let configured_failure_workspace_root = if request.failure_debug_policy.capture.enabled {
         Some(failure_workspace_root.clone())

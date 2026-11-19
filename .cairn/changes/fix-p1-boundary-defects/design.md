@@ -17,6 +17,9 @@ store backend, parser, or trust model is introduced.
 | Sandbox logs | Retain 480 KiB per stream, drain to EOF, append a truncation marker | Whole capture then filter, or closing the pipe |
 | Acquisition | Separate compressed/decompressed/per-entry/total budgets with bounded spooling | One `take` around a decompressor |
 | CI transport | Cargo `[patch]` from SSH to the identical HTTPS artifact revision | Git URL rewrites or an SSH agent |
+| First-run key | Atomic no-replace temp file; losers load the published winner | `create_new` then write into a visible partial file |
+| Tar modes | Map executable/non-executable to 0755/0644; never materialize special bits | Raw archive mode or silent chmod failure |
+| Sandbox roots | `<state-dir>/build-work/<category>`, mode 0700, owner/type/mode admission | Fixed names under shared `/tmp` |
 
 ## Boundaries and ownership
 

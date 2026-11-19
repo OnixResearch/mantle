@@ -17,6 +17,7 @@ snix-build = { path = "../../vendor/snix-build" }
 thiserror = "2.0"
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 tracing = "0.1"
+libc = "0.2"
 
 [dev-dependencies]
 data-encoding = "2.6"

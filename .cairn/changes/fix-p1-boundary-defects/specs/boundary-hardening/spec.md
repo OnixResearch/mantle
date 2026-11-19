@@ -95,6 +95,48 @@ WHEN acquisition runs
 THEN it MUST fail explicitly rather than treating the truncation as EOF
 AND an exact-limit response MUST succeed.
 
+### Requirement: First-run signing-key publication is atomic
+
+r[boundary_hardening.atomic_key_publication] First-run key generation MUST
+publish one complete private key without exposing a partial file. Concurrent
+callers MUST converge on the published key and MUST NOT overwrite it.
+
+#### Scenario: Concurrent callers generate the first key
+
+GIVEN two or more callers find no signing key
+WHEN they generate candidates concurrently
+THEN exactly one complete mode-0600 key MUST be published
+AND every caller MUST return that same key.
+
+### Requirement: Untrusted tar modes are sanitized
+
+r[boundary_hardening.tar_mode_policy] Regular tar entries MUST map to
+deterministic ordinary permissions: executable entries to 0755 and
+non-executable entries to 0644. Setuid, setgid, and sticky bits MUST NOT be
+materialized. A required permission change failure MUST fail extraction.
+
+#### Scenario: An archive declares a setuid regular file
+
+GIVEN a regular entry with mode 04755, 02755, or 01777
+WHEN extraction runs
+THEN the materialized file MUST carry no 07000 bits
+AND its executable/non-executable NAR distinction MUST remain correct.
+
+### Requirement: Sandbox work roots are private per user
+
+r[boundary_hardening.private_work_roots] Sandbox work roots MUST default under
+the store state directory, be created with mode 0700, and be admitted only when
+they are real directories owned by the current user with no group or other
+permission bits. An explicit operator override MAY select the parent.
+
+#### Scenario: A pre-existing shared work root is rejected
+
+GIVEN a work root that is a symlink, is owned by another user, or grants group
+or other access
+WHEN a sandbox work root is requested
+THEN it MUST fail before use
+AND two users MUST be able to build concurrently with default settings.
+
 ### Requirement: Clean-runner flake evaluation is credential-free
 
 r[boundary_hardening.clean_runner_evaluation] Flake evaluation MUST NOT require

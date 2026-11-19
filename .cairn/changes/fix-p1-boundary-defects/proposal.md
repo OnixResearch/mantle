@@ -23,6 +23,12 @@ merely large input cross a boundary without a bounded, typed outcome.
   budgets with bounded spooling and exact-limit overflow probing.
 - Redirect the pinned valence transitive artifact source from SSH to HTTPS so
   flake evaluation is credential-free.
+- Publish first-run signing keys through atomic no-replace temporary-file
+  persistence so concurrent callers share one complete private key.
+- Strip setuid, setgid, and sticky bits from untrusted tar entries and fail
+  extraction when a required permission change fails.
+- Create sandbox work roots under the private state directory with explicit
+  owner/type/mode admission and an operator override.
 
 ## Impact
 

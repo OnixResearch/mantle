@@ -2106,6 +2106,7 @@ dependencies = [
  "crunch-store",
  "crunch-watch-core",
  "data-encoding",
+ "libc",
  "nix-compat",
  "sha2",
  "snix-build",

@@ -34,3 +34,9 @@
 - [x] [serial] T5.1 Run the focused regressions and record their exact output. r[boundary_hardening.change_evidence]
 - [x] [serial] T5.2 Run the first-party quality gate or scoped equivalents for the touched packages. r[boundary_hardening.change_evidence]
 - [x] [serial] T5.3 Update the ADR index and retain the change evidence. r[boundary_hardening.change_evidence]
+
+## Phase 6: Follow-on security boundaries
+
+- [x] [serial] T6.1 Publish first-run signing keys through atomic no-replace temporary-file persistence and converge concurrent callers. r[boundary_hardening.atomic_key_publication]
+- [x] [serial] T6.2 Strip setuid, setgid, and sticky bits from regular tar entries and hardlink copies; fail on permission errors. r[boundary_hardening.tar_mode_policy]
+- [x] [serial] T6.3 Move sandbox work roots under the state directory with 0700 creation, owner/type/mode admission, and an operator override; apply the same admission to the remote executor. r[boundary_hardening.private_work_roots]

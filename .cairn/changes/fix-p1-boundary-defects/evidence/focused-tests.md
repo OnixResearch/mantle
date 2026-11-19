@@ -28,6 +28,19 @@ Additional signing-key path coverage:
 The private-key fixtures in these tests now set mode 0600; the loader
 correctly rejects the prior 0644 fixtures before reading.
 
+Follow-on security boundaries:
+
+| Test filter | Result |
+| --- | --- |
+| `cargo test -p mantle --bin mantle signing_key::tests::` | 13 passed; 0 failed |
+| `cargo test -p crunch-pipeline --lib private_build_work_root` | 3 passed; 0 failed |
+| `cargo test -p crunch-build --lib fetcher::tests::extract_tar_strips_setuid_setgid_and_sticky_bits` | 1 passed; 0 failed |
+
+The key test includes eight concurrent first-run callers converging on one
+mode-0600 key; the pipeline tests cover creation, loose-mode rejection, and
+symlinked-parent rejection. Tar mode fixtures cover 04755, 02755, 01777, and
+04644.
+
 Formatting: `rustfmt --edition 2024 --check` on the edited first-party leaf
 files passed. Vendored files are outside the first-party fmt selection and
 retain their existing formatting.

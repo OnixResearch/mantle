@@ -1135,6 +1135,15 @@ fn extract_tar_entry<R: Read>(
     }
 }
 
+/// Map an archive-declared mode to safe, deterministic ordinary permissions.
+///
+/// NAR identity encodes only whether a regular file is executable. Setuid,
+/// setgid, and sticky bits are never materialized from untrusted archive input.
+fn sanitized_tar_mode(declared_mode: u32) -> u32 {
+    let ordinary_mode = declared_mode & 0o7777;
+    if ordinary_mode & 0o111 != 0 { 0o755 } else { 0o644 }
+}
+
 fn write_regular_tar_entry<R: Read>(
     entry: &mut tar::Entry<'_, R>,
     dest: &Path,
@@ -1160,11 +1169,9 @@ fn write_regular_tar_entry<R: Read>(
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Ok(mode) = entry.header().mode()
-            && let Err(e) = std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode))
-        {
-            tracing::debug!(path = ?dest, error = %e, "set_permissions on tar entry failed");
-        }
+        let declared_mode = entry.header().mode().unwrap_or(0o644);
+        std::fs::set_permissions(dest, std::fs::Permissions::from_mode(sanitized_tar_mode(declared_mode)))
+            .map_err(|error| FetchError::TarError(format!("setting permissions on {}: {error}", dest.display())))?;
     }
     Ok(())
 }
@@ -1236,8 +1243,9 @@ fn copy_existing_file_bounded(
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mode = input.metadata()?.permissions().mode();
-        std::fs::set_permissions(dest, std::fs::Permissions::from_mode(mode))?;
+        let declared_mode = input.metadata()?.permissions().mode();
+        std::fs::set_permissions(dest, std::fs::Permissions::from_mode(sanitized_tar_mode(declared_mode)))
+            .map_err(|error| FetchError::TarError(format!("setting permissions on {}: {error}", dest.display())))?;
     }
     Ok(())
 }
@@ -3012,6 +3020,33 @@ mod tests {
         let error = fetch_and_unpack_once_with_limits(request, limits).unwrap_err();
         assert!(error.to_string().contains("compressed fetch input"), "expected compressed input limit: {error}");
         assert!(!out.join("payload.txt").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extract_tar_strips_setuid_setgid_and_sticky_bits() {
+        use std::os::unix::fs::PermissionsExt;
+
+        for (declared_mode, expected_mode) in [
+            (0o4755_u32, 0o755_u32),
+            (0o2755, 0o755),
+            (0o1777, 0o755),
+            (0o4644, 0o644),
+        ] {
+            let tar_data = build_raw_tar(&[RawTarEntry {
+                path: "pkg/payload.txt",
+                typeflag: b'0',
+                mode: declared_mode,
+                linkname: None,
+                data: b"payload",
+            }]);
+            let tmp = tempfile::tempdir().unwrap();
+            let out = tmp.path().join("out");
+            extract_tar(io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap();
+            let mode = std::fs::metadata(out.join("payload.txt")).unwrap().permissions().mode() & 0o7777;
+            assert_eq!(mode, expected_mode, "declared mode {declared_mode:o} must be sanitized");
+            assert_eq!(mode & 0o7000, 0, "special permission bits must not survive extraction");
+        }
     }
 
     #[test]
