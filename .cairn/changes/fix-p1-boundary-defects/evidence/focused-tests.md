@@ -39,7 +39,8 @@ Follow-on security boundaries:
 The key test includes eight concurrent first-run callers converging on one
 mode-0600 key; the pipeline tests cover creation, loose-mode rejection, and
 symlinked-parent rejection. Tar mode fixtures cover 04755, 02755, 01777, and
-04644.
+04644. `mantle doctor` now includes a `work-root` check reporting the selected
+sandbox root and free space at its nearest existing ancestor.
 
 Executable fixed-output migration:
 

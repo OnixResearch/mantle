@@ -368,6 +368,7 @@ impl<E: DoctorEnvironmentReader> DoctorProbePort for HostDoctorProbePort<'_, E> 
             DoctorProbe::StoreDirectory => {
                 check_directory_writable("store-dir", self.request.store_dir, "store directory")
             }
+            DoctorProbe::WorkRoot => check_work_root(self.request.state_dir),
         }
     }
 }
@@ -619,6 +620,54 @@ fn check_directory_writable(id: &'static str, target_path: &Path, label: &str) -
     }
 }
 
+fn check_work_root(state_dir: &Path) -> PreflightCheck {
+    assert!(!state_dir.as_os_str().is_empty(), "state_dir must not be empty for work-root probe");
+    let work_root = crunch_pipeline::build_work_root_path(state_dir, "sandbox-local");
+    let anchor = nearest_existing_ancestor(&work_root).unwrap_or_else(|| state_dir.to_path_buf());
+    match free_space_bytes(&anchor) {
+        Ok(free_bytes) => ok_check(
+            "work-root",
+            format!(
+                "sandbox work root {} ({} free at {})",
+                work_root.display(),
+                format_bytes(free_bytes),
+                anchor.display()
+            ),
+            None,
+        ),
+        Err(detail) => failed_check(
+            "work-root",
+            format!("sandbox work root {} free space is unobserved", work_root.display()),
+            Some(detail),
+        ),
+    }
+}
+
+fn free_space_bytes(path: &Path) -> Result<u64, String> {
+    let path_c = CString::new(path.as_os_str().as_bytes()).map_err(|_| "path contains NUL".to_string())?;
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: path_c is NUL-terminated and stat is a valid writable struct.
+    let result = unsafe { libc::statvfs(path_c.as_ptr(), &mut stat) };
+    if result != 0 {
+        return Err(format!("statvfs {}: {}", path.display(), std::io::Error::last_os_error()));
+    }
+    stat.f_bavail
+        .checked_mul(stat.f_frsize)
+        .ok_or_else(|| format!("free space for {} exceeded u64", path.display()))
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const GIB: u64 = 1024 * 1024 * 1024;
+    const MIB: u64 = 1024 * 1024;
+    if bytes >= GIB {
+        format!("{:.1} GiB", bytes as f64 / GIB as f64)
+    } else if bytes >= MIB {
+        format!("{:.1} MiB", bytes as f64 / MIB as f64)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
 fn writable_anchor(target_path: &Path) -> Result<PathBuf, String> {
     assert!(!target_path.as_os_str().is_empty(), "target_path must not be empty");
     let anchor = nearest_existing_ancestor(target_path)
@@ -734,6 +783,9 @@ mod tests {
         )
         .unwrap();
         assert!(report.ok, "{report:?}");
+        let work_root_check = report.checks.iter().find(|check| check.id == "work-root").expect("work-root check");
+        assert!(work_root_check.summary.contains("sandbox work root"), "{}", work_root_check.summary);
+        assert!(work_root_check.summary.contains("free at"), "{}", work_root_check.summary);
         assert_eq!(environment.reads[0], BWRAP_PATH_ENV);
         assert_eq!(environment.reads[1], "SNIX_BUILD_SANDBOX_SHELL");
         assert!(

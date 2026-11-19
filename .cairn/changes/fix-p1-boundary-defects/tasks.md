@@ -40,6 +40,7 @@
 - [x] [serial] T6.1 Publish first-run signing keys through atomic no-replace temporary-file persistence and converge concurrent callers. r[boundary_hardening.atomic_key_publication]
 - [x] [serial] T6.2 Strip setuid, setgid, and sticky bits from regular tar entries and hardlink copies; fail on permission errors. r[boundary_hardening.tar_mode_policy]
 - [x] [serial] T6.3 Move sandbox work roots under the state directory with 0700 creation, owner/type/mode admission, and an operator override; apply the same admission to the remote executor. r[boundary_hardening.private_work_roots]
+- [x] [serial] T6.4 Report the selected work root and free space through `mantle doctor`. r[boundary_hardening.private_work_roots]
 
 ## Phase 7: Executable fixed-output identity
 

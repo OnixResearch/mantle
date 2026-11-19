@@ -128,10 +128,8 @@ const PRIVATE_BUILD_WORK_ROOT_ENV: &str = "MANTLE_BUILD_WORK_ROOT";
 pub fn private_build_work_root(state_dir: &std::path::Path, category: &str) -> std::io::Result<PathBuf> {
     assert!(!category.is_empty(), "work-root category must not be empty");
     assert!(!category.contains('/') && !category.contains('\\'), "work-root category must be one path component");
-    let root = std::env::var_os(PRIVATE_BUILD_WORK_ROOT_ENV)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| state_dir.join(PRIVATE_BUILD_WORK_ROOT_NAME));
-    let path = root.join(category);
+    let path = build_work_root_path(state_dir, category);
+    let root = path.parent().expect("work root has a parent").to_path_buf();
     match std::fs::symlink_metadata(&root) {
         Ok(_) => admit_private_work_directory(&root, "build work root")?,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -142,6 +140,16 @@ pub fn private_build_work_root(state_dir: &std::path::Path, category: &str) -> s
     create_private_work_directory(&path)?;
     admit_private_work_directory(&path, "sandbox work root")?;
     Ok(path)
+}
+
+/// Selected sandbox work-root path without creating or admitting it.
+pub fn build_work_root_path(state_dir: &std::path::Path, category: &str) -> PathBuf {
+    assert!(!category.is_empty(), "work-root category must not be empty");
+    assert!(!category.contains('/') && !category.contains('\\'), "work-root category must be one path component");
+    let root = std::env::var_os(PRIVATE_BUILD_WORK_ROOT_ENV)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| state_dir.join(PRIVATE_BUILD_WORK_ROOT_NAME));
+    root.join(category)
 }
 
 fn create_private_work_directory(path: &std::path::Path) -> std::io::Result<()> {

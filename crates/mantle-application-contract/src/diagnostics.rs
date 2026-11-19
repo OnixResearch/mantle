@@ -162,6 +162,7 @@ pub enum DoctorProbe {
     Fuse,
     StateDirectory,
     StoreDirectory,
+    WorkRoot,
 }
 
 impl DoctorProbe {
@@ -173,6 +174,7 @@ impl DoctorProbe {
             Self::Fuse => "fusermount3",
             Self::StateDirectory => "state-dir",
             Self::StoreDirectory => "store-dir",
+            Self::WorkRoot => "work-root",
         }
     }
 
@@ -189,7 +191,7 @@ pub const MAX_DOCTOR_ENVIRONMENT_READS: u32 = 4;
 
 /// Select the complete profile before invoking a host probe.
 pub fn doctor_probes(needs_nightly: bool) -> Vec<DoctorProbe> {
-    let mut probes = Vec::with_capacity(6);
+    let mut probes = Vec::with_capacity(7);
     if needs_nightly {
         probes.push(DoctorProbe::NightlyToolchain);
     }
@@ -199,6 +201,7 @@ pub fn doctor_probes(needs_nightly: bool) -> Vec<DoctorProbe> {
         DoctorProbe::Fuse,
         DoctorProbe::StateDirectory,
         DoctorProbe::StoreDirectory,
+        DoctorProbe::WorkRoot,
     ]);
     probes
 }
