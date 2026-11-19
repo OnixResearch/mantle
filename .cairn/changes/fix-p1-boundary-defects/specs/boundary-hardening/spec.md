@@ -137,6 +137,62 @@ WHEN a sandbox work root is requested
 THEN it MUST fail before use
 AND two users MUST be able to build concurrently with default settings.
 
+### Requirement: Executable fixed outputs use NAR addressing
+
+r[boundary_hardening.executable_nar_addressing] Executable fixed-output
+downloads MUST use recursive/NAR addressing so the executable bit participates
+in content identity. Flat executable verification MAY reject the output with a
+typed error; it MUST NOT silently strip the executable bit or publish the
+result under a flat digest.
+
+#### Scenario: A flat executable declaration is parsed
+
+GIVEN a fetch declaration with a flat CA hash and executable=1
+WHEN the declaration is parsed or verified
+THEN it MUST fail with an actionable typed error naming the NAR requirement
+AND no PathInfo or claimed output may be published.
+
+#### Scenario: A NAR-addressed executable is verified
+
+GIVEN an executable regular-file node whose NAR sha256 matches the declared
+recursive digest
+WHEN fixed-output verification runs
+THEN it MUST succeed
+AND the same bytes with the executable bit cleared MUST have a different NAR digest.
+
+### Requirement: Remote admission verifies effective trust before publication
+
+r[boundary_hardening.remote_admission_trust] Remote delta and full-NAR
+substitution MUST authenticate candidate metadata against the effective
+caller/destination trust policy before authoritative PathInfo, attestation,
+export, or root publication. An empty URL-level key list MUST NOT imply
+permissive admission; explicit unsigned admission MUST be separate and
+explicit.
+
+#### Scenario: An untrusted full-NAR candidate is returned
+
+GIVEN a remote candidate with a valid-looking signature from a key outside the
+effective trust set
+WHEN substitution runs
+THEN it MUST be rejected before local PathInfo, attestation, export, or root
+mutation
+AND a trusted candidate MUST still substitute successfully.
+
+### Requirement: Protected-exec observations state the check-to-use limit
+
+r[boundary_hardening.protected_exec_non_claim] Protected-exec documentation
+and ADRs MUST state that seccomp user-notification continue re-resolves the
+pathname after inspection. Audit events are observations of inspected paths
+under a cooperative-tracee assumption, not proof of the executed bytes. The
+supervisor MUST remain fail-closed on the paths it inspects.
+
+#### Scenario: A consumer reads a protected-exec audit event
+
+GIVEN an audit event produced by the continue-based supervisor
+WHEN a consumer interprets it
+THEN the documentation MUST NOT claim that the event proves executed bytes
+AND the fail-closed admission behavior MUST remain unchanged.
+
 ### Requirement: Clean-runner flake evaluation is credential-free
 
 r[boundary_hardening.clean_runner_evaluation] Flake evaluation MUST NOT require

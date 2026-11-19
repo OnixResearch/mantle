@@ -161,3 +161,4 @@ compatibility surface, crate name, or historical decision.
 | [0161](0161-admit-build-metadata-compiler-actions-through-their-authored-template.md) | Admit build-metadata compiler actions through their authored template | Accepted |
 | [0162](0162-keep-the-vendored-snix-data-layer-with-upstream-terms.md) | Keep the vendored Snix data layer with upstream terms | Proposed |
 | [0163](0163-bound-untrusted-acquisition-secrets-and-sandbox-diagnostics.md) | Bound untrusted acquisition, secrets, and sandbox diagnostics at their boundaries | Proposed |
+| [0164](0164-state-the-protected-exec-check-to-use-non-claim.md) | State the protected-exec check-to-use non-claim | Proposed |

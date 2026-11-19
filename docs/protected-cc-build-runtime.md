@@ -84,6 +84,18 @@ Inventory lookup and audit names are unchanged; exact bytes still have to match.
 The same retained-file rule applies to diagnostic observation. It is not atomic
 exec-to-file binding or a filesystem-isolation guarantee.
 
+**Check-to-use non-claim.** `SECCOMP_USER_NOTIF_FLAG_CONTINUE` makes the kernel
+re-read and re-resolve the tracee's pathname after the supervisor has finished
+inspecting its own opened file. A cooperating tracee matches the audit event; a
+multithreaded tracee that rewrites the path buffer, or a writable directory that
+swaps a rename or symlink between inspection and execution, can execute
+different bytes from the ones hashed. Audit events are therefore observations
+of inspected paths under a cooperative-tracee assumption, not proof of the
+executed bytes. The supervisor still fails closed on admission and never
+releases the allow-list; closing the race requires an immutable/read-only mount
+policy or a kernel-evaluated execute authority such as Landlock, not a claim
+that the current continue-based supervisor proves execution identity.
+
 Each sandbox claims a fresh audit file beneath the external `audit_dir`, named
 from its unique sandbox work directory. Keep audit and mapping paths outside
 build outputs. The observation schema is

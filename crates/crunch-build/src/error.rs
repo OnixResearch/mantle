@@ -27,6 +27,9 @@ pub enum Error {
     #[error("flat-mode FOD output is not a file: {name}")]
     FodFlatNotFile { name: String },
 
+    #[error("flat-mode FOD output is executable; use recursive/NAR addressing: {name}")]
+    FodFlatExecutable { name: String },
+
     #[error("derivation not found in known_paths: {}", path.to_absolute_path())]
     DerivationNotFound { path: StorePath<String> },
 
@@ -160,6 +163,16 @@ mod tests {
         };
         let msg = err.to_string();
         assert!(msg.contains("not a file"), "should describe the problem: {msg}");
+    }
+
+    #[test]
+    fn fod_flat_executable_display() {
+        let err = Error::FodFlatExecutable {
+            name: "src.bin".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("executable"), "should describe the problem: {msg}");
+        assert!(msg.contains("recursive/NAR"), "should name the migration: {msg}");
     }
 
     #[test]

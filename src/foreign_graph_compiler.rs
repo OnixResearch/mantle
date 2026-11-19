@@ -756,11 +756,11 @@ fn lower_download_facts(
     mode: String,
     executable: bool,
 ) -> Result<BuiltinLowering, ImportDiagnostic> {
-    if executable && fixed_output.recursive {
+    if executable && !fixed_output.recursive {
         return Err(compiler_diagnostic(
             "foreign-compiler-executable-mode-mismatch",
             Some(&node.node_id),
-            "executable downloads require flat fixed-output mode",
+            "executable downloads require recursive fixed-output mode",
         ));
     }
     let candidates = ordered_fetch_candidates(node, payloads)?;
@@ -770,7 +770,7 @@ fn lower_download_facts(
         ("mode".to_string(), mode.clone()),
         (FOREIGN_FETCH_CANDIDATES_ENV.to_string(), serialize_candidates(&candidates, &node.node_id)?),
     ]);
-    if fixed_output.recursive {
+    if fixed_output.recursive && !executable {
         environment.insert("unpack".to_string(), "1".to_string());
     }
     if executable {
@@ -1954,9 +1954,9 @@ mod tests {
         add_fetch_payload(&mut graph, "download-source", "download", mirrors.clone());
         let leaf = graph.nodes.iter_mut().find(|node| node.node_id == "leaf").expect("leaf");
         leaf.builtin = FOREIGN_DOWNLOAD_BUILTIN.to_string();
-        leaf.fixed_output.as_mut().expect("fixed output").recursive = false;
+        leaf.fixed_output.as_mut().expect("fixed output").recursive = true;
         leaf.env.insert("url".to_string(), primary.to_string());
-        leaf.env.insert("mode".to_string(), FETCH_MODE_FLAT.to_string());
+        leaf.env.insert("mode".to_string(), FETCH_MODE_RECURSIVE.to_string());
         leaf.env.insert("executable".to_string(), "1".to_string());
         leaf.source_refs.push(SourceRef {
             payload_id: "download-source".to_string(),
@@ -1975,7 +1975,7 @@ mod tests {
                 content_digest,
             } => {
                 assert_eq!(candidates, &expected_candidates);
-                assert_eq!(mode, FETCH_MODE_FLAT);
+                assert_eq!(mode, FETCH_MODE_RECURSIVE);
                 assert!(*executable);
                 assert_eq!(content_digest.domain, FOREIGN_DIGEST_DOMAIN);
                 assert_eq!(content_digest.algorithm, SHA256_ALGORITHM);
@@ -1986,7 +1986,7 @@ mod tests {
         assert_eq!(leaf_unit.derivation.system, MANTLE_BUILTIN_SYSTEM);
         assert!(matches!(
             crunch_build::fetcher::parse_fetch(&leaf_unit.derivation).expect("native fetch facts must parse"),
-            crunch_build::Fetch::Executable { .. }
+            crunch_build::Fetch::Nar { executable: true, .. }
         ));
         assert!(leaf_unit.digest_facts.iter().any(|fact| {
             fact.role == FIXED_OUTPUT_CONTENT_ROLE

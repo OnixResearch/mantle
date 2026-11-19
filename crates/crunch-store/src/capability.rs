@@ -592,6 +592,11 @@ impl BuildStore {
         self.handle.set_root_registration(registration);
     }
 
+    /// Set the effective caller/destination trust used at remote admission.
+    pub fn set_remote_admission_trust(&mut self, keys: Vec<nix_compat::narinfo::VerifyingKey>, trust_unsigned: bool) {
+        self.handle.set_remote_admission_trust(keys, trust_unsigned);
+    }
+
     pub async fn read_file_node(&self, node: &Node, max_bytes: u64) -> Result<Vec<u8>, Error> {
         crate::build_io::read_file_node(self.handle.blob_service().as_ref(), node, max_bytes).await
     }

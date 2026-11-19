@@ -29,7 +29,16 @@ pub(crate) async fn verify_fod_hash(
     match expected_ca {
         CAHash::Flat(expected_hash) => {
             let digest = match node {
-                Node::File { digest, .. } => digest,
+                Node::File {
+                    digest,
+                    executable: false,
+                    ..
+                } => digest,
+                Node::File { executable: true, .. } => {
+                    return Err(Error::FodFlatExecutable {
+                        name: drv_name.to_string(),
+                    });
+                }
                 _ => {
                     return Err(Error::FodFlatNotFile {
                         name: drv_name.to_string(),
@@ -189,6 +198,48 @@ mod tests {
         verify_fod_hash("test-drv", "out", &ca, 0, &nar_sha256, &node, &bs, &ds)
             .await
             .expect("matching flat sha256 should pass");
+    }
+
+    #[tokio::test]
+    async fn flat_executable_output_is_rejected_before_publication() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let data = b"executable payload";
+        let (_, mut node) = insert_blob(&bs, data).await;
+        if let Node::File { executable, .. } = &mut node {
+            *executable = true;
+        }
+        let ca = CAHash::Flat(expected_hash(data, HashAlgo::Sha256));
+
+        let err = verify_fod_hash("test-drv", "out", &ca, 0, &[0; 32], &node, &bs, &ds).await.unwrap_err();
+        assert!(matches!(err, Error::FodFlatExecutable { .. }));
+    }
+
+    #[tokio::test]
+    async fn nar_executable_output_has_a_distinct_identity() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let data = b"#!/bin/sh\necho hi";
+        let (_, mut executable_node) = insert_blob(&bs, data).await;
+        if let Node::File { executable, .. } = &mut executable_node {
+            *executable = true;
+        }
+        let executable_hash = nar_hash(&executable_node, HashAlgo::Sha256, bs.clone(), tmp_ds()).await.unwrap();
+        let NixHash::Sha256(executable_digest) = executable_hash else {
+            panic!("expected sha256 NAR digest");
+        };
+        let ca = CAHash::Nar(NixHash::Sha256(executable_digest));
+
+        verify_fod_hash("test-drv", "out", &ca, 0, &executable_digest, &executable_node, &bs, &ds)
+            .await
+            .expect("matching executable NAR should pass");
+
+        let mut plain_node = executable_node.clone();
+        if let Node::File { executable, .. } = &mut plain_node {
+            *executable = false;
+        }
+        let plain_hash = nar_hash(&plain_node, HashAlgo::Sha256, bs.clone(), tmp_ds()).await.unwrap();
+        assert_ne!(plain_hash, NixHash::Sha256(executable_digest), "executable bit must change NAR identity");
     }
 
     #[tokio::test]

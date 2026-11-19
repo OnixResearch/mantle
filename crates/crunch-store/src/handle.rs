@@ -909,6 +909,11 @@ pub struct StoreHandle {
     source_admission: Option<Arc<dyn StoreSourceAdmission>>,
     remote_source_leases: Vec<Arc<dyn StoreSourceLease>>,
     remote_trusted_public_keys: Vec<VerifyingKey>,
+    /// Effective caller/destination trust for remote admission. Distinct from
+    /// URL-level keys: an absent URL override does not make trust permissive.
+    admission_trusted_public_keys: Vec<VerifyingKey>,
+    /// Explicit unsigned remote admission; never inferred from an empty key vector.
+    trust_unsigned_admission: bool,
     remote_delta_capability: Option<RemoteDeltaCapability>,
     remote_delta_http_client: Option<reqwest::Client>,
     state_dir: PathBuf,
@@ -1041,6 +1046,8 @@ impl StoreHandle {
             source_admission: config.source_admission,
             remote_source_leases: sources.remote_leases,
             remote_trusted_public_keys,
+            admission_trusted_public_keys: Vec::new(),
+            trust_unsigned_admission: false,
             remote_delta_capability: None,
             remote_delta_http_client: None,
             state_dir: config.state_dir,
@@ -1200,6 +1207,8 @@ impl StoreHandle {
             source_admission: config.source_admission,
             remote_source_leases: sources.remote_leases,
             remote_trusted_public_keys,
+            admission_trusted_public_keys: Vec::new(),
+            trust_unsigned_admission: false,
             remote_delta_capability: None,
             remote_delta_http_client: None,
             state_dir: config.state_dir,
@@ -1257,6 +1266,8 @@ impl StoreHandle {
             source_admission: None,
             remote_source_leases: Vec::new(),
             remote_trusted_public_keys: Vec::new(),
+            admission_trusted_public_keys: Vec::new(),
+            trust_unsigned_admission: false,
             remote_delta_capability: None,
             remote_delta_http_client: None,
             state_dir: services.state_dir,
@@ -1743,6 +1754,17 @@ impl StoreHandle {
 
     pub fn set_root_registration(&mut self, registration: Option<crate::retention::RootRegistration>) {
         self.root_registration = registration;
+    }
+
+    /// Set the caller/destination trust policy used at remote admission.
+    ///
+    /// This is deliberately separate from URL-level cache overrides. An empty
+    /// URL-level key list never implies permissive admission; explicit
+    /// `trust_unsigned` is the only way to admit unauthenticated metadata.
+    pub(crate) fn set_remote_admission_trust(&mut self, keys: Vec<VerifyingKey>, trust_unsigned: bool) {
+        assert!(keys.len() <= 4_096, "trusted key count must stay bounded");
+        self.admission_trusted_public_keys = keys;
+        self.trust_unsigned_admission = trust_unsigned;
     }
 
     pub async fn register_retained_root(
@@ -2742,26 +2764,42 @@ impl StoreHandle {
         }
     }
 
-    fn verify_delta_pathinfo_trusted(&self, path_info: &PathInfo) -> Result<(), String> {
-        if self.remote_trusted_public_keys.is_empty() {
+    fn effective_remote_trust_keys(&self) -> &[VerifyingKey] {
+        if self.admission_trusted_public_keys.is_empty() {
+            &self.remote_trusted_public_keys
+        } else {
+            &self.admission_trusted_public_keys
+        }
+    }
+
+    fn verify_remote_admission(&self, path_info: &PathInfo) -> Result<(), String> {
+        if self.trust_unsigned_admission {
             return Ok(());
         }
+        let trusted_keys = self.effective_remote_trust_keys();
+        if trusted_keys.is_empty() {
+            return Err(format!("remote PathInfo for {} has no effective trusted keys", path_info.store_path));
+        }
         if path_info.signatures.is_empty() {
-            return Err(format!("delta PathInfo for {} had no signatures", path_info.store_path));
+            return Err(format!("remote PathInfo for {} had no signatures", path_info.store_path));
         }
         let fingerprint = compute_pathinfo_fingerprint(path_info, &self.store_dir);
         let is_trusted = path_info.signatures.iter().any(|signature| {
             let signature_ref = signature.as_ref();
-            self.remote_trusted_public_keys.iter().any(|key| key.verify(&fingerprint, &signature_ref))
+            trusted_keys.iter().any(|key| key.verify(&fingerprint, &signature_ref))
         });
         if is_trusted {
             Ok(())
         } else {
             Err(format!(
-                "delta PathInfo signatures for {} did not match configured trusted keys",
+                "remote PathInfo signatures for {} did not match the effective trusted keys",
                 path_info.store_path
             ))
         }
+    }
+
+    fn verify_delta_pathinfo_trusted(&self, path_info: &PathInfo) -> Result<(), String> {
+        self.verify_remote_admission(path_info)
     }
 
     async fn attempt_delta_candidate_negotiation(
@@ -3344,6 +3382,16 @@ impl StoreHandle {
                 // r[impl cache_substitution.requested_path_identity]
                 require_requested_path_identity(request.digest, request.output_path, &remote_pi)
                     .map_err(Error::Cache)?;
+                if let Err(error) = self.verify_remote_admission(&remote_pi) {
+                    tracing::warn!(
+                        path = %request.output_path,
+                        output = %request.output_name,
+                        cache = %cache_url,
+                        err = %error,
+                        "rejected remote substitution before authoritative publication"
+                    );
+                    return Ok(None);
+                }
                 trace_info!(
                     path = %request.output_path,
                     output = %request.output_name,
@@ -4385,7 +4433,7 @@ mod tests {
             Arc::new(LruPathInfoService::with_capacity("handle-remote".to_string(), NonZeroUsize::new(32).unwrap()))
                 as Arc<dyn PathInfoService>;
 
-        let handle = StoreHandle::from_services_with_store_dir(
+        let mut handle = StoreHandle::from_services_with_store_dir(
             StoreBackend::Snix,
             StoreHandleServices {
                 blob_service,
@@ -4399,6 +4447,7 @@ mod tests {
             "/nix/store".to_string(),
         )
         .unwrap();
+        handle.set_remote_admission_trust(vec![test_verifying_key()], false);
         (handle, remote)
     }
 
@@ -4570,7 +4619,7 @@ mod tests {
         size_bytes: u64,
         executable: bool,
     ) -> PathInfo {
-        PathInfo {
+        let mut path_info = PathInfo {
             store_path,
             node: Node::File {
                 digest,
@@ -4580,10 +4629,12 @@ mod tests {
             references: vec![],
             nar_size: size_bytes,
             nar_sha256: [8u8; 32],
-            signatures: vec![test_signature()],
+            signatures: Vec::new(),
             deriver: None,
             ca: None,
-        }
+        };
+        sign_test_pathinfo(&mut path_info);
+        path_info
     }
 
     #[derive(Default, Debug)]
@@ -5918,6 +5969,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn remote_substitution_rejects_untrusted_full_pathinfo_before_publication() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let (mut handle, remote) = test_handle_with_remote(state_dir.path());
+        let output_path = test_output("untrusted-full-substitution", 41);
+        let node = Node::Symlink {
+            target: SymlinkTarget::try_from("target").unwrap(),
+        };
+        let untrusted_signer =
+            SigningKey::new("untrusted-test-1".to_string(), ed25519_dalek::SigningKey::from_bytes(&[19_u8; 32]));
+        let untrusted =
+            signed_pathinfo_with_signing_key(output_path.clone(), node.clone(), 1, [9_u8; 32], &untrusted_signer);
+        remote.put(untrusted).await.unwrap();
+
+        let rejected =
+            handle.try_substitute_remote(*output_path.digest(), &output_path, "out", true, None).await.unwrap();
+        assert!(rejected.is_none(), "untrusted remote PathInfo must not be admitted");
+        assert!(
+            handle.pathinfo_service.get(*output_path.digest()).await.unwrap().is_none(),
+            "untrusted admission must not persist authoritative PathInfo"
+        );
+        assert!(!state_dir.path().join(output_path.to_string()).exists(), "untrusted admission must not export");
+
+        let trusted = signed_pathinfo_with_signing_key(output_path.clone(), node, 1, [9_u8; 32], &test_signing_key());
+        remote.put(trusted).await.unwrap();
+        let admitted = handle
+            .try_substitute_remote(*output_path.digest(), &output_path, "out", true, None)
+            .await
+            .unwrap()
+            .expect("trusted remote PathInfo should be admitted");
+        assert_eq!(admitted.store_path, output_path);
+        assert!(handle.pathinfo_service.get(*output_path.digest()).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
     async fn remote_substitution_missing_local_backing_content_is_absent_from_receiver_manifest() {
         let state_dir = tempfile::tempdir().unwrap();
         let (mut handle, _remote) = test_handle_with_remote(state_dir.path());
@@ -6507,7 +6592,7 @@ mod tests {
         let trusted_dalek = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
         let trusted_verify = VerifyingKey::new("cache-trusted-1".to_string(), trusted_dalek.verifying_key());
         let trusted_sign = SigningKey::new("cache-trusted-1".to_string(), trusted_dalek);
-        handle.remote_trusted_public_keys = vec![trusted_verify];
+        handle.set_remote_admission_trust(vec![trusted_verify], false);
 
         let untrusted_dalek = ed25519_dalek::SigningKey::from_bytes(&[11u8; 32]);
         let untrusted_sign = SigningKey::new("cache-untrusted-1".to_string(), untrusted_dalek);
@@ -6611,8 +6696,10 @@ mod tests {
         let child_digest: snix_castore::B3Digest = blake3::hash(child_bytes).as_bytes().into();
         let directory_digest: snix_castore::B3Digest =
             blake3::hash(b"directory-root-missing-locally").as_bytes().into();
-        let delta_sign =
-            SigningKey::new("cache-directory-1".to_string(), ed25519_dalek::SigningKey::from_bytes(&[12u8; 32]));
+        let delta_dalek = ed25519_dalek::SigningKey::from_bytes(&[12u8; 32]);
+        let delta_verify = VerifyingKey::new("cache-directory-1".to_string(), delta_dalek.verifying_key());
+        let delta_sign = SigningKey::new("cache-directory-1".to_string(), delta_dalek);
+        handle.set_remote_admission_trust(vec![delta_verify], false);
         let delta_path_info = signed_pathinfo_with_signing_key(
             output_path.clone(),
             Node::Directory {

@@ -41,6 +41,40 @@ mode-0600 key; the pipeline tests cover creation, loose-mode rejection, and
 symlinked-parent rejection. Tar mode fixtures cover 04755, 02755, 01777, and
 04644.
 
+Executable fixed-output migration:
+
+| Test filter | Result |
+| --- | --- |
+| `cargo test -p crunch-build --lib fetcher::tests::parse_fetch_executable` | 2 passed; 0 failed |
+| `cargo test -p crunch-build --lib fod::tests::` | 21 passed; 0 failed |
+| `cargo test -p crunch-build --lib fetch_build_service::tests::` | 26 passed; 0 failed |
+| `cargo test -p mantle --bin mantle foreign_graph_compiler::tests::compiler_lowers_ordered_executable_download_to_mantle_fetch_facts` | 1 passed; 0 failed |
+
+Flat executable declarations now fail with `ExecutableRequiresNar`; flat
+executable nodes fail with `FodFlatExecutable`; NAR-addressed executable
+verification passes and its digest differs from the non-executable node.
+
+Remote admission trust:
+
+```text
+cargo test -p crunch-store --lib remote_substitution_ -- --test-threads=1
+```
+
+Observed: 17 passed; 0 failed. The new
+`remote_substitution_rejects_untrusted_full_pathinfo_before_publication`
+regression proves an untrusted nonempty signature list is rejected before
+local PathInfo persistence or export, while a trusted candidate still
+substitutes.
+
+Protected-exec non-claim (#79, partial):
+
+- Docs and ADR 0164 now state that continue-based user notification
+  re-resolves the pathname after inspection, so audit events are observations
+  of inspected paths under a cooperative-tracee assumption, not proof of the
+  executed bytes.
+- Receipt-schema non-claim enforcement and a race-class fixture remain open in
+  Phase 8 tasks T8.2 and T8.3.
+
 Formatting: `rustfmt --edition 2024 --check` on the edited first-party leaf
 files passed. Vendored files are outside the first-party fmt selection and
 retain their existing formatting.

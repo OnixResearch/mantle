@@ -5557,9 +5557,10 @@ fn fetch_from_source_record(record: &SourceRecord, expected_hash: &NixHash) -> R
         });
     }
     if record.metadata.get(FETCH_ENV_EXECUTABLE_KEY).map(String::as_str) == Some("1") {
-        return Ok(crunch_build::Fetch::Executable {
+        return Ok(crunch_build::Fetch::Nar {
             url,
             hash: expected_hash.clone(),
+            executable: true,
         });
     }
     Ok(crunch_build::Fetch::Url {

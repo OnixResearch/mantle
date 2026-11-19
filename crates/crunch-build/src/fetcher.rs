@@ -85,10 +85,9 @@ pub enum Fetch {
     /// Download a tarball, decompress, extract, strip top-level dir.
     /// Hash is NAR of the unpacked tree.
     Tarball { url: Url, exp_nar_sha256: Option<[u8; 32]> },
-    /// Download a NAR archive and extract it.
-    Nar { url: Url, hash: NixHash },
-    /// Download a file and mark it executable.
-    Executable { url: Url, hash: NixHash },
+    /// Download a single file whose NAR is content-addressed. The executable
+    /// bit participates in that NAR identity.
+    Nar { url: Url, hash: NixHash, executable: bool },
     /// Clone a git repository at a specific revision.
     Git {
         url: String,
@@ -167,6 +166,12 @@ pub enum FetchError {
     #[error("decompression failed: {0}")]
     DecompressError(String),
 
+    #[error("executable downloads require recursive/NAR addressing; declare ca_hash = Nar(...)")]
+    ExecutableRequiresNar,
+
+    #[error("executable downloads do not support unpack=1; declare a single-file NAR identity")]
+    ExecutableUnpackUnsupported,
+
     #[error("{resource} exceeds the {limit_bytes}-byte limit")]
     LimitExceeded { resource: String, limit_bytes: u64 },
 
@@ -220,14 +225,12 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
     let ca_hash = derivation.outputs.get("out").and_then(|o| o.ca_hash.as_ref());
 
     match ca_hash {
-        Some(CAHash::Flat(hash)) if is_executable => Ok(Fetch::Executable {
-            url,
-            hash: hash.clone(),
-        }),
+        Some(CAHash::Flat(_)) if is_executable => Err(FetchError::ExecutableRequiresNar),
         Some(CAHash::Flat(hash)) => Ok(Fetch::Url {
             url,
             exp_hash: Some(hash.clone()),
         }),
+        Some(CAHash::Nar(_)) if should_unpack && is_executable => Err(FetchError::ExecutableUnpackUnsupported),
         Some(CAHash::Nar(hash)) if should_unpack => Ok(Fetch::Tarball {
             url,
             exp_nar_sha256: expected_nar_sha256(hash),
@@ -235,6 +238,7 @@ pub fn parse_fetch(derivation: &Derivation) -> Result<Fetch, FetchError> {
         Some(CAHash::Nar(hash)) => Ok(Fetch::Nar {
             url,
             hash: hash.clone(),
+            executable: is_executable,
         }),
         None => {
             // No ca_hash — treat as plain URL fetch without hash verification.
@@ -290,17 +294,15 @@ pub fn fetch_to_store(fetch: &Fetch, out_path: &str) -> Result<(), FetchError> {
             info!(url = %url, "fetching tarball");
             fetch_and_unpack(url.as_str(), out_path)?;
         }
-        Fetch::Nar { url, .. } => {
-            info!(url = %url, "fetching NAR");
+        Fetch::Nar { url, executable, .. } => {
+            info!(url = %url, "fetching NAR-addressed file");
             fetch_flat(url.as_str(), out_path)?;
-        }
-        Fetch::Executable { url, .. } => {
-            info!(url = %url, "fetching executable");
-            fetch_flat(url.as_str(), out_path)?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(out_path, std::fs::Permissions::from_mode(0o755))?;
+            if *executable {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(out_path, std::fs::Permissions::from_mode(0o755))?;
+                }
             }
         }
         Fetch::Git { url, rev, .. } => {
@@ -2578,14 +2580,25 @@ mod tests {
     }
 
     #[test]
-    fn parse_fetch_executable() {
+    fn parse_fetch_executable_requires_nar_addressing() {
         let drv = make_drv(
             "builtin:fetchurl",
             vec![("url", "https://example.com/run"), ("executable", "1")],
             Some(CAHash::Flat(NixHash::Sha256([0xCC; 32]))),
         );
-        let fetch = parse_fetch(&drv).unwrap();
-        assert!(matches!(fetch, Fetch::Executable { .. }));
+        let error = parse_fetch(&drv).expect_err("flat executable fetch is rejected");
+        assert!(matches!(error, FetchError::ExecutableRequiresNar));
+    }
+
+    #[test]
+    fn parse_fetch_executable_nar() {
+        let drv = make_drv(
+            "builtin:fetchurl",
+            vec![("url", "https://example.com/run"), ("executable", "1")],
+            Some(CAHash::Nar(NixHash::Sha256([0xCC; 32]))),
+        );
+        let fetch = parse_fetch(&drv).expect("NAR executable fetch parses");
+        assert!(matches!(fetch, Fetch::Nar { executable: true, .. }));
     }
 
     #[test]

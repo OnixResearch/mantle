@@ -2118,6 +2118,7 @@ where BServ: BuildService + 'static
         derivation: &Derivation,
         is_root: bool,
     ) -> Result<Option<CacheCheckHit>, Error> {
+        self.store.set_remote_admission_trust(self.trusted_keys.clone(), self.trust_unsigned);
         let cached = self
             .store
             .check_cache(drv_path, derivation, is_root, self.root_retention_source)

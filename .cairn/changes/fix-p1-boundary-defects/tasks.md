@@ -40,3 +40,20 @@
 - [x] [serial] T6.1 Publish first-run signing keys through atomic no-replace temporary-file persistence and converge concurrent callers. r[boundary_hardening.atomic_key_publication]
 - [x] [serial] T6.2 Strip setuid, setgid, and sticky bits from regular tar entries and hardlink copies; fail on permission errors. r[boundary_hardening.tar_mode_policy]
 - [x] [serial] T6.3 Move sandbox work roots under the state directory with 0700 creation, owner/type/mode admission, and an operator override; apply the same admission to the remote executor. r[boundary_hardening.private_work_roots]
+
+## Phase 7: Executable fixed-output identity
+
+- [x] [serial] T7.1 Reject flat executable fetch declarations and flat executable FOD nodes with typed errors. r[boundary_hardening.executable_nar_addressing]
+- [x] [serial] T7.2 Carry the executable bit through NAR-addressed fetch acquisition and migration of source-bundle and foreign-compiler executable downloads. r[boundary_hardening.executable_nar_addressing]
+- [x] [serial] T7.3 Add parse, FOD, and foreign-lowering regressions for executable NAR identity. r[boundary_hardening.executable_nar_addressing]
+
+## Phase 8: Protected-exec observation limits
+
+- [x] [serial] T8.1 Add the check-to-use non-claim to the protected-exec documentation and an ADR. r[boundary_hardening.protected_exec_non_claim]
+- [ ] [serial] T8.2 Carry the non-claim in audit/receipt schema and reject a receipt without it. r[boundary_hardening.protected_exec_non_claim]
+- [ ] [serial] T8.3 Add a race-class regression fixture and record the preventive or detective outcome. r[boundary_hardening.protected_exec_non_claim]
+
+## Phase 9: Remote admission trust
+
+- [x] [serial] T9.1 Apply the effective builder/destination trust policy at delta and full-NAR remote admission before authoritative publication. r[boundary_hardening.remote_admission_trust]
+- [x] [serial] T9.2 Add an untrusted full-NAR candidate regression proving no PathInfo or export is created before rejection. r[boundary_hardening.remote_admission_trust]
