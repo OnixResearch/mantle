@@ -99,6 +99,7 @@ PATH=/path/without/nix mantle --json \
   --state-dir ./state \
   --store ./output \
   --store-prefix /nix/store \
+  --remote-binding-config remote-endpoint-binding.json \
   foreign-import realize \
   --plan plan.json \
   --import-receipt import-receipt.json \
@@ -114,6 +115,24 @@ The plan cache URL must bind each trusted public key.
 Mantle supports one selected output root for this route.
 It validates all bounded NARInfo metadata before it imports NAR content.
 A metadata failure creates no output and no realization receipt.
+
+Cache-only hydration accepts `http://` and `https://` cache URLs only.
+`foreign-import produce-nix --cache-url` and `foreign-import plan` also accept
+a `file://` URL, but realization can never hydrate from one. Serve a file cache
+over HTTP, for example from a loopback-only server, and plan with that URL.
+
+`--remote-binding-config` names a `mantle-remote-endpoint-binding-config-v1`
+file, the operator's admission authority for every plan-bound substituter URL.
+Without it, realization fails with `store-source-admission-required`. Opening
+the store admits the cache URL with its `?trusted_public_keys[...]` query, but
+hydration requests the URL without the query. Bind both exact forms, each with
+the same scope and trust requirement; an unbound form fails with
+`source endpoint admission denied`.
+
+The shipped `default.json` cache-closure policy caps `max_nar_bytes` at 8 GiB.
+A larger runtime closure is rejected before any import. Pass an operator
+policy sized for the closure, for example a copy of the default with only
+`max_nar_bytes` raised.
 
 After hydration, Mantle reopens the store without remote services.
 The ordinary scheduler observes the selected output as already present.
