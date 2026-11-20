@@ -53,13 +53,16 @@ Shell integration tests (8, all ok):
 | `cargo clippy -p crunch-verification-bridge-core -p crunch-verification-bridge --all-targets --no-deps -- -D warnings` | `clippy.txt` | 0 |
 | `cargo fmt --check -p crunch-verification-bridge-core` | `fmt.txt` | 0 |
 | `cargo fmt --check -p crunch-verification-bridge` | `fmt.txt` | 0 |
-| `./scripts/check-no-std-core.sh` | `check-no-std-core.txt` | see below |
+| `./scripts/check-no-std-core.sh` | `check-no-std-core.txt` | 1 (step 12 only, pre-existing) |
 
-`./scripts/check-no-std-core.sh` step 12 fails at `origin/main` for files this
-work does not touch; the failure is pre-existing and is recorded, not fixed.
-`no-std-origin-main-step12.txt` is the same ownership check run in a detached
-worktree of `origin/main` (`cd4ad3f43`), which fails on the same classification
-entries.
+Steps 1-11 pass, including step 11 (API shape). That step rejected an
+intermediate signature, `octet_provider_profile_locator(&Value) -> &str`,
+because the no-std core bans references in public boundary types, so the
+public locator takes and returns owned values. Step 12 (ownership) fails on 13
+`missing touched std classification entry` lines, none for a file this change
+touches. `no-std-origin-main-step12.txt` is the same ownership check run in a
+detached worktree of `origin/main` (`cd4ad3f43`). It reports the identical 13
+entries, so the failure is pre-existing. It is recorded here, not fixed.
 
 ## Cairn gates
 
@@ -74,9 +77,13 @@ entries.
 
 ## Real producer-output run
 
-`real-run.txt` records the command and exit code 0;
+`real-run.txt` records the command, the exit code (0) and the BLAKE3 of the
+release binary, built from commit `7fdb6b861`.
 `real-run-mantle-observation.json` is the exact `mantle-observation.json` the
-run wrote (the temporary handoff directory was then deleted).
+run wrote. The run's whole handoff tree is byte-identical to the pilot handoff
+at `convergence-evidence/realization/handoff`, which the binary from the
+intermediate commit `b14db98cb` wrote; that commit differs only in the
+locator's signature. The temporary handoff directory was then deleted.
 
 ```
 target/release/mantle-verification-bridge octet-job \

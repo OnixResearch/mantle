@@ -1,4 +1,4 @@
-=== cairn validate --root . ===
+$ cairn validate --root .
 {
   "change_issues": [],
   "changes": 39,
@@ -15,7 +15,7 @@
     "source": "legacy_default"
   },
   "profile_issues": [],
-  "receipt_hash": "40dba61018bee5a2b71452ff635f0add7811b3be5c4ca8621d84a97adbf132ad",
+  "receipt_hash": "6c8042580507c4014e8238b6f05e1eaecf011867a955a8f33b1e98953afa34e3",
   "resolution": {
     "diagnostics": [],
     "locator_consulted": false,
@@ -1038,7 +1038,7 @@
       "path": "./.cairn/changes/admit-octet-producer-layout-in-verification-bridge/design.md",
       "requirement_blocks": 0,
       "scenario_blocks": 0,
-      "substantive_lines": 63,
+      "substantive_lines": 66,
       "substantive_requirement_blocks": 0,
       "substantive_tasks": 0,
       "task_done": 0,
@@ -2970,7 +2970,7 @@
         "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
         "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
       ],
-      "profile_identity_hash": "305d523fa7cc048e21b714ae25a98415d52de9e3d14a4d55bedcddb46785dd7a",
+      "profile_identity_hash": "ea30b30111180a0990b72f50d02a713ff624d7680153d8c7697147070bd60304",
       "review_receipt_hashes": [],
       "spec_effect": "delta",
       "workflow_profile": "spec-driven",
@@ -3349,7 +3349,7 @@
   ]
 }
 EXIT=0
-=== cairn gate proposal admit-octet-producer-layout-in-verification-bridge --root . ===
+$ cairn gate proposal admit-octet-producer-layout-in-verification-bridge --root .
 {
   "acceptance_ids": [],
   "change": "admit-octet-producer-layout-in-verification-bridge",
@@ -3362,7 +3362,7 @@ EXIT=0
     "probe": 0,
     "property": 0
   },
-  "input_hash": "bf3219bc341f0e6dc05f548e2ea6cfe85995dac3cfee247fe5fcb0db0ddf3b64",
+  "input_hash": "05ba0088780058db93c49f93b52b2f8df845858db48b5a0836ecf989e092ebb2",
   "issues": [],
   "layout": "cairn",
   "non_claims": [
@@ -3380,8 +3380,8 @@ EXIT=0
     "source": "legacy_default"
   },
   "probe_evidence": null,
-  "profile_identity_hash": "305d523fa7cc048e21b714ae25a98415d52de9e3d14a4d55bedcddb46785dd7a",
-  "receipt_hash": "d1b44930dc23d230d7f63e230ab886a3703b9a0297d894ca5f475780f06db48b",
+  "profile_identity_hash": "ea30b30111180a0990b72f50d02a713ff624d7680153d8c7697147070bd60304",
+  "receipt_hash": "2ab53164f5a70c429966e21ef818367b831e7db7acdf04464c0112fd57f0d35e",
   "review_receipt_hashes": [],
   "spec_effect": "delta",
   "stage": "proposal",
@@ -3410,7 +3410,7 @@ EXIT=0
   "workflow_profile_version": 1
 }
 EXIT=0
-=== cairn gate design admit-octet-producer-layout-in-verification-bridge --root . ===
+$ cairn gate design admit-octet-producer-layout-in-verification-bridge --root .
 {
   "acceptance_ids": [],
   "change": "admit-octet-producer-layout-in-verification-bridge",
@@ -3423,7 +3423,7 @@ EXIT=0
     "probe": 0,
     "property": 0
   },
-  "input_hash": "303dc5e6f1e035589a091c5ed63a48faf92771408b80eb1f2a5f2c0a5e40881b",
+  "input_hash": "7d7d6fd0c045ea418e75303cc3ddf48ab3395d6e35f37cdff4cdcb167d03d3e7",
   "issues": [],
   "layout": "cairn",
   "non_claims": [
@@ -3441,8 +3441,8 @@ EXIT=0
     "source": "legacy_default"
   },
   "probe_evidence": null,
-  "profile_identity_hash": "305d523fa7cc048e21b714ae25a98415d52de9e3d14a4d55bedcddb46785dd7a",
-  "receipt_hash": "24acaaba6276160621ceeca12491cbd32a1165d4089632f6c42e05d85f10dfcb",
+  "profile_identity_hash": "ea30b30111180a0990b72f50d02a713ff624d7680153d8c7697147070bd60304",
+  "receipt_hash": "e49faf6b7259b1f17268732b8cbbe61d90689c31c3b1989e1b8da4777d78f0eb",
   "review_receipt_hashes": [],
   "spec_effect": "delta",
   "stage": "design",
@@ -3454,7 +3454,7 @@ EXIT=0
       "path": "./.cairn/changes/admit-octet-producer-layout-in-verification-bridge/design.md",
       "requirement_blocks": 0,
       "scenario_blocks": 0,
-      "substantive_lines": 63,
+      "substantive_lines": 66,
       "substantive_requirement_blocks": 0,
       "substantive_tasks": 0,
       "task_done": 0,
@@ -3499,7 +3499,7 @@ EXIT=0
   "workflow_profile_version": 1
 }
 EXIT=0
-=== cairn gate tasks admit-octet-producer-layout-in-verification-bridge --root . ===
+$ cairn gate tasks admit-octet-producer-layout-in-verification-bridge --root .
 {
   "acceptance_ids": [],
   "change": "admit-octet-producer-layout-in-verification-bridge",
@@ -3512,7 +3512,7 @@ EXIT=0
     "probe": 0,
     "property": 0
   },
-  "input_hash": "f2518c7c23c7f2225d6271a89c17a9103fe75a4b041cafdffd3e16357bcdf687",
+  "input_hash": "d4b7c2ec65dca2a699151b4aee798407628f53b3aa27fb409689bf58b264b964",
   "issues": [],
   "layout": "cairn",
   "non_claims": [
@@ -3533,8 +3533,8 @@ EXIT=0
     "declarations_present": false,
     "probes": []
   },
-  "profile_identity_hash": "305d523fa7cc048e21b714ae25a98415d52de9e3d14a4d55bedcddb46785dd7a",
-  "receipt_hash": "c936dbb09789ef1a78194432746e07787c59e9770182d5093810f45cc1efbffd",
+  "profile_identity_hash": "ea30b30111180a0990b72f50d02a713ff624d7680153d8c7697147070bd60304",
+  "receipt_hash": "8385be0c94f72c0cbef2be6b464cbcaf2ebaa6608b7e25592cc6c0421575827d",
   "review_receipt_hashes": [],
   "spec_effect": "delta",
   "stage": "tasks",
@@ -3546,7 +3546,7 @@ EXIT=0
       "path": "./.cairn/changes/admit-octet-producer-layout-in-verification-bridge/design.md",
       "requirement_blocks": 0,
       "scenario_blocks": 0,
-      "substantive_lines": 63,
+      "substantive_lines": 66,
       "substantive_requirement_blocks": 0,
       "substantive_tasks": 0,
       "task_done": 0,
