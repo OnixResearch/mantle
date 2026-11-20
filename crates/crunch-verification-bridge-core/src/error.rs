@@ -27,6 +27,8 @@ pub enum BridgeError {
     StageArtifactCountBound,
     MissingArtifactIdentities,
     ArtifactIdentityCountBound,
+    MissingProviderProfileLocator,
+    AmbiguousProviderProfileLocator,
     MissingProviderTools,
     MissingExtractionOptions,
     MissingTrellisArtifacts,
@@ -36,6 +38,9 @@ pub enum BridgeError {
     ProducerNetworkNotDenied,
     ToolGraphByteBound,
     InvalidToolGraphShape,
+    UnsupportedToolGraphVersion,
+    MixedToolGraphShape,
+    NonEmptyDynamicToolOutputs,
     ToolGraphRootOrCountBound,
     InvalidProducerDerivation,
     MissingToolInputDerivations,
@@ -86,6 +91,10 @@ impl fmt::Display for BridgeError {
             Self::StageArtifactCountBound => formatter.write_str("invalid stage artifact count"),
             Self::MissingArtifactIdentities => formatter.write_str("missing artifact identities"),
             Self::ArtifactIdentityCountBound => formatter.write_str("artifact identity count exceeds bound"),
+            Self::MissingProviderProfileLocator => formatter.write_str("receipt names no provider-profile artifact"),
+            Self::AmbiguousProviderProfileLocator => {
+                formatter.write_str("receipt names more than one provider-profile artifact")
+            }
             Self::MissingProviderTools => formatter.write_str("missing provider tools"),
             Self::MissingExtractionOptions => formatter.write_str("missing extraction options"),
             Self::MissingTrellisArtifacts => formatter.write_str("missing Trellis artifacts"),
@@ -99,6 +108,11 @@ impl fmt::Display for BridgeError {
             }
             Self::ToolGraphByteBound => formatter.write_str("tool graph byte bound exceeded or empty"),
             Self::InvalidToolGraphShape => formatter.write_str("tool graph must be Nix derivation-show JSON"),
+            Self::UnsupportedToolGraphVersion => formatter.write_str("unsupported producer tool graph schema version"),
+            Self::MixedToolGraphShape => formatter.write_str("mixed legacy and versioned producer tool graph shape"),
+            Self::NonEmptyDynamicToolOutputs => {
+                formatter.write_str("producer tool graph selects a dynamic derivation output")
+            }
             Self::ToolGraphRootOrCountBound => {
                 formatter.write_str("tool graph root absent or derivation bound exceeded")
             }

@@ -208,7 +208,10 @@ fn material_paths(producer: Producer, parsed: &Value) -> Result<BTreeSet<String>
 /// per generated stage.
 fn octet_material_paths(parsed: &Value, paths: &mut BTreeSet<String>) -> Result<(), String> {
     paths.insert(text(parsed, "/consumer/source_path")?.to_owned());
-    paths.insert("proofs/aeneas/provider-profile.json".to_owned());
+    paths.insert(
+        crunch_verification_bridge_core::octet_provider_profile_locator(parsed.clone())
+            .map_err(|error| error.to_string())?,
+    );
     let stages = parsed
         .pointer("/consumer/stage_artifacts")
         .and_then(Value::as_array)

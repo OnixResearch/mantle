@@ -1,0 +1,14 @@
+error: openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: crates/mantle-wasm-consumer-verifier/tests/support/mod.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: crates/mantle-wasm-consumer-verifier/tests/wrpc-telemetry.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_fixed_point_receipt_fixture.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_fixed_point_stagex_adoption.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_macro_smoke_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_macros_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_minicargo_resolve_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_native_smoke_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_successors_graph_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_successors_macro_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_successors_profile_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_translation_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_resolve_tests.rs
+EXIT=1

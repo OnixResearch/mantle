@@ -80,6 +80,28 @@ report and envelope. Mantle hashes/links these bytes; it does not reimplement
 the owner's theorem admission, checker semantics or report authenticity policy.
 This observes external acceptance, rather than turning build success into proof.
 
+The provider-profile locator is derived from the selected receipt: it is the
+single `artifact_identities` row whose `blake3` equals
+`consumer.provider_profile_identity` (compared with the `b3:` prefix ignored)
+and whose locator's final component is `provider-profile.json`. Zero matching
+rows, more than one, or an unsafe relative locator fail closed, so a
+rail-named proof directory binds without a fixture-specific constant. The
+shell's material plan and the core check share this one function.
+
+The producer tool graph admits exactly the two wire shapes the producer job
+declares: the legacy `nix derivation show` map of full store paths with
+`inputDrvs`/`inputSrcs`, and the `version: 4` `derivations` map keyed by store
+basenames, each node carrying `version: 4` and `inputs.drvs` values with string
+`outputs` and an empty `dynamicOutputs` object. The root is located by the final
+component of `root_derivation`, every dependency must sit inside the closure,
+and mixed, unsupported, or non-empty dynamic-output shapes fail closed with
+stable error variants. `tool_graph_identity` stays the digest of the exact
+graph bytes.
+
+Both rules locate and parse producer-authored bytes. Neither grants proof
+authority: Mantle still does not admit theorems, evaluate proof truth, or
+reimplement the producer's verification policy.
+
 The Trellis adapter checks exact pilot profile/source/artifact identities,
 byte sizes, and the opaque Verus receipt payload identity. It does not parse
 or accept Verus proof semantics. Trellis's existing primitive manifest is not

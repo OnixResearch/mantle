@@ -1,0 +1,8 @@
+$ target/release/mantle-verification-bridge octet-job /datapool/mantle-store/convergence-pilot-20261119/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1 /home/brittonr/wt/convergence-evidence/realization/producer-export d5b34c2d64b1227417a46df8ed8427f2d10ed3c8 /tmp/bridge-layout-check-handoff
+$ echo $?
+0
+
+Exit code: 0
+
+The command wrote `/tmp/bridge-layout-check-handoff/mantle-observation.json` (copied verbatim to
+`real-run-mantle-observation.json`), then the handoff directory was deleted.

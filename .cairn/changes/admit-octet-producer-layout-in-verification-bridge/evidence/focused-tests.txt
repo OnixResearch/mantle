@@ -1,0 +1,62 @@
+warning: /home/brittonr/wt/mantle-bridge/Cargo.toml: file `/home/brittonr/wt/mantle-bridge/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running unittests src/lib.rs (target/debug/deps/crunch_verification_bridge-05fbe349ab122432)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/mantle_verification_bridge-eff49cae0a6ec0b0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/boundaries.rs (target/debug/deps/boundaries-e3f53f8f3a471d79)
+
+running 8 tests
+test symbolic_link_substitution_is_not_a_payload ... ok
+test stale_source_profile_tool_and_options_cannot_reuse_association ... ok
+test rail_named_provider_profile_layout_is_admitted_from_the_receipt ... ok
+test selected_fixture_cannot_stand_in_for_a_complete_owner_verification_bundle ... ok
+test missing_tampered_and_escaped_payloads_fail_without_publication ... ok
+test real_owner_handoffs_replay_with_exact_receipts_without_promoting_authority ... ok
+test external_failure_and_unknown_versions_do_not_become_proof_acceptance ... ok
+test provider_profile_row_must_be_unique_and_match_the_provider_identity ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/crunch_verification_bridge_core-98d8f7079f03bcd9)
+
+running 13 tests
+test producer::tests::legacy_node_carrying_versioned_keys_fails_closed ... ok
+test producer::tests::legacy_tool_graph_with_store_paths_is_admitted ... ok
+test producer::tests::unsupported_top_level_graph_version_fails_closed ... ok
+test producer::tests::versioned_dependency_outside_the_closure_fails_closed ... ok
+test producer::tests::versioned_dynamic_output_selection_fails_closed ... ok
+test provider_profile_tests::absent_provider_profile_row_fails_closed ... ok
+test provider_profile_tests::duplicate_provider_profile_rows_fail_closed ... ok
+test producer::tests::versioned_root_absent_fails_closed ... ok
+test producer::tests::versioned_node_carrying_legacy_inputs_fails_closed ... ok
+test producer::tests::versioned_tool_graph_with_basenames_is_admitted ... ok
+test provider_profile_tests::escaping_provider_profile_locator_fails_closed ... ok
+test provider_profile_tests::provider_profile_digest_mismatch_fails_closed ... ok
+test provider_profile_tests::rail_named_provider_profile_locator_is_selected ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_verification_bridge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_verification_bridge_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT=0

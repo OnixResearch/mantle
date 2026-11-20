@@ -12,6 +12,9 @@
 //! Identity-only consumers of externally authored contracts. No theorem admission.
 extern crate alloc;
 
+#[cfg(test)]
+extern crate std;
+
 use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
@@ -37,9 +40,6 @@ pub const MAX_TOTAL_BYTES: usize = 33_554_432;
 
 /// The relative path of the Octet artifact-verification report.
 const VERIFICATION_REPORT_PATH: &str = "producer-artifact-verification.json";
-
-/// The relative path of the Octet producer provider profile.
-const PROVIDER_PROFILE_PATH: &str = "proofs/aeneas/provider-profile.json";
 
 /// The value one observed external field is required to carry.
 ///
@@ -406,10 +406,11 @@ fn observe_octet_inner(
     check_octet_consumer_binding(inputs, &profile, consumer)?;
     let source_path = check_octet_source_material(inputs, consumer, materials)?;
     let source = find_octet_profile_source(&profile, source_path)?;
-    check_octet_provider_profile(inputs, materials)?;
+    let provider_path = provider_profile_locator(&receipt)?;
+    check_octet_provider_profile(inputs, provider_path, materials)?;
     check_octet_options_contract(inputs, &profile)?;
     check_octet_outcome_binding(inputs, source, &receipt, consumer)?;
-    let mut checked = alloc::vec![source_path.to_string(), PROVIDER_PROFILE_PATH.to_string()];
+    let mut checked = alloc::vec![source_path.to_string(), provider_path.to_string()];
     check_octet_stage_artifacts(materials, &receipt, consumer, &mut checked)?;
     debug_assert!(!source_path.is_empty());
     debug_assert!(checked.iter().all(|path| is_relative_path(path)));
@@ -480,10 +481,66 @@ fn find_octet_profile_source<'a>(profile: &'a Value, source_path: &str) -> Resul
     Ok(source)
 }
 
+/// Selects the receipt row that locates the provider profile.
+///
+/// The row is the one `artifact_identities` entry whose digest equals the
+/// consumer's provider-profile identity and whose locator names
+/// `provider-profile.json`. The locator is derived from the receipt, never from
+/// a fixture layout, so any rail-named proof directory is admissible.
+// r[impl verification_bridge.octet_producer_layout]
+pub fn octet_provider_profile_locator(receipt: Value) -> Result<String, BridgeError> {
+    let locator = provider_profile_locator(&receipt)?;
+    debug_assert!(!locator.is_empty());
+    debug_assert!(is_relative_path(locator));
+    Ok(locator.to_string())
+}
+
+/// Borrowed form of [`octet_provider_profile_locator`] for in-crate callers.
+fn provider_profile_locator(receipt: &Value) -> Result<&str, BridgeError> {
+    let expected = text(receipt, "/consumer/provider_profile_identity")?;
+    let rows = receipt
+        .get("artifact_identities")
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingArtifactIdentities)?;
+    if rows.is_empty() || rows.len() > MAX_MATERIALS {
+        return Err(BridgeError::ArtifactIdentityCountBound);
+    }
+    let mut selected: Option<&str> = None;
+    let mut matches: u32 = 0;
+    for row in rows {
+        let locator = text(row, "/locator")?;
+        if locator.rsplit('/').next() != Some("provider-profile.json") {
+            continue;
+        }
+        if digest_equal(text(row, "/blake3")?, Expected(expected), "provider profile").is_err() {
+            continue;
+        }
+        if !is_relative_path(locator) {
+            return Err(BridgeError::UnsafeArtifactPath(locator.to_string()));
+        }
+        matches = matches.saturating_add(1);
+        if matches == 1 {
+            selected = Some(locator);
+        }
+    }
+    let locator = match matches {
+        0 => return Err(BridgeError::MissingProviderProfileLocator),
+        1 => selected.ok_or(BridgeError::MissingProviderProfileLocator)?,
+        _ => return Err(BridgeError::AmbiguousProviderProfileLocator),
+    };
+    debug_assert_eq!(locator.rsplit('/').next(), Some("provider-profile.json"));
+    debug_assert!(is_relative_path(locator));
+    Ok(locator)
+}
+
 /// The provider profile must be a material, and the tool contract must equal the
 /// provider identity.
-fn check_octet_provider_profile(inputs: &PackagingInputs, materials: &[Material]) -> Result<(), BridgeError> {
-    material(materials, PROVIDER_PROFILE_PATH, Expected(&inputs.provider_identity))?;
+fn check_octet_provider_profile(
+    inputs: &PackagingInputs,
+    provider_path: &str,
+    materials: &[Material],
+) -> Result<(), BridgeError> {
+    material(materials, provider_path, Expected(&inputs.provider_identity))?;
     equal(&inputs.tool_contract_identity, Expected(&inputs.provider_identity), "provider tool contract")?;
     Ok(())
 }
@@ -706,4 +763,69 @@ fn finish(
         tool_graph_identity: None,
         boundary: "Mantle checks selected exact-byte links only; producer receipts remain opaque external evidence, not build success, theorem admission, or release eligibility".to_string(),
     })
+}
+
+// r[impl verification_bridge.octet_producer_layout]
+#[cfg(test)]
+mod provider_profile_tests {
+    use serde_json::Value;
+
+    use super::octet_provider_profile_locator;
+    use crate::BridgeError;
+
+    const PROVIDER: &str = "b3:cd11b49d1acede2c6a91fa26f0b7a6b4b28db4007b4601a65b3269706a0ce625";
+    const RAIL: &str = "proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.aeneas";
+
+    fn receipt(rows: Value) -> Value {
+        serde_json::json!({
+            "consumer": {"provider_profile_identity": PROVIDER},
+            "artifact_identities": rows
+        })
+    }
+
+    fn provider_row(locator: &str, digest: &str) -> Value {
+        serde_json::json!({"locator": locator, "blake3": digest})
+    }
+
+    #[test]
+    fn rail_named_provider_profile_locator_is_selected() {
+        let locator = alloc::format!("{RAIL}/provider-profile.json");
+        let receipt = receipt(serde_json::json!([
+            provider_row(&locator, PROVIDER.trim_start_matches("b3:")),
+            provider_row(&alloc::format!("{RAIL}/package-lock.json"), "00")
+        ]));
+        assert_eq!(octet_provider_profile_locator(receipt).unwrap(), locator);
+    }
+
+    #[test]
+    fn absent_provider_profile_row_fails_closed() {
+        let receipt = receipt(serde_json::json!([provider_row(&alloc::format!("{RAIL}/package-lock.json"), "00")]));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::MissingProviderProfileLocator)));
+    }
+
+    #[test]
+    fn duplicate_provider_profile_rows_fail_closed() {
+        let locator = alloc::format!("{RAIL}/provider-profile.json");
+        let receipt = receipt(serde_json::json!([
+            provider_row(&locator, PROVIDER.trim_start_matches("b3:")),
+            provider_row(&locator, PROVIDER.trim_start_matches("b3:"))
+        ]));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::AmbiguousProviderProfileLocator)));
+    }
+
+    #[test]
+    fn provider_profile_digest_mismatch_fails_closed() {
+        let locator = alloc::format!("{RAIL}/provider-profile.json");
+        let receipt = receipt(serde_json::json!([provider_row(&locator, "00")]));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::MissingProviderProfileLocator)));
+    }
+
+    #[test]
+    fn escaping_provider_profile_locator_fails_closed() {
+        let receipt = receipt(serde_json::json!([provider_row(
+            "../provider-profile.json",
+            PROVIDER.trim_start_matches("b3:")
+        )]));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::UnsafeArtifactPath(_))));
+    }
 }

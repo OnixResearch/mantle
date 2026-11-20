@@ -158,3 +158,74 @@ fn selected_fixture_cannot_stand_in_for_a_complete_owner_verification_bundle() {
         );
     }
 }
+
+// r[impl verification_bridge.octet_producer_layout]
+const RAIL_PROOF_DIR: &str = "proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.aeneas";
+
+/// Copies the recorded Octet fixture into the realized producer's rail-named layout.
+fn rail_layout() -> tempfile::TempDir {
+    let scratch = tempfile::tempdir().unwrap();
+    copy_tree(&fixture("octet"), scratch.path());
+    fs::rename(scratch.path().join("proofs/aeneas"), scratch.path().join(RAIL_PROOF_DIR)).unwrap();
+    let path = scratch.path().join("receipt.json");
+    let mut receipt: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    for key in ["artifact_identities", "source_bindings"] {
+        for row in receipt[key].as_array_mut().unwrap() {
+            let locator = row["locator"].as_str().unwrap().to_owned();
+            row["locator"] = Value::String(locator.replacen("proofs/aeneas/", &format!("{RAIL_PROOF_DIR}/"), 1));
+        }
+    }
+    fs::write(&path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    scratch
+}
+
+#[test]
+fn rail_named_provider_profile_layout_is_admitted_from_the_receipt() {
+    let scratch = rail_layout();
+    let handoff = consume_selected(Producer::Octet, scratch.path(), "profile.json", "receipt.json", OCTET_REV).unwrap();
+    assert!(
+        handoff
+            .observation
+            .checked_materials
+            .iter()
+            .any(|path| path == &format!("{RAIL_PROOF_DIR}/provider-profile.json")),
+        "{:?}",
+        handoff.observation.checked_materials
+    );
+    assert_eq!(handoff.observation.proof_acceptance, "not-evaluated-by-mantle");
+}
+
+#[test]
+fn provider_profile_row_must_be_unique_and_match_the_provider_identity() {
+    for (mode, expected) in [
+        ("missing", "receipt names no provider-profile artifact"),
+        ("duplicate", "receipt names more than one provider-profile artifact"),
+        ("digest", "receipt names no provider-profile artifact"),
+    ] {
+        let scratch = rail_layout();
+        let path = scratch.path().join("receipt.json");
+        let mut receipt: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let rows = receipt["artifact_identities"].as_array_mut().unwrap();
+        let index = rows
+            .iter()
+            .position(|row| row["locator"].as_str().is_some_and(|locator| locator.ends_with("provider-profile.json")))
+            .unwrap();
+        match mode {
+            "missing" => {
+                rows.remove(index);
+            }
+            "duplicate" => {
+                let duplicate = rows[index].clone();
+                rows.push(duplicate);
+            }
+            "digest" => rows[index]["blake3"] = Value::String("0".repeat(64)),
+            _ => unreachable!(),
+        }
+        fs::write(&path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+        let error = match consume_selected(Producer::Octet, scratch.path(), "profile.json", "receipt.json", OCTET_REV) {
+            Ok(_) => panic!("{mode} provider row admitted"),
+            Err(error) => error,
+        };
+        assert!(error.contains(expected), "{mode}: {error}");
+    }
+}
