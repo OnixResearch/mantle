@@ -1,5 +1,10 @@
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+=== cargo clippy -p crunch-verification-bridge-core -p crunch-verification-bridge --all-targets --no-deps -- -D warnings ===
 warning: /home/brittonr/wt/mantle-bridge/Cargo.toml: file `/home/brittonr/wt/mantle-bridge/src/main.rs` found to be present in multiple build targets:
   * `bin` target `crunch`
   * `bin` target `mantle`
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+    Checking crunch-verification-bridge-core v0.1.0 (/home/brittonr/wt/mantle-bridge/crates/crunch-verification-bridge-core)
+    Checking crunch-verification-bridge v0.1.0 (/home/brittonr/wt/mantle-bridge/crates/crunch-verification-bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
 EXIT=0

@@ -209,8 +209,9 @@ fn material_paths(producer: Producer, parsed: &Value) -> Result<BTreeSet<String>
 fn octet_material_paths(parsed: &Value, paths: &mut BTreeSet<String>) -> Result<(), String> {
     paths.insert(text(parsed, "/consumer/source_path")?.to_owned());
     paths.insert(
-        crunch_verification_bridge_core::octet_provider_profile_locator(parsed.clone())
-            .map_err(|error| error.to_string())?,
+        crunch_verification_bridge_core::octet_provider_profile_locator(parsed)
+            .map_err(|error| error.to_string())?
+            .to_owned(),
     );
     let stages = parsed
         .pointer("/consumer/stage_artifacts")

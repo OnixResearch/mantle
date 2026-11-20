@@ -1,7 +1,11 @@
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
 warning: /home/brittonr/wt/mantle-bridge/Cargo.toml: file `/home/brittonr/wt/mantle-bridge/src/main.rs` found to be present in multiple build targets:
   * `bin` target `crunch`
   * `bin` target `mantle`
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+   Compiling crunch-verification-bridge-core v0.1.0 (/home/brittonr/wt/mantle-bridge/crates/crunch-verification-bridge-core)
+   Compiling crunch-verification-bridge v0.1.0 (/home/brittonr/wt/mantle-bridge/crates/crunch-verification-bridge)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.85s
      Running unittests src/lib.rs (target/debug/deps/crunch_verification_bridge-05fbe349ab122432)
 
 running 0 tests
@@ -18,8 +22,8 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 8 tests
 test symbolic_link_substitution_is_not_a_payload ... ok
-test stale_source_profile_tool_and_options_cannot_reuse_association ... ok
 test rail_named_provider_profile_layout_is_admitted_from_the_receipt ... ok
+test stale_source_profile_tool_and_options_cannot_reuse_association ... ok
 test selected_fixture_cannot_stand_in_for_a_complete_owner_verification_bundle ... ok
 test missing_tampered_and_escaped_payloads_fail_without_publication ... ok
 test real_owner_handoffs_replay_with_exact_receipts_without_promoting_authority ... ok
@@ -36,12 +40,12 @@ test producer::tests::legacy_tool_graph_with_store_paths_is_admitted ... ok
 test producer::tests::unsupported_top_level_graph_version_fails_closed ... ok
 test producer::tests::versioned_dependency_outside_the_closure_fails_closed ... ok
 test producer::tests::versioned_dynamic_output_selection_fails_closed ... ok
-test provider_profile_tests::absent_provider_profile_row_fails_closed ... ok
-test provider_profile_tests::duplicate_provider_profile_rows_fail_closed ... ok
 test producer::tests::versioned_root_absent_fails_closed ... ok
-test producer::tests::versioned_node_carrying_legacy_inputs_fails_closed ... ok
 test producer::tests::versioned_tool_graph_with_basenames_is_admitted ... ok
+test provider_profile_tests::absent_provider_profile_row_fails_closed ... ok
+test producer::tests::versioned_node_carrying_legacy_inputs_fails_closed ... ok
 test provider_profile_tests::escaping_provider_profile_locator_fails_closed ... ok
+test provider_profile_tests::duplicate_provider_profile_rows_fail_closed ... ok
 test provider_profile_tests::provider_profile_digest_mismatch_fails_closed ... ok
 test provider_profile_tests::rail_named_provider_profile_locator_is_selected ... ok
 

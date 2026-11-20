@@ -235,7 +235,7 @@ fn is_store_basename(name: &str) -> bool {
     is_hash && is_name
 }
 
-// r[impl verification_bridge.octet_producer_layout]
+// r[verify verification_bridge.octet_producer_layout]
 #[cfg(test)]
 mod tests {
     use alloc::format;
