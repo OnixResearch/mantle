@@ -31,6 +31,8 @@ use crate::foreign_derivation_import::FixedOutputMetadata;
 use crate::foreign_derivation_import::ForeignDerivationGraph;
 use crate::foreign_derivation_import::ForeignDerivationNode;
 use crate::foreign_derivation_import::ImportDiagnostic;
+use crate::foreign_derivation_import::NIX_BASE32_ALPHABET;
+use crate::foreign_derivation_import::NIX_STORE_BASENAME_HASH_CHARS;
 use crate::foreign_derivation_import::PRESERVE_CACHE_PATHS_MODE;
 use crate::foreign_derivation_import::RECOMPUTE_BLAKE3_MODE;
 use crate::foreign_derivation_import::SourcePayload;
@@ -315,8 +317,13 @@ pub(crate) fn compile_foreign_graph_with_profile_and_output_mode(
     validate_compiled_coverage(&dependency_order, &units)?;
 
     for unit in &mut units {
-        unit.declared_references =
-            rewrite_values(&unit.declared_references, &exact_index, &graph.source_store_prefixes, Some(&unit.node_id))?;
+        unit.declared_references = rewrite_values(
+            &unit.declared_references,
+            &exact_index,
+            &graph.source_store_prefixes,
+            target_store_prefix,
+            Some(&unit.node_id),
+        )?;
         validate_compiled_unit_references(unit, &graph.source_store_prefixes, &exact_index)?;
     }
     let roots = graph
@@ -619,11 +626,27 @@ fn compile_node(
 ) -> Result<CompiledForeignUnit, ImportDiagnostic> {
     validate_node_compile_surface(node)?;
     let builtin = lower_foreign_builtin(node, payloads)?;
-    let builder =
-        rewrite_store_objects(&builtin.builder, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
-    let arguments = rewrite_values(&builtin.arguments, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
-    let system =
-        rewrite_store_objects(&builtin.system, exact_index, &graph.source_store_prefixes, Some(&node.node_id))?;
+    let builder = rewrite_store_objects(
+        &builtin.builder,
+        exact_index,
+        &graph.source_store_prefixes,
+        target_store_prefix,
+        Some(&node.node_id),
+    )?;
+    let arguments = rewrite_values(
+        &builtin.arguments,
+        exact_index,
+        &graph.source_store_prefixes,
+        target_store_prefix,
+        Some(&node.node_id),
+    )?;
+    let system = rewrite_store_objects(
+        &builtin.system,
+        exact_index,
+        &graph.source_store_prefixes,
+        target_store_prefix,
+        Some(&node.node_id),
+    )?;
     let outputs = compile_outputs(node)?;
     let input_derivations = compile_input_derivations(node, identities, target_store_prefix)?;
     let input_sources = compile_input_sources(node, payloads, path_maps, target_store_prefix)?;
@@ -1400,11 +1423,12 @@ fn rewrite_values(
     values: &[String],
     exact_index: &ExactPathIndex,
     source_prefixes: &[String],
+    target_store_prefix: &str,
     node_id: Option<&str>,
 ) -> Result<Vec<String>, ImportDiagnostic> {
     values
         .iter()
-        .map(|value| rewrite_store_objects(value, exact_index, source_prefixes, node_id))
+        .map(|value| rewrite_store_objects(value, exact_index, source_prefixes, target_store_prefix, node_id))
         .collect()
 }
 
@@ -1415,7 +1439,7 @@ fn rewrite_environment_value(
     target_store_prefix: &str,
     node_id: Option<&str>,
 ) -> Result<String, ImportDiagnostic> {
-    let rewritten = rewrite_store_objects(value, exact_index, source_prefixes, node_id)?;
+    let rewritten = rewrite_store_objects(value, exact_index, source_prefixes, target_store_prefix, node_id)?;
     Ok(rewrite_known_store_dir_placeholders(&rewritten, source_prefixes, target_store_prefix))
 }
 
@@ -1498,43 +1522,87 @@ fn store_dir_placeholder_has_token_boundary(value: &str, prefix_start: usize, pr
     }
 }
 
+/// What follows one foreign store prefix in rewritten text.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StorePrefixOccurrence {
+    /// Bare store-directory mention: the prefix is followed by end of string or by a character
+    /// that cannot start a Nix base32 hash (regex classes, quotes, `*`, `$`, …).
+    Bare,
+    /// A store object reference: 32 base32 hash characters, `-`, and a non-empty name.
+    Object { object_start: usize, object_end: usize },
+    /// Prefix followed by a base32 run that is not a valid 32-character hash plus `-name`.
+    Malformed,
+}
+
+fn classify_store_prefix_occurrence(value: &str, prefix: &str, start: usize) -> StorePrefixOccurrence {
+    let Some(object_start) = start.checked_add(prefix.len()).and_then(|position| position.checked_add(1)) else {
+        return StorePrefixOccurrence::Malformed;
+    };
+    let Some(suffix) = value.get(object_start..) else {
+        return StorePrefixOccurrence::Malformed;
+    };
+    let hash_run = suffix.bytes().take_while(|byte| NIX_BASE32_ALPHABET.contains(byte)).count();
+    if hash_run == 0 {
+        return StorePrefixOccurrence::Bare;
+    }
+    if hash_run != NIX_STORE_BASENAME_HASH_CHARS {
+        return StorePrefixOccurrence::Malformed;
+    }
+    let name_start = object_start.saturating_add(NIX_STORE_BASENAME_HASH_CHARS).saturating_add(1);
+    if value.as_bytes().get(object_start.saturating_add(NIX_STORE_BASENAME_HASH_CHARS)) != Some(&b'-') {
+        return StorePrefixOccurrence::Malformed;
+    }
+    let name_len = value[name_start..]
+        .char_indices()
+        .take_while(|(_, character)| is_store_name_character(*character))
+        .last()
+        .map(|(position, character)| position + character.len_utf8())
+        .unwrap_or(0);
+    if name_len == 0 {
+        return StorePrefixOccurrence::Malformed;
+    }
+    let object_end = name_start.saturating_add(name_len);
+    if !is_valid_foreign_store_object(&value[start..object_end], prefix) {
+        return StorePrefixOccurrence::Malformed;
+    }
+    StorePrefixOccurrence::Object {
+        object_start,
+        object_end,
+    }
+}
+
 fn rewrite_store_objects(
     value: &str,
     exact_index: &ExactPathIndex,
     source_prefixes: &[String],
+    target_store_prefix: &str,
     node_id: Option<&str>,
 ) -> Result<String, ImportDiagnostic> {
     let mut rewritten = String::with_capacity(value.len());
     let mut cursor = 0usize;
     while let Some((start, prefix)) = next_store_object(value, cursor, source_prefixes) {
         rewritten.push_str(&value[cursor..start]);
-        let object_start =
-            start.checked_add(prefix.len()).and_then(|position| position.checked_add(1)).ok_or_else(|| {
-                compiler_diagnostic(
-                    "foreign-compiler-path-position-overflow",
+        let (object_start, object_end) = match classify_store_prefix_occurrence(value, prefix, start) {
+            StorePrefixOccurrence::Bare => {
+                rewritten.push_str(target_store_prefix);
+                rewritten.push('/');
+                cursor = start.saturating_add(prefix.len()).saturating_add(1);
+                continue;
+            }
+            StorePrefixOccurrence::Malformed => {
+                return Err(compiler_diagnostic(
+                    "foreign-compiler-malformed-reference",
                     node_id,
-                    "foreign store path position overflowed",
-                )
-            })?;
-        let object_end = value[object_start..]
-            .char_indices()
-            .take_while(|(_, character)| is_store_name_character(*character))
-            .last()
-            .map(|(position, character)| object_start + position + character.len_utf8())
-            .unwrap_or(object_start);
-        if object_end == object_start {
-            return Err(compiler_diagnostic(
-                "foreign-compiler-malformed-reference",
-                node_id,
-                "foreign store prefix is not followed by an object name",
-            ));
-        }
+                    "foreign store prefix is followed by text that is not a store object",
+                ));
+            }
+            StorePrefixOccurrence::Object {
+                object_start,
+                object_end,
+            } => (object_start, object_end),
+        };
+        debug_assert!(object_end > object_start);
         let foreign_path = &value[start..object_end];
-        if !is_valid_foreign_store_object(foreign_path, prefix) {
-            rewritten.push_str(foreign_path);
-            cursor = object_end;
-            continue;
-        }
         let (matched_foreign_path, target_path, matched_end) =
             exact_store_object_match(value, start, object_end, &exact_index.exact).ok_or_else(|| {
                 compiler_diagnostic(
@@ -1605,21 +1673,19 @@ fn contains_unmapped_source_store_object(
 ) -> bool {
     let mut cursor = 0usize;
     while let Some((start, prefix)) = next_store_object(value, cursor, source_prefixes) {
-        let object_start = start.saturating_add(prefix.len()).saturating_add(1);
-        let object_end = value[object_start..]
-            .char_indices()
-            .take_while(|(_, character)| is_store_name_character(*character))
-            .last()
-            .map(|(position, character)| object_start + position + character.len_utf8())
-            .unwrap_or(object_start);
-        if object_end == object_start {
-            return true;
+        match classify_store_prefix_occurrence(value, prefix, start) {
+            StorePrefixOccurrence::Bare => {
+                cursor = start.saturating_add(prefix.len()).saturating_add(1);
+            }
+            StorePrefixOccurrence::Malformed => return true,
+            StorePrefixOccurrence::Object { object_end, .. } => {
+                let candidate = &value[start..object_end];
+                if !exact_index.targets.contains(candidate) {
+                    return true;
+                }
+                cursor = object_end;
+            }
         }
-        let candidate = &value[start..object_end];
-        if is_valid_foreign_store_object(candidate, prefix) && !exact_index.targets.contains(candidate) {
-            return true;
-        }
-        cursor = object_end;
     }
     false
 }
@@ -1743,6 +1809,44 @@ mod tests {
     const EMPTY_HASH: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     #[test]
+    fn bare_store_directory_mentions_translate_in_env_and_arguments() {
+        let foreign = foreign_output("leaf", "out");
+        let index = ExactPathIndex::from_exact_map(BTreeMap::from([(foreign, format!("{TARGET_PREFIX}/mapped-leaf"))]));
+        let prefixes = vec![SOURCE_PREFIX.to_string()];
+
+        // Environment value: a sed class that strips store hashes.
+        let sed = "/nix/store/[a-z0-9]{32}-";
+        let rewritten = rewrite_environment_value(sed, &index, &prefixes, TARGET_PREFIX, Some("leaf")).unwrap();
+        assert_eq!(rewritten, format!("{TARGET_PREFIX}/[a-z0-9]{{32}}-"));
+
+        // Arguments: bare mention at end of string and before a quote.
+        let arguments = vec![
+            "--replace-fail".to_string(),
+            "/nix/store/".to_string(),
+            "p=\"/nix/store/\"".to_string(),
+        ];
+        let rewritten = rewrite_values(&arguments, &index, &prefixes, TARGET_PREFIX, Some("leaf")).unwrap();
+        assert_eq!(rewritten[1], format!("{TARGET_PREFIX}/"));
+        assert_eq!(rewritten[2], format!("p=\"{TARGET_PREFIX}/\""));
+    }
+
+    #[test]
+    fn base32_run_that_is_not_a_store_object_is_a_malformed_reference() {
+        let index = ExactPathIndex::default();
+        let prefixes = vec![SOURCE_PREFIX.to_string()];
+        let short_run = "/nix/store/abcdef/leaf";
+        let long_run = format!("/nix/store/{}-leaf", "a".repeat(33));
+        let missing_name = format!("/nix/store/{}-", "a".repeat(32));
+
+        for value in [short_run, long_run.as_str(), missing_name.as_str()] {
+            assert_class(
+                rewrite_store_objects(value, &index, &prefixes, TARGET_PREFIX, Some("leaf")),
+                "foreign-compiler-malformed-reference",
+            );
+        }
+    }
+
+    #[test]
     fn fixed_output_metadata_accepts_sha512_sri_and_rejects_algorithm_mismatch() {
         const SHA512_SRI: &str =
             "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
@@ -1769,10 +1873,17 @@ mod tests {
         let exact_index = ExactPathIndex::from_exact_map(BTreeMap::from([(foreign.clone(), target.clone())]));
         let source_prefixes = vec![SOURCE_PREFIX.to_string()];
         let prefix_map = format!("-ffile-prefix-map={foreign}=.");
-        let rewritten = rewrite_store_objects(&prefix_map, &exact_index, &source_prefixes, Some("leaf")).unwrap();
+        let rewritten =
+            rewrite_store_objects(&prefix_map, &exact_index, &source_prefixes, TARGET_PREFIX, Some("leaf")).unwrap();
         assert_eq!(rewritten, format!("-ffile-prefix-map={target}=."));
         assert_class(
-            rewrite_store_objects(&format!("{foreign}-unmapped"), &exact_index, &source_prefixes, Some("leaf")),
+            rewrite_store_objects(
+                &format!("{foreign}-unmapped"),
+                &exact_index,
+                &source_prefixes,
+                TARGET_PREFIX,
+                Some("leaf"),
+            ),
             "foreign-compiler-unknown-reference",
         );
     }
@@ -2302,7 +2413,7 @@ mod tests {
     }
 
     #[test]
-    fn compiler_preserves_non_path_store_placeholders_but_rejects_valid_unknown_paths() {
+    fn compiler_translates_non_path_store_placeholders_and_rejects_valid_unknown_paths() {
         const PLACEHOLDER: &str = "/nix/store/...-glibc-...";
         let mut graph = diamond_graph();
         graph
@@ -2319,7 +2430,7 @@ mod tests {
                 .environment
                 .get("placeholder")
                 .map(|value| String::from_utf8_lossy(value).to_string()),
-            Some(PLACEHOLDER.to_string())
+            Some(format!("{TARGET_PREFIX}/...-glibc-..."))
         );
 
         let valid_unknown = format!("{SOURCE_PREFIX}/99999999999999999999999999999999-unknown");

@@ -132,3 +132,39 @@ The plan rejection moved from the fixed-output defect to a reference-detection p
 validation (`foreign-plan-leftover-reference`), so tolerating prefix-only occurrences is a
 policy change to the fail-closed leftover-reference rule, not an isolated defect; it is
 reported, not changed.
+
+
+## Correctness fix 2 — store-prefix occurrence classification (2026-11-19)
+
+`rewrite_store_objects` now classifies what follows a declared foreign prefix: full object
+reference (must map), bare store-directory mention (translated to the target store directory),
+or malformed base32 run (fail closed). `contains_unmapped_source_store_object` and the plan
+validator `contains_unmapped_plan_store_object` apply the same rule.
+
+```text
+cargo test -p mantle --bin mantle store_ -- --test-threads=1
+  foreign_graph_compiler::tests::bare_store_directory_mentions_translate_in_env_and_arguments ... ok
+  foreign_graph_compiler::tests::base32_run_that_is_not_a_store_object_is_a_malformed_reference ... ok
+  foreign_executable_plan::tests::plan_reference_validation_accepts_bare_store_mentions_and_rejects_malformed_runs ... ok
+  foreign_graph_compiler::tests::compiler_translates_non_path_store_placeholders_and_rejects_valid_unknown_paths ... ok
+cargo test -p mantle --bin mantle foreign_graph_compiler::tests:: -- --test-threads=1
+  test result: ok. 25 passed; 0 failed
+```
+
+Real export re-run:
+
+```text
+produce-nix  verdict=accepted, EXIT 0, 0.65 s                                  (18-produce-nix.txt)
+plan         verdict=rejected, EXIT 1, 1.72 s, 434,036 KiB RSS                 (19-plan.txt)
+  diagnostics=[{"class":"foreign-compiler-unknown-reference", "node_id": null,
+    "message":"foreign store object has no exact mapping:
+      /nix/store/svkzykss0hww0g5s4x1j80m14a2n8583-ghc-binary-9.8.4."}]
+```
+
+Next diagnostic: 26 nodes carry `setupCompilerEnvironmentPhase` text
+`echo "Build with /nix/store/svkzykss…-ghc-binary-9.8.4."`; the trailing period is sentence
+punctuation inside the echo, but `.` is a legal store-name character, so the scanner includes it
+and the dotted candidate has no exact mapping. The dot-trimmed path is exactly the `ghc-binary`
+output (`nix:4a6vhwxy…-ghc-binary-9.8.4.drv` `out`). Resolving this needs a new reference-boundary
+rule (accept a mapped object followed by trailing punctuation only when the dotted run is
+unmapped), which can silently truncate a genuinely unmapped dotted name; reported, not changed.

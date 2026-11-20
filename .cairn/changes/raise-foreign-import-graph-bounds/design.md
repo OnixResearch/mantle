@@ -78,6 +78,18 @@ surface (611 edges, 102,597-byte `buildCommand`) and stays well inside the
 chosen headroom. Byte budgets for whole artifacts are resource decisions that
 scale with per-derivation size, not node count.
 
+### Decision: Translate bare store-directory mentions
+
+**Choice:** Classify text after a declared foreign store prefix into (1) full object reference
+(must map, else fail), (2) bare store-directory mention (prefix followed by end of string or a
+non-base32 character → translate to the target store directory), and (3) malformed base32 run
+(fail closed). Apply the same classification at plan validation.
+
+**Rationale:** nixpkgs scripts (`unbound-1.24.x` `postConfigure`) contain
+`/nix/store/[a-z0-9]{32}-` sed classes meaning the store directory; rejecting them blocked the
+real producer graph, while blindly prefix-rewriting would defeat the fail-closed rule for real
+object references.
+
 ### Decision: Derive fixed-output metadata from the v4 record shape
 
 **Choice:** In `nix_fixed_output_metadata`, take the algorithm from the SRI

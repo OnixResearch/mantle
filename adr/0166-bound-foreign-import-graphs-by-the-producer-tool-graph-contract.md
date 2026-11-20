@@ -103,6 +103,23 @@ with `hashAlgo`/`outputHashAlgo`
 with `method` (`conflicting-fixed-output-method-mode`), and keeps the legacy
 hex/`hashAlgo`/`outputHashMode` path byte-for-byte unchanged.
 
+## Store-prefix occurrences in rewritten text are classified
+
+Rewritten builder/argument/environment/declared-reference text distinguishes three cases after
+a declared foreign store prefix:
+
+1. a full object reference (32 Nix base32 hash characters, `-`, non-empty name) must map to an
+   exact target object, else `foreign-compiler-unknown-reference`;
+2. a bare store-directory mention (end of string, or followed by a character outside the base32
+   alphabet — `[`, `"`, `*`, `$`, …) is translated to the target store directory, because
+   nixpkgs scripts mean the store directory there (e.g. `unbound-1.24.x` `postConfigure` strips
+   store hashes with `/nix/store/[a-z0-9]{32}-`, which must keep matching target paths);
+3. any other base32 run after the prefix (short runs, 33+ characters, missing `-name`) remains
+   `foreign-compiler-malformed-reference`, failing closed.
+
+Plan validation (`contains_unmapped_plan_store_object`) applies the same classification, so a
+translated bare mention is not a leftover while case (3) and unmapped case (1) still fail.
+
 ## Consequences
 
 - A full nixpkgs closure fits: `produce-nix` lowering, graph validation, and

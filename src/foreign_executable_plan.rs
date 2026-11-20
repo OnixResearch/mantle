@@ -18,6 +18,8 @@ use crate::foreign_derivation_import::ImportDiagnostic;
 use crate::foreign_derivation_import::ImportReceipt;
 use crate::foreign_derivation_import::MAX_GRAPH_NODES;
 use crate::foreign_derivation_import::MAX_SANDBOX_CAPABILITIES;
+use crate::foreign_derivation_import::NIX_BASE32_ALPHABET;
+use crate::foreign_derivation_import::NIX_STORE_BASENAME_HASH_CHARS;
 use crate::foreign_derivation_import::PRESERVE_CACHE_PATHS_MODE;
 use crate::foreign_derivation_import::PackageIndex;
 use crate::foreign_derivation_import::PackageIndexEntry;
@@ -957,24 +959,64 @@ fn contains_unmapped_plan_store_object(
 ) -> bool {
     let mut cursor = 0usize;
     while let Some((start, prefix)) = next_plan_store_object(value, cursor, source_prefixes) {
-        let object_start = start.saturating_add(prefix.len()).saturating_add(1);
-        let object_end = value[object_start..]
-            .char_indices()
-            .take_while(|(_, character)| is_plan_store_name_character(*character))
-            .last()
-            .map(|(position, character)| object_start + position + character.len_utf8())
-            .unwrap_or(object_start);
-        if object_end == object_start {
-            return true;
+        match classify_plan_store_prefix(value, prefix, start) {
+            PlanStoreOccurrence::Bare => {
+                // A bare store-directory mention is translated to the target store directory by
+                // compilation, so it is not a leftover reference.
+                cursor = start.saturating_add(prefix.len()).saturating_add(1);
+            }
+            PlanStoreOccurrence::Malformed => return true,
+            PlanStoreOccurrence::Object { object_end } => {
+                let candidate = &value[start..object_end];
+                if !permitted_targets.contains(candidate) {
+                    return true;
+                }
+                cursor = object_end;
+            }
         }
-        let candidate = &value[start..object_end];
-        let is_valid = StorePath::<String>::from_absolute_path_with_prefix(candidate.as_bytes(), prefix).is_ok();
-        if is_valid && !permitted_targets.contains(candidate) {
-            return true;
-        }
-        cursor = object_end;
     }
     false
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PlanStoreOccurrence {
+    Bare,
+    Object { object_end: usize },
+    Malformed,
+}
+
+fn classify_plan_store_prefix(value: &str, prefix: &str, start: usize) -> PlanStoreOccurrence {
+    let Some(object_start) = start.checked_add(prefix.len()).and_then(|position| position.checked_add(1)) else {
+        return PlanStoreOccurrence::Malformed;
+    };
+    let Some(suffix) = value.get(object_start..) else {
+        return PlanStoreOccurrence::Malformed;
+    };
+    let hash_run = suffix.bytes().take_while(|byte| NIX_BASE32_ALPHABET.contains(byte)).count();
+    if hash_run == 0 {
+        return PlanStoreOccurrence::Bare;
+    }
+    if hash_run != NIX_STORE_BASENAME_HASH_CHARS {
+        return PlanStoreOccurrence::Malformed;
+    }
+    let name_start = object_start.saturating_add(NIX_STORE_BASENAME_HASH_CHARS).saturating_add(1);
+    if value.as_bytes().get(object_start.saturating_add(NIX_STORE_BASENAME_HASH_CHARS)) != Some(&b'-') {
+        return PlanStoreOccurrence::Malformed;
+    }
+    let name_len = value[name_start..]
+        .char_indices()
+        .take_while(|(_, character)| is_plan_store_name_character(*character))
+        .last()
+        .map(|(position, character)| position + character.len_utf8())
+        .unwrap_or(0);
+    if name_len == 0 {
+        return PlanStoreOccurrence::Malformed;
+    }
+    let object_end = name_start.saturating_add(name_len);
+    if StorePath::<String>::from_absolute_path_with_prefix(&value.as_bytes()[start..object_end], prefix).is_err() {
+        return PlanStoreOccurrence::Malformed;
+    }
+    PlanStoreOccurrence::Object { object_end }
 }
 
 fn next_plan_store_object<'a>(value: &str, cursor: usize, source_prefixes: &'a [&'a str]) -> Option<(usize, &'a str)> {
@@ -1134,6 +1176,21 @@ fn plan_diagnostic(class: &str, node_id: Option<&str>, message: &str) -> ImportD
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plan_reference_validation_accepts_bare_store_mentions_and_rejects_malformed_runs() {
+        let prefixes = ["/nix/store"];
+        let permitted = BTreeSet::new();
+
+        assert!(!contains_unmapped_plan_store_object("/nix/store/[a-z0-9]{32}-", &prefixes, &permitted));
+        assert!(!contains_unmapped_plan_store_object("PATH=\"/nix/store/\"", &prefixes, &permitted));
+        assert!(contains_unmapped_plan_store_object("/nix/store/abcdef/leaf", &prefixes, &permitted));
+
+        let unmapped = format!("/nix/store/{}-leaf", "a".repeat(32));
+        assert!(contains_unmapped_plan_store_object(&unmapped, &prefixes, &permitted));
+        let mapped = BTreeSet::from([unmapped.as_str()]);
+        assert!(!contains_unmapped_plan_store_object(&unmapped, &prefixes, &mapped));
+    }
 
     const NIX_GRAPH: &str = include_str!("../tests/fixtures/foreign-import/nix-hello.graph.json");
     const NIX_INDEX: &str = include_str!("../tests/fixtures/foreign-import/nix-hello.index.json");

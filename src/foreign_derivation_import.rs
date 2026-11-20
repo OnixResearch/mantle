@@ -82,8 +82,8 @@ const SUBSTITUTION_POLICY_CLASSIFICATION: &str = "cache-hint-policy-data-store-a
 const OUTPUT_HASH_HEX_CHARS: usize = 32;
 const SOURCE_PAYLOAD_HASH_HEX_CHARS: usize = 32;
 const SHA256_HEX_CHARS: usize = 64;
-const NIX_STORE_BASENAME_HASH_CHARS: usize = 32;
-const NIX_BASE32_ALPHABET: &[u8] = b"0123456789abcdfghijklmnpqrsvwxyz";
+pub(crate) const NIX_STORE_BASENAME_HASH_CHARS: usize = 32;
+pub(crate) const NIX_BASE32_ALPHABET: &[u8] = b"0123456789abcdfghijklmnpqrsvwxyz";
 // r[impl foreign_derivation_import.producer_graph_bounds]
 /// Graph node bound, equal to the producer tool-graph contract the verification bridge admits
 /// (`crunch_verification_bridge_core::producer::MAX_TOOL_DERIVATIONS` = 32,768; that module is
