@@ -22,7 +22,10 @@ the consumer binding).
 
 ### Decision: Derive the provider-profile locator from the receipt
 
-**Choice:** `octet_provider_profile_locator(receipt: &Value) -> Result<&str, BridgeError>`
+**Choice:** `octet_provider_profile_locator(receipt: Value) -> Result<String, BridgeError>`
+takes and returns owned values, because the no-std core API-shape check bans
+references in public boundary types. In-crate callers share a borrowed helper
+with the same rule. The rule
 scans at most `MAX_MATERIALS` `artifact_identities` rows, keeps those whose
 final locator component is `provider-profile.json` and whose `blake3` equals
 `consumer.provider_profile_identity` (ignoring the `b3:` prefix), requires

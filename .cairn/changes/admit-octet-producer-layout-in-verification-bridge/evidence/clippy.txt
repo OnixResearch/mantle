@@ -6,5 +6,5 @@ warning: /home/brittonr/wt/mantle-bridge/Cargo.toml: file `/home/brittonr/wt/man
   * `bin` target `mantle`
     Checking crunch-verification-bridge-core v0.1.0 (/home/brittonr/wt/mantle-bridge/crates/crunch-verification-bridge-core)
     Checking crunch-verification-bridge v0.1.0 (/home/brittonr/wt/mantle-bridge/crates/crunch-verification-bridge)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.52s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.59s
 EXIT=0

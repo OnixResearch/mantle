@@ -40,7 +40,9 @@ defects were the only blockers on the realized output.
 ## Decision
 
 - Replace the `PROVIDER_PROFILE_PATH` constant with
-  `octet_provider_profile_locator(receipt: &Value) -> Result<&str, BridgeError>`
+  `octet_provider_profile_locator(receipt: Value) -> Result<String, BridgeError>`
+  (owned, because the no-std core API-shape check bans references in public
+  boundary types)
   in `crunch-verification-bridge-core`. It selects the single
   `artifact_identities` row whose `blake3` equals
   `consumer.provider_profile_identity` (ignoring the `b3:` prefix) and whose

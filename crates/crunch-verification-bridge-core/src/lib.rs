@@ -403,7 +403,7 @@ fn observe_octet_inner(
     check_octet_consumer_binding(inputs, &profile, consumer)?;
     let source_path = check_octet_source_material(inputs, consumer, materials)?;
     let source = find_octet_profile_source(&profile, source_path)?;
-    let provider_path = octet_provider_profile_locator(&receipt)?;
+    let provider_path = provider_profile_locator(&receipt)?;
     check_octet_provider_profile(inputs, provider_path, materials)?;
     check_octet_options_contract(inputs, &profile)?;
     check_octet_outcome_binding(inputs, source, &receipt, consumer)?;
@@ -484,8 +484,19 @@ fn find_octet_profile_source<'a>(profile: &'a Value, source_path: &str) -> Resul
 /// consumer's provider-profile identity and whose locator names
 /// `provider-profile.json`. The locator is derived from the receipt, never from
 /// a fixture layout, so any rail-named proof directory is admissible.
+///
+/// The no-std core API-shape rule bans references in public boundary types, so
+/// this entry point takes and returns owned values.
 // r[impl verification_bridge.octet_producer_layout]
-pub fn octet_provider_profile_locator(receipt: &Value) -> Result<&str, BridgeError> {
+pub fn octet_provider_profile_locator(receipt: Value) -> Result<String, BridgeError> {
+    let locator = provider_profile_locator(&receipt)?;
+    debug_assert!(!locator.is_empty());
+    debug_assert!(is_relative_path(locator));
+    Ok(locator.to_string())
+}
+
+/// Borrowed form of [`octet_provider_profile_locator`] for in-crate callers.
+fn provider_profile_locator(receipt: &Value) -> Result<&str, BridgeError> {
     let expected = text(receipt, "/consumer/provider_profile_identity")?;
     let rows = receipt
         .get("artifact_identities")
@@ -783,13 +794,13 @@ mod provider_profile_tests {
             provider_row(&locator, PROVIDER.trim_start_matches("b3:")),
             provider_row(&alloc::format!("{RAIL}/package-lock.json"), "00")
         ]));
-        assert_eq!(octet_provider_profile_locator(&receipt).unwrap(), locator);
+        assert_eq!(octet_provider_profile_locator(receipt).unwrap(), locator);
     }
 
     #[test]
     fn absent_provider_profile_row_fails_closed() {
         let receipt = receipt(serde_json::json!([provider_row(&alloc::format!("{RAIL}/package-lock.json"), "00")]));
-        assert!(matches!(octet_provider_profile_locator(&receipt), Err(BridgeError::MissingProviderProfileLocator)));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::MissingProviderProfileLocator)));
     }
 
     #[test]
@@ -799,17 +810,14 @@ mod provider_profile_tests {
             provider_row(&locator, PROVIDER.trim_start_matches("b3:")),
             provider_row(&locator, PROVIDER.trim_start_matches("b3:"))
         ]));
-        assert!(matches!(
-            octet_provider_profile_locator(&receipt),
-            Err(BridgeError::AmbiguousProviderProfileLocator)
-        ));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::AmbiguousProviderProfileLocator)));
     }
 
     #[test]
     fn provider_profile_digest_mismatch_fails_closed() {
         let locator = alloc::format!("{RAIL}/provider-profile.json");
         let receipt = receipt(serde_json::json!([provider_row(&locator, "00")]));
-        assert!(matches!(octet_provider_profile_locator(&receipt), Err(BridgeError::MissingProviderProfileLocator)));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::MissingProviderProfileLocator)));
     }
 
     #[test]
@@ -818,6 +826,6 @@ mod provider_profile_tests {
             "../provider-profile.json",
             PROVIDER.trim_start_matches("b3:")
         )]));
-        assert!(matches!(octet_provider_profile_locator(&receipt), Err(BridgeError::UnsafeArtifactPath(_))));
+        assert!(matches!(octet_provider_profile_locator(receipt), Err(BridgeError::UnsafeArtifactPath(_))));
     }
 }
