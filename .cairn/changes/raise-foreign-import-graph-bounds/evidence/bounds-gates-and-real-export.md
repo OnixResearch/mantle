@@ -203,3 +203,33 @@ prepare-sources (empty bundle)                     EXIT 0, records 0
 Step 2 (Nix build of the producer job) initially failed because two derivations were dispatched
 to the remote `grpc://aspen1.local:50051` farm with no connected worker (20-nix-build.txt);
 re-run locally with `--option builders ''` (23-nix-build-local.txt).
+
+
+## Real frozen export: plan, sources and realization at 80ab420bc (2026-11-20)
+
+The convergence pilot re-ran the real frozen export through the raised bounds and the three
+correctness fixes. The pilot cache is served over a loopback-only HTTP endpoint, because
+cache-only hydration admits only HTTP closures. Its key is still the only trusted key.
+Transcripts live under `convergence-evidence/realization/transcripts/`.
+
+```text
+produce-nix (preserve graph, http://127.0.0.1:18471?trusted_public_keys[0]=<pilot>)  EXIT 0   (34)
+plan (--nix-compat)          EXIT 0, route cache-only-preserve-v1, substitution_audit 1,
+                             trust_scope trusted-binary-cache, store_admission_required true  (35)
+prepare-sources              EXIT 0, manifest_blake3 8ed1103b5de3054ee13ea391af805e276e3cc3b6ceaa50b2149193adb1ff1777  (36)
+foreign-import realize --substitute (pilot key only)   EXIT 0, wall 301 s                  (41)
+  mantle-foreign-realization-receipt-v1: status complete, strongest_state realized,
+  cache_policy.realization_route cache-only-preserve-v1, 11,565 units
+  (366 already-present, 125 substituted, 11,074 not-required-cache-only);
+  root nix:vl7bqxyz2f86x0vlvxipcvryavckb9wj-octet-mantle-aeneas-consumer-job-v1.drv
+  -> /nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1
+```
+
+Before transcript 41, hydration failed closed (transcript 39) with
+`http-closure-content-admission-failed` on `mold-unwrapped-wrapper-2.40.4`. That NAR in the cache
+did not match its narinfo `NarHash`. The cause was on the host: in two `/nix/store` paths,
+empty `nix-support` files were mode 0755 where the NAR records 0444, with ctimes from
+2026-04-27, so `nix copy` exported modified content under the original PathInfo. The
+operator replaced both NARs with the original cache.nixos.org NARs, whose SHA-256 equals the
+recorded `NarHash`, and re-signed them with the pilot key. Mantle's content admission rejecting
+that mismatch is the intended fail-closed behavior.

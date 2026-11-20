@@ -16,4 +16,4 @@
 - [x] [serial] T2.3 Record ADR 0166 and validate the Cairn change (proposal/design/tasks gates). r[foreign_derivation_import.producer_graph_bounds]
 - [x] [serial] T2.4 Run the real frozen-export `produce-nix` and `plan` check and record the verdict. r[foreign_derivation_import.producer_graph_bounds]
 - [x] [serial] T3.1 Fix v4 fixed-output metadata: SRI algorithm, `method` recursion, and explicit conflicts. r[foreign_derivation_import.producer_graph_bounds]
-- [ ] [serial] T3.2 Re-run the real frozen-export plan and prepare-sources check; record the verdict. r[foreign_derivation_import.producer_graph_bounds]
+- [x] [serial] T3.2 Re-run the real frozen-export plan and prepare-sources check; record the verdict. r[foreign_derivation_import.producer_graph_bounds]
