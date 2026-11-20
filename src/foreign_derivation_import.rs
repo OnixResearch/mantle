@@ -64,6 +64,9 @@ const NIXPKGS_PRODUCER_KIND: &str = "nixpkgs";
 const NIX_DERIVATION_BUILTIN: &str = "nix.derivation";
 const FIXED_OUTPUT_FETCH_BUILTIN: &str = "fixed-output-fetch";
 const OUTPUT_HASH_MODE_ENV: &str = "outputHashMode";
+const OUTPUT_HASH_ALGO_ENV: &str = "outputHashAlgo";
+const NAR_OUTPUT_HASH_METHOD: &str = "nar";
+const FLAT_OUTPUT_HASH_METHOD: &str = "flat";
 const RECURSIVE_OUTPUT_HASH_MODE: &str = "recursive";
 const FLAT_OUTPUT_HASH_MODE: &str = "flat";
 const CHMOD_SETUID_CAPABILITY: &str = "chmod-setuid";
@@ -374,6 +377,10 @@ pub(crate) struct NixDerivationJsonOutput {
     pub(crate) hash: Option<String>,
     #[serde(rename = "hashAlgo", default = "absent_string")]
     pub(crate) hash_algo: Option<String>,
+    /// Fixed-output method recorded by Nix v4 derivation JSON (`flat`/`nar`); absent in the
+    /// legacy `nix derivation show` shape, which carries `outputHashMode` in the environment.
+    #[serde(rename = "method", default = "absent_string")]
+    pub(crate) method: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -840,6 +847,7 @@ fn normalize_reviewed_nix_output(
         path: Some(path),
         hash,
         hash_algo,
+        method: None,
     }))
 }
 
@@ -1043,6 +1051,7 @@ fn normalize_foreign_aterm_outputs(
             path: Some(path),
             hash,
             hash_algo,
+            method: None,
         });
         debug_assert!(replaced.is_none(), "ATerm parser rejects duplicate output names");
         debug_assert!(normalized.len() <= output_count);
@@ -1737,7 +1746,12 @@ fn nix_aterm_outputs_to_json(
         .map(|(name, output)| {
             let (hash, hash_algo) = nix_aterm_output_hash_fields(output.ca_hash.as_ref());
             let path = output.path.map(|path| path.to_absolute_path());
-            (name, NixDerivationJsonOutput { path, hash, hash_algo })
+            (name, NixDerivationJsonOutput {
+                path,
+                hash,
+                hash_algo,
+                method: None,
+            })
         })
         .collect()
 }
@@ -2082,19 +2096,14 @@ fn nix_fixed_output_metadata(
     outputs: &BTreeMap<String, NixDerivationJsonOutput>,
     env: &BTreeMap<String, String>,
 ) -> Result<Option<FixedOutputMetadata>, ImportDiagnostic> {
-    let output_hash_mode = env.get(OUTPUT_HASH_MODE_ENV).map(String::as_str).filter(|mode| !mode.is_empty());
+    let env_algorithm = env.get(OUTPUT_HASH_ALGO_ENV).map(String::as_str).filter(|algorithm| !algorithm.is_empty());
+    let env_mode = env.get(OUTPUT_HASH_MODE_ENV).map(String::as_str).filter(|mode| !mode.is_empty());
     let mut metadata: Option<FixedOutputMetadata> = None;
     for output in outputs.values() {
         let Some(digest) = output.hash.as_ref() else {
             continue;
         };
-        let hash_algo = output.hash_algo.as_deref().unwrap_or(SHA256_ALGORITHM);
-        let (algorithm, recursive) = parse_nix_fixed_output_hash(hash_algo, output_hash_mode)?;
-        let candidate = FixedOutputMetadata {
-            algorithm,
-            digest: digest.clone(),
-            recursive,
-        };
+        let candidate = nix_output_fixed_output_metadata(output, digest, env_algorithm, env_mode)?;
         if let Some(existing) = metadata.as_ref() {
             if existing != &candidate {
                 return Err(diagnostic(
@@ -2112,10 +2121,114 @@ fn nix_fixed_output_metadata(
     Ok(metadata)
 }
 
+/// Derive one fixed-output metadata record from a declared digest and its companion fields.
+///
+/// Nix v4 derivation JSON records the digest as an SRI string (`sha256-…`, `sha512-…`) with a
+/// `method` (`flat`/`nar`) and no `hashAlgo`; the legacy shape records lowercase hex plus
+/// `hashAlgo` (optionally `r:`-prefixed for recursion) and `outputHashMode` in the environment.
+fn nix_output_fixed_output_metadata(
+    output: &NixDerivationJsonOutput,
+    digest: &str,
+    env_algorithm: Option<&str>,
+    env_mode: Option<&str>,
+) -> Result<FixedOutputMetadata, ImportDiagnostic> {
+    assert!(!digest.is_empty(), "fixed-output digest must be non-empty");
+    assert!(output.hash.is_some(), "fixed-output metadata is derived only from a hashed output");
+    let sri_algorithm =
+        digest.split_once('-').map(|(algorithm, _)| algorithm).filter(|algorithm| !algorithm.is_empty());
+    let method_declared = output.method.as_deref().filter(|method| !method.is_empty());
+    if sri_algorithm.is_none() && method_declared.is_none() {
+        // Legacy shape: lowercase hex digest, `hashAlgo` (optionally `r:`-prefixed), and
+        // `outputHashMode` in the environment. Behaviour is unchanged from before v4 support.
+        let legacy_algorithm = output
+            .hash_algo
+            .as_deref()
+            .filter(|algorithm| !algorithm.is_empty())
+            .or(env_algorithm)
+            .unwrap_or(SHA256_ALGORITHM);
+        let (algorithm, recursive) = parse_nix_fixed_output_hash(legacy_algorithm, env_mode)?;
+        return Ok(FixedOutputMetadata {
+            algorithm,
+            digest: digest.to_string(),
+            recursive,
+        });
+    }
+    let declared = output
+        .hash_algo
+        .as_deref()
+        .filter(|algorithm| !algorithm.is_empty())
+        .or(env_algorithm)
+        .map(parse_nix_hash_algorithm);
+    let (algorithm, declared_recursive) = match declared {
+        Some((declared_algorithm, declared_recursive)) => {
+            if let Some(sri_algorithm) = sri_algorithm
+                && declared_algorithm != sri_algorithm
+            {
+                return Err(diagnostic(
+                    "conflicting-fixed-output-hash-algorithm",
+                    None,
+                    "Nix derivation fixed-output SRI hash algorithm differs from declared metadata",
+                ));
+            }
+            (sri_algorithm.map_or(declared_algorithm, ToString::to_string), declared_recursive)
+        }
+        None => (sri_algorithm.map_or_else(|| SHA256_ALGORITHM.to_string(), ToString::to_string), false),
+    };
+    let method_recursive = match method_declared {
+        Some(NAR_OUTPUT_HASH_METHOD) => Some(true),
+        Some(FLAT_OUTPUT_HASH_METHOD) => Some(false),
+        Some(other) => {
+            return Err(diagnostic(
+                "unsupported-fixed-output-method",
+                None,
+                &format!("Nix derivation declares an unsupported fixed-output method: {other}"),
+            ));
+        }
+        None => None,
+    };
+    let mode_recursive = match env_mode {
+        None => None,
+        Some(RECURSIVE_OUTPUT_HASH_MODE) => Some(true),
+        Some(FLAT_OUTPUT_HASH_MODE) => Some(false),
+        Some(_) => {
+            return Err(diagnostic(
+                "unsupported-fixed-output-hash-mode",
+                None,
+                "Nix derivation declares an unsupported fixed-output hash mode",
+            ));
+        }
+    };
+    if let (Some(method), Some(mode)) = (method_recursive, mode_recursive)
+        && method != mode
+    {
+        return Err(diagnostic(
+            "conflicting-fixed-output-method-mode",
+            None,
+            "Nix derivation fixed-output method and outputHashMode declare conflicting recursion",
+        ));
+    }
+    if let (true, Some(false)) = (declared_recursive, method_recursive.or(mode_recursive)) {
+        return Err(diagnostic(
+            "conflicting-fixed-output-hash-mode",
+            None,
+            "Nix derivation hash algorithm and method declare conflicting fixed-output modes",
+        ));
+    }
+    let recursive = method_recursive.or(mode_recursive).unwrap_or(declared_recursive);
+    debug_assert!(!algorithm.is_empty());
+    debug_assert!(sri_algorithm.is_none() || algorithm == sri_algorithm.unwrap_or_default());
+    Ok(FixedOutputMetadata {
+        algorithm,
+        digest: digest.to_string(),
+        recursive,
+    })
+}
+
 fn parse_nix_fixed_output_hash(
     hash_algo: &str,
     output_hash_mode: Option<&str>,
 ) -> Result<(String, bool), ImportDiagnostic> {
+    assert!(!hash_algo.is_empty(), "fixed-output hash algorithm must not be empty");
     let (algorithm, algorithm_marks_recursive) = parse_nix_hash_algorithm(hash_algo);
     let mode_marks_recursive = match output_hash_mode {
         None => None,
@@ -2136,6 +2249,7 @@ fn parse_nix_fixed_output_hash(
             "Nix derivation hash algorithm and outputHashMode declare conflicting fixed-output modes",
         ));
     }
+    debug_assert!(!algorithm.is_empty());
     Ok((algorithm, mode_marks_recursive.unwrap_or(algorithm_marks_recursive)))
 }
 
@@ -3691,6 +3805,133 @@ mod tests {
     }
 
     #[test]
+    fn versioned_nix_export_accepts_sha512_flat_fixed_output() {
+        const SHA512_SRI: &str =
+            "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+        let export = versioned_nix_fixed_output_export(SHA512_SRI, Some("flat"), None, None);
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+            .expect("sha512 flat export must normalize");
+        let artifacts = lower_nix_derivation_json_closure(&closure, &versioned_fixed_output_config())
+            .expect("sha512 flat fixed output must lower");
+
+        let fixed_output = artifacts.graph.nodes[0].fixed_output.clone().expect("fixed-output metadata");
+        assert_eq!(fixed_output.algorithm, "sha512");
+        assert_eq!(fixed_output.digest, SHA512_SRI);
+        assert!(!fixed_output.recursive);
+        validate_graph(&artifacts.graph).expect("sha512 flat graph must validate");
+    }
+
+    #[test]
+    fn versioned_nix_export_takes_recursion_from_the_nar_method_without_env_mode() {
+        let export = versioned_nix_fixed_output_export(NIXPKGS_SOURCE_HASH, Some("nar"), None, None);
+        let closure = normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+            .expect("nar-method export must normalize");
+        let artifacts = lower_nix_derivation_json_closure(&closure, &versioned_fixed_output_config())
+            .expect("nar-method fixed output must lower");
+
+        let fixed_output = artifacts.graph.nodes[0].fixed_output.clone().expect("fixed-output metadata");
+        assert_eq!(fixed_output.algorithm, "sha256");
+        assert!(fixed_output.recursive);
+    }
+
+    #[test]
+    fn versioned_nix_export_rejects_method_and_env_mode_conflict() {
+        let export = versioned_nix_fixed_output_export(NIXPKGS_SOURCE_HASH, Some("nar"), None, Some("flat"));
+
+        assert_error_class(
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+                .and_then(|closure| lower_nix_derivation_json_closure(&closure, &versioned_fixed_output_config())),
+            "conflicting-fixed-output-method-mode",
+        );
+    }
+
+    #[test]
+    fn versioned_nix_export_rejects_sri_and_hash_algo_conflict() {
+        const SHA512_SRI: &str =
+            "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+        let export = versioned_nix_fixed_output_export(SHA512_SRI, Some("flat"), Some("sha256"), None);
+
+        assert_error_class(
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+                .and_then(|closure| lower_nix_derivation_json_closure(&closure, &versioned_fixed_output_config())),
+            "conflicting-fixed-output-hash-algorithm",
+        );
+    }
+
+    #[test]
+    fn versioned_nix_export_rejects_unknown_fixed_output_method() {
+        let export = versioned_nix_fixed_output_export(NIXPKGS_SOURCE_HASH, Some("git"), None, None);
+
+        assert_error_class(
+            normalize_nix_derivation_json_export(NixDerivationJsonExport::Versioned(export))
+                .and_then(|closure| lower_nix_derivation_json_closure(&closure, &versioned_fixed_output_config())),
+            "unsupported-fixed-output-method",
+        );
+    }
+
+    const NIXPKGS_SOURCE_HASH: &str = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+    /// One v4 export node whose single output is a fixed output with the given SRI digest,
+    /// optional `method`, and optional environment `outputHashAlgo`/`outputHashMode`.
+    fn versioned_nix_fixed_output_export(
+        hash: &str,
+        method: Option<&str>,
+        env_algorithm: Option<&str>,
+        env_mode: Option<&str>,
+    ) -> NixDerivationJsonVersionedExport {
+        assert!(hash.contains('-'), "synthetic fixed-output digest must be SRI");
+        let mut env = BTreeMap::from([
+            ("builder".to_string(), "builtin:fetchurl".to_string()),
+            ("name".to_string(), "hello-source".to_string()),
+            ("system".to_string(), "builtin".to_string()),
+            (NIX_URL_ENV.to_string(), "https://source.example.invalid/hello.txt".to_string()),
+            (OUT_OUTPUT_NAME.to_string(), NIXPKGS_SOURCE_OUT.to_string()),
+        ]);
+        if let Some(algorithm) = env_algorithm {
+            env.insert(OUTPUT_HASH_ALGO_ENV.to_string(), algorithm.to_string());
+        }
+        if let Some(mode) = env_mode {
+            env.insert(OUTPUT_HASH_MODE_ENV.to_string(), mode.to_string());
+        }
+        let source_key = NIXPKGS_SOURCE_DRV
+            .strip_prefix(NIX_STORE_PREFIX_WITH_SLASH)
+            .expect("fixture drv should have Nix store prefix")
+            .to_string();
+        let mut derivations = BTreeMap::new();
+        derivations.insert(source_key, NixDerivationJsonVersionedNode {
+            name: "hello-source".to_string(),
+            system: "builtin".to_string(),
+            builder: "builtin:fetchurl".to_string(),
+            args: Vec::new(),
+            env,
+            outputs: BTreeMap::from([(OUT_OUTPUT_NAME.to_string(), NixDerivationJsonOutput {
+                path: None,
+                hash: Some(hash.to_string()),
+                hash_algo: None,
+                method: method.map(str::to_string),
+            })]),
+            structured_attrs: None,
+            inputs: NixDerivationJsonVersionedInputs::default(),
+        });
+        NixDerivationJsonVersionedExport {
+            derivations,
+            version: 4,
+        }
+    }
+
+    fn versioned_fixed_output_config() -> NixProducerConfig {
+        NixProducerConfig {
+            package_name: HELLO_PACKAGE_NAME.to_string(),
+            system: HELLO_SYSTEM.to_string(),
+            root_derivation: NIXPKGS_SOURCE_DRV.to_string(),
+            producer_identity: "nixpkgs:synthetic-fixed-output".to_string(),
+            producer_revision: "synthetic-revision".to_string(),
+            cache_hints: Vec::new(),
+            unsupported_metadata_classes: Vec::new(),
+        }
+    }
+
+    #[test]
     #[allow(clippy::assertions_on_constants)]
     fn graph_node_bound_matches_the_producer_tool_derivation_contract_value() {
         // The bridge's `producer` module is private; ADR 0166 records 32,768 as the contract value.
@@ -3885,6 +4126,7 @@ mod tests {
                     path: Some(output_path),
                     hash: None,
                     hash_algo: None,
+                    method: None,
                 })]),
                 structured_attrs: None,
                 inputs: NixDerivationJsonVersionedInputs {
@@ -3942,6 +4184,7 @@ mod tests {
                     path: Some(output_path),
                     hash: None,
                     hash_algo: None,
+                    method: None,
                 })]),
                 structured_attrs: None,
                 inputs: NixDerivationJsonVersionedInputs {
@@ -4174,6 +4417,7 @@ mod tests {
                 path: None,
                 hash: Some("sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=".to_string()),
                 hash_algo: None,
+                method: None,
             })]),
             structured_attrs: None,
             inputs: NixDerivationJsonVersionedInputs::default(),
@@ -4190,6 +4434,7 @@ mod tests {
             path: Some(NIXPKGS_SOURCE_OUT.to_string()),
             hash: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
             hash_algo: Some("r:sha256".to_string()),
+            method: None,
         });
         NixDerivationJsonNode {
             name: "hello-source".to_string(),
@@ -4209,6 +4454,7 @@ mod tests {
             path: Some(NIXPKGS_HELLO_OUT.to_string()),
             hash: None,
             hash_algo: None,
+            method: None,
         });
         let mut input_drvs = BTreeMap::new();
         input_drvs.insert(NIXPKGS_SOURCE_DRV.to_string(), NixDerivationJsonInput {

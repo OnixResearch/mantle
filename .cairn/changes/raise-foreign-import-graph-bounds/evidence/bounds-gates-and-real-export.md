@@ -91,3 +91,44 @@ EXIT 1; wall 1.13 s; peak RSS 315,176 KiB
 ```
 
 The plan rejection is reported as-is; it is not a bound rejection and was not worked around.
+
+
+## Correctness fix 1 — v4 fixed-output metadata (2026-11-19)
+
+`nix_fixed_output_metadata` defaulted the algorithm to sha256 when `hashAlgo` was absent and
+ignored the v4 `method`, so sha512 SRI digests failed at plan compilation with
+`foreign-compiler-fixed-output-hash-invalid`. The v4 path now takes the algorithm from the SRI
+prefix, recursion from `method` (`nar`/`flat`), rejects SRI-vs-`hashAlgo` disagreement
+(`conflicting-fixed-output-hash-algorithm`), rejects `method`-vs-`outputHashMode` disagreement
+(`conflicting-fixed-output-method-mode`), and rejects unknown methods
+(`unsupported-fixed-output-method`); the legacy hex/`hashAlgo` path is unchanged.
+
+```text
+cargo test -p mantle --bin mantle versioned_nix_export -- --test-threads=1
+  versioned_nix_export_accepts_sha512_flat_fixed_output ... ok
+  versioned_nix_export_takes_recursion_from_the_nar_method_without_env_mode ... ok
+  versioned_nix_export_rejects_method_and_env_mode_conflict ... ok
+  versioned_nix_export_rejects_sri_and_hash_algo_conflict ... ok
+  versioned_nix_export_rejects_unknown_fixed_output_method ... ok
+  test result: ok. 5 passed; 0 failed
+
+cargo test -p mantle --bin mantle foreign_graph_compiler::tests::fixed_output_metadata_accepts_sha512_sri_and_rejects_algorithm_mismatch
+  ... ok
+```
+
+Re-run on the real export:
+
+```text
+produce-nix (regenerated graph)  verdict=accepted, EXIT 0, 0.69 s, 369,632 KiB RSS   (16-produce-nix.txt)
+plan (regenerated graph)         verdict=rejected, EXIT 1, 1.39 s, 369,080 KiB RSS   (17-plan.txt)
+  diagnostics=[{"class":"foreign-compiler-malformed-reference", "node_id": null,
+    "message":"foreign store prefix is not followed by an object name"}]
+```
+
+The plan rejection moved from the fixed-output defect to a reference-detection policy: three
+`unbound-1.24.x` nodes carry `postConfigure` sed regexes
+(`s;/nix/store/[a-z0-9]{32}-;/nix/store/eeee…;/g`) where `/nix/store/` is followed by `[`, which
+`rewrite_store_objects` classifies as a malformed reference. The same rule exists at plan
+validation (`foreign-plan-leftover-reference`), so tolerating prefix-only occurrences is a
+policy change to the fail-closed leftover-reference rule, not an isolated defect; it is
+reported, not changed.

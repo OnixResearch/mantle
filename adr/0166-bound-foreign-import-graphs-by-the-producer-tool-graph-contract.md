@@ -82,6 +82,27 @@ Two implementation facts matter beyond the constants:
   costs `O(n log n)` rather than quadratic time. The admitted-target set that
   validates rewritten fields is carried by the same index.
 
+## Fixed-output metadata follows the v4 record shape
+
+Nix v4 derivation JSON records a fixed-output hash as an SRI string
+(`sha256-…`, `sha512-…`) with a `method` (`flat`/`nar`) and no `hashAlgo`;
+the legacy `nix derivation show` shape records lowercase hex plus `hashAlgo`
+(optionally `r:`-prefixed) and keeps `outputHashMode` in the environment. The
+old lowering defaulted the algorithm to sha256 when `hashAlgo` was absent and
+derived recursion only from `outputHashMode`, so a sha512 SRI digest produced
+`foreign-compiler-fixed-output-hash-invalid` at plan time (the real frozen
+producer export has 5,221 sha256 and 6 sha512 fixed outputs; 4,211 `flat` and
+1,020 `nar` methods; 87 empty `outputHashAlgo`; 3,153 outputs with no env
+`outputHashMode`).
+
+The v4 path now takes the algorithm from the SRI prefix, rejects disagreement
+with `hashAlgo`/`outputHashAlgo`
+(`conflicting-fixed-output-hash-algorithm`), takes recursion from `method`
+(`nar` => recursive, `flat` => flat, anything else =>
+`unsupported-fixed-output-method`), requires a present `outputHashMode` to agree
+with `method` (`conflicting-fixed-output-method-mode`), and keeps the legacy
+hex/`hashAlgo`/`outputHashMode` path byte-for-byte unchanged.
+
 ## Consequences
 
 - A full nixpkgs closure fits: `produce-nix` lowering, graph validation, and

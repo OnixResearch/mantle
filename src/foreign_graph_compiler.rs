@@ -1743,6 +1743,26 @@ mod tests {
     const EMPTY_HASH: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
     #[test]
+    fn fixed_output_metadata_accepts_sha512_sri_and_rejects_algorithm_mismatch() {
+        const SHA512_SRI: &str =
+            "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+        let accepted = FixedOutputMetadata {
+            algorithm: "sha512".to_string(),
+            digest: SHA512_SRI.to_string(),
+            recursive: false,
+        };
+        let parsed = parse_fixed_output(&accepted).expect("sha512 SRI digest must parse");
+        assert_eq!(parsed.hash().algo(), HashAlgo::Sha512);
+
+        let mismatched = FixedOutputMetadata {
+            algorithm: "sha256".to_string(),
+            digest: SHA512_SRI.to_string(),
+            recursive: false,
+        };
+        assert_class(parse_fixed_output(&mismatched), "foreign-compiler-fixed-output-hash-invalid");
+    }
+
+    #[test]
     fn exact_store_mapping_accepts_prefix_map_boundary_but_rejects_name_extension() {
         let foreign = foreign_output("leaf", "out");
         let target = "/mantle/store/mapped-leaf".to_string();

@@ -78,6 +78,22 @@ surface (611 edges, 102,597-byte `buildCommand`) and stays well inside the
 chosen headroom. Byte budgets for whole artifacts are resource decisions that
 scale with per-derivation size, not node count.
 
+### Decision: Derive fixed-output metadata from the v4 record shape
+
+**Choice:** In `nix_fixed_output_metadata`, take the algorithm from the SRI
+digest prefix (agreeing with `hashAlgo`/`outputHashAlgo`, else
+`conflicting-fixed-output-hash-algorithm`), take recursion from the v4 `method`
+(`nar`/`flat`, else `unsupported-fixed-output-method`), require an explicit
+`outputHashMode` to agree with `method`
+(`conflicting-fixed-output-method-mode`), and leave the legacy hex/`hashAlgo`
+path unchanged.
+
+**Rationale:** The v4 export records no `hashAlgo`; the old sha256 default made
+every sha512 fixed output fail plan compilation with
+`foreign-compiler-fixed-output-hash-invalid`. Measured in the frozen export:
+5,221 sha256 + 6 sha512 SRI hashes, 4,211 `flat` + 1,020 `nar` methods, 87
+empty `outputHashAlgo`, 3,153 outputs with no env `outputHashMode`.
+
 ### Decision: Size the scheduler goal bound for total planned units
 
 **Choice:** `crunch-build::goal::MAX_GOALS` becomes 32,768 (the producer
