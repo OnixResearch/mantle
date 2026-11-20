@@ -120,6 +120,12 @@ a declared foreign store prefix:
 Plan validation (`contains_unmapped_plan_store_object`) applies the same classification, so a
 translated bare mention is not a leftover while case (3) and unmapped case (1) still fail.
 
+A complete store object followed by sentence punctuation keeps the punctuation: when the
+longest name-bearing candidate is not an exact mapped object, trailing `.` characters are
+stripped and the trimmed form is accepted only if it maps exactly (e.g. `echo "Build with
+/nix/store/…-ghc-binary-9.8.4."`). Otherwise the unmapped object still fails closed, and the
+punctuation is copied literally. Both the compiler and plan validation use this rule.
+
 ## Consequences
 
 - A full nixpkgs closure fits: `produce-nix` lowering, graph validation, and

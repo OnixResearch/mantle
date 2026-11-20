@@ -1,0 +1,103 @@
+# 20-nix-build (summary; full log kept outside the repository)
+# full log: /home/brittonr/wt/convergence-evidence/realization/transcripts/20-nix-build.txt, 5114630 bytes, BLAKE3 3045b68a5750598ae741d7f99d9c87cf84bd7518b8093e9198101de96b70bb82
+# 20-nix-build — step 2: Nix builds the producer job (preserve route)
+# started 2026-11-19T19:33:13-05:00
+# public key: convergence-pilot-20261119-1:sRZV4nbjXTCkhRjkEIVe5Pg4G2ajYaCobLqS0JJVu2A=
+these 263 derivations will be built:
+  /nix/store/08flvkjg6yyb989jfm25yiqmyghd7080-cargo-package-sharded-slab-0.1.7.drv
+  /nix/store/0g6rigf4a1cpcsjyj3dbs3y2gnjwcqjr-cargo-package-ustr-1.1.0.drv
+  /nix/store/8y1hvscfjjsi8dg1csmv48p9c2zhr24g-brownstone-3.0.0.drv
+  /nix/store/0pk72w1wsn67bw8gni3s261a9ar94z2m-cargo-package-brownstone-3.0.0.drv
+  /nix/store/14q4f93ryvlia3agwz2xf39ap7cq0f7n-cargo-package-time-0.3.41.drv
+  /nix/store/21jmxvfn2pqy7rpfyrhsqbp1znh8iiba-cargo-package-env_logger-0.11.8.drv
+  /nix/store/25s2ii0hpzf9lrw1pzxhi7glbhyy17x1-cargo-package-tracing-subscriber-0.3.19.drv
+  /nix/store/2icmr8w158pgylbb89l8mr9f5ycp5isr-cargo-package-parking_lot_core-0.9.12.drv
+  /nix/store/2jin707cmkzhdc16sdpwzfymgkwa3nhg-cargo-package-toml_write-0.1.2.drv
+  /nix/store/2rn98xs2mb7g700y34ghf2gry1m7dxpp-cargo-package-tracing-log-0.2.0.drv
+  /nix/store/2vwnma6vpwz8xk2lsw4rd02khmvgcfsw-cargo-package-num-bigint-0.4.6.drv
+  /nix/store/325wvih4xbvkr9c42vyzl41lfnnm0c5w-cargo-package-snapbox-0.6.21.drv
+  /nix/store/3fp75cw3zqh2r9y0bj3ph4p93w4nfqy6-cargo-package-regex-automata-0.4.9.drv
+  /nix/store/3nii27fi82j1l64lnsvzy2fz3m96qik8-cargo-package-cc-1.2.32.drv
+  /nix/store/43pgimbzz9a8csaq66xz3szhqf96p7dd-cargo-package-thiserror-2.0.18.drv
+  /nix/store/4paik547kql2zj7m0h5krwfg5rdyzbnz-cargo-package-serde_spanned-0.6.9.drv
+  /nix/store/4y35b06wf97m7j4i8jcg733qznfw9snq-cargo-package-num-rational-0.4.2.drv
+  /nix/store/6gzyy0j5lj6i1id6dby7j8plpiwzn30p-cargo-package-itertools-0.13.0.drv
+  /nix/store/6lyqylc9f8djk7vrff9ka5d3fxm9fssj-cargo-package-openssl-probe-0.1.6.drv
+  /nix/store/6ypgmkhsd8mn30xi54dv6a3p5sw2zyc4-cargo-package-take_mut-0.2.2.drv
+  /nix/store/7736cp1ff4wf98cncd0h6ysxqalx5ba6-cargo-package-postcard-1.1.3.drv
+  /nix/store/7rrkdxr9z0jnx15cilhdh8zy92bvq89l-cargo-package-nom-7.1.3.drv
+  /nix/store/7vp4w8fsrk6mkynpvs75w3sk7ynpmlg5-cargo-package-semver-1.0.26.drv
+  /nix/store/lky70j0fcv7xgdzis98bw6xn16nvnd3b-security-framework-2.11.1.drv
+  /nix/store/80gv6xmz1wix3bhxf99apb2kivjrhssv-cargo-package-security-framework-2.11.1.drv
+  /nix/store/80r01y6vqkwd2b54ja0vjmy92scmmjfm-cargo-package-matchers-0.1.0.drv
+  /nix/store/8cgh8gjlr0wnwawnd519gb7ky8rp3sxy-cargo-package-num-0.4.3.drv
+  /nix/store/hpf8lpx2xd5w8i6an1yjrwmgmyhylimb-indent_write-2.2.0.drv
+  /nix/store/8v2pi2y5cdsvp2vgi2qp26jv5769drmp-cargo-package-indent_write-2.2.0.drv
+  /nix/store/9chz6wx5qckvlyqgrqwdjr7cvlrwklb1-cargo-package-embedded-io-0.6.1.drv
+  /nix/store/9jrl5iwilvnlnyr21zxlnjbmm3k4bj4b-cargo-package-rustc-hash-2.1.2.drv
+  /nix/store/9jz4fnwhkqx0a03176lbhp3pjx5p1sir-cargo-package-memchr-2.7.5.drv
+  /nix/store/9kyjkdvi9mhkvyc7sp50mxg9p4ryzf7j-cargo-package-wit-bindgen-rt-0.39.0.drv
+  /nix/store/9wzfm8k004n8jc585y7hp7qs9hj4vr36-cargo-package-embedded-io-0.4.0.drv
+  /nix/store/8q1vq2mm0bx6ji1n3i2dnfkmh982s60z-hyper-tls-0.6.0.drv
+  /nix/store/a3hkjqkfqzrhz6kkahn7dlsk9g2afbpp-cargo-package-hyper-tls-0.6.0.drv
+# ...
+rust-default> patchelf: not an ELF executable
+rust-default> warning: entry 48 in symbol table refers to a non-existent section, skipping
+rust-default> patchelf: not an ELF executable
+rust-default> substituteStream() in derivation rust-default-1.98.0-nightly-2026-06-01: WARNING: '--replace' is deprecated, use --replace-{fail,warn,quiet}. (file '/nix/store/sq6f11hs89dfrn3j4jkb60mlxgrx5wjh-rust-default-1.98.0-nightly-2026-06-01/bin/cargo-miri')
+building '/nix/store/dryf23f2w36x07fkgjsdrsm4mcyxmn96-cargo-package-num-complex-0.4.6.drv' on 'grpc://aspen1.local:50051?ca-cert=/run/nix-farm/2e1ca4f16fa93410/ca&client-cert=/run/nix-farm/2e1ca4f16fa93410/cert&client-key=/run/nix-farm/2e1ca4f16fa93410/key&system=x86_64-linux'...
+building '/nix/store/f0d1bfx3v68zrk27f54l98cmm7vkxfq4-Cargo.toml.drv' on 'grpc://aspen1.local:50051?ca-cert=/run/nix-farm/2e1ca4f16fa93410/ca&client-cert=/run/nix-farm/2e1ca4f16fa93410/cert&client-key=/run/nix-farm/2e1ca4f16fa93410/key&system=x86_64-linux'...
+building '/nix/store/nzb34g3hm839kp997szgbzl40vf7p3gi-Cargo.toml.drv'...
+pkfqn7k1d3amgl602wa12nw828fq5whn-cargo-octet-0.1.1-rc.1.drv: no connected, non-draining worker for system 'x86_64-linux' offers features {}, the workers offer {}
+error: build of '/nix/store/pkfqn7k1d3amgl602wa12nw828fq5whn-cargo-octet-0.1.1-rc.1.drv' on 'grpc://aspen1.local:50051?ca-cert=/run/nix-farm/2e1ca4f16fa93410/ca&client-cert=/run/nix-farm/2e1ca4f16fa93410/cert&client-key=/run/nix-farm/2e1ca4f16fa93410/key&system=x86_64-linux' failed: no connected, non-draining worker for system 'x86_64-linux' offers features {}, the workers offer {}
+jxbl4m6n82av9nhkx7mnav6qqj88s7ig-octet-standards-0.1.1-rc.1.drv: no connected, non-draining worker for system 'x86_64-linux' offers features {}, the workers offer {}
+error: build of '/nix/store/jxbl4m6n82av9nhkx7mnav6qqj88s7ig-octet-standards-0.1.1-rc.1.drv' on 'grpc://aspen1.local:50051?ca-cert=/run/nix-farm/2e1ca4f16fa93410/ca&client-cert=/run/nix-farm/2e1ca4f16fa93410/cert&client-key=/run/nix-farm/2e1ca4f16fa93410/key&system=x86_64-linux' failed: no connected, non-draining worker for system 'x86_64-linux' offers features {}, the workers offer {}
+Cargo.toml> 
+Cargo.toml> 
+Cargo.toml> 
+error: Cannot build '/nix/store/pkfqn7k1d3amgl602wa12nw828fq5whn-cargo-octet-0.1.1-rc.1.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/5rm1x1c5h6f7l4s2jp45b6s1d3793r9f-cargo-octet-0.1.1-rc.1
+error: Cannot build '/nix/store/jxbl4m6n82av9nhkx7mnav6qqj88s7ig-octet-standards-0.1.1-rc.1.drv'.
+       Reason: builder failed with exit code 1.
+       Output paths:
+         /nix/store/li576bq0hbn3cygzzzrl2vkicadmj1wk-octet-standards-0.1.1-rc.1
+building '/nix/store/hyc3ww7clxanhbqlrgaqd8k0hvvba28p-Cargo.toml.drv'...
+building '/nix/store/0pk72w1wsn67bw8gni3s261a9ar94z2m-cargo-package-brownstone-3.0.0.drv'...
+building '/nix/store/jsipijiasd6d4m1a8cy1w3l47c5ijnzh-cargo-package-security-framework-sys-2.14.0.drv'...
+warning: killing stray builder process 3254218 ()...
+building '/nix/store/hwsgc15zdh9kzkxgws4kv0gnwvn15sfp-Cargo.toml.drv'...
+building '/nix/store/kxn5b8a0lh91qf6nhwd8vxjg7zjadi40-anyhow-1.0.94.drv'...
+building '/nix/store/zvyk06flm8qgkm05pa559ln81shimfyg-cargo-package-foreign-types-0.3.2.drv'...
+warning: killing stray builder process 3254583 ()...
+warning: killing stray builder process 3254557 ()...
+warning: killing stray builder process 3254589 ()...
+error: Cannot build '/nix/store/vl7bqxyz2f86x0vlvxipcvryavckb9wj-octet-mantle-aeneas-consumer-job-v1.drv'.
+       Reason: 1 dependency failed.
+       Output paths:
+         /nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1
+Command exited with non-zero status 1
+	Command being timed: "nix --option min-free 0 build git+file:///home/brittonr/git/OnixResearch/octet?rev=d5b34c2d64b1227417a46df8ed8427f2d10ed3c8#packages.x86_64-linux.octet-mantle-aeneas-consumer-job --out-link /datapool/mantle-store/convergence-pilot-20261119/nix-producer-out -L"
+	User time (seconds): 7.14
+	System time (seconds): 2.01
+	Percent of CPU this job got: 5%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:55.54
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 756664
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1629
+	Minor (reclaiming a frame) page faults: 174738
+	Voluntary context switches: 521905
+	Involuntary context switches: 10234
+	Swaps: 0
+	File system inputs: 121067
+	File system outputs: 11656
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 1

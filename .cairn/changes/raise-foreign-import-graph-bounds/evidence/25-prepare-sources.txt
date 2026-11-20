@@ -1,0 +1,25 @@
+{"format":"mantle-source-bundle-v1","version":1,"store_prefix":"/nix/store","roots":[],"records":[],"manifest_blake3":"8ed1103b5de3054ee13ea391af805e276e3cc3b6ceaa50b2149193adb1ff1777","non_claim":"source bundle evidence proves declared source/input availability and identity only"}
+	Command being timed: "target/release/mantle --json foreign-import prepare-sources --plan /home/brittonr/wt/convergence-evidence/realization/mantle-graph-preserve/plan.json --out /datapool/mantle-store/convergence-pilot-20261119/source-bundle.json"
+	User time (seconds): 34.28
+	System time (seconds): 1.42
+	Percent of CPU this job got: 97%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:36.65
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 322424
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 1457525
+	Voluntary context switches: 5
+	Involuntary context switches: 33098
+	Swaps: 0
+	File system inputs: 16
+	File system outputs: 8
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+EXIT=0

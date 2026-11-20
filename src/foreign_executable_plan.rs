@@ -968,7 +968,9 @@ fn contains_unmapped_plan_store_object(
             PlanStoreOccurrence::Malformed => return true,
             PlanStoreOccurrence::Object { object_end } => {
                 let candidate = &value[start..object_end];
-                if !permitted_targets.contains(candidate) {
+                if !permitted_targets.contains(candidate)
+                    && !has_trimmed_plan_store_object(value, start, object_end, permitted_targets)
+                {
                     return true;
                 }
                 cursor = object_end;
@@ -983,6 +985,23 @@ enum PlanStoreOccurrence {
     Bare,
     Object { object_end: usize },
     Malformed,
+}
+
+fn has_trimmed_plan_store_object(
+    value: &str,
+    start: usize,
+    object_end: usize,
+    permitted_targets: &BTreeSet<&str>,
+) -> bool {
+    assert!(object_end > start, "store object candidate must be non-empty");
+    let mut candidate = &value[start..object_end];
+    while let Some(stripped) = candidate.strip_suffix('.') {
+        if permitted_targets.contains(stripped) {
+            return true;
+        }
+        candidate = stripped;
+    }
+    false
 }
 
 fn classify_plan_store_prefix(value: &str, prefix: &str, start: usize) -> PlanStoreOccurrence {
@@ -1190,6 +1209,10 @@ mod tests {
         assert!(contains_unmapped_plan_store_object(&unmapped, &prefixes, &permitted));
         let mapped = BTreeSet::from([unmapped.as_str()]);
         assert!(!contains_unmapped_plan_store_object(&unmapped, &prefixes, &mapped));
+
+        let punctuated = format!("{unmapped}.");
+        assert!(!contains_unmapped_plan_store_object(&punctuated, &prefixes, &mapped));
+        assert!(contains_unmapped_plan_store_object(&punctuated, &prefixes, &permitted));
     }
 
     const NIX_GRAPH: &str = include_str!("../tests/fixtures/foreign-import/nix-hello.graph.json");

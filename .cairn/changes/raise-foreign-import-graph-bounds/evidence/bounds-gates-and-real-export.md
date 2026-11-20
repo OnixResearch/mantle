@@ -168,3 +168,38 @@ and the dotted candidate has no exact mapping. The dot-trimmed path is exactly t
 output (`nix:4a6vhwxy…-ghc-binary-9.8.4.drv` `out`). Resolving this needs a new reference-boundary
 rule (accept a mapped object followed by trailing punctuation only when the dotted run is
 unmapped), which can silently truncate a genuinely unmapped dotted name; reported, not changed.
+
+
+## Correctness fix 3 — sentence punctuation after a mapped store object (2026-11-19)
+
+When the longest name-bearing candidate is unmapped, trailing `.` characters are stripped and
+the trimmed form is accepted only if it maps exactly; the dots are copied literally. Unmapped
+dotted names still fail closed. Applied in `exact_store_object_match`,
+`contains_unmapped_source_store_object`, and `contains_unmapped_plan_store_object`.
+
+```text
+cargo test -p mantle --bin mantle store_ -- --test-threads=1       70 passed / 0 failed
+cargo test -p mantle --bin mantle foreign_graph_compiler::tests::  26 passed / 0 failed
+  includes mapped_store_object_followed_by_sentence_punctuation_keeps_the_punctuation
+  and plan_reference_validation_accepts_bare_store_mentions_and_rejects_malformed_runs (mapped+dot accepted)
+```
+
+Preserve-route results (WP4b, route label "prebuilt closure preserved (Mantle
+`preserve-cache-paths-v1` / `cache-only-preserve-v1`); Nix executed the producer job and its
+proof; Mantle verified the pilot-key signature and preserved the output; Mantle did not build
+the tool graph"):
+
+```text
+produce-nix (preserve graph, pilot-key cache URL)  accepted, EXIT 0        (21)
+plan (--policy preserve-nix.json --nix-compat)     ACCEPTED, EXIT 0, 1:23.93 wall   (24)
+  schema mantle-foreign-executable-plan-v1, native_units 11565, roots 1,
+  realization_route cache-only-preserve-v1, target_prefix /nix/store,
+  source_requirements 677, substitution_audit 1 (file://…/cache?trusted_public_keys[0]=pilot),
+  sandbox_audit 0, diagnostics 0
+prepare-sources (empty bundle)                     EXIT 0, records 0
+  manifest_blake3 8ed1103b5de3054ee13ea391af805e276e3cc3b6ceaa50b2149193adb1ff1777   (25)
+```
+
+Step 2 (Nix build of the producer job) initially failed because two derivations were dispatched
+to the remote `grpc://aspen1.local:50051` farm with no connected worker (20-nix-build.txt);
+re-run locally with `--option builders ''` (23-nix-build-local.txt).

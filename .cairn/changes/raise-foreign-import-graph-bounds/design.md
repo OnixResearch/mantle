@@ -78,6 +78,16 @@ surface (611 edges, 102,597-byte `buildCommand`) and stays well inside the
 chosen headroom. Byte budgets for whole artifacts are resource decisions that
 scale with per-derivation size, not node count.
 
+### Decision: Keep sentence punctuation after a mapped store object
+
+**Choice:** When the longest name-bearing store-object candidate is unmapped, strip trailing
+`.` characters and accept the trimmed form only if it is an exact mapped object; copy the dots
+literally. Unmapped dotted names still fail closed.
+
+**Rationale:** 26 real nodes echo `"Build with /nix/store/…-ghc-binary-9.8.4."`; `.` is a legal
+store-name character, so the greedy token cannot be split without a mapping-driven rule, and the
+trimmed path is exactly the `ghc-binary` output.
+
 ### Decision: Translate bare store-directory mentions
 
 **Choice:** Classify text after a declared foreign store prefix into (1) full object reference

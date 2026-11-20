@@ -1637,6 +1637,17 @@ fn exact_store_object_match<'a>(
     if let Some((foreign_path, target_path)) = exact_map.get_key_value(direct) {
         return Some((foreign_path.as_str(), target_path.as_str(), parsed_end));
     }
+    // Sentence punctuation can follow a complete store object (`…-ghc-binary-9.8.4."`). A dotted
+    // name is a legal store name, so only treat trailing dots as punctuation when the dotted form
+    // is unmapped and the trimmed form is an exact mapped object.
+    let mut trimmed = direct;
+    while let Some(stripped) = trimmed.strip_suffix('.') {
+        if let Some((foreign_path, target_path)) = exact_map.get_key_value(stripped) {
+            let matched_end = start.checked_add(stripped.len())?;
+            return Some((foreign_path.as_str(), target_path.as_str(), matched_end));
+        }
+        trimmed = stripped;
+    }
     exact_map
         .iter()
         .filter_map(|(foreign_path, target_path)| {
@@ -1650,6 +1661,20 @@ fn exact_store_object_match<'a>(
             Some((foreign_path.as_str(), target_path.as_str(), matched_end))
         })
         .max_by_key(|(foreign_path, _, _)| foreign_path.len())
+}
+
+/// True when the candidate's trailing dots are sentence punctuation and the trimmed form is a
+/// mapped store object.
+fn trimmed_mapped_store_object(value: &str, start: usize, object_end: usize, is_mapped: impl Fn(&str) -> bool) -> bool {
+    assert!(object_end > start, "store object candidate must be non-empty");
+    let mut candidate = &value[start..object_end];
+    while let Some(stripped) = candidate.strip_suffix('.') {
+        if is_mapped(stripped) {
+            return true;
+        }
+        candidate = stripped;
+    }
+    false
 }
 
 fn next_store_object<'a>(value: &str, cursor: usize, source_prefixes: &'a [String]) -> Option<(usize, &'a str)> {
@@ -1679,8 +1704,11 @@ fn contains_unmapped_source_store_object(
             }
             StorePrefixOccurrence::Malformed => return true,
             StorePrefixOccurrence::Object { object_end, .. } => {
-                let candidate = &value[start..object_end];
-                if !exact_index.targets.contains(candidate) {
+                if !exact_index.targets.contains(&value[start..object_end])
+                    && !trimmed_mapped_store_object(value, start, object_end, |candidate| {
+                        exact_index.targets.contains(candidate)
+                    })
+                {
                     return true;
                 }
                 cursor = object_end;
@@ -1828,6 +1856,24 @@ mod tests {
         let rewritten = rewrite_values(&arguments, &index, &prefixes, TARGET_PREFIX, Some("leaf")).unwrap();
         assert_eq!(rewritten[1], format!("{TARGET_PREFIX}/"));
         assert_eq!(rewritten[2], format!("p=\"{TARGET_PREFIX}/\""));
+    }
+
+    #[test]
+    fn mapped_store_object_followed_by_sentence_punctuation_keeps_the_punctuation() {
+        let foreign = foreign_output("leaf", "out");
+        let target = format!("{TARGET_PREFIX}/mapped-leaf");
+        let index = ExactPathIndex::from_exact_map(BTreeMap::from([(foreign.clone(), target.clone())]));
+        let prefixes = vec![SOURCE_PREFIX.to_string()];
+
+        let echoed = format!("echo \"Build with {foreign}.\"");
+        let rewritten = rewrite_store_objects(&echoed, &index, &prefixes, TARGET_PREFIX, Some("leaf")).unwrap();
+        assert_eq!(rewritten, format!("echo \"Build with {target}.\""));
+
+        let unmapped = format!("{SOURCE_PREFIX}/99999999999999999999999999999999-unknown.");
+        assert_class(
+            rewrite_store_objects(&unmapped, &index, &prefixes, TARGET_PREFIX, Some("leaf")),
+            "foreign-compiler-unknown-reference",
+        );
     }
 
     #[test]

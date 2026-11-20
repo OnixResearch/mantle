@@ -1,0 +1,69 @@
+# 24-plan-preserve (summary; full transcript kept outside the repository)
+# full transcript: /home/brittonr/wt/convergence-evidence/realization/transcripts/24-plan-preserve.txt, 121290776 bytes, BLAKE3 c596c762707b6bfeaa437366619c2924bb5b77f464b7cc3f110b854c2275cf8e
+# head:
+{
+  "schema": "mantle-foreign-import-cli-v1",
+  "command": "plan",
+  "verdict": "accepted",
+  "accepted": true,
+  "diagnostics": [],
+  "receipt": {
+    "schema": "foreign-derivation-import-receipt-v1",
+    "producer_identity": "octet@d5b34c2d64b1227417a46df8ed8427f2d10ed3c8",
+    "raw_graph_digest": "a3bf015e02b38bf19bd756f049f107079f05012d3640e137cd3dbd80b4d1439e",
+    "translation_policy_digest": "29ea216f911da613a92bd29fc40c4ee1d85a0c8e2e6b5b3bf9e81df01aa1ddde",
+    "translated_graph_digest": "48bd8b0a5978788f045f887fd3adce928e0fe3019c899c26eb9395d434548694",
+    "package_index_digest": "037cbde7ce5465e43f5c5d3f04409105f63488d52415ce5f2b47a03374070754",
+    "fetch_cache_policy_digest": "1a64e6557d26665f7eef400f3fbfd3ce766a42b72e96b3cdc5570ff3f97b7ee4",
+    "sandbox_policy_digest": "b80fdec27a0955fcb9748d1ac75b7da507959fdab796a2f223c6bc8d76424afc",
+    "hash_domains": [
+      {
+        "domain": "mantle-receipt",
+        "kind": "raw-graph",
+        "algorithm": "blake3",
+        "value": "a3bf015e02b38bf19bd756f049f107079f05012d3640e137cd3dbd80b4d1439e"
+      },
+      {
+        "domain": "mantle-receipt",
+        "kind": "translated-graph",
+        "algorithm": "blake3",
+       
+# verdict/diagnostics/plan facts:
+  "schema": "mantle-foreign-import-cli-v1",
+  "verdict": "accepted",
+  "accepted": true,
+    "schema": "foreign-derivation-import-receipt-v1",
+    "schema": "mantle-foreign-executable-plan-v1",
+    "target_store_prefix": "/nix/store",
+    "realization_route": "cache-only-preserve-v1",
+          "pname": "schema",
+          "pythonImportsCheck": "schema",
+          "pname": "schema",
+          "pythonImportsCheck": "schema",
+          "pname": "schema",
+# tail (time -v):
+}
+	Command being timed: "target/release/mantle --json foreign-import plan --graph /home/brittonr/wt/convergence-evidence/realization/mantle-graph-preserve/nixpkgs.graph.json --package-index /home/brittonr/wt/convergence-evidence/realization/mantle-graph-preserve/nixpkgs.index.json --policy config/foreign-cache-closure/generated/preserve-nix.json --execution-profile config/foreign-execution-profiles/generated/nix.json --package octet-mantle-aeneas-consumer-job --system x86_64-linux --nix-compat --plan-out /home/brittonr/wt/convergence-evidence/realization/mantle-graph-preserve/plan.json --receipt-out /home/brittonr/wt/convergence-evidence/realization/mantle-graph-preserve/import-receipt.json --state-dir /datapool/mantle-store/convergence-pilot-20261119/plan/state --store /datapool/mantle-store/convergence-pilot-20261119/plan/store"
+	User time (seconds): 78.19
+	System time (seconds): 0.97
+	Percent of CPU this job got: 94%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:23.93
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 718920
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 298863
+	Voluntary context switches: 272
+	Involuntary context switches: 72509
+	Swaps: 0
+	File system inputs: 125048
+	File system outputs: 468344
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+EXIT=0
