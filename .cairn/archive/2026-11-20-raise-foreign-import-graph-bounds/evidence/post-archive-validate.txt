@@ -1,0 +1,5 @@
+# post-archive validation, 2026-11-20T17:46:58-05:00, worktree 21c0feaf7 plus the archive moves
+$ CAIRN_ARCHIVE_DATE=2026-11-20 cairn sync raise-foreign-import-graph-bounds --root . --execute && cairn archive raise-foreign-import-graph-bounds --root . --execute   (both: dry_run false, blocked false, mutated true)
+$ cairn validate --root .
+{"valid":true,"issues":0,"findings":0}
+EXIT=0
