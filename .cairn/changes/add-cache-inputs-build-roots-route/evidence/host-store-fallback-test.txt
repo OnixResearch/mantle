@@ -1,0 +1,8 @@
+$ cargo test -p crunch-build --lib forbid_host_store_fallback -- --test-threads=1
+test orchestrate::tests::forbid_host_store_fallback_refuses_a_source_only_present_in_the_host_store ... ok
+test result: ok. 1 passed; 0 failed
+EXIT=0
+$ cargo clippy -p crunch-build --all-targets --no-deps -- -D warnings
+EXIT=0
+$ cargo fmt --check -p crunch-build
+EXIT=0

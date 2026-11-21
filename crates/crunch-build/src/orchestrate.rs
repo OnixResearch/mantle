@@ -4668,6 +4668,55 @@ mod tests {
     // ── Custom output_dir tests ───────────────────────────────────
 
     #[tokio::test]
+    async fn forbid_host_store_fallback_refuses_a_source_only_present_in_the_host_store() {
+        use std::os::unix::ffi::OsStrExt as _;
+
+        const HOST_STORE_PREFIX: &str = "/nix/store";
+        let mut host_source = None;
+        for entry in std::fs::read_dir(HOST_STORE_PREFIX).expect("host store").flatten() {
+            let host_path = entry.path();
+            if let Ok(store_path) =
+                StorePath::<String>::from_absolute_path_with_prefix(host_path.as_os_str().as_bytes(), HOST_STORE_PREFIX)
+            {
+                host_source = Some((host_path, store_path));
+                break;
+            }
+        }
+        let (host_path, source_path) = host_source.expect("host store entry");
+        let physical_store = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, _calls) = MockBuildService::new(bs.clone());
+        let mut builder = Builder::new(
+            bs,
+            tmp_ds(),
+            mock,
+            test_pis(),
+            physical_store.path().to_path_buf(),
+            HOST_STORE_PREFIX,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        );
+
+        // The default behavior really resolves the declared source from the host store.
+        assert_eq!(builder.preferred_source_host_path(&source_path), host_path);
+        assert!(builder.ensure_declared_source_exists(&source_path).await.is_ok());
+
+        builder.set_forbid_host_store_fallback(true);
+        let physical_candidate =
+            PathBuf::from(source_path.to_absolute_path_with_prefix(physical_store.path().to_str().unwrap()));
+        assert_eq!(builder.preferred_source_host_path(&source_path), physical_candidate);
+        assert_ne!(physical_candidate, host_path);
+        let error = builder.ensure_declared_source_exists(&source_path).await.unwrap_err();
+        assert!(matches!(error, Error::SourceNotFound { .. }), "unexpected error: {error}");
+        assert!(
+            builder.store.cached_node_for_path(&source_path).await.unwrap().is_none(),
+            "a refused host source must not be ingested"
+        );
+    }
+
+    #[tokio::test]
     async fn custom_logical_store_prefix_controls_source_lookup_and_diagnostics() {
         const CUSTOM_SOURCE_DIGEST_BYTE: u8 = 43;
         const MISSING_SOURCE_DIGEST_BYTE: u8 = 44;
