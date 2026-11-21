@@ -1,0 +1,5 @@
+$ cargo_fmt_first_party
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+running: cargo fmt --check -p mantle -p crunch-android-core -p crunch-android -p crunch-cmake-core -p crunch-cmake -p crunch-esp-idf-core -p crunch-esp-idf -p crunch-fpga-core -p crunch-fpga -p crunch-gpu-core -p crunch-gpu -p crunch-model-conversion-core -p crunch-model-conversion -p crunch-pnpm-core -p crunch-pnpm -p crunch-python-core -p crunch-python -p crunch-test-core -p crunch-test-app -p crunch-test -p crunch-verification-bridge-core -p crunch-verification-bridge -p crunch-zephyr-core -p crunch-zephyr -p mantle-cargo-build-bundle-core -p mantle-causal-trace-core -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-remote-app -p crunch-remote-core -p crunch-service-readiness-core -p crunch-shell -p crunch-store -p crunch-watch-core
+EXIT=0

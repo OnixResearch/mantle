@@ -1862,7 +1862,7 @@ async fn cmd_store_pull(
             (report, None, matches!(leaf, StoreLeaf::Pull { http: true, .. }).then_some(request.paths.len()))
         }
         StorePullEvidence::Closure(report) => {
-            (&report.pull, Some(report.root_admitted), Some(report.plan.members.len()))
+            (&report.pull, Some(report.roots_admitted), Some(report.plan.members.len()))
         }
     };
     let readback_matches = readback_path_metadata(
@@ -1893,9 +1893,10 @@ async fn cmd_store_pull(
     let failure = match classification {
         Ok(()) => None,
         Err(StoreFactFailure::ClosureRootNotAdmitted) => match &pull_evidence {
-            StorePullEvidence::Closure(report) => {
-                Some(RunError::Build(format!("closure pull did not admit root {}", report.plan.root)))
-            }
+            StorePullEvidence::Closure(report) => Some(RunError::Build(format!(
+                "closure pull did not admit every seed root: {}",
+                report.plan.roots.join(",")
+            ))),
             StorePullEvidence::Explicit(_) => unreachable!("explicit pull cannot produce a closure classification"),
         },
         Err(error) => return Err(RunError::Internal(format!("store pull observations were inconsistent: {error:?}"))),
@@ -2011,12 +2012,12 @@ fn print_pull_evidence(evidence: &StorePullEvidence) {
         StorePullEvidence::Explicit(report) => print_pull_report(report),
         StorePullEvidence::Closure(report) => {
             println!(
-                "CLOSURE plan_blake3={} members={} reused={} root={} admitted={}",
+                "CLOSURE plan_blake3={} members={} reused={} roots={} admitted={}",
                 report.plan.plan_blake3,
                 report.plan.members.len(),
                 report.reused_complete_count,
-                report.plan.root,
-                report.root_admitted,
+                report.plan.roots.join(","),
+                report.roots_admitted,
             );
             print_pull_report(&report.pull);
         }

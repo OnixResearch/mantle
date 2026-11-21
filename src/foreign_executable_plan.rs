@@ -60,6 +60,7 @@ const BLAKE3_BYTES: usize = 32;
 const NIX_STORE_PREFIX: &str = "/nix/store";
 const SOURCE_STORE_LITERAL_SENTINEL: &str = "__MANTLE_SOURCE_STORE_LITERAL_V1__";
 pub(crate) const CACHE_ONLY_PRESERVE_ROUTE: &str = "cache-only-preserve-v1";
+pub(crate) const CACHE_INPUTS_BUILD_ROOTS_ROUTE: &str = "cache-inputs-build-roots-v1";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ForeignExecutablePlan {
@@ -154,6 +155,7 @@ struct PlanIdentityMaterial<'a> {
     non_claims: &'a [String],
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // used by crate tests and other unit-test callers
 pub(crate) fn compile_foreign_executable_plan(
     graph: &ForeignDerivationGraph,
     package_index: &PackageIndex,
@@ -172,6 +174,26 @@ pub(crate) fn compile_foreign_executable_plan_with_profile(
     package: &str,
     system: &str,
     execution_profile: &ExecutionProfile,
+) -> Result<(ForeignExecutablePlan, ImportReceipt), ImportDiagnostic> {
+    compile_foreign_executable_plan_with_profile_and_route(
+        graph,
+        package_index,
+        policy,
+        package,
+        system,
+        execution_profile,
+        None,
+    )
+}
+
+pub(crate) fn compile_foreign_executable_plan_with_profile_and_route(
+    graph: &ForeignDerivationGraph,
+    package_index: &PackageIndex,
+    policy: &TranslationPolicy,
+    package: &str,
+    system: &str,
+    execution_profile: &ExecutionProfile,
+    requested_route: Option<&str>,
 ) -> Result<(ForeignExecutablePlan, ImportReceipt), ImportDiagnostic> {
     let (_translated, receipt) = translate_foreign_graph(graph, Some(package_index), policy)?;
     let selected_entry = select_package_entry(package_index, package, system)?;
@@ -216,8 +238,7 @@ pub(crate) fn compile_foreign_executable_plan_with_profile(
     let diagnostics = receipt.diagnostics.clone();
     let sandbox_audit = sandbox_audit(graph, &compiled.dependency_order);
     let substitution_audit = substitution_audit(graph, &compiled.dependency_order);
-    let realization_route =
-        (policy.output_path_recompute_mode == PRESERVE_CACHE_PATHS_MODE).then(|| CACHE_ONLY_PRESERVE_ROUTE.to_string());
+    let realization_route = resolve_realization_route(policy, requested_route)?;
     let non_claims = executable_plan_non_claims(realization_route.as_deref());
     let mut plan = ForeignExecutablePlan {
         schema: EXECUTABLE_PLAN_SCHEMA.to_string(),
@@ -505,9 +526,37 @@ fn executable_plan_non_claims(realization_route: Option<&str>) -> Vec<String> {
             "not-cache-future-availability".to_string(),
         ]);
     }
+    if realization_route == Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE) {
+        non_claims.extend(["not-input-cache-completeness".to_string()]);
+    }
     non_claims.sort();
     non_claims.dedup();
     non_claims
+}
+
+fn resolve_realization_route(
+    policy: &TranslationPolicy,
+    requested_route: Option<&str>,
+) -> Result<Option<String>, ImportDiagnostic> {
+    let preserve = policy.output_path_recompute_mode == PRESERVE_CACHE_PATHS_MODE;
+    let Some(route) = requested_route else {
+        return Ok(preserve.then(|| CACHE_ONLY_PRESERVE_ROUTE.to_string()));
+    };
+    if route != CACHE_INPUTS_BUILD_ROOTS_ROUTE {
+        return Err(plan_diagnostic(
+            "foreign-plan-route-unsupported",
+            None,
+            "requested foreign executable plan realization route is unsupported",
+        ));
+    }
+    if !preserve {
+        return Err(plan_diagnostic(
+            "foreign-plan-cache-inputs-requires-preserve",
+            None,
+            "cache-inputs build route requires preserve-cache-paths-v1",
+        ));
+    }
+    Ok(Some(route.to_string()))
 }
 
 fn validate_plan_header(plan: &ForeignExecutablePlan) -> Result<(), ImportDiagnostic> {
@@ -593,7 +642,7 @@ fn validate_plan_route(plan: &ForeignExecutablePlan) -> Result<(), ImportDiagnos
     let Some(route) = plan.realization_route.as_deref() else {
         return Ok(());
     };
-    if route != CACHE_ONLY_PRESERVE_ROUTE {
+    if route != CACHE_ONLY_PRESERVE_ROUTE && route != CACHE_INPUTS_BUILD_ROOTS_ROUTE {
         return Err(plan_diagnostic(
             "foreign-plan-route-unsupported",
             None,
@@ -613,8 +662,23 @@ fn validate_plan_route(plan: &ForeignExecutablePlan) -> Result<(), ImportDiagnos
         return Err(plan_diagnostic(
             "foreign-plan-cache-only-path-drift",
             None,
-            "cache-only preserved route contains a rewritten output or source path",
+            "preserved cache route contains a rewritten output or source path",
         ));
+    }
+    if route == CACHE_INPUTS_BUILD_ROOTS_ROUTE {
+        let selected = plan.selected_roots.iter().map(|root| root.node_id.as_str()).collect::<BTreeSet<_>>();
+        for unit in &plan.native_units {
+            if !selected.contains(unit.node_id.as_str()) {
+                continue;
+            }
+            if !matches!(&unit.builtin, CompiledForeignBuiltin::NativeDerivation) {
+                return Err(plan_diagnostic(
+                    "foreign-plan-cache-inputs-fod-root",
+                    Some(&unit.node_id),
+                    "cache-inputs build route refuses a fixed-output selected root",
+                ));
+            }
+        }
     }
     Ok(())
 }
@@ -1112,8 +1176,11 @@ fn validate_plan_claim_boundary(plan: &ForeignExecutablePlan) -> Result<(), Impo
         ]
         .iter()
         .any(|claim| !plan.non_claims.iter().any(|actual| actual == claim));
+    let cache_inputs_claim_missing = plan.realization_route.as_deref() == Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE)
+        && !plan.non_claims.iter().any(|claim| claim == "not-input-cache-completeness");
     if !plan.forbidden_process_invocations.is_empty()
         || cache_only_claim_missing
+        || cache_inputs_claim_missing
         || required.iter().any(|claim| !plan.non_claims.iter().any(|actual| actual == claim))
     {
         return Err(plan_diagnostic(
@@ -1300,9 +1367,15 @@ mod tests {
 
     #[test]
     fn cache_only_plan_binds_route_and_rejects_path_or_route_tampering() {
-        let mut graph: ForeignDerivationGraph = serde_json::from_str(NIX_GRAPH).expect("graph fixture");
-        let index: PackageIndex = serde_json::from_str(NIX_INDEX).expect("index fixture");
-        let mut policy: TranslationPolicy = serde_json::from_str(POLICY).expect("policy fixture");
+        let mut graph: ForeignDerivationGraph =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.graph.json"))
+                .expect("graph fixture");
+        let index: PackageIndex =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.index.json"))
+                .expect("index fixture");
+        let mut policy: TranslationPolicy =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-policy.json"))
+                .expect("policy fixture");
         graph.nodes[0].cache_hints.push(crate::foreign_derivation_import::CacheHint {
             cache_url: "https://cache.nixos.org".to_string(),
             trust_scope: "trusted-binary-cache".to_string(),
@@ -1311,13 +1384,13 @@ mod tests {
         policy.source_prefixes = vec![NIX_STORE_PREFIX.to_string()];
         policy.target_prefix = NIX_STORE_PREFIX.to_string();
         policy.output_path_recompute_mode = PRESERVE_CACHE_PATHS_MODE.to_string();
-        let (plan, _) = compile_foreign_executable_plan(&graph, &index, &policy, "hello", "x86_64-linux")
+        let (plan, _) = compile_foreign_executable_plan(&graph, &index, &policy, "two-node", "x86_64-linux")
             .expect("cache-only plan must compile");
 
         let mut prefix_drift = policy.clone();
         prefix_drift.target_prefix = "/mantle/store".to_string();
         assert_class(
-            compile_foreign_executable_plan(&graph, &index, &prefix_drift, "hello", "x86_64-linux"),
+            compile_foreign_executable_plan(&graph, &index, &prefix_drift, "two-node", "x86_64-linux"),
             "preserved-cache-prefix-mismatch",
         );
         assert_eq!(plan.realization_route.as_deref(), Some(CACHE_ONLY_PRESERVE_ROUTE));
@@ -1334,6 +1407,81 @@ mod tests {
         first_target.push_str("-drift");
         refresh_plan_identity(&mut drift);
         assert_class(validate_foreign_executable_plan(&drift), "foreign-plan-cache-only-path-drift");
+    }
+
+    #[test]
+    fn cache_inputs_build_roots_plan_binds_the_route_and_refuses_fod_roots() {
+        let mut graph: ForeignDerivationGraph =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.graph.json"))
+                .expect("graph fixture");
+        let index: PackageIndex =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.index.json"))
+                .expect("index fixture");
+        let mut policy: TranslationPolicy =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-policy.json"))
+                .expect("policy fixture");
+        graph.nodes[0].cache_hints.push(crate::foreign_derivation_import::CacheHint {
+            cache_url: "https://cache.nixos.org".to_string(),
+            trust_scope: "trusted-binary-cache".to_string(),
+        });
+        policy.trusted_cache_scopes.insert("trusted-binary-cache".to_string());
+        policy.source_prefixes = vec![NIX_STORE_PREFIX.to_string()];
+        policy.target_prefix = NIX_STORE_PREFIX.to_string();
+        policy.output_path_recompute_mode = PRESERVE_CACHE_PATHS_MODE.to_string();
+        let profile = crunch_build::foreign_profile_for_producer("nix");
+        let (plan, _) = compile_foreign_executable_plan_with_profile_and_route(
+            &graph,
+            &index,
+            &policy,
+            "two-node",
+            "x86_64-linux",
+            &profile,
+            Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE),
+        )
+        .expect("cache-inputs plan must compile");
+        assert_eq!(plan.realization_route.as_deref(), Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE));
+        assert!(plan.non_claims.iter().any(|claim| claim == "not-input-cache-completeness"));
+        assert!(!plan.non_claims.iter().any(|claim| claim == "not-builder-execution"));
+        validate_foreign_executable_plan(&plan).unwrap();
+
+        let mut recompute: TranslationPolicy =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-policy.json"))
+                .expect("policy fixture");
+        recompute.trusted_cache_scopes.insert("trusted-binary-cache".to_string());
+        assert_class(
+            compile_foreign_executable_plan_with_profile_and_route(
+                &graph,
+                &index,
+                &recompute,
+                "two-node",
+                "x86_64-linux",
+                &profile,
+                Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE),
+            ),
+            "foreign-plan-cache-inputs-requires-preserve",
+        );
+        assert_class(
+            compile_foreign_executable_plan_with_profile_and_route(
+                &graph,
+                &index,
+                &policy,
+                "two-node",
+                "x86_64-linux",
+                &profile,
+                Some(CACHE_ONLY_PRESERVE_ROUTE),
+            ),
+            "foreign-plan-route-unsupported",
+        );
+
+        let mut fod = plan.clone();
+        let root_id = fod.selected_roots[0].node_id.clone();
+        for unit in &mut fod.native_units {
+            if unit.node_id == root_id {
+                unit.builtin = CompiledForeignBuiltin::FixedOutput;
+            }
+        }
+        refresh_plan_identity(&mut fod);
+        assert_class(validate_foreign_executable_plan(&fod), "foreign-plan-cache-inputs-fod-root");
     }
 
     #[test]

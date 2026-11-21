@@ -293,6 +293,7 @@ pub struct RegisteredBuildRequest<'a> {
     pub retained_outputs: &'a [StorePath<String>],
     pub source_policy: FetchSourcePolicy,
     pub cache_only: bool,
+    pub forbid_host_store_fallback: bool,
 }
 
 #[derive(Debug)]
@@ -846,6 +847,7 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
     root_registry: crunch_store::RootRegistry,
     workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
 ) -> Result<RegisteredBuildResult, Error> {
+    builder.set_forbid_host_store_fallback(request.forbid_host_store_fallback);
     let mut worker_result = builder
         .build_all_report(request.roots, known_paths, config.max_jobs)
         .await

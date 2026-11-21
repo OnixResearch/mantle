@@ -219,6 +219,7 @@ pub use pull::import_http_cache_closure;
 pub use pull::import_http_cache_closure_with_validator;
 pub use pull::import_paths_from_cache_dir;
 pub use pull::import_paths_from_http_cache;
+pub use pull::probe_http_cache_path;
 pub use push::PushOptions;
 pub use push::PushReport;
 pub use push::PushedPath;

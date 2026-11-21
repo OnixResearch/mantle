@@ -1,0 +1,807 @@
+$ cargo test -p mantle --bin mantle foreign_realization
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 43s
+     Running unittests src/main.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/mantle-7696ded92822839c)
+
+running 13 tests
+test foreign_realization::tests::admission_rejects_remote_execution_before_unit_admission ... ok
+test foreign_realization::tests::admission_rejects_stale_receipt_missing_profile_and_unknown_root ... ok
+test foreign_realization::tests::admission_validates_receipt_roots_profiles_and_native_units ... ok
+test foreign_realization::tests::cache_inputs_closure_excludes_roots_and_admits_only_mapped_paths ... ok
+test foreign_realization::tests::cache_inputs_refuses_a_fixed_output_root_and_a_seeded_root_output ... ok
+test foreign_realization::tests::cache_inputs_root_refusals_report_the_first_path ... ok
+test foreign_realization::tests::cache_only_policy_and_empty_source_bundle_fail_closed ... ok
+test foreign_realization::tests::source_admission_binds_payloads_to_manifest_records ... ok
+test foreign_realization::tests::source_admission_rejects_missing_incomplete_and_stale_bindings ... ok
+test foreign_realization_receipt::tests::failure_origin_index_does_not_mark_an_unrelated_derivation ... ok
+test foreign_realization_receipt::tests::failure_origin_index_exposes_the_causal_derivation ... ok
+test foreign_realization_shell::tests::cache_only_observer_removes_every_builder_dependency_and_argument ... ok
+test foreign_realization_shell::tests::prepared_cache_closure_accepts_only_exact_mapped_members_and_references ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 3005 filtered out; finished in 0.07s
+
+EXIT=0
+$ cargo test -p mantle --bin mantle foreign_executable_plan
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.71s
+     Running unittests src/main.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/mantle-7696ded92822839c)
+
+running 7 tests
+test foreign_executable_plan::tests::cache_inputs_build_roots_plan_binds_the_route_and_refuses_fod_roots ... ok
+test foreign_executable_plan::tests::cache_only_plan_binds_route_and_rejects_path_or_route_tampering ... ok
+test foreign_executable_plan::tests::executable_plan_compilation_rejects_a_failed_sibling_root_without_partial_success ... ok
+test foreign_executable_plan::tests::executable_plan_is_deterministic_receipt_bound_and_self_validating ... ok
+test foreign_executable_plan::tests::executable_plan_preserves_bare_source_store_literals_during_aterm_validation ... ok
+test foreign_executable_plan::tests::executable_plan_validator_rejects_identity_domain_root_and_reference_tampering ... ok
+test foreign_executable_plan::tests::plan_reference_validation_accepts_bare_store_mentions_and_rejects_malformed_runs ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 3011 filtered out; finished in 0.05s
+
+EXIT=0
+$ cargo test -p mantle --bin mantle foreign_realization_shell
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.72s
+     Running unittests src/main.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/mantle-7696ded92822839c)
+
+running 2 tests
+test foreign_realization_shell::tests::cache_only_observer_removes_every_builder_dependency_and_argument ... ok
+test foreign_realization_shell::tests::prepared_cache_closure_accepts_only_exact_mapped_members_and_references ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3016 filtered out; finished in 0.00s
+
+EXIT=0
+$ cargo test -p mantle --test cache_inputs_build_route
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 34s
+     Running tests/cache_inputs_build_route.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cache_inputs_build_route-4a1094ad7faa3587)
+
+running 6 tests
+test cache_inputs_route_builds_the_root_from_hydrated_inputs ... ok
+test cache_inputs_route_is_refused_on_a_recompute_plan ... ok
+test cache_inputs_route_refuses_a_missing_input ... ok
+test cache_inputs_route_refuses_a_root_offered_by_the_cache ... ok
+test cache_inputs_route_refuses_an_untrusted_signer ... ok
+test cache_inputs_route_rejects_a_nonempty_source_bundle ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.99s
+
+EXIT=0
+$ cargo test -p mantle --test foreign_import_cli
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+     Running tests/foreign_import_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/foreign_import_cli-26e2265444123e8f)
+
+running 19 tests
+test foreign_import_cli_does_not_require_foreign_frontend_commands ... ok
+test foreign_import_cli_prepares_exact_nario_source_and_rejects_unmatched_records ... ok
+test foreign_import_cli_produce_aterm_matches_nix_and_emits_guix_directory_artifacts ... ok
+test foreign_import_cli_produce_aterm_rejects_bad_bundles_without_partial_artifacts ... ok
+test foreign_import_cli_produce_aterm_rejects_duplicate_and_bounded_byte_inputs ... ok
+test foreign_import_cli_produce_aterm_rejects_input_mode_conflicts_without_artifacts ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_from_drv_dir_without_nix ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_from_drv_files_without_nix ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_without_nix ... ok
+test foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs ... ok
+test foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_artifacts ... ok
+test foreign_import_cli_rejects_malformed_drv_without_partial_artifacts ... ok
+test foreign_import_cli_rejects_malformed_json_and_policy_failures ... ok
+test foreign_import_cli_reports_fixed_output_mismatch_from_admitted_source_state ... ok
+test foreign_import_cli_validates_and_plans_checked_fixtures ... ok
+test foreign_plan_refuses_success_when_distinct_output_names_alias ... ok
+test produce_backend_fix_and_host_nix_emit_parity_artifacts ... ignored, requires MANTLE_TEST_FIX_BACKEND_BINARY, MANTLE_TEST_NIX_INSTANTIATE_BINARY, and a reachable Nix daemon
+test produce_backend_rejects_conflicting_target_modes ... ok
+test produce_backend_rejects_unknown_backend ... ok
+
+test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.67s
+
+EXIT=0
+$ cargo test -p crunch-store --lib
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling smallvec v1.15.1
+   Compiling generic-array v0.14.7
+   Compiling getrandom v0.2.17
+   Compiling mio v1.2.0
+   Compiling zeroize v1.9.0
+   Compiling rustix v1.1.4
+   Compiling serde v1.0.228
+   Compiling futures-util v0.3.32
+   Compiling tracing v0.1.44
+   Compiling thiserror v2.0.18
+   Compiling zerofrom v0.1.7
+   Compiling regex-automata v0.4.14
+   Compiling lazy_static v1.5.0
+   Compiling num-traits v0.2.19
+   Compiling hashbrown v0.16.1
+   Compiling blake3 v1.8.5
+   Compiling bytemuck v1.25.0
+   Compiling strum v0.26.3
+   Compiling darling_core v0.23.0
+   Compiling pin-project v1.1.11
+   Compiling sharded-slab v0.1.7
+   Compiling indexmap v2.13.1
+   Compiling yoke v0.8.2
+   Compiling rustls-pki-types v1.14.0
+   Compiling parking_lot_core v0.9.12
+   Compiling rand_core v0.6.4
+   Compiling aws-lc-rs v1.18.1
+   Compiling uuid v1.23.0
+   Compiling miette v7.6.0
+   Compiling darling_core v0.20.11
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling bytes v1.11.1
+   Compiling parking_lot v0.12.5
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling inout v0.1.4
+   Compiling rustls-native-certs v0.8.3
+   Compiling universal-hash v0.5.1
+   Compiling digest v0.10.7
+   Compiling chrono v0.4.44
+   Compiling cipher v0.4.4
+   Compiling polyval v0.6.2
+   Compiling num-integer v0.1.46
+   Compiling aead v0.5.2
+   Compiling sha2 v0.10.9
+   Compiling ghash v0.5.1
+   Compiling tokio v1.51.0
+   Compiling http v1.4.0
+   Compiling num-bigint v0.4.8
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling bindgen v0.69.5
+   Compiling roaring v0.11.4
+   Compiling aristo v0.4.1
+   Compiling async-stream v0.3.6
+   Compiling turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling pack1 v1.1.0
+   Compiling genawaiter v0.99.1
+   Compiling prost-derive v0.14.3
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling rustls-webpki v0.103.16
+   Compiling aes-gcm v0.10.3
+   Compiling icu_collections v2.2.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling icu_locale_core v2.2.0
+   Compiling http-body v1.0.1
+   Compiling http-body-util v0.1.3
+   Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling rustls v0.23.46
+   Compiling bigdecimal v0.4.11
+   Compiling clap v4.6.0
+   Compiling derive_more v2.1.1
+   Compiling quick-xml v0.40.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling nibble_vec v0.1.0
+   Compiling ed25519 v2.2.3
+   Compiling radix_trie v0.2.1
+   Compiling n0-error v0.1.3
+   Compiling curve25519-dalek v4.1.3
+   Compiling thiserror v1.0.69
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling icu_provider v2.2.0
+   Compiling num_enum_derive v0.7.6
+   Compiling sha1 v0.10.6
+   Compiling cobs v0.3.0
+   Compiling petgraph v0.6.5
+   Compiling darling_macro v0.20.11
+   Compiling postcard v1.1.3
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/wt/mantle-build-route/vendor/fuse-backend-rs)
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling matchers v0.2.0
+   Compiling darling_macro v0.23.0
+   Compiling regex v1.12.3
+   Compiling tracing-subscriber v0.3.23
+   Compiling futures-executor v0.3.32
+   Compiling icu_locale v2.2.0
+   Compiling futures v0.3.32
+   Compiling bstr v1.12.1
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling darling v0.23.0
+   Compiling prost v0.14.3
+   Compiling serde_with_macros v3.18.0
+   Compiling num_enum v0.7.6
+   Compiling ed25519-dalek v2.2.0
+   Compiling ref-cast v1.0.25
+   Compiling serde_tagged v0.3.0
+   Compiling serde_qs v0.12.0
+   Compiling safe_arch v0.7.4
+   Compiling inplace-vec-builder v0.1.1
+   Compiling range-collections v0.4.6
+   Compiling md-5 v0.10.6
+   Compiling typed-builder v0.22.0
+   Compiling sha1-checked v0.10.0
+   Compiling lru v0.16.4
+   Compiling artifact-auth-core v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling idna_adapter v1.2.1
+   Compiling icu_collator v2.2.1
+   Compiling idna v1.1.0
+   Compiling wide v0.7.33
+   Compiling derive_builder_macro v0.20.2
+   Compiling tracing-appender v0.2.5
+   Compiling tracing-indicatif v0.3.14
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-attestation-core)
+   Compiling url v2.5.8
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-action-result-core)
+   Compiling serde_with v3.18.0
+   Compiling derive_builder v0.20.2
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-composition-core)
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-overlay-core)
+   Compiling oci-spec v0.7.1
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-gc-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-repair-core)
+   Compiling bit-vec v0.8.0
+   Compiling quick-error v1.2.3
+   Compiling rand_xorshift v0.4.0
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling libbz2-rs-sys v0.2.3
+   Compiling tempfile v3.27.0
+   Compiling xattr v1.6.1
+   Compiling polling v3.11.0
+   Compiling fs-set-times v0.20.3
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling tokio-rustls v0.26.4
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling async-compression v0.4.19
+   Compiling cap-primitives v4.0.2
+   Compiling nix-compat v0.1.0 (/home/brittonr/wt/mantle-build-route/vendor/nix-compat)
+   Compiling iroh-io v0.6.2
+   Compiling imbl v7.0.2
+   Compiling fs4 v1.1.0
+   Compiling nix-archive v0.6.0
+   Compiling nix-archive v0.1.0
+   Compiling tower-http v0.6.8
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-attestation)
+   Compiling tar v0.4.45
+   Compiling h2 v0.4.16
+   Compiling tokio-stream v0.1.18
+   Compiling n0-future v0.3.2
+   Compiling cap-std v4.0.2
+   Compiling bao-tree v0.16.1
+   Compiling cap-fs-ext v4.0.2
+   Compiling rusty-fork v0.3.1
+   Compiling bit-set v0.8.0
+   Compiling unarray v0.1.4
+   Compiling bzip2 v0.6.1
+   Compiling fault-injection v1.0.10
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling astral-tokio-tar v0.6.4
+   Compiling fastcdc v3.2.1
+   Compiling fastcdc v5.0.0
+   Compiling proptest v1.11.0
+   Compiling irpc v0.13.0
+   Compiling crunch-nar v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-nar)
+   Compiling hyper v1.9.0
+   Compiling hyper-util v0.1.20
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling reqwest-tracing v0.6.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/wt/mantle-build-route/vendor/snix-tracing)
+   Compiling snix-castore v0.1.0 (/home/brittonr/wt/mantle-build-route/vendor/snix-castore)
+   Compiling snix-build v0.1.0 (/home/brittonr/wt/mantle-build-route/vendor/snix-build)
+   Compiling snix-store v0.1.0 (/home/brittonr/wt/mantle-build-route/vendor/snix-store)
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling crunch-store v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-store)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-delta)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 06s
+     Running unittests src/lib.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/crunch_store-c4cd4ccf5b5f26c7)
+
+running 464 tests
+test action_result::tests::aggregate_candidate_limit_rejects_the_offending_source_response ... ok
+test action_result::tests::discovery_only_base_is_readable_but_never_receives_publication ... ok
+test action_result::tests::duplicate_detached_signatures_are_rejected_before_publication ... ok
+test action_result::tests::gc_retains_metadata_only_while_outputs_are_independently_live ... ok
+test action_result::tests::http_corrupt_record_and_poisoned_index_fail_closed ... ok
+test action_result::tests::http_interrupted_index_publication_leaves_record_undiscoverable ... ok
+test action_result::tests::http_publication_is_record_first_discoverable_and_duplicate_safe ... ok
+test action_result::tests::http_timeout_rejects_source_without_fabricating_lookup ... ok
+test action_result::tests::http_urls_strip_query_fragment_and_preserve_cache_subpath ... ok
+test action_result::tests::io_fault_cache_publication_is_undiscoverable_until_retry_commits ... ok
+test action_result::tests::io_fault_counter_is_serialized_and_unrelated_store_reads_cannot_consume_it ... ok
+test action_result::tests::io_fault_default_counter_keeps_store_and_cache_cycle ... ok
+test action_result::tests::io_fault_guard_restores_ownership_after_unwind ... ok
+test action_result::tests::io_fault_nar_write_is_classified_as_export_failure ... ok
+test action_result::tests::io_fault_store_read_is_classified_as_store_failure ... ok
+test action_result::tests::local_conflicting_existing_record_is_not_overwritten ... ok
+test action_result::tests::local_dangling_or_poisoned_index_fails_closed ... ok
+test action_result::tests::local_interrupted_publication_is_not_discoverable ... ok
+test action_result::tests::local_publish_is_atomic_no_clobber_and_duplicate_safe ... ok
+test action_result::tests::offline_discovery_never_opens_remote_sources ... ok
+test action_result::tests::source_limit_bounds_empty_or_failing_remote_sources ... ok
+test archive::tests::archive_export_list_round_trip_preserves_metadata_before_payload ... ok
+test archive::tests::archive_export_refuses_unsigned_without_escape_hatch ... ok
+test archive::tests::archive_export_rejects_stale_final_nar_facts_before_writing ... ok
+test archive::tests::archive_import_rejects_ca_metadata_for_another_store_path ... ok
+test archive::tests::archive_import_rejects_conflicting_local_pathinfo ... ok
+test archive::tests::archive_import_rejects_existing_path_with_stale_final_nar_facts ... ok
+test archive::tests::archive_import_rejects_store_prefix_mismatch_before_persisting ... ok
+test archive::tests::archive_import_rejects_tampered_payload_without_persisting ... ok
+test archive::tests::archive_import_rejects_truncated_payload_without_persisting ... ok
+test archive::tests::archive_import_rejects_unsupported_ca_metadata_without_persisting ... ok
+test archive::tests::archive_import_rejects_untrusted_signature_without_persisting ... ok
+test archive::tests::archive_import_round_trip_and_skip_existing_are_idempotent ... ok
+test archive::tests::archive_list_drains_non_seekable_payloads_in_bounded_chunks ... ok
+test archive::tests::archive_list_rejects_bad_magic ... ok
+test archive::tests::archive_list_rejects_header_end_count_mismatch ... ok
+test archive::tests::archive_list_rejects_signed_size_mismatch_and_truncated_stream ... ok
+test archive::tests::archive_list_rejects_stream_corruption_even_with_resealed_payload_blake3 ... ok
+test archive::tests::archive_round_trip_preserves_distinct_marker_ca_and_final_nar_identities ... ok
+test archive::tests::ca_path_identity_accepts_reference_aware_standard_path ... ok
+test archive::tests::casita_archive_export_rechecks_revoked_closure_signer_before_writing ... ok
+test archive::tests::casita_archive_rejects_unsigned_override_before_reading_or_admitting ... ok
+test archive::tests::casita_archive_rejects_unsigned_record_under_signed_import ... ok
+test archive::tests::export_closure_includes_references_deterministically ... ok
+test archive::tests::import_action_core_rejects_untrusted_and_skips_present ... ok
+test archive::tests::large_archive_payload_stays_on_the_chunked_castore_ingest_path ... ok
+test archive::tests::missing_closure_reference_fails_export_plan ... ok
+test archive::tests::pathinfo_fixture_service_is_bounded ... ok
+test archive::tests::signed_snix_archive_requires_casita_destination_trust_and_round_trips_unchanged ... ok
+test attestation::tests::artifact_attestation_file_uses_canonical_bytes ... ok
+test attestation::tests::artifact_attestation_round_trips_by_logical_store_path ... ok
+test attestation::tests::runtime_closure_attestation_is_cached_by_root_selection ... ok
+test attestation::tests::runtime_closure_attestation_refreshes_after_member_digest_changes ... ok
+test attestation::tests::runtime_closure_attestation_synthesizes_missing_member_artifact ... ok
+test attestation::tests::runtime_closure_attestation_uses_stored_artifact_digests ... ok
+test backend::tests::undeclared_overlay_rejects_before_accessing_writable_or_base_state ... ok
+test build_io::tests::blob_and_nar_hashes_cover_all_supported_algorithms ... ok
+test build_io::tests::equal_length_replacement_preserves_binary_shape_and_occurrences ... ok
+test build_io::tests::host_path_hash_is_deterministic_and_missing_paths_fail_closed ... ok
+test build_io::tests::missing_blob_hash_fails_closed ... ok
+test build_io::tests::read_file_node_rejects_non_file_and_over_limit_inputs ... ok
+test build_io::tests::rewrite_and_nar_hash_preserve_named_operation_behavior ... ok
+test build_io::tests::unequal_length_replacement_is_rejected - should panic ... ok
+test ca_mapping::tests::insert_and_get ... ok
+test ca_mapping::tests::load_missing_file_returns_empty ... ok
+test ca_mapping::tests::save_and_load_roundtrip ... ok
+test capability::tests::missing_output_does_not_create_a_root ... ok
+test capability::tests::output_lookup_and_selected_root_registration_share_exact_identity ... ok
+test capability::tests::owned_transfer_objects_outlive_the_borrowed_handle ... ok
+test capability::tests::source_slice_batch_publishes_both_backends_without_partial_conflicts ... ok
+test casita::tests::cached_node_rechecks_revoked_policy_in_same_session ... ok
+test casita::tests::gc_inventory_reads_more_roots_than_one_atomic_mutation ... ok
+test casita::tests::invalid_trust_policy_cannot_open_casita_repository ... ok
+test casita::tests::local_signer_without_policy_survives_fresh_process ... ok
+test casita::tests::pathinfo_batch_rejects_second_client_root_published_after_staging ... ok
+test casita::tests::policy_file_changed_after_open_is_rechecked_on_lookup ... ok
+test casita::tests::removed_policy_key_blocks_fresh_process_reopen_without_changing_root ... ok
+test casita::tests::repointed_castore_payload_rejects_swapped_content_and_postcard_before_gc ... ok
+test casita::tests::second_client_cannot_resurrect_a_removed_castore_root ... ok
+test casita::tests::second_client_cannot_resurrect_a_root_removed_after_its_read ... ok
+test casita::tests::second_client_update_conflict_keeps_winners_root_and_revision ... ok
+test casita::tests::signed_roots_survive_export_removal_and_reopen_with_conflicts_and_guard ... ok
+test casita::tests::snix_miss_does_not_read_a_leftover_casita_output_root ... ok
+test casita::tests::staged_output_batch_rejects_competing_root_and_reclaims_abandoned_envelopes ... ok
+test casita::tests::staged_output_loses_to_second_client_without_replacing_winner ... ok
+test casita::tests::stopped_staging_is_unrooted_collected_and_retry_succeeds ... ok
+test casita::tests::stopped_staging_process_leaves_no_root_and_collection_allows_retry ... ok
+test casita::tests::store_sign_rejects_second_client_repoint_between_read_and_update ... ok
+test closure::tests::cycle_terminates ... ok
+test closure::tests::depth_limit_enforced ... ok
+test closure::tests::diamond_dedup ... ok
+test closure::tests::linear_chain ... ok
+test closure::tests::local_query_error_can_still_use_remote_refs ... ok
+test closure::tests::practical_mode_records_degraded_child_lookup ... ok
+test closure::tests::practical_mode_records_degraded_root_lookup ... ok
+test closure::tests::remote_fallback ... ok
+test closure::tests::remote_metadata_lookup_failure_degrades_practical_mode ... ok
+test closure::tests::self_reference ... ok
+test closure::tests::single_path_no_refs ... ok
+test closure::tests::strict_mode_rejects_missing_root_closure_facts ... ok
+test completeness::tests::blob_node_rejects_declared_size_mismatch ... ok
+test completeness::tests::blob_node_requires_blob_presence ... ok
+test completeness::tests::bounded_depth_rejects_extremely_deep_trees ... ok
+test completeness::tests::chunked_blob_metadata_must_match_declared_size ... ok
+test completeness::tests::completeness_rechecks_and_rejects_removed_directory ... ok
+test completeness::tests::directory_with_missing_blob_child_is_incomplete ... ok
+test completeness::tests::empty_directory_requires_existence ... ok
+test completeness::tests::node_visit_limit_accepts_last_supported_node_and_rejects_overflow ... ok
+test completeness::tests::symlink_is_always_complete ... ok
+test composition::tests::complete_multi_root_realization_is_repeatable_and_order_independent ... ok
+test composition::tests::missing_child_and_corrupt_directory_fail_before_persistence ... ok
+test composition::tests::missing_root_and_blob_fail_without_receipt ... ok
+test composition::tests::persistence_and_root_recheck_failures_emit_no_receipt ... ok
+test export::tests::export_depth_limit_enforced ... ok
+test export::tests::export_directory_creates_files ... ok
+test export::tests::export_directory_sets_permissions_and_mtime ... ok
+test export::tests::export_directory_with_symlink ... ok
+test export::tests::export_file_allows_many_small_reads ... ok
+test export::tests::export_file_creates_parent_directories ... ok
+test export::tests::export_file_empty_content ... ok
+test export::tests::export_file_executable_sets_permissions ... ok
+test export::tests::export_file_non_executable_sets_permissions ... ok
+test export::tests::export_file_rejects_short_blob ... ok
+test export::tests::export_file_sets_mtime ... ok
+test export::tests::export_file_writes_content ... ok
+test export::tests::export_missing_blob_returns_error ... ok
+test export::tests::export_missing_directory_returns_error ... ok
+test export::tests::export_moderate_depth_succeeds ... ok
+test export::tests::export_nested_directory ... ok
+test export::tests::export_symlink_creates_link ... ok
+test export::tests::export_symlink_sets_lmtime ... ok
+test gc::tests::blob_creation_order_does_not_change_plan_but_changed_blob_facts_stale_it ... ok
+test gc::tests::casita_castore_fence_never_deletes_a_retained_output_export ... ok
+test gc::tests::casita_castore_gc_keeps_retained_nodes_and_rejects_missing_roots ... ok
+test gc::tests::casita_fence_recovers_partial_progress_without_marking_other_roots_removed ... ok
+test gc::tests::casita_fence_rejects_symlink_and_oversized_outcome_journal ... ok
+test gc::tests::casita_gc_busy_collector_keeps_reclaim_incomplete_until_recovery ... ok
+test gc::tests::casita_gc_executes_signed_output_plan_and_preserves_retained_nar_facts ... ok
+test gc::tests::casita_gc_fence_pending_rejects_dangling_orphan_journal ... ok
+test gc::tests::casita_gc_matches_snix_candidates_for_identical_published_outputs_and_retention ... ok
+test gc::tests::casita_gc_rejects_newly_retained_root_then_collects_only_unretained ... ok
+test gc::tests::casita_gc_rejects_repointed_retained_payload_and_missing_root ... ok
+test gc::tests::casita_gc_repointed_verified_output_rejects_old_plan_before_fencing ... ok
+test gc::tests::casita_output_fence_recovery_preserves_unremoved_and_cleans_only_removed_metadata ... ok
+test gc::tests::casita_plan_identity_binds_exact_root_targets ... ok
+test gc::tests::casita_recovery_before_first_root_removal_preserves_candidate ... ok
+test gc::tests::casita_recovery_cleans_only_absent_roots_and_keeps_retained_exports ... ok
+test gc::tests::casita_recovery_conflicting_later_root_preserves_earlier_export_and_indexes ... ok
+test gc::tests::casita_recovery_rejects_changed_targets_and_preserves_published_roots ... ok
+test gc::tests::casita_recovery_rejects_republished_fenced_root_without_erasing_it ... ok
+test gc::tests::casita_recovery_replays_real_partial_root_removal_without_new_deletions ... ok
+test gc::tests::casita_unguarded_gc_rejects_before_touching_signed_roots_or_metadata ... ok
+test gc::tests::directory_outputs_survive_reopen_and_gc ... ok
+test gc::tests::dry_run_reports_same_candidates_as_real_run ... ok
+test gc::tests::explicit_castore_root_survives_while_unreachable_blob_is_reclaimed ... ok
+test gc::tests::file_cleanup_reports_failure_after_attempting_later_independent_paths ... ok
+test gc::tests::gc_aborts_when_retained_root_pathinfo_is_missing ... ok
+test gc::tests::gc_aborts_when_root_registry_is_corrupt ... ok
+test gc::tests::gc_operation_order_matches_design ... ok
+test gc::tests::operation_reporting_preserves_first_failure_and_records_later_work ... ok
+test gc::tests::path_explanation_rejects_retaining_root_links_above_policy_limit ... ok
+test gc::tests::pathinfo_rewrite_failure_stops_before_export_deletion ... ok
+test gc::tests::reclaim_observation_preserves_unknown_bytes_and_plan_identity_binds_shape ... ok
+test gc::tests::remove_path_accepts_an_already_missing_export ... ok
+test gc::tests::remove_path_does_not_follow_a_symlink_outside_the_export_tree ... ok
+test gc::tests::remove_path_removes_nested_read_only_export_tree ... ok
+test gc::tests::retained_root_keeps_transitive_closure_and_sidecars ... ok
+test gc::tests::reversed_blob_enumeration_has_the_same_reclaim_observations_and_plan_id ... ok
+test gc::tests::shared_blob_survives_when_reachable_path_still_references_it ... ok
+test gc::tests::snapshot_pathinfos_finishes_before_later_mutation ... ok
+test gc::tests::stale_plan_is_rejected_after_export_symlink_substitution ... ok
+test gc::tests::stale_plan_is_rejected_after_root_change_without_deletion ... ok
+test gc::tests::unreachable_output_removes_pathinfo_exports_and_attestations ... ok
+test gc::tests::unsigned_retained_pathinfo_survives_real_gc ... ok
+test handle::tests::action_result_admission_preserves_current_detailed_artifact_attestation ... ok
+test handle::tests::action_result_nar_byte_accounting_distinguishes_transfer_reuse_and_overflow ... ok
+test handle::tests::cached_node_for_path_rejects_incomplete_session_node ... ok
+test handle::tests::cached_node_for_path_reuses_local_pathinfo_node ... ok
+test handle::tests::casita_lookup_does_not_fall_back_to_leftover_snix_pathinfo ... ok
+test handle::tests::check_cache_accepts_ca_mapping_with_custom_store_prefix ... ok
+test handle::tests::check_cache_directory_output_with_missing_child_is_castore_incomplete ... ok
+test handle::tests::check_cache_preserves_current_detailed_artifact_attestation ... ok
+test handle::tests::check_cache_replaces_stale_artifact_attestation_facts ... ok
+test handle::tests::delta_and_full_substitution_record_same_attestation_and_root_metadata ... ok
+test handle::tests::delta_capability_url_preserves_cache_subpath_with_trailing_slash ... ok
+test handle::tests::delta_capability_url_preserves_cache_subpath_without_trailing_slash ... ok
+test handle::tests::delta_capability_url_uses_root_cache_authority ... ok
+test handle::tests::failed_persist_does_not_register_root ... ok
+test handle::tests::local_protocol_v1_matches_crunch_delta_wire_contract ... ok
+test handle::tests::mismatched_remote_pathinfo_causes_no_substitution_mutations ... ok
+test handle::tests::noop_publisher_is_default_and_skips_all_outputs ... ok
+test handle::tests::overlay_base_layer_opens_without_a_source_admission_authority ... ok
+test handle::tests::overlay_base_state_mutation_blocks_output_admission ... ok
+test handle::tests::overlay_ca_mapping_precedence_and_publication_are_layer_bounded ... ok
+test handle::tests::overlay_custom_prefix_get_and_list_share_reference_signature_authority ... ok
+test handle::tests::overlay_duplicate_base_declaration_fails_before_overlay_creation ... ok
+test handle::tests::overlay_gc_execution_rejects_stale_base_generation ... ok
+test handle::tests::overlay_gc_rejects_base_to_overlay_reference ... ok
+test handle::tests::overlay_gc_retains_base_reachability_without_base_mutation ... ok
+test handle::tests::overlay_generation_drift_blocks_later_read ... ok
+test handle::tests::overlay_incomplete_shadow_blocks_complete_base_fallback ... ok
+test handle::tests::overlay_missing_base_fails_closed ... ok
+test handle::tests::overlay_prefix_mismatch_preserves_both_layers ... ok
+test handle::tests::overlay_read_through_base_hit_does_not_mutate_overlay ... ok
+test handle::tests::overlay_reads_file_and_directory_content_from_distinct_bases_without_backfill ... ok
+test handle::tests::overlay_rejects_base_pathinfo_with_invalid_layer_signature ... ok
+test handle::tests::overlay_rejects_base_with_write_permission ... ok
+test handle::tests::overlay_rejects_foreign_base_before_opening_services_or_creating_writable_state ... ok
+test handle::tests::overlay_report_records_selected_base_descriptor ... ok
+test handle::tests::overlay_shadowed_path_does_not_inherit_base_trust ... ok
+test handle::tests::overlay_shadows_base_pathinfo ... ok
+test handle::tests::overlay_substituter_refuses_to_open_without_a_source_admission_authority ... ok
+test handle::tests::overlay_two_bases_stack_in_declaration_order ... ok
+test handle::tests::overlay_writes_route_to_overlay_only ... ok
+test handle::tests::persist_signed_output_registers_build_root ... ok
+test handle::tests::persist_signed_output_registers_self_build_root ... ok
+test handle::tests::persist_signed_output_rejects_store_path_mismatch ... ok
+test handle::tests::persist_signed_output_rejects_unsigned_pathinfo ... ok
+test handle::tests::persist_signed_output_writes_artifact_attestation ... ok
+test handle::tests::persistent_output_calls_configured_publisher ... ok
+test handle::tests::persistent_output_does_not_fail_on_publisher_error ... ok
+test handle::tests::practical_pathinfo_open_fallback_records_audit_event ... ok
+test handle::tests::remote_substitution_404_delta_probe_falls_back_to_full_fetch ... ok
+test handle::tests::remote_substitution_accepts_delta_chunk_stream_without_full_fetch ... ok
+test handle::tests::remote_substitution_closure_scoped_delta_accepts_requested_output_and_reports_reuse ... ok
+test handle::tests::remote_substitution_cross_authority_capability_falls_back_to_full_fetch ... ok
+test handle::tests::remote_substitution_directory_delta_without_local_directory_closure_falls_back_to_full_fetch ... ok
+test handle::tests::remote_substitution_malformed_delta_capability_json_falls_back_to_full_fetch ... ok
+test handle::tests::remote_substitution_malformed_stream_json_falls_back_to_full_fetch ... ok
+test handle::tests::remote_substitution_missing_local_backing_content_is_absent_from_receiver_manifest ... ok
+test handle::tests::remote_substitution_probe_error_falls_back_to_full_fetch ... ok
+test handle::tests::remote_substitution_probes_delta_capability_once_per_session ... ok
+test handle::tests::remote_substitution_receiver_manifest_stays_bounded_to_requested_output ... ok
+test handle::tests::remote_substitution_registers_bootstrap_root ... ok
+test handle::tests::remote_substitution_rejects_untrusted_full_pathinfo_before_publication ... ok
+test handle::tests::remote_substitution_stream_failure_falls_back_through_real_http_cache ... ok
+test handle::tests::remote_substitution_untrusted_delta_pathinfo_falls_back_to_full_fetch ... ok
+test handle::tests::remote_substitution_without_cache_url_skips_probe_and_full_fetches ... ok
+test handle::tests::remote_substitution_writes_artifact_attestation ... ok
+test handle::tests::remote_trusted_key_parser_accepts_indexed_keys_and_rejects_duplicate_indexes ... ok
+test handle::tests::resolve_same_authority_endpoint_rejects_cross_origin_urls ... ok
+test handle::tests::root_export_refreshes_stale_materialized_path ... ok
+test handle::tests::snix_lookup_ignores_readable_casita_repository_left_in_recorded_state ... ok
+test handle::tests::strict_pathinfo_open_fallback_is_rejected ... ok
+test handle::tests::synthetic_services_reject_casita_before_opening_state ... ok
+test handle::tests::synthetic_snix_services_reject_recorded_casita_before_loading_foreign_state ... ok
+test handle::tests::try_substitute_remote_fallback_to_subsequent_url_when_primary_missing ... ok
+test handle::tests::try_substitute_remote_negative_miss_prevents_repeat_probe ... ok
+test handle::tests::try_substitute_remote_records_metadata_cache_on_hit ... ok
+test handle::tests::verified_local_output_adoption_ingests_signs_and_persists ... ok
+test handle::tests::verified_local_output_adoption_rejects_a_missing_physical_path ... ok
+test handle::tests::verified_local_output_adoption_rejects_changed_existing_content ... ok
+test handle::tests::verified_source_ingest_preserves_exact_path_and_reuses_matching_content ... ok
+test handle::tests::verified_source_ingest_rejects_conflicting_existing_content ... ok
+test http_closure::tests::conflicting_digest_path_identity_is_rejected ... ok
+test http_closure::tests::depth_limit_fails_closed ... ok
+test http_closure::tests::diamond_and_cycle_are_deduplicated ... ok
+test http_closure::tests::duplicate_reference_is_rejected ... ok
+test http_closure::tests::incomplete_plan_and_active_request_fail_closed ... ok
+test http_closure::tests::invalid_limits_and_identity_are_rejected ... ok
+test http_closure::tests::linear_plan_imports_root_last ... ok
+test http_closure::tests::member_limit_fails_closed ... ok
+test http_closure::tests::observation_without_active_request_is_rejected ... ok
+test http_closure::tests::one_member_plan_is_stable_and_root_last ... ok
+test http_closure::tests::reference_limit_fails_before_pending_members_change ... ok
+test http_closure::tests::reference_order_does_not_change_plan_identity ... ok
+test http_closure::tests::returned_path_mismatch_is_rejected ... ok
+test http_closure::tests::total_nar_size_limit_fails_closed ... ok
+test layer::tests::layered_value_preserves_exact_index_through_map ... ok
+test layer::tests::store_layer_booleans_are_disjoint ... ok
+test layer::tests::store_layer_display_includes_exact_base_index ... ok
+test layer::tests::zero_service_index_is_overlay ... ok
+test metadata_cache::tests::evict_expired_removes_only_expired_entries ... ok
+test metadata_cache::tests::force_refresh_disables_get ... ok
+test metadata_cache::tests::load_corrupt_file_returns_empty ... ok
+test metadata_cache::tests::load_empty_cache_from_nonexistent_file ... ok
+test metadata_cache::tests::put_and_get_roundtrip ... ok
+test metadata_cache::tests::put_replaces_existing_entry ... ok
+test metadata_cache::tests::remove_removes_existing_entry ... ok
+test metadata_cache::tests::remove_returns_false_for_missing_key ... ok
+test metadata_cache::tests::save_and_reload_persists_entries ... ok
+test metadata_cache::tests::save_evicts_excess_entries ... ok
+test mutation_lock::tests::try_acquire_rejects_second_mutator ... ok
+test nario::tests::ca_identity_core_accepts_standard_path_and_rejects_mismatch ... ok
+test nario::tests::materialization_publication_moves_all_staged_paths ... ok
+test nario::tests::materialization_publication_rolls_back_prior_moves_on_failure ... ok
+test nario::tests::nario_casita_accepts_configured_1024_root_boundary ... ok
+test nario::tests::nario_casita_batch_publishes_both_verified_paths ... ok
+test nario::tests::nario_casita_batch_rejects_conflicting_root_without_publishing_other_path ... ok
+test nario::tests::nario_casita_late_envelope_failure_reclaims_first_staged_path ... ok
+test nario::tests::nario_casita_later_bad_nar_leaves_earlier_path_unpublished ... ok
+test nario::tests::nario_casita_later_envelope_staging_failure_leaves_earlier_object_collectable ... ok
+test nario::tests::nario_casita_rechecks_import_policy_before_reading_archive ... ok
+test nario::tests::nario_casita_rejects_1025_new_roots_before_any_publication ... ok
+test nario::tests::nario_casita_rejects_out_of_policy_key_before_archive_or_mutation ... ok
+test nario::tests::nario_casita_rejects_unsigned_override_before_reading_archive ... ok
+test nario::tests::nario_casita_rejects_unsigned_record_under_signed_import ... ok
+test nario::tests::nario_declared_profile_bounds_gate_batch_without_repository_mutation ... ok
+test nario::tests::nario_snix_batch_import_accepts_unsigned_record_and_reopens_both_paths ... ok
+test nario::tests::reference_closure_accepts_archive_member_and_rejects_missing_member ... ok
+test nario::tests::sha256_parser_accepts_pinned_raw_hex_and_rejects_other_encodings ... ok
+test nario::tests::state_core_accepts_record_and_end ... ok
+test nario::tests::state_core_rejects_marker_duplicate_and_limit ... ok
+test nario::tests::trust_core_accepts_matching_key_and_rejects_wrong_key ... ok
+test overlay::tests::backend_identity_cannot_be_reopened_under_another_backend ... ok
+test overlay::tests::embedded_overlay_policy_is_typed_and_bounded ... ok
+test overlay::tests::generation_observation_rejects_symlink_members ... ok
+test overlay::tests::identity_record_rejects_prefix_drift ... ok
+test overlay::tests::identityless_casita_marker_blocks_any_backend_without_mutation ... ok
+test overlay::tests::identityless_unknown_content_blocks_casita_without_mutation ... ok
+test overlay::tests::legacy_snix_identityless_populated_store_reopens_without_rewriting_existing_content ... ok
+test overlay::tests::legacy_v1_identity_remains_snix_only_without_backend_field ... ok
+test overlay::tests::mixed_backend_base_rejects_before_opening_any_layer ... ok
+test overlay::tests::pure_open_decision_covers_recorded_identity_and_identityless_markers ... ok
+test overlay::tests::undeclared_overlay_rejects_before_touching_either_directory ... ok
+test overlay::tests::writable_base_is_rejected_before_generation_admission ... ok
+test path_identity::tests::different_requested_path_digest_is_rejected ... ok
+test path_identity::tests::marker_normalized_ca_path_is_accepted ... ok
+test path_identity::tests::matching_requested_path_digest_is_accepted ... ok
+test path_identity::tests::mismatched_ca_path_is_rejected ... ok
+test provenance::tests::byte_reference_admission_requires_a_valid_store_path_digest ... ok
+test provenance::tests::castore_directory_scan_detects_symlink_loop_without_following_links ... ok
+test provenance::tests::castore_scan_accepts_complete_signed_blob_without_host_fallback ... ok
+test provenance::tests::castore_scan_counts_duplicate_nodes_and_enforces_duplicate_limit ... ok
+test provenance::tests::castore_scan_rejects_untrusted_and_receipt_inconsistent_pathinfo_before_blob_reads ... ok
+test provenance::tests::castore_scan_reports_missing_blob_before_claiming_complete_traversal ... ok
+test provenance::tests::classifier_covers_data_elf_script_and_unknown_executable ... ok
+test provenance::tests::cpio_and_gzip_initrd_readers_classify_nested_executable_scripts ... ok
+test provenance::tests::equivalent_observation_order_canonicalizes_deterministically ... ok
+test provenance::tests::exact_reference_resolution_accepts_declared_target_and_rejects_foreign_unknown_and_escape ... ok
+test provenance::tests::generic_compressed_streams_are_bounded_and_scanned_as_single_payloads ... ok
+test provenance::tests::identity_shape_is_bounded_and_stable ... ok
+test provenance::tests::lexical_relative_resolution_never_returns_a_path_outside_root ... ok
+test provenance::tests::malformed_and_bounded_containers_fail_closed ... ok
+test provenance::tests::named_limits_all_fail_closed ... ok
+test provenance::tests::payload_classification_is_deterministic_for_arbitrary_bytes ... ok
+test provenance::tests::policy_accepts_bounded_sorted_profile_paths_and_rejects_bad_limits ... ok
+test provenance::tests::preserved_identity_paths_are_targets_not_untranslated_foreign_references ... ok
+test provenance::tests::shebang_accepts_profile_and_rejects_relative_missing_and_non_utf8_targets ... ok
+test provenance::tests::symlink_resolution_rejects_escape_missing_and_loop ... ok
+test provenance::tests::tar_reader_finds_hidden_unclassified_executable_and_path_escape ... ok
+test pull::tests::http_closure_changed_dependency_nar_keeps_closure_absent ... ok
+test pull::tests::http_closure_dependency_content_failure_keeps_root_absent ... ok
+test pull::tests::http_closure_diamond_fetches_shared_member_once ... ok
+test pull::tests::http_closure_duplicate_reference_fails_before_nar_download ... ok
+test pull::tests::http_closure_missing_dependency_fails_before_nar_download ... ok
+test pull::tests::http_closure_narinfo_limit_fails_before_nar_download ... ok
+test pull::tests::http_closure_path_mismatch_fails_before_nar_download ... ok
+test pull::tests::http_closure_plan_validator_rejects_before_nar_download_or_store_mutation ... ok
+test pull::tests::http_closure_pull_discovers_all_metadata_and_imports_root_last ... ok
+test pull::tests::http_closure_pull_reuses_complete_dependency ... ok
+test pull::tests::http_closure_refetches_incomplete_local_dependency ... ok
+test pull::tests::http_closure_total_nar_limit_fails_before_nar_download ... ok
+test pull::tests::http_closure_untrusted_root_fails_before_nar_download ... ok
+test pull::tests::http_pull_accepts_unknown_key_signature_when_trust_unsigned ... ok
+test pull::tests::http_pull_accepts_unsigned_when_trust_unsigned ... ok
+test pull::tests::http_pull_blocks_cross_scheme_redirects ... ok
+test pull::tests::http_pull_consumes_all_zstd_frames ... ok
+test pull::tests::http_pull_continues_after_narinfo_fetch_transport_failure ... ok
+test pull::tests::http_pull_detects_store_path_mismatch_and_client_metadata ... ok
+test pull::tests::http_pull_does_not_recurse_into_missing_references ... ok
+test pull::tests::http_pull_export_failure_after_persistence_is_fatal ... ok
+test pull::tests::http_pull_handles_compressed_xz_nar ... ok
+test pull::tests::http_pull_handles_gzip_bzip2_and_zstd_nar ... ok
+test pull::tests::http_pull_keeps_path_prefixed_cache_urls_stable ... ok
+test pull::tests::http_pull_maps_nar_http_failure_to_missing_nar_count ... ok
+test pull::tests::http_pull_maps_narinfo_http_403_to_missing_nar_count ... ok
+test pull::tests::http_pull_maps_narinfo_http_5xx_to_parse_error_count ... ok
+test pull::tests::http_pull_maps_other_nar_http_statuses_to_missing_nar_count ... ok
+test pull::tests::http_pull_maps_other_narinfo_http_statuses_to_parse_error_count ... ok
+test pull::tests::http_pull_missing_and_malformed_nix_cache_info_both_proceed ... ok
+test pull::tests::http_pull_network_failure_continues_for_remaining_paths ... ok
+test pull::tests::http_pull_nix_cache_info_client_error_warning_proceeds ... ok
+test pull::tests::http_pull_nix_cache_info_redirect_rejection_warns_and_proceeds ... ok
+test pull::tests::http_pull_parses_references_with_local_store_prefix ... ok
+test pull::tests::http_pull_pathinfo_persistence_failure_is_fatal ... ok
+test pull::tests::http_pull_rejects_absolute_nar_url_without_download ... ok
+test pull::tests::http_pull_rejects_cache_base_url_userinfo ... ok
+test pull::tests::http_pull_rejects_decoded_zstd_bytes_beyond_nar_limit ... ok
+test pull::tests::http_pull_rejects_malformed_narinfo_text ... ok
+test pull::tests::http_pull_rejects_malformed_or_wrong_prefix_references_before_persistence ... ok
+test pull::tests::http_pull_rejects_malformed_zstd_without_pathinfo ... ok
+test pull::tests::http_pull_rejects_narinfo_store_path_prefix_mismatch_after_matching_preflight ... ok
+test pull::tests::http_pull_rejects_truncated_later_zstd_frame_without_pathinfo ... ok
+test pull::tests::http_pull_rejects_unsigned_when_trust_unsigned_is_false ... ok
+test pull::tests::http_pull_rejects_untrusted_signature ... ok
+test pull::tests::http_pull_single_signed_path_round_trip ... ok
+test pull::tests::http_pull_skips_already_present_without_narinfo_request ... ok
+test pull::tests::http_pull_skips_missing_narinfo_404 ... ok
+test pull::tests::http_pull_store_dir_mismatch_is_hard_error_before_narinfo_fetch ... ok
+test pull::tests::pull_accepts_unsigned_when_trust_unsigned ... ok
+test pull::tests::pull_detects_nar_hash_mismatch ... ok
+test pull::tests::pull_multiple_paths ... ok
+test pull::tests::pull_nonexistent_source_returns_error ... ok
+test pull::tests::pull_rejects_store_dir_mismatch ... ok
+test pull::tests::pull_rejects_untrusted_signature ... ok
+test pull::tests::pull_signed_zstd_file_cache_imports_verified_nar_and_exports_output ... ok
+test pull::tests::pull_signed_zstd_file_cache_rejects_valid_nar_with_mutated_content ... ok
+test pull::tests::pull_single_signed_path_round_trip ... ok
+test pull::tests::pull_skips_already_present ... ok
+test pull::tests::pull_skips_missing_nar ... ok
+test pull::tests::pull_with_path_filter ... ok
+test pull::tests::signed_directory_pull_repairs_interrupted_export_without_trusting_partial_path ... ok
+test push::tests::deriver_normalization_rejects_an_empty_base_name ... ok
+test push::tests::push_custom_store_dir_narinfo_uses_correct_prefix ... ok
+test push::tests::push_idempotent_skip ... ok
+test push::tests::push_includes_unsigned_when_trusted ... ok
+test push::tests::push_multiple_paths ... ok
+test push::tests::push_narinfo_references_match ... ok
+test push::tests::push_normalizes_deriver_suffix_and_writes_parseable_narinfo ... ok
+test push::tests::push_preserves_existing_nix_cache_info ... ok
+test push::tests::push_single_signed_path ... ok
+test push::tests::push_skips_unsigned_by_default ... ok
+test query::tests::store_sign_adds_signature ... ok
+test query::tests::store_sign_all_skips_already_signed_entries ... ok
+test query::tests::store_sign_appends_different_key_signature ... ok
+test query::tests::store_sign_replaces_same_key_signature ... ok
+test query::tests::store_sign_then_verify_roundtrips_under_custom_prefix ... ok
+test query::tests::store_verify_mismatch_for_tampered_disk_content ... ok
+test query::tests::store_verify_missing_for_path_not_on_disk_in_custom_store_dir ... ok
+test query::tests::store_verify_ok_for_exported_path_in_custom_store_dir ... ok
+test query::tests::store_verify_read_failure_does_not_persist_pathinfo ... FAILED
+test query::tests::store_verify_signatures_rejects_wrong_prefix ... ok
+test query::tests::verify_signatures_accepts_trusted_key ... ok
+test query::tests::verify_signatures_reports_untrusted_signer ... ok
+test reference_scan::tests::exact_byte_bound_reads_eof_and_extra_byte_is_rejected ... ok
+test reference_scan::tests::finds_split_file_match_and_symlink_target_but_not_absent_reference ... ok
+test repair::tests::casita_repair_library_entrypoints_reject_without_publishing ... ok
+test repair::tests::current_pathinfo_is_an_idempotent_no_op ... ok
+test repair::tests::dry_run_does_not_mutate_stale_pathinfo_or_attestation ... ok
+test repair::tests::execute_repairs_facts_replaces_signatures_and_preserves_attestation_graph ... ok
+test repair::tests::incomplete_content_is_rejected_without_pathinfo_mutation ... ok
+test repair::tests::invalid_ca_identity_is_rejected_without_pathinfo_mutation ... ok
+test repair::tests::missing_exact_pathinfo_is_rejected ... ok
+test repair::tests::pathinfo_persistence_failure_is_reported_without_mutation ... ok
+test repair::tests::pure_plan_distinguishes_current_and_stale_facts ... ok
+test repair::tests::pure_plan_rejects_each_unsafe_candidate ... ok
+test repair::tests::stale_artifact_attestation_is_rejected_without_pathinfo_mutation ... ok
+test repair::tests::undeclared_repair_capability_rejects_snix_library_entrypoints_before_effects ... ok
+test repair::tests::unsigned_stale_pathinfo_is_rejected_without_mutation ... ok
+test restricted_view::tests::digest_lookalike_of_an_admitted_name_is_refused ... ok
+test restricted_view::tests::view_serves_only_its_path_and_refuses_every_lookup_outside_it ... ok
+test retention::tests::embedded_policy_is_typed_and_bounded ... ok
+test roots::tests::active_second_owner_lease_keeps_shared_path ... ok
+test roots::tests::casita_fenced_root_mutations_preserve_registry_bytes ... ok
+test roots::tests::concurrent_owners_keep_both_records_and_release_one ... ok
+test roots::tests::corrupt_registry_is_rejected_without_replacement ... ok
+test roots::tests::invalid_interest_bytes_version_identity_and_duplicates_fail_closed ... ok
+test roots::tests::legacy_interest_report_rejects_a_root_beyond_the_policy_limit ... ok
+test roots::tests::legacy_record_migrates_to_protected_unmanaged_state ... ok
+test roots::tests::managed_generation_batch_is_atomic_and_shares_generation_number ... ok
+test roots::tests::migrated_interest_set_preserves_gc_candidate_order ... ok
+test roots::tests::migration_refuses_to_overwrite_an_existing_legacy_archive ... ok
+test roots::tests::operator_pin_reasons_survive_automatic_explicit_pin_registration ... ok
+test roots::tests::pin_rejects_nonexistent_and_unreadable_paths ... ok
+test roots::tests::project_generation_reuses_identity_and_advances_new_identity ... ok
+test roots::tests::register_root_survives_reload_with_versioned_provenance ... ok
+test roots::tests::renewed_shell_interest_rejects_limit_without_mutating_records ... ok
+test roots::tests::renewed_shell_interest_replaces_its_owner_without_erasing_another_or_pending_file ... ok
+test roots::tests::shell_lease_renewal_is_bounded_and_requires_lease_facts ... ok
+test roots::tests::snix_pin_and_unpin_ignore_foreign_casita_gc_fence ... ok
+test roots::tests::unmanaged_remote_registration_uses_remote_owner_scope ... ok
+test roots::tests::unmigrated_legacy_pin_survives_expired_new_owner_lease ... ok
+test roots::tests::unpin_removes_existing_versioned_record ... ok
+
+failures:
+
+---- query::tests::store_verify_read_failure_does_not_persist_pathinfo stdout ----
+
+thread 'query::tests::store_verify_read_failure_does_not_persist_pathinfo' (2983568) panicked at crates/crunch-store/src/query.rs:644:78:
+bind an unobservable store entry: Error { kind: InvalidInput, message: "path must be shorter than SUN_LEN" }
+
+
+failures:
+    query::tests::store_verify_read_failure_does_not_persist_pathinfo
+
+test result: FAILED. 463 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 148.60s
+
+error: test failed, to rerun pass `-p crunch-store --lib`
+EXIT=101

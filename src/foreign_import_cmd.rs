@@ -35,8 +35,7 @@ use crate::foreign_derivation_import::parse_prefix_aware_aterm_bundle;
 use crate::foreign_derivation_import::select_nix_derivation_json_closure;
 use crate::foreign_derivation_import::translate_foreign_graph;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
-use crate::foreign_executable_plan::compile_foreign_executable_plan;
-use crate::foreign_executable_plan::compile_foreign_executable_plan_with_profile;
+use crate::foreign_executable_plan::compile_foreign_executable_plan_with_profile_and_route;
 use crate::foreign_provenance_audit::ForeignProvenanceAuditReceipt;
 use crate::foreign_provenance_audit::ForeignProvenanceAuditRequest;
 use crate::foreign_provenance_audit::audit_foreign_realization;
@@ -151,6 +150,10 @@ pub(crate) enum ForeignImportAction {
         /// Optional exported `mantle-foreign-execution-profile-v1` JSON
         #[arg(long = "execution-profile")]
         execution_profile: Option<PathBuf>,
+
+        /// Optional realization route override: `cache-inputs-build-roots-v1`
+        #[arg(long = "realization-route")]
+        realization_route: Option<String>,
 
         /// Write the accepted executable plan atomically to this path
         #[arg(long = "plan-out")]
@@ -477,6 +480,7 @@ struct ForeignPlanRequest<'a> {
     package: &'a str,
     system: &'a str,
     execution_profile_path: Option<&'a Path>,
+    realization_route: Option<&'a str>,
     plan_out: Option<&'a Path>,
     receipt_out: Option<&'a Path>,
     json: bool,
@@ -1079,6 +1083,7 @@ pub(crate) fn cmd_foreign_import_with_observation(
             package,
             system,
             execution_profile,
+            realization_route,
             plan_out,
             receipt_out,
         } => run_plan(
@@ -1089,6 +1094,7 @@ pub(crate) fn cmd_foreign_import_with_observation(
                 package: &package,
                 system: &system,
                 execution_profile_path: execution_profile.as_deref(),
+                realization_route: realization_route.as_deref(),
                 plan_out: plan_out.as_deref(),
                 receipt_out: receipt_out.as_deref(),
                 json,
@@ -1359,9 +1365,17 @@ fn run_plan(
                 return emit_foreign_report(effect_plan, report, request.json, false, port.read_calls(), &[]);
             }
         };
-        plan_inputs_with_profile(graph, index, request.package, policy, request.system, &execution_profile)
+        plan_inputs_with_profile(
+            graph,
+            index,
+            request.package,
+            policy,
+            request.system,
+            &execution_profile,
+            request.realization_route,
+        )
     } else {
-        plan_inputs(graph, index, request.package, policy, request.system)
+        plan_inputs(graph, index, request.package, policy, request.system, request.realization_route)
     };
     if request.plan_out.is_some() && request.plan_out == request.receipt_out {
         return Err(RunError::Internal("foreign plan and import receipt output paths must differ".to_string()));
@@ -1480,7 +1494,9 @@ fn run_prepare_sources(
         nario_evidence = Some((evidence_path.to_path_buf(), evidence));
         Some(staging)
     };
-    let manifest = if is_cache_only_foreign_plan(&plan) {
+    let cache_hydrated_plan =
+        is_cache_only_foreign_plan(&plan) || crate::foreign_realization::is_cache_inputs_build_roots_plan(&plan);
+    let manifest = if cache_hydrated_plan {
         if !bindings.is_empty() {
             return Err(RunError::Internal(
                 "cache-only foreign source preparation rejects builder source bindings".to_string(),
@@ -1619,8 +1635,8 @@ fn validate_nario_source_request(
             crunch_store::NARIO_V2_TRUSTED_KEYS_MAX
         )));
     }
-    if is_cache_only_foreign_plan(plan) {
-        return Err(RunError::Internal("cache-only plans reject Nario source projection".to_string()));
+    if is_cache_only_foreign_plan(plan) || crate::foreign_realization::is_cache_inputs_build_roots_plan(plan) {
+        return Err(RunError::Internal("cache-hydrated plans reject Nario source projection".to_string()));
     }
     Ok(())
 }
@@ -1897,14 +1913,20 @@ fn run_realize(
         return Err(RunError::Internal("offline foreign realization cannot enable cache substitution".to_string()));
     }
     let cache_only = is_cache_only_foreign_plan(&plan);
-    if cache_only && (!request.substitute || request.offline) {
-        return Err(RunError::Internal("cache-only foreign realization requires online substitution".to_string()));
+    let cache_inputs_build_roots = crate::foreign_realization::is_cache_inputs_build_roots_plan(&plan);
+    let cache_hydrated = cache_only || cache_inputs_build_roots;
+    if cache_hydrated && (!request.substitute || request.offline) {
+        return Err(RunError::Internal("cache-hydrated foreign realization requires online substitution".to_string()));
     }
-    if cache_only && cache_closure_policy.is_none() {
-        return Err(RunError::Internal("cache-only foreign realization requires --cache-closure-policy".to_string()));
+    if cache_hydrated && cache_closure_policy.is_none() {
+        return Err(RunError::Internal(
+            "cache-hydrated foreign realization requires --cache-closure-policy".to_string(),
+        ));
     }
-    if !cache_only && cache_closure_policy.is_some() {
-        return Err(RunError::Internal("cache closure policy is only valid for a cache-only foreign plan".to_string()));
+    if !cache_hydrated && cache_closure_policy.is_some() {
+        return Err(RunError::Internal(
+            "cache closure policy is only valid for a cache-hydrated foreign plan".to_string(),
+        ));
     }
     validate_foreign_realization_admission(ForeignRealizationAdmission {
         plan: &plan,
@@ -2013,7 +2035,9 @@ fn trusted_cache_keys_from_plan(
             keys_by_encoding.entry(key.to_string()).or_insert(key);
         }
     }
-    if is_cache_only_foreign_plan(plan) && keys_by_encoding.is_empty() {
+    if (is_cache_only_foreign_plan(plan) || crate::foreign_realization::is_cache_inputs_build_roots_plan(plan))
+        && keys_by_encoding.is_empty()
+    {
         return Err(RunError::Internal(
             "cache-only foreign plan has no receipt-bound trusted cache public key".to_string(),
         ));
@@ -2876,12 +2900,10 @@ fn plan_inputs(
     package: &str,
     policy: TranslationPolicy,
     system: &str,
+    realization_route: Option<&str>,
 ) -> ForeignImportCliReport {
-    let (plan, receipt) = match compile_foreign_executable_plan(&graph, &index, &policy, package, system) {
-        Ok(result) => result,
-        Err(diagnostic) => return rejected_report(PLAN_COMMAND, diagnostic),
-    };
-    accepted_report(PLAN_COMMAND, Some(receipt), Some(plan))
+    let execution_profile = crunch_build::foreign_profile_for_producer(&graph.producer.kind);
+    plan_inputs_with_profile(graph, index, package, policy, system, &execution_profile, realization_route)
 }
 
 fn plan_inputs_with_profile(
@@ -2891,13 +2913,20 @@ fn plan_inputs_with_profile(
     policy: TranslationPolicy,
     system: &str,
     execution_profile: &ExecutionProfile,
+    realization_route: Option<&str>,
 ) -> ForeignImportCliReport {
-    let (plan, receipt) =
-        match compile_foreign_executable_plan_with_profile(&graph, &index, &policy, package, system, execution_profile)
-        {
-            Ok(result) => result,
-            Err(diagnostic) => return rejected_report(PLAN_COMMAND, diagnostic),
-        };
+    let (plan, receipt) = match compile_foreign_executable_plan_with_profile_and_route(
+        &graph,
+        &index,
+        &policy,
+        package,
+        system,
+        execution_profile,
+        realization_route,
+    ) {
+        Ok(result) => result,
+        Err(diagnostic) => return rejected_report(PLAN_COMMAND, diagnostic),
+    };
     accepted_report(PLAN_COMMAND, Some(receipt), Some(plan))
 }
 
@@ -3189,6 +3218,7 @@ mod tests {
                 package: "two-node".to_string(),
                 system: "x86_64-linux".to_string(),
                 execution_profile: Some(profile.clone()),
+                realization_route: None,
                 plan_out: Some(plan_path.clone()),
                 receipt_out: Some(import_receipt_path.clone()),
             },
@@ -3393,7 +3423,7 @@ mod tests {
         let (graph, index) = crate::foreign_derivation_import::guix_like_hello_fixture();
         let policy = fixture_policy();
 
-        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, policy, DEFAULT_SYSTEM);
+        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, policy, DEFAULT_SYSTEM, None);
         let plan = report
             .plan
             .as_ref()
@@ -3428,7 +3458,7 @@ mod tests {
     #[test]
     fn nario_source_request_core_rejects_archive_key_and_route_limits() {
         let (graph, index) = crate::foreign_derivation_import::guix_like_hello_fixture();
-        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, fixture_policy(), DEFAULT_SYSTEM);
+        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, fixture_policy(), DEFAULT_SYSTEM, None);
         let mut plan = report.plan.unwrap();
         let too_many_archives = vec![PathBuf::from("fixture.nario"); NARIO_SOURCE_ARCHIVE_COUNT_MAX.saturating_add(1)];
         let too_many_keys = vec!["key".to_string(); crunch_store::NARIO_V2_TRUSTED_KEYS_MAX.saturating_add(1)];
@@ -3458,7 +3488,7 @@ mod tests {
     fn cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls() {
         const CACHE_KEY: &str = "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=";
         let (graph, index) = crate::foreign_derivation_import::guix_like_hello_fixture();
-        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, fixture_policy(), DEFAULT_SYSTEM);
+        let report = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, fixture_policy(), DEFAULT_SYSTEM, None);
         let mut plan = report.plan.unwrap();
         plan.realization_route = Some(crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE.to_string());
         plan.substitution_audit = vec![crate::foreign_derivation_import::SubstitutionAuditEvent {

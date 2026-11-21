@@ -20,6 +20,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::foreign_derivation_import::ImportReceipt;
+use crate::foreign_executable_plan::CACHE_INPUTS_BUILD_ROOTS_ROUTE;
 use crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE;
 use crate::foreign_executable_plan::ExecutableNativeUnit;
 use crate::foreign_executable_plan::ForeignExecutablePlan;
@@ -123,6 +124,11 @@ pub(crate) enum ForeignRealizationAdmissionError {
     ForeignSourceBindingMismatch(String),
     InvalidCacheClosurePolicy(String),
     CacheOnlySourceBundleNotEmpty,
+    CacheInputsFixedOutputRoot(String),
+    CacheInputsRootOffered(String),
+    CacheInputsRootAlreadyPresent(String),
+    CacheInputsRootInSeedSet(String),
+    CacheInputsPathOutsideMap(String),
     RemoteExecutionUnsupported,
 }
 
@@ -190,6 +196,21 @@ impl fmt::Display for ForeignRealizationAdmissionError {
             Self::CacheOnlySourceBundleNotEmpty => {
                 write!(formatter, "cache-only foreign realization requires an empty source bundle")
             }
+            Self::CacheInputsFixedOutputRoot(node_id) => {
+                write!(formatter, "cache-inputs build route refuses a fixed-output selected root: {node_id}")
+            }
+            Self::CacheInputsRootOffered(path) => {
+                write!(formatter, "cache-inputs build route refuses a root offered by the cache: {path}")
+            }
+            Self::CacheInputsRootAlreadyPresent(path) => {
+                write!(formatter, "cache-inputs build route refuses a root already present in the store: {path}")
+            }
+            Self::CacheInputsRootInSeedSet(path) => {
+                write!(formatter, "cache-inputs build route seed set contains a selected root output: {path}")
+            }
+            Self::CacheInputsPathOutsideMap(path) => {
+                write!(formatter, "cache-inputs build route seed path is outside the exact path map: {path}")
+            }
             Self::RemoteExecutionUnsupported => write!(formatter, "remote foreign realization is unsupported"),
         }
     }
@@ -207,6 +228,9 @@ pub(crate) fn validate_foreign_realization_admission(
         .map_err(|diagnostic| ForeignRealizationAdmissionError::InvalidPlan(diagnostic.class))?;
     validate_import_receipt_link(admission.plan, admission.import_receipt)?;
     let selected_root_paths = validate_selected_roots(admission.plan, admission.selected_root_node_ids)?;
+    if is_cache_inputs_build_roots_plan(admission.plan) {
+        reject_fixed_output_roots(admission.plan, admission.selected_root_node_ids)?;
+    }
     validate_profile_set(admission.execution_profiles)?;
     let units = admission
         .plan
@@ -224,6 +248,112 @@ pub(crate) fn validate_foreign_realization_admission(
 
 pub(crate) fn is_cache_only_foreign_plan(plan: &ForeignExecutablePlan) -> bool {
     plan.realization_route.as_deref() == Some(CACHE_ONLY_PRESERVE_ROUTE)
+}
+
+pub(crate) fn is_cache_inputs_build_roots_plan(plan: &ForeignExecutablePlan) -> bool {
+    plan.realization_route.as_deref() == Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE)
+}
+
+/// Compute the exact set of non-root paths the selected roots need at build time.
+///
+/// The set is the outputs requested by each selected root's direct input
+/// derivation edges, the roots' own input sources, and nothing else. Runtime
+/// references are added by the signed cache closure walk, not here.
+pub(crate) fn cache_inputs_closure(
+    plan: &ForeignExecutablePlan,
+    selected_root_node_ids: &[String],
+) -> Result<Vec<String>, ForeignRealizationAdmissionError> {
+    let mut units_by_node = BTreeMap::new();
+    let mut units_by_target = BTreeMap::new();
+    for unit in &plan.native_units {
+        units_by_node.insert(unit.node_id.as_str(), unit);
+        units_by_target.insert(unit.target_derivation.as_str(), unit);
+    }
+    let selected_roots = selected_root_node_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    for root_id in &selected_roots {
+        if !units_by_node.contains_key(*root_id) {
+            return Err(ForeignRealizationAdmissionError::UnknownSelectedRoot((*root_id).to_string()));
+        }
+    }
+    let mut root_outputs = BTreeSet::new();
+    for root in &plan.selected_roots {
+        if selected_roots.contains(root.node_id.as_str()) {
+            root_outputs.extend(root.target_outputs.values().cloned());
+        }
+    }
+    if root_outputs.is_empty() {
+        return Err(ForeignRealizationAdmissionError::InvalidSelectedRoots);
+    }
+    let permitted_outputs = plan.exact_path_maps.outputs.values().cloned().collect::<BTreeSet<_>>();
+    let permitted_sources = plan.exact_path_maps.sources.values().cloned().collect::<BTreeSet<_>>();
+    let mut seed_paths = BTreeSet::new();
+    for root_id in &selected_roots {
+        let unit = units_by_node
+            .get(root_id)
+            .ok_or_else(|| ForeignRealizationAdmissionError::UnknownSelectedRoot((*root_id).to_string()))?;
+        for (input_derivation, output_names) in &unit.input_derivations {
+            let input_unit = units_by_target.get(input_derivation.as_str()).ok_or_else(|| {
+                ForeignRealizationAdmissionError::InvalidNativeUnit {
+                    node_id: unit.node_id.clone(),
+                    reason: format!("input derivation is absent from the plan: {input_derivation}"),
+                }
+            })?;
+            for output_name in output_names {
+                let target = input_unit.outputs.get(output_name.as_str()).ok_or_else(|| {
+                    ForeignRealizationAdmissionError::InvalidNativeUnit {
+                        node_id: input_unit.node_id.clone(),
+                        reason: format!("requested output is absent from the plan: {output_name}"),
+                    }
+                })?;
+                seed_paths.insert(target.clone());
+            }
+        }
+        for source in &unit.input_sources {
+            seed_paths.insert(source.clone());
+        }
+    }
+    for path in &seed_paths {
+        if root_outputs.contains(path) {
+            return Err(ForeignRealizationAdmissionError::CacheInputsRootInSeedSet(path.clone()));
+        }
+        let is_permitted = permitted_outputs.contains(path) || permitted_sources.contains(path);
+        if !is_permitted {
+            return Err(ForeignRealizationAdmissionError::CacheInputsPathOutsideMap(path.clone()));
+        }
+    }
+    Ok(seed_paths.into_iter().collect())
+}
+
+pub(crate) fn reject_fixed_output_roots(
+    plan: &ForeignExecutablePlan,
+    selected_root_node_ids: &[String],
+) -> Result<(), ForeignRealizationAdmissionError> {
+    for unit in &plan.native_units {
+        if !selected_root_node_ids.iter().any(|root| root == &unit.node_id) {
+            continue;
+        }
+        if !matches!(&unit.builtin, crate::foreign_graph_compiler::CompiledForeignBuiltin::NativeDerivation) {
+            return Err(ForeignRealizationAdmissionError::CacheInputsFixedOutputRoot(unit.node_id.clone()));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_cache_inputs_roots(
+    roots: &[String],
+    cache_offered_roots: &[String],
+    present_roots: &[String],
+) -> Result<(), ForeignRealizationAdmissionError> {
+    if let Some(path) = cache_offered_roots.first() {
+        return Err(ForeignRealizationAdmissionError::CacheInputsRootOffered(path.clone()));
+    }
+    if let Some(path) = present_roots.first() {
+        return Err(ForeignRealizationAdmissionError::CacheInputsRootAlreadyPresent(path.clone()));
+    }
+    if roots.is_empty() {
+        return Err(ForeignRealizationAdmissionError::InvalidSelectedRoots);
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_foreign_cache_closure_policy(
@@ -674,6 +804,83 @@ mod tests {
             .unwrap_err(),
             ForeignRealizationAdmissionError::RemoteExecutionUnsupported
         );
+    }
+
+    #[test]
+    fn cache_inputs_closure_excludes_roots_and_admits_only_mapped_paths() {
+        let (plan, _) = fixture();
+        let roots = vec![plan.selected_roots[0].node_id.clone()];
+        let closure = cache_inputs_closure(&plan, &roots).unwrap();
+        assert!(!closure.is_empty());
+        let root_outputs = plan.selected_roots[0].target_outputs.values().cloned().collect::<BTreeSet<_>>();
+        let permitted = plan
+            .exact_path_maps
+            .outputs
+            .values()
+            .chain(plan.exact_path_maps.sources.values())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        for path in &closure {
+            assert!(!root_outputs.contains(path));
+            assert!(permitted.contains(path));
+        }
+        let mut sorted = closure.clone();
+        sorted.sort();
+        assert_eq!(closure, sorted);
+
+        assert!(matches!(
+            cache_inputs_closure(&plan, &["absent-node".to_string()]),
+            Err(ForeignRealizationAdmissionError::UnknownSelectedRoot(_))
+        ));
+    }
+
+    #[test]
+    fn cache_inputs_refuses_a_fixed_output_root_and_a_seeded_root_output() {
+        let (mut plan, _) = fixture();
+        let root_id = plan.selected_roots[0].node_id.clone();
+        let root_target = plan.selected_roots[0].target_derivation.clone();
+        for unit in &mut plan.native_units {
+            if unit.node_id == root_id {
+                unit.builtin = crate::foreign_graph_compiler::CompiledForeignBuiltin::FixedOutput;
+            }
+        }
+        assert!(matches!(
+            reject_fixed_output_roots(&plan, std::slice::from_ref(&root_id)),
+            Err(ForeignRealizationAdmissionError::CacheInputsFixedOutputRoot(_))
+        ));
+
+        let (mut plan, _) = fixture();
+        let root_unit = plan.native_units.iter().find(|unit| unit.node_id == root_id).expect("root unit").clone();
+        let root_outputs = plan.selected_roots[0].target_outputs.values().cloned().collect::<Vec<_>>();
+        for unit in &mut plan.native_units {
+            if unit.node_id == root_id {
+                unit.input_derivations.insert(root_target.clone(), vec!["out".to_string()]);
+                unit.outputs.insert("out".to_string(), root_outputs[0].clone());
+            }
+        }
+        assert!(matches!(
+            cache_inputs_closure(&plan, std::slice::from_ref(&root_id)),
+            Err(ForeignRealizationAdmissionError::CacheInputsRootInSeedSet(_))
+        ));
+        assert!(!root_unit.outputs.is_empty());
+    }
+
+    #[test]
+    fn cache_inputs_root_refusals_report_the_first_path() {
+        let roots = vec!["/nix/store/root".to_string()];
+        assert!(validate_cache_inputs_roots(&roots, &[], &[]).is_ok());
+        assert!(matches!(
+            validate_cache_inputs_roots(&roots, &["/nix/store/offered".to_string()], &[]),
+            Err(ForeignRealizationAdmissionError::CacheInputsRootOffered(_))
+        ));
+        assert!(matches!(
+            validate_cache_inputs_roots(&roots, &[], &["/nix/store/present".to_string()]),
+            Err(ForeignRealizationAdmissionError::CacheInputsRootAlreadyPresent(_))
+        ));
+        assert!(matches!(
+            validate_cache_inputs_roots(&[], &[], &[]),
+            Err(ForeignRealizationAdmissionError::InvalidSelectedRoots)
+        ));
     }
 
     fn fixture() -> (ForeignExecutablePlan, ImportReceipt) {

@@ -38,7 +38,10 @@ use crate::foreign_realization::AdmittedForeignSource;
 use crate::foreign_realization::ForeignCacheClosurePolicy;
 use crate::foreign_realization::ForeignRealizationAdmission;
 use crate::foreign_realization::ForeignSourceAdmission;
+use crate::foreign_realization::cache_inputs_closure;
+use crate::foreign_realization::is_cache_inputs_build_roots_plan;
 use crate::foreign_realization::is_cache_only_foreign_plan;
+use crate::foreign_realization::validate_cache_inputs_roots;
 use crate::foreign_realization::validate_cache_only_source_bundle;
 use crate::foreign_realization::validate_foreign_cache_closure_policy;
 use crate::foreign_realization::validate_foreign_realization_admission;
@@ -126,8 +129,13 @@ pub(crate) async fn realize_foreign_plan(
         return Err(RunError::Internal("offline foreign realization cannot enable cache substitution".to_string()));
     }
     let cache_only = is_cache_only_foreign_plan(request.plan);
-    if cache_only && (!request.substitution_enabled || request.offline) {
-        return Err(RunError::Internal("cache-only foreign realization requires online substitution".to_string()));
+    let build_roots = is_cache_inputs_build_roots_plan(request.plan);
+    if cache_only && build_roots {
+        return Err(RunError::Internal("foreign realization plan carries two routes".to_string()));
+    }
+    let cache_hydrated = cache_only || build_roots;
+    if cache_hydrated && (!request.substitution_enabled || request.offline) {
+        return Err(RunError::Internal("cache-hydrated foreign realization requires online substitution".to_string()));
     }
     let admitted = validate_foreign_realization_admission(ForeignRealizationAdmission {
         plan: request.plan,
@@ -137,9 +145,9 @@ pub(crate) async fn realize_foreign_plan(
         remote_execution_requested: request.remote_execution_requested,
     })
     .map_err(|error| RunError::Internal(error.to_string()))?;
-    let admitted_sources = if cache_only {
+    let admitted_sources = if cache_hydrated {
         let policy = request.cache_closure_policy.ok_or_else(|| {
-            RunError::Internal("cache-only foreign realization requires a cache closure policy".to_string())
+            RunError::Internal("cache-hydrated foreign realization requires a cache closure policy".to_string())
         })?;
         validate_foreign_cache_closure_policy(policy).map_err(|error| RunError::Internal(error.to_string()))?;
         validate_cache_only_source_bundle(request.source_bundle, request.expected_source_bundle_blake3)
@@ -176,7 +184,7 @@ pub(crate) async fn realize_foreign_plan(
     })
     .await
     .map_err(|error| RunError::Internal(format!("opening foreign realization store: {error}")))?;
-    let ingested_sources = if cache_only {
+    let ingested_sources = if cache_hydrated {
         IngestedForeignSources {
             facts: Vec::new(),
             payload_paths: BTreeMap::new(),
@@ -192,18 +200,55 @@ pub(crate) async fn realize_foreign_plan(
         )
         .await?
     };
-    let cache_closure = if cache_only {
+    let cache_closure = if cache_hydrated {
         let policy = request.cache_closure_policy.ok_or_else(|| {
-            RunError::Internal("cache-only foreign realization requires a cache closure policy".to_string())
+            RunError::Internal("cache-hydrated foreign realization requires a cache closure policy".to_string())
         })?;
-        let hydration = hydrate_cache_only_runtime_closure(
-            &mut store,
-            &retained_outputs,
-            request.plan,
-            policy,
-            request.trusted_keys,
-        )
-        .await?;
+        let hydration = if cache_only {
+            Some(
+                hydrate_signed_cache_closure(&mut store, &retained_outputs, request.plan, policy, request.trusted_keys)
+                    .await?,
+            )
+        } else {
+            let seed_strings = cache_inputs_closure(request.plan, request.selected_root_node_ids)
+                .map_err(|error| RunError::Internal(error.to_string()))?;
+            let root_strings = retained_outputs.iter().map(ToString::to_string).collect::<Vec<_>>();
+            let cache_url = cache_only_http_cache_url(request.plan)?;
+            let pull_options = crunch_store::PullOptions {
+                trust_unsigned: false,
+                trusted_public_keys: request.trusted_keys.to_vec(),
+            };
+            let mut offered = Vec::new();
+            for root in &retained_outputs {
+                let is_offered =
+                    crunch_store::probe_http_cache_path(&store, &cache_url, root, &pull_options).await.map_err(
+                        |error| RunError::Internal(format!("probing the cache for selected root {root}: {error}")),
+                    )?;
+                if is_offered {
+                    offered.push(root.to_string());
+                }
+            }
+            validate_cache_inputs_roots(&root_strings, &offered, &[])
+                .map_err(|error| RunError::Internal(error.to_string()))?;
+            if seed_strings.is_empty() {
+                None
+            } else {
+                let mut seeds = Vec::with_capacity(seed_strings.len());
+                for seed in &seed_strings {
+                    seeds.push(
+                        nix_compat::store_path::StorePath::from_absolute_path_with_prefix(
+                            seed.as_bytes(),
+                            &request.plan.target_store_prefix,
+                        )
+                        .map_err(|error| RunError::Internal(format!("parsing cache input seed {seed}: {error}")))?,
+                    );
+                }
+                Some(
+                    hydrate_signed_cache_closure(&mut store, &seeds, request.plan, policy, request.trusted_keys)
+                        .await?,
+                )
+            }
+        };
         drop(store);
         store = StoreHandle::open(crunch_store::StoreConfig {
             backend: request.backend,
@@ -217,7 +262,23 @@ pub(crate) async fn realize_foreign_plan(
         })
         .await
         .map_err(|error| RunError::Internal(format!("reopening hydrated foreign realization store: {error}")))?;
-        Some(hydration)
+        if build_roots {
+            let mut present = Vec::new();
+            for root in &retained_outputs {
+                if store
+                    .export_cached_path_info(root)
+                    .await
+                    .map_err(|error| RunError::Internal(format!("checking selected root {root}: {error}")))?
+                    .is_some()
+                {
+                    present.push(root.to_string());
+                }
+            }
+            let root_strings = retained_outputs.iter().map(ToString::to_string).collect::<Vec<_>>();
+            validate_cache_inputs_roots(&root_strings, &[], &present)
+                .map_err(|error| RunError::Internal(error.to_string()))?;
+        }
+        hydration
     } else {
         None
     };
@@ -263,7 +324,7 @@ pub(crate) async fn realize_foreign_plan(
     }
     let source_fetch_overrides =
         foreign_source_fetch_overrides(request.plan, &ingested_sources.facts, &ingested_sources.payload_paths)?;
-    let source_policy = if request.offline || cache_only {
+    let source_policy = if request.offline || cache_hydrated {
         FetchSourcePolicy::RequireOverride
     } else {
         FetchSourcePolicy::AllowNetwork
@@ -288,7 +349,7 @@ pub(crate) async fn realize_foreign_plan(
             aged_after_epochs: crunch_build::scheduling::DEFAULT_AGED_AFTER_EPOCHS,
             protected_after_epochs: crunch_build::scheduling::DEFAULT_PROTECTED_AFTER_EPOCHS,
         },
-        substituter_urls: if cache_only { Vec::new() } else { cache_urls.clone() },
+        substituter_urls: if cache_hydrated { Vec::new() } else { cache_urls.clone() },
         hermeticity_mode: HermeticityMode::Strict,
         base_state_dirs: request.base_state_dirs.to_vec(),
         source_admission: request.source_admission.cloned(),
@@ -311,6 +372,7 @@ pub(crate) async fn realize_foreign_plan(
             retained_outputs: &retained_outputs,
             source_policy,
             cache_only,
+            forbid_host_store_fallback: build_roots,
         })
         .await
         .map_err(|error| RunError::Internal(format!("realizing foreign derivation graph: {error}")))?;
@@ -407,7 +469,7 @@ fn cache_only_observer_derivation(derivation: &Derivation) -> Derivation {
     observer
 }
 
-async fn hydrate_cache_only_runtime_closure(
+async fn hydrate_signed_cache_closure(
     store: &mut StoreHandle,
     roots: &[StorePath<String>],
     plan: &ForeignExecutablePlan,
@@ -416,13 +478,11 @@ async fn hydrate_cache_only_runtime_closure(
 ) -> Result<CacheClosureHydration, RunError> {
     validate_foreign_cache_closure_policy(policy).map_err(|error| RunError::Internal(error.to_string()))?;
     if trusted_keys.is_empty() {
-        return Err(RunError::Internal("cache-only foreign realization has no trusted PathInfo keys".to_string()));
+        return Err(RunError::Internal("cache-hydrated foreign realization has no trusted PathInfo keys".to_string()));
     }
-    let [root] = roots else {
-        return Err(RunError::Internal(
-            "cache-only foreign realization requires exactly one selected output root".to_string(),
-        ));
-    };
+    if roots.is_empty() {
+        return Err(RunError::Internal("cache-hydrated foreign realization has no seed path".to_string()));
+    }
     let policy_bytes = serde_json::to_vec(policy)
         .map_err(|error| RunError::Internal(format!("serializing foreign cache closure policy: {error}")))?;
     let policy_blake3 = blake3::hash(&policy_bytes).to_hex().to_string();
@@ -433,9 +493,13 @@ async fn hydrate_cache_only_runtime_closure(
         .chain(plan.exact_path_maps.sources.values())
         .cloned()
         .collect::<BTreeSet<_>>();
-    let root_path = root.to_absolute_path_with_prefix(&plan.target_store_prefix);
-    if !permitted_paths.contains(&root_path) {
-        return Err(RunError::Internal(format!("cache-only selected root is outside the exact path map: {root_path}")));
+    for root in roots {
+        let root_path = root.to_absolute_path_with_prefix(&plan.target_store_prefix);
+        if !permitted_paths.contains(&root_path) {
+            return Err(RunError::Internal(format!(
+                "cache-hydrated seed path is outside the exact path map: {root_path}"
+            )));
+        }
     }
     let cache_url = cache_only_http_cache_url(plan)?;
     let limits = cache_only_http_closure_limits(policy)?;
@@ -446,22 +510,17 @@ async fn hydrate_cache_only_runtime_closure(
     let report = crunch_store::import_http_cache_closure_with_validator(
         store,
         &cache_url,
-        root,
+        roots,
         &pull_options,
         limits,
         |closure_plan| {
-            validate_prepared_cache_closure(
-                closure_plan,
-                &root.to_string(),
-                &plan.target_store_prefix,
-                &permitted_paths,
-            )
+            validate_prepared_cache_closure(closure_plan, roots, &plan.target_store_prefix, &permitted_paths)
         },
     )
     .await
     .map_err(|error| RunError::Internal(format!("hydrating preflighted foreign cache closure: {error}")))?;
-    if !report.root_admitted {
-        return Err(RunError::Internal("foreign cache closure root was not admitted after hydration".to_string()));
+    if !report.roots_admitted {
+        return Err(RunError::Internal("foreign cache closure seed path was not admitted after hydration".to_string()));
     }
     let imported_paths = report.pull.paths.iter().map(|path| path.store_path.as_str()).collect::<BTreeSet<_>>();
     let mut facts = Vec::with_capacity(report.plan.members.len());
@@ -570,15 +629,20 @@ fn cache_only_http_closure_limits(
 
 fn validate_prepared_cache_closure(
     closure_plan: &crunch_store::HttpClosurePlan,
-    expected_root: &str,
+    expected_roots: &[StorePath<String>],
     target_store_prefix: &str,
     permitted_paths: &BTreeSet<String>,
 ) -> Result<(), String> {
-    if closure_plan.root != expected_root {
-        return Err(format!(
-            "foreign cache closure root changed during preflight: expected {expected_root}, got {}",
-            closure_plan.root
-        ));
+    let expected_roots = expected_roots.iter().map(ToString::to_string).collect::<BTreeSet<_>>();
+    let planned_roots = closure_plan.roots.iter().cloned().collect::<BTreeSet<_>>();
+    if expected_roots != planned_roots {
+        return Err("foreign cache closure seed set changed during preflight".to_string());
+    }
+    let planned_members = closure_plan.members.iter().map(|member| member.store_path.as_str()).collect::<BTreeSet<_>>();
+    for root in &expected_roots {
+        if !planned_members.contains(root.as_str()) {
+            return Err(format!("foreign cache closure seed is absent from the plan: {root}"));
+        }
     }
     for member in &closure_plan.members {
         let logical_member = format!("{target_store_prefix}/{}", member.store_path);
@@ -786,12 +850,20 @@ mod tests {
         const DEPENDENCY: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-dependency";
         const TEST_HASH_BYTES: usize = 32;
         let mut permitted = BTreeSet::from([format!("/nix/store/{ROOT}"), format!("/nix/store/{DEPENDENCY}")]);
+        let root =
+            StorePath::<String>::from_absolute_path_with_prefix(format!("/nix/store/{ROOT}").as_bytes(), "/nix/store")
+                .unwrap();
+        let dependency = StorePath::<String>::from_absolute_path_with_prefix(
+            format!("/nix/store/{DEPENDENCY}").as_bytes(),
+            "/nix/store",
+        )
+        .unwrap();
         let mut closure_plan = crunch_store::HttpClosurePlan {
             schema: crunch_store::HTTP_CLOSURE_PLAN_SCHEMA.to_string(),
             cache_identity: "https://cache.example.test/".to_string(),
             trust_policy_blake3: "trust".to_string(),
             store_dir: "/nix/store".to_string(),
-            root: ROOT.to_string(),
+            roots: vec![ROOT.to_string()],
             limits: crunch_store::HttpClosureLimits::default(),
             total_nar_bytes: 1,
             members: vec![crunch_store::HttpClosurePlanMember {
@@ -804,14 +876,20 @@ mod tests {
             }],
             plan_blake3: "identity-not-used-by-this-pure-validator".to_string(),
         };
-        assert!(validate_prepared_cache_closure(&closure_plan, ROOT, "/nix/store", &permitted).is_ok());
+        assert!(
+            validate_prepared_cache_closure(&closure_plan, std::slice::from_ref(&root), "/nix/store", &permitted)
+                .is_ok()
+        );
 
         permitted.remove(&format!("/nix/store/{DEPENDENCY}"));
-        let error = validate_prepared_cache_closure(&closure_plan, ROOT, "/nix/store", &permitted).unwrap_err();
+        let error =
+            validate_prepared_cache_closure(&closure_plan, std::slice::from_ref(&root), "/nix/store", &permitted)
+                .unwrap_err();
         assert!(error.contains("reference is outside the exact path map"));
 
-        closure_plan.root = DEPENDENCY.to_string();
-        let error = validate_prepared_cache_closure(&closure_plan, ROOT, "/nix/store", &permitted).unwrap_err();
-        assert!(error.contains("root changed during preflight"));
+        closure_plan.roots = vec![DEPENDENCY.to_string()];
+        let error = validate_prepared_cache_closure(&closure_plan, &[root], "/nix/store", &permitted).unwrap_err();
+        assert!(error.contains("seed set changed during preflight"));
+        assert!(!dependency.to_string().is_empty());
     }
 }

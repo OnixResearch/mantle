@@ -1,0 +1,68 @@
+$ cargo clippy touched crates --all-targets --no-deps -D warnings
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-store v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-rustc-wrapper)
+    Checking crunch-build v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-build)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-pipeline)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-nix-gateway)
+    Checking mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+error: this creates an owned instance just for comparison
+   --> tests/cache_inputs_build_route.rs:277:40
+    |
+277 |     let sources = if base_canonical == url_with_key.to_string() {
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `url_with_key`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cmp_owned
+    = note: `-D clippy::cmp-owned` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::cmp_owned)]`
+
+error: could not compile `mantle` (test "cache_inputs_build_route") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src/foreign_realization.rs:848:46
+    |
+848 |             reject_fixed_output_roots(&plan, &[root_id.clone()]),
+    |                                              ^^^^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(&root_id)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cloned_ref_to_slice_refs
+    = note: `-D clippy::cloned-ref-to-slice-refs` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::cloned_ref_to_slice_refs)]`
+
+error: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src/foreign_realization.rs:862:41
+    |
+862 |             cache_inputs_closure(&plan, &[root_id.clone()]),
+    |                                         ^^^^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(&root_id)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cloned_ref_to_slice_refs
+
+error: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src/foreign_realization_shell.rs:879:64
+    |
+879 |         assert!(validate_prepared_cache_closure(&closure_plan, &[root.clone()], "/nix/store", &permitted).is_ok());
+    |                                                                ^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(&root)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cloned_ref_to_slice_refs
+
+error: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src/foreign_realization_shell.rs:883:60
+    |
+883 |             validate_prepared_cache_closure(&closure_plan, &[root.clone()], "/nix/store", &permitted).unwrap_err();
+    |                                                            ^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(&root)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cloned_ref_to_slice_refs
+
+error: could not compile `mantle` (bin "crunch" test) due to 4 previous errors
+error: could not compile `mantle` (bin "mantle" test) due to 4 previous errors
+EXIT=101
+$ cargo test -p crunch-store --lib
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+error: creating temporary file '/tmp/nix-shell.5KACq5': Disk quota exceeded
+EXIT=1

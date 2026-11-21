@@ -32,6 +32,8 @@ family. A successful planning report now contains the versioned
 The plan binds import identity, roots, native units, exact path maps, source requirements, profiles, diagnostics, route, and non-claims.
 Its BLAKE3 identity covers these fields.
 `cache-only-preserve-v1` identifies exact-path cache observation, not local build authority.
+`cache-inputs-build-roots-v1` identifies exact-path input hydration plus root execution;
+its realization receipt keeps the same field set and records hydrated input facts.
 This classification does not prove source availability, scheduler execution, store admission, realization, or output trust.
 
 The same family includes `mantle-foreign-realization-receipt-v1`.

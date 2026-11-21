@@ -1,0 +1,66 @@
+$ cargo clippy -p mantle -p crunch-store -p crunch-build -p crunch-pipeline --all-targets --no-deps -D warnings
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+error: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src/foreign_realization.rs:848:46
+    |
+848 |             reject_fixed_output_roots(&plan, &[root_id.clone()]),
+    |                                              ^^^^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(&root_id)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cloned_ref_to_slice_refs
+    = note: `-D clippy::cloned-ref-to-slice-refs` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::cloned_ref_to_slice_refs)]`
+
+error: this call to `clone` can be replaced with `std::slice::from_ref`
+   --> src/foreign_realization.rs:862:41
+    |
+862 |             cache_inputs_closure(&plan, &[root_id.clone()]),
+    |                                         ^^^^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(&root_id)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#cloned_ref_to_slice_refs
+
+error: could not compile `mantle` (bin "mantle" test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `mantle` (bin "crunch" test) due to 2 previous errors
+EXIT=101
+$ cargo_fmt_first_party
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+running: cargo fmt --check -p mantle -p crunch-android-core -p crunch-android -p crunch-cmake-core -p crunch-cmake -p crunch-esp-idf-core -p crunch-esp-idf -p crunch-fpga-core -p crunch-fpga -p crunch-gpu-core -p crunch-gpu -p crunch-model-conversion-core -p crunch-model-conversion -p crunch-pnpm-core -p crunch-pnpm -p crunch-python-core -p crunch-python -p crunch-test-core -p crunch-test-app -p crunch-test -p crunch-verification-bridge-core -p crunch-verification-bridge -p crunch-zephyr-core -p crunch-zephyr -p mantle-cargo-build-bundle-core -p mantle-causal-trace-core -p crunch-attestation -p crunch-build -p crunch-delta -p crunch-eval -p crunch-glue -p crunch-pipeline -p crunch-project -p crunch-remote-app -p crunch-remote-core -p crunch-service-readiness-core -p crunch-shell -p crunch-store -p crunch-watch-core
+Diff in /home/brittonr/wt/mantle-build-route/crates/crunch-store/src/pull.rs:429:
+     options: &PullOptions,
+     limits: HttpClosureLimits,
+ ) -> Result<HttpClosurePullReport, Error> {
+-    import_http_cache_closure_with_validator(handle, cache_url, std::slice::from_ref(root), options, limits, |_| Ok(())).await
++    import_http_cache_closure_with_validator(handle, cache_url, std::slice::from_ref(root), options, limits, |_| Ok(()))
++        .await
+ }
+ 
+ /// Discover and validate the complete metadata closure before content import.
+Diff in /home/brittonr/wt/mantle-build-route/src/foreign_realization_shell.rs:876:
+             }],
+             plan_blake3: "identity-not-used-by-this-pure-validator".to_string(),
+         };
+-        assert!(validate_prepared_cache_closure(&closure_plan, std::slice::from_ref(&root), "/nix/store", &permitted).is_ok());
++        assert!(
++            validate_prepared_cache_closure(&closure_plan, std::slice::from_ref(&root), "/nix/store", &permitted)
++                .is_ok()
++        );
+ 
+         permitted.remove(&format!("/nix/store/{DEPENDENCY}"));
+         let error =
+Diff in /home/brittonr/wt/mantle-build-route/src/foreign_realization_shell.rs:883:
+-            validate_prepared_cache_closure(&closure_plan, std::slice::from_ref(&root), "/nix/store", &permitted).unwrap_err();
++            validate_prepared_cache_closure(&closure_plan, std::slice::from_ref(&root), "/nix/store", &permitted)
++                .unwrap_err();
+         assert!(error.contains("reference is outside the exact path map"));
+ 
+         closure_plan.roots = vec![DEPENDENCY.to_string()];
+EXIT=1
+$ cairn validate --root .
+issues [] change_issues []
+EXIT=0

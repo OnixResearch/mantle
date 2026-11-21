@@ -80,7 +80,7 @@ pub struct HttpClosurePlan {
     pub cache_identity: String,
     pub trust_policy_blake3: String,
     pub store_dir: String,
-    pub root: String,
+    pub roots: Vec<String>,
     pub limits: HttpClosureLimits,
     pub total_nar_bytes: u64,
     pub members: Vec<HttpClosurePlanMember>,
@@ -109,7 +109,7 @@ pub struct HttpClosurePlanBuilder {
     cache_identity: String,
     trust_policy_blake3: String,
     store_dir: String,
-    root: StorePath<String>,
+    roots: Vec<StorePath<String>>,
     limits: HttpClosureLimits,
     pending_order: BTreeSet<(u32, [u8; 20])>,
     pending_by_digest: BTreeMap<[u8; 20], PendingMember>,
@@ -177,7 +177,7 @@ impl HttpClosurePlanError {
 
 impl HttpClosurePlanBuilder {
     pub fn new(
-        root: StorePath<String>,
+        mut roots: Vec<StorePath<String>>,
         cache_identity: String,
         trust_policy_blake3: String,
         store_dir: String,
@@ -187,24 +187,31 @@ impl HttpClosurePlanBuilder {
         validate_identity_field(&trust_policy_blake3, "trust_policy_blake3")?;
         validate_identity_field(&store_dir, "store_dir")?;
         validate_limits(limits)?;
+        if roots.is_empty() {
+            return Err(HttpClosurePlanError::InvalidIdentity { field: "roots" });
+        }
+        roots.sort_by_key(ToString::to_string);
+        roots.dedup_by(|left, right| left.digest() == right.digest());
 
-        let root_digest = *root.digest();
-        let root_pending = PendingMember {
-            path: root.clone(),
-            depth: 0,
-        };
         let mut pending_order = BTreeSet::new();
         let mut pending_by_digest = BTreeMap::new();
-        pending_order.insert((0, root_digest));
-        pending_by_digest.insert(root_digest, root_pending);
+        for root in &roots {
+            let root_digest = *root.digest();
+            let root_pending = PendingMember {
+                path: root.clone(),
+                depth: 0,
+            };
+            pending_order.insert((0, root_digest));
+            pending_by_digest.insert(root_digest, root_pending);
+        }
 
         debug_assert_eq!(pending_order.len(), pending_by_digest.len());
-        debug_assert!(pending_by_digest.contains_key(&root_digest));
+        debug_assert_eq!(pending_by_digest.len(), roots.len());
         Ok(Self {
             cache_identity,
             trust_policy_blake3,
             store_dir,
-            root,
+            roots,
             limits,
             pending_order,
             pending_by_digest,
@@ -306,30 +313,41 @@ impl HttpClosurePlanBuilder {
             let pending_count = u32::try_from(self.pending_by_digest.len()).unwrap_or(u32::MAX);
             return Err(HttpClosurePlanError::IncompletePlan { pending_count });
         }
-        let root_digest = *self.root.digest();
-        let root_member = self.observed_by_digest.get(&root_digest).expect("complete plan must contain its root");
+        let root_paths = self.roots.iter().map(ToString::to_string).collect::<BTreeSet<_>>();
+        let root_members = self
+            .roots
+            .iter()
+            .map(|root| {
+                self.observed_by_digest
+                    .get(root.digest())
+                    .unwrap_or_else(|| panic!("complete plan must contain seed {root}"))
+            })
+            .collect::<Vec<_>>();
         let mut members = self
             .observed_by_digest
             .values()
-            .filter(|member| member.path != self.root)
+            .filter(|member| !root_paths.contains(member.path.to_string().as_str()))
             .map(plan_member)
             .collect::<Vec<_>>();
         members.sort_by(|left, right| left.store_path.cmp(&right.store_path));
-        members.push(plan_member(root_member));
+        for root_member in root_members {
+            members.push(plan_member(root_member));
+        }
 
         let mut plan = HttpClosurePlan {
             schema: HTTP_CLOSURE_PLAN_SCHEMA.to_string(),
             cache_identity: self.cache_identity,
             trust_policy_blake3: self.trust_policy_blake3,
             store_dir: self.store_dir,
-            root: self.root.to_string(),
+            roots: self.roots.iter().map(ToString::to_string).collect(),
             limits: self.limits,
             total_nar_bytes: self.total_nar_bytes,
             members,
             plan_blake3: String::new(),
         };
         plan.plan_blake3 = compute_plan_blake3(&plan)?;
-        debug_assert_eq!(plan.members.last().map(|member| member.store_path.as_str()), Some(plan.root.as_str()));
+        debug_assert!(!plan.roots.is_empty());
+        debug_assert!(plan.roots.iter().all(|root| plan.members.iter().any(|member| member.store_path == *root)));
         debug_assert_eq!(plan.plan_blake3.len(), BLAKE3_BYTES.saturating_mul(2));
         Ok(plan)
     }
@@ -340,7 +358,7 @@ impl HttpClosurePlanBuilder {
         parent_depth: u32,
     ) -> Result<(), HttpClosurePlanError> {
         let child_depth = parent_depth.checked_add(1).ok_or_else(|| HttpClosurePlanError::DepthLimit {
-            path: self.root.to_string(),
+            path: self.roots.first().map(ToString::to_string).unwrap_or_default(),
             depth: u32::MAX,
             maximum: self.limits.max_depth,
         })?;
@@ -467,7 +485,7 @@ struct HttpClosurePlanIdentity<'a> {
     cache_identity: &'a str,
     trust_policy_blake3: &'a str,
     store_dir: &'a str,
-    root: &'a str,
+    roots: &'a [String],
     limits: HttpClosureLimits,
     total_nar_bytes: u64,
     members: &'a [HttpClosurePlanMember],
@@ -479,7 +497,7 @@ fn compute_plan_blake3(plan: &HttpClosurePlan) -> Result<String, HttpClosurePlan
         cache_identity: &plan.cache_identity,
         trust_policy_blake3: &plan.trust_policy_blake3,
         store_dir: &plan.store_dir,
-        root: &plan.root,
+        roots: &plan.roots,
         limits: plan.limits,
         total_nar_bytes: plan.total_nar_bytes,
         members: &plan.members,
@@ -539,7 +557,7 @@ mod tests {
 
     fn builder(root: &StorePath<String>) -> HttpClosurePlanBuilder {
         HttpClosurePlanBuilder::new(
-            root.clone(),
+            vec![root.clone()],
             "https://cache.example.test/".to_string(),
             "trust-blake3".to_string(),
             "/nix/store".to_string(),
@@ -668,7 +686,7 @@ mod tests {
             ..limits()
         };
         let mut builder = HttpClosurePlanBuilder::new(
-            root.clone(),
+            vec![root.clone()],
             "cache".to_string(),
             "trust".to_string(),
             "/nix/store".to_string(),
@@ -702,7 +720,7 @@ mod tests {
             ..limits()
         };
         let mut builder = HttpClosurePlanBuilder::new(
-            root,
+            vec![root],
             "cache".to_string(),
             "trust".to_string(),
             "/nix/store".to_string(),
@@ -737,7 +755,7 @@ mod tests {
             ..limits()
         };
         let mut builder = HttpClosurePlanBuilder::new(
-            root,
+            vec![root],
             "cache".to_string(),
             "trust".to_string(),
             "/nix/store".to_string(),
@@ -771,7 +789,7 @@ mod tests {
             ..limits()
         };
         let mut builder = HttpClosurePlanBuilder::new(
-            root,
+            vec![root],
             "cache".to_string(),
             "trust".to_string(),
             "/nix/store".to_string(),
@@ -903,7 +921,7 @@ mod tests {
             ..limits()
         };
         let limit_error = HttpClosurePlanBuilder::new(
-            root.clone(),
+            vec![root.clone()],
             "cache".to_string(),
             "trust".to_string(),
             "/nix/store".to_string(),
@@ -913,9 +931,14 @@ mod tests {
         assert_eq!(limit_error.reason_code(), "http-closure-invalid-limits");
         assert_eq!(limit_error, HttpClosurePlanError::InvalidLimits { field: "max_members" });
 
-        let identity_error =
-            HttpClosurePlanBuilder::new(root, String::new(), "trust".to_string(), "/nix/store".to_string(), limits())
-                .unwrap_err();
+        let identity_error = HttpClosurePlanBuilder::new(
+            vec![root],
+            String::new(),
+            "trust".to_string(),
+            "/nix/store".to_string(),
+            limits(),
+        )
+        .unwrap_err();
         assert_eq!(identity_error.reason_code(), "http-closure-invalid-identity");
         assert_eq!(identity_error, HttpClosurePlanError::InvalidIdentity {
             field: "cache_identity"

@@ -107,13 +107,13 @@ pub struct PullReport {
     pub paths: Vec<PulledPath>,
 }
 
-/// Strict single-root HTTP closure import result.
+/// Strict seeded HTTP closure import result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpClosurePullReport {
     pub plan: HttpClosurePlan,
     pub pull: PullReport,
     pub reused_complete_count: u32,
-    pub root_admitted: bool,
+    pub roots_admitted: bool,
 }
 
 /// Import PathInfo entries from a flat Nix binary cache directory.
@@ -429,14 +429,15 @@ pub async fn import_http_cache_closure(
     options: &PullOptions,
     limits: HttpClosureLimits,
 ) -> Result<HttpClosurePullReport, Error> {
-    import_http_cache_closure_with_validator(handle, cache_url, root, options, limits, |_| Ok(())).await
+    import_http_cache_closure_with_validator(handle, cache_url, std::slice::from_ref(root), options, limits, |_| Ok(()))
+        .await
 }
 
 /// Discover and validate the complete metadata closure before content import.
 pub async fn import_http_cache_closure_with_validator<F>(
     handle: &StoreHandle,
     cache_url: &Url,
-    root: &StorePath<String>,
+    roots: &[StorePath<String>],
     options: &PullOptions,
     limits: HttpClosureLimits,
     validate_plan: F,
@@ -444,6 +445,9 @@ pub async fn import_http_cache_closure_with_validator<F>(
 where
     F: FnOnce(&HttpClosurePlan) -> Result<(), String>,
 {
+    if roots.is_empty() {
+        return Err(Error::Store("http-closure-roots-empty".to_string()));
+    }
     let _source_lease = handle.admit_http_source(cache_url)?;
     handle.revalidate_overlay_bases()?;
     validate_http_cache_url(cache_url)?;
@@ -452,7 +456,7 @@ where
     validate_remote_store_dir(&client, &normalized_cache_url, handle.store_dir()).await?;
 
     let discovered =
-        discover_http_cache_closure(&client, &normalized_cache_url, root, handle.store_dir(), options, limits).await?;
+        discover_http_cache_closure(&client, &normalized_cache_url, roots, handle.store_dir(), options, limits).await?;
     if !verify_http_closure_plan_identity(&discovered.plan).map_err(http_closure_plan_error)? {
         return Err(Error::Store("http-closure-plan-identity-mismatch".to_string()));
     }
@@ -460,6 +464,40 @@ where
     let report = import_discovered_http_closure(handle, &client, &normalized_cache_url, options, discovered).await?;
     handle.revalidate_overlay_bases()?;
     Ok(report)
+}
+
+/// Probe whether one path is offered by the signed HTTP cache, without importing content.
+///
+/// A hit requires a bounded narinfo response whose store path matches and whose
+/// signature verifies against `options.trusted_public_keys`.
+pub async fn probe_http_cache_path(
+    handle: &StoreHandle,
+    cache_url: &Url,
+    path: &StorePath<String>,
+    options: &PullOptions,
+) -> Result<bool, Error> {
+    assert!(!cache_url.as_str().is_empty(), "cache URL must not be empty");
+    assert!(!options.trusted_public_keys.is_empty() || options.trust_unsigned, "probe requires a trust set");
+    let _source_lease = handle.admit_http_source(cache_url)?;
+    validate_http_cache_url(cache_url)?;
+    let client = build_http_pull_client()?;
+    let normalized_cache_url = normalize_http_cache_base_url(cache_url);
+    validate_remote_store_dir(&client, &normalized_cache_url, handle.store_dir()).await?;
+    match fetch_http_narinfo_text_bounded(
+        &client,
+        &normalized_cache_url,
+        *path.digest(),
+        MAX_HTTP_CLOSURE_NARINFO_BYTES,
+    )
+    .await
+    {
+        Ok(Some(text)) => {
+            strict_http_closure_observation(&text, path, handle.store_dir(), options)?;
+            Ok(true)
+        }
+        Ok(None) => Ok(false),
+        Err(detail) => Err(Error::Store(format!("http-cache-probe-failed: {path}: {detail}"))),
+    }
 }
 
 #[derive(Debug)]
@@ -477,14 +515,14 @@ struct DiscoveredHttpClosure {
 async fn discover_http_cache_closure(
     client: &reqwest::Client,
     cache_url: &Url,
-    root: &StorePath<String>,
+    roots: &[StorePath<String>],
     store_dir: &str,
     options: &PullOptions,
     limits: HttpClosureLimits,
 ) -> Result<DiscoveredHttpClosure, Error> {
     let trust_policy_blake3 = http_pull_trust_policy_blake3(options)?;
     let mut builder = HttpClosurePlanBuilder::new(
-        root.clone(),
+        roots.to_vec(),
         cache_url.to_string(),
         trust_policy_blake3,
         store_dir.to_string(),
@@ -507,7 +545,7 @@ async fn discover_http_cache_closure(
     if plan.members.len() != narinfos.len() {
         return Err(Error::Store("http-closure-plan-member-count-mismatch".to_string()));
     }
-    debug_assert_eq!(plan.root, root.to_string());
+    debug_assert_eq!(plan.roots.len(), roots.len());
     debug_assert_eq!(plan.members.len(), narinfos.len());
     Ok(DiscoveredHttpClosure { plan, narinfos })
 }
@@ -585,30 +623,32 @@ async fn import_discovered_http_closure(
         import_planned_http_member(&context, discovered_narinfo, member, &mut pull).await?;
     }
 
-    let root_member = discovered
-        .narinfos
-        .get(&discovered.plan.root)
-        .ok_or_else(|| Error::Store("http-closure-root-metadata-missing-after-import".to_string()))?;
-    let root_admitted = local_member_is_complete(
-        handle,
-        root_member,
-        discovered.plan.members.last().expect("closure plan must contain the root"),
-        options,
-    )
-    .await?;
-    if !root_admitted {
-        return Err(Error::Store("http-closure-root-not-admitted".to_string()));
+    let members_by_path = discovered
+        .plan
+        .members
+        .iter()
+        .map(|member| (member.store_path.as_str(), member))
+        .collect::<BTreeMap<_, _>>();
+    let mut roots_admitted = true;
+    for root in &discovered.plan.roots {
+        let root_member = discovered
+            .narinfos
+            .get(root)
+            .ok_or_else(|| Error::Store(format!("http-closure-seed-metadata-missing-after-import: {root}")))?;
+        let member = members_by_path
+            .get(root.as_str())
+            .ok_or_else(|| Error::Store(format!("http-closure-seed-not-in-plan: {root}")))?;
+        roots_admitted = roots_admitted && local_member_is_complete(handle, root_member, member, options).await?;
     }
-    debug_assert_eq!(
-        discovered.plan.members.last().map(|member| member.store_path.as_str()),
-        Some(discovered.plan.root.as_str())
-    );
+    if !roots_admitted {
+        return Err(Error::Store("http-closure-seed-not-admitted".to_string()));
+    }
     debug_assert_eq!(pull.imported_count.saturating_add(reused_complete_count) as usize, discovered.plan.members.len());
     Ok(HttpClosurePullReport {
         plan: discovered.plan,
         pull,
         reused_complete_count,
-        root_admitted,
+        roots_admitted,
     })
 }
 
@@ -2430,7 +2470,7 @@ mod tests {
         assert_eq!(report.plan.members.last().unwrap().store_path, root.store_path.to_string());
         assert_eq!(report.pull.imported_count, 2);
         assert_eq!(report.reused_complete_count, 0);
-        assert!(report.root_admitted);
+        assert!(report.roots_admitted);
         let stats = server.stats();
         assert_eq!(stats.narinfo_requests, 2);
         assert_eq!(stats.nar_requests, 2);
@@ -2458,7 +2498,7 @@ mod tests {
         let error = import_http_cache_closure_with_validator(
             &pull_store,
             &server.base_url,
-            &root.store_path,
+            std::slice::from_ref(&root.store_path),
             &default_pull_options(),
             HttpClosureLimits::default(),
             |_| Err("fixture-plan-rejected".to_string()),
@@ -2509,7 +2549,7 @@ mod tests {
         assert_eq!(report.pull.imported_count, 1);
         assert_eq!(report.reused_complete_count, 1);
         assert_eq!(report.pull.skipped_already_present_count, 1);
-        assert!(report.root_admitted);
+        assert!(report.roots_admitted);
     }
 
     // r[verify cache_substitution.complete_http_closure_pull]
@@ -2747,7 +2787,7 @@ mod tests {
         .unwrap();
         assert_eq!(report.pull.imported_count, 2);
         assert_eq!(report.reused_complete_count, 0);
-        assert!(report.root_admitted);
+        assert!(report.roots_admitted);
         assert!(pull_store.castore_has_complete_content(&child.node).await.unwrap());
     }
 

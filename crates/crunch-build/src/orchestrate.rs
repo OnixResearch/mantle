@@ -432,6 +432,9 @@ pub struct Builder<BServ> {
     source_closure_cache: HashMap<StorePath<String>, Vec<StorePath<String>>>,
     observed_source_paths: BTreeSet<StorePath<String>>,
     root_retention_source: Option<GcRootSource>,
+    /// When true, a declared source input is never taken from the logical host
+    /// store directory; only the admitted physical output authority is used.
+    forbid_host_store_fallback: bool,
     /// Explicit pool executor. When present, ready goals are routed through the
     /// pool instead of the ordinary single build service.
     pool_dispatch: Option<Arc<crate::distributed::PoolDispatch>>,
@@ -559,6 +562,7 @@ where BServ: BuildService + 'static
             source_closure_cache: HashMap::new(),
             observed_source_paths: BTreeSet::new(),
             root_retention_source: None,
+            forbid_host_store_fallback: false,
             pool_dispatch: None,
             rust_wait_units: None,
         }
@@ -623,6 +627,10 @@ where BServ: BuildService + 'static
 
     pub fn set_hermeticity_mode(&mut self, hermeticity_mode: HermeticityMode) {
         self.hermeticity_mode = hermeticity_mode;
+    }
+
+    pub fn set_forbid_host_store_fallback(&mut self, forbid_host_store_fallback: bool) {
+        self.forbid_host_store_fallback = forbid_host_store_fallback;
     }
     pub fn set_rust_wait_units(
         &mut self,
@@ -1497,7 +1505,7 @@ where BServ: BuildService + 'static
         assert!(source_path.to_string().contains('-'), "source path text must include a digest/name separator");
 
         let host_path = self.preferred_source_host_path(source_path);
-        if host_path.exists() {
+        if !self.forbid_host_store_fallback && host_path.exists() {
             return Ok(());
         }
         let stored = self
@@ -1541,7 +1549,7 @@ where BServ: BuildService + 'static
 
     fn preferred_source_host_path(&self, source_path: &StorePath<String>) -> PathBuf {
         let physical_path = PathBuf::from(source_path.to_absolute_path_with_prefix(self.store.output_dir_str()));
-        if physical_path.exists() {
+        if physical_path.exists() || self.forbid_host_store_fallback {
             return physical_path;
         }
         PathBuf::from(source_path.to_absolute_path_with_prefix(self.store.store_dir()))

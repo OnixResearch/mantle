@@ -1,0 +1,146 @@
+$ cargo clippy ...
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-store v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-rustc-wrapper)
+    Checking crunch-build v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-build)
+error[E0308]: mismatched types
+   --> crates/crunch-store/src/http_closure.rs:689:13
+    |
+688 |         let mut builder = HttpClosurePlanBuilder::new(
+    |                           --------------------------- arguments to this function are incorrect
+689 |             root.clone(),
+    |             ^^^^^^^^^^^^ expected `Vec<StorePath<String>>`, found `StorePath<String>`
+    |
+    = note: expected struct `std::vec::Vec<nix_compat::store_path::StorePath<_>>`
+               found struct `nix_compat::store_path::StorePath<_>`
+note: associated function defined here
+   --> crates/crunch-store/src/http_closure.rs:179:12
+    |
+179 |     pub fn new(
+    |            ^^^
+180 |         mut roots: Vec<StorePath<String>>,
+    |         ---------------------------------
+
+error[E0308]: mismatched types
+   --> crates/crunch-store/src/http_closure.rs:723:13
+    |
+722 |         let mut builder = HttpClosurePlanBuilder::new(
+    |                           --------------------------- arguments to this function are incorrect
+723 |             root,
+    |             ^^^^ expected `Vec<StorePath<String>>`, found `StorePath<String>`
+    |
+    = note: expected struct `std::vec::Vec<nix_compat::store_path::StorePath<_>>`
+               found struct `nix_compat::store_path::StorePath<_>`
+note: associated function defined here
+   --> crates/crunch-store/src/http_closure.rs:179:12
+    |
+179 |     pub fn new(
+    |            ^^^
+180 |         mut roots: Vec<StorePath<String>>,
+    |         ---------------------------------
+
+error[E0308]: mismatched types
+   --> crates/crunch-store/src/http_closure.rs:758:13
+    |
+757 |         let mut builder = HttpClosurePlanBuilder::new(
+    |                           --------------------------- arguments to this function are incorrect
+758 |             root,
+    |             ^^^^ expected `Vec<StorePath<String>>`, found `StorePath<String>`
+    |
+    = note: expected struct `std::vec::Vec<nix_compat::store_path::StorePath<_>>`
+               found struct `nix_compat::store_path::StorePath<_>`
+note: associated function defined here
+   --> crates/crunch-store/src/http_closure.rs:179:12
+    |
+179 |     pub fn new(
+    |            ^^^
+180 |         mut roots: Vec<StorePath<String>>,
+    |         ---------------------------------
+
+error[E0308]: mismatched types
+   --> crates/crunch-store/src/http_closure.rs:792:13
+    |
+791 |         let mut builder = HttpClosurePlanBuilder::new(
+    |                           --------------------------- arguments to this function are incorrect
+792 |             root,
+    |             ^^^^ expected `Vec<StorePath<String>>`, found `StorePath<String>`
+    |
+    = note: expected struct `std::vec::Vec<nix_compat::store_path::StorePath<_>>`
+               found struct `nix_compat::store_path::StorePath<_>`
+note: associated function defined here
+   --> crates/crunch-store/src/http_closure.rs:179:12
+    |
+179 |     pub fn new(
+    |            ^^^
+180 |         mut roots: Vec<StorePath<String>>,
+    |         ---------------------------------
+
+error[E0308]: mismatched types
+   --> crates/crunch-store/src/http_closure.rs:924:13
+    |
+923 |         let limit_error = HttpClosurePlanBuilder::new(
+    |                           --------------------------- arguments to this function are incorrect
+924 |             root.clone(),
+    |             ^^^^^^^^^^^^ expected `Vec<StorePath<String>>`, found `StorePath<String>`
+    |
+    = note: expected struct `std::vec::Vec<nix_compat::store_path::StorePath<_>>`
+               found struct `nix_compat::store_path::StorePath<_>`
+note: associated function defined here
+   --> crates/crunch-store/src/http_closure.rs:179:12
+    |
+179 |     pub fn new(
+    |            ^^^
+180 |         mut roots: Vec<StorePath<String>>,
+    |         ---------------------------------
+
+error[E0308]: mismatched types
+   --> crates/crunch-store/src/http_closure.rs:935:41
+    |
+935 |             HttpClosurePlanBuilder::new(root, String::new(), "trust".to_string(), "/nix/store".to_string(), limits())
+    |             --------------------------- ^^^^ expected `Vec<StorePath<String>>`, found `StorePath<String>`
+    |             |
+    |             arguments to this function are incorrect
+    |
+    = note: expected struct `std::vec::Vec<nix_compat::store_path::StorePath<_>>`
+               found struct `nix_compat::store_path::StorePath<_>`
+note: associated function defined here
+   --> crates/crunch-store/src/http_closure.rs:179:12
+    |
+179 |     pub fn new(
+    |            ^^^
+180 |         mut roots: Vec<StorePath<String>>,
+    |         ---------------------------------
+
+error[E0308]: mismatched types
+    --> crates/crunch-store/src/pull.rs:2500:13
+     |
+2497 |         let error = import_http_cache_closure_with_validator(
+     |                     ---------------------------------------- arguments to this function are incorrect
+...
+2500 |             &root.store_path,
+     |             ^^^^^^^^^^^^^^^^ expected `&[StorePath<String>]`, found `&StorePath<String>`
+     |
+     = note: expected reference `&[nix_compat::store_path::StorePath<std::string::String>]`
+                found reference `&nix_compat::store_path::StorePath<std::string::String>`
+note: function defined here
+    --> crates/crunch-store/src/pull.rs:436:14
+     |
+ 436 | pub async fn import_http_cache_closure_with_validator<F>(
+     |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 439 |     roots: &[StorePath<String>],
+     |     ---------------------------
+
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-pipeline)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/wt/mantle-build-route/crates/crunch-nix-gateway)
+    Checking mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `crunch-store` (lib test) due to 7 previous errors
+warning: build failed, waiting for other jobs to finish...
+EXIT=101

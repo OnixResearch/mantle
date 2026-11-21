@@ -139,6 +139,57 @@ The ordinary scheduler observes the selected output as already present.
 The cache-only observer has no inputs, arguments, or executable builder fallback.
 Units outside the runtime closure report `not-required-cache-only`.
 
+## Build a preserved Nix root from cache-hydrated inputs
+
+`cache-inputs-build-roots-v1` builds the selected root instead of hydrating it.
+Plan it explicitly with the same preserve policy:
+
+```text
+mantle --json --store-prefix /nix/store foreign-import plan \
+  --graph graph.json \
+  --package-index index.json \
+  --policy config/foreign-cache-closure/generated/preserve-nix.json \
+  --execution-profile config/foreign-execution-profiles/generated/nix.json \
+  --realization-route cache-inputs-build-roots-v1 \
+  --plan-out plan.json \
+  --receipt-out import-receipt.json
+```
+
+Realization takes the cache-only flags and requires `--substitute`, a
+`--cache-closure-policy`, one receipt-bound signed cache URL, and the
+`--remote-binding-config` that admits that URL:
+
+```text
+mantle --json --state-dir ./state --store ./output --store-prefix /nix/store \
+  foreign-import realize \
+  --plan plan.json \
+  --import-receipt import-receipt.json \
+  --source-bundle source-bundle.json \
+  --source-bundle-blake3 <manifest-blake3> \
+  --execution-profile config/foreign-execution-profiles/generated/nix.json \
+  --cache-closure-policy cache-closure-policy.json \
+  --substitute \
+  --receipt-out realization-receipt.json
+```
+
+The hydrate set is exactly the outputs the selected roots' direct
+input-derivation edges request, the roots' own input sources, and the runtime
+reference closure of that set as declared by the cache. Mantle does not walk
+the transitive derivation closure. Every hydrated path must be inside the
+plan's exact path map. Units outside the hydrated set are not built or
+hydrated and report `not-required-cache-only`.
+
+The route fails closed when a selected root output is offered by the cache or
+already present in the store, when a selected root is a fixed-output fetch,
+when an input is missing, unsigned, untrusted, hash-mismatched, or missing a
+declared reference, and when a declared source exists only in the host logical
+store. After hydration Mantle reopens the store without substituters and
+executes only the selected roots. The receipt keeps the
+`mantle-foreign-realization-receipt-v1` field set; roots report `built`,
+hydrated inputs report `substituted` or `already-present`, and the strongest
+state remains `realized`. `foreign-import audit` remains cache-only; a built
+root is not provenance-audited by this route.
+
 ## Export a translated GuixPkgs package
 
 GuixPkgs is a producer boundary. Pin its flake before export. Record the flake

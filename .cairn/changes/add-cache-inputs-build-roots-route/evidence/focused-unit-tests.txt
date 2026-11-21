@@ -1,0 +1,99 @@
+$ cargo test -p mantle --bin mantle foreign_executable_plan
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.73s
+     Running unittests src/main.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/mantle-7696ded92822839c)
+
+running 7 tests
+test foreign_executable_plan::tests::cache_inputs_build_roots_plan_binds_the_route_and_refuses_fod_roots ... ok
+test foreign_executable_plan::tests::cache_only_plan_binds_route_and_rejects_path_or_route_tampering ... ok
+test foreign_executable_plan::tests::executable_plan_compilation_rejects_a_failed_sibling_root_without_partial_success ... ok
+test foreign_executable_plan::tests::executable_plan_is_deterministic_receipt_bound_and_self_validating ... ok
+test foreign_executable_plan::tests::executable_plan_preserves_bare_source_store_literals_during_aterm_validation ... ok
+test foreign_executable_plan::tests::executable_plan_validator_rejects_identity_domain_root_and_reference_tampering ... ok
+test foreign_executable_plan::tests::plan_reference_validation_accepts_bare_store_mentions_and_rejects_malformed_runs ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 3011 filtered out; finished in 0.06s
+
+EXIT=0
+$ cargo test -p mantle --bin mantle foreign_realization_shell
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.81s
+     Running unittests src/main.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/mantle-7696ded92822839c)
+
+running 2 tests
+test foreign_realization_shell::tests::cache_only_observer_removes_every_builder_dependency_and_argument ... ok
+test foreign_realization_shell::tests::prepared_cache_closure_accepts_only_exact_mapped_members_and_references ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 3016 filtered out; finished in 0.00s
+
+EXIT=0
+$ cargo test -p mantle --test cache_inputs_build_route
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 53s
+     Running tests/cache_inputs_build_route.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cache_inputs_build_route-4a1094ad7faa3587)
+
+running 6 tests
+test cache_inputs_route_builds_the_root_from_hydrated_inputs ... FAILED
+test cache_inputs_route_is_refused_on_a_recompute_plan ... FAILED
+test cache_inputs_route_refuses_a_missing_input ... FAILED
+test cache_inputs_route_refuses_a_root_offered_by_the_cache ... FAILED
+test cache_inputs_route_refuses_an_untrusted_signer ... FAILED
+test cache_inputs_route_rejects_a_nonempty_source_bundle ... ok
+
+failures:
+
+---- cache_inputs_route_builds_the_root_from_hydrated_inputs stdout ----
+
+thread 'cache_inputs_route_builds_the_root_from_hydrated_inputs' (2193508) panicked at tests/cache_inputs_build_route.rs:404:5:
+realize failed: {"error":"remote-endpoint-binding-config-target-unsafe","code":3,"kind":"internal"}
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- cache_inputs_route_is_refused_on_a_recompute_plan stdout ----
+
+thread 'cache_inputs_route_is_refused_on_a_recompute_plan' (2193576) panicked at tests/cache_inputs_build_route.rs:485:5:
+unexpected stderr: 
+
+---- cache_inputs_route_refuses_a_missing_input stdout ----
+
+thread 'cache_inputs_route_refuses_a_missing_input' (2193598) panicked at tests/cache_inputs_build_route.rs:449:5:
+unexpected stderr: {"error":"remote-endpoint-binding-config-target-unsafe","code":3,"kind":"internal"}
+
+
+---- cache_inputs_route_refuses_a_root_offered_by_the_cache stdout ----
+
+thread 'cache_inputs_route_refuses_a_root_offered_by_the_cache' (2193652) panicked at tests/cache_inputs_build_route.rs:432:5:
+unexpected stderr: {"error":"remote-endpoint-binding-config-target-unsafe","code":3,"kind":"internal"}
+
+
+---- cache_inputs_route_refuses_an_untrusted_signer stdout ----
+
+thread 'cache_inputs_route_refuses_an_untrusted_signer' (2193726) panicked at tests/cache_inputs_build_route.rs:469:5:
+unexpected stderr: {"error":"remote-endpoint-binding-config-target-unsafe","code":3,"kind":"internal"}
+
+
+
+failures:
+    cache_inputs_route_builds_the_root_from_hydrated_inputs
+    cache_inputs_route_is_refused_on_a_recompute_plan
+    cache_inputs_route_refuses_a_missing_input
+    cache_inputs_route_refuses_a_root_offered_by_the_cache
+    cache_inputs_route_refuses_an_untrusted_signer
+
+test result: FAILED. 1 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+error: test failed, to rerun pass `-p mantle --test cache_inputs_build_route`
+EXIT=101

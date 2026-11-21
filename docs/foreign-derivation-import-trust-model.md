@@ -204,8 +204,16 @@ introduce a session or replace signed PathInfo/content verification. The
 names the establishing declaration and the checked fixtures for each boundary.
 
 `preserve-cache-paths-v1` permits exact path identity only with one unchanged store prefix.
-It selects the distinct `cache-only-preserve-v1` route.
-This route requires online substitution, an empty source bundle, and one selected output root.
+It selects the distinct `cache-only-preserve-v1` route by default, or the
+`cache-inputs-build-roots-v1` route when the plan explicitly requests it.
+The cache-only route requires online substitution, an empty source bundle, and
+one selected output root; it executes no builder.
+The cache-inputs build route requires the same online substitution, empty
+source bundle and signed-cache admission, hydrates only the selected roots'
+direct input outputs, their input sources and those paths' runtime reference
+closure, and then executes the root derivations. It refuses a root the cache
+offers or the store already holds, refuses fixed-output roots, and never falls
+back to the host logical store for a missing source.
 
 The plan binds trusted cache keys in its cache URLs.
 Mantle validates bounded NARInfo metadata before it imports NAR content.
@@ -290,9 +298,10 @@ can export one package without running Guix:
 5. Publish that closure as a Nix-compatible cache.
 6. Stop the producer boundary before Mantle planning and consumption.
 
-Mantle then uses `preserve-cache-paths-v1` and `cache-only-preserve-v1`. It
-verifies the exporter signature, NAR facts, references, limits, and exact
-`/nix/store` paths. It does not run Nix, Guix, GuixPkgs, or `guix-transfer`.
+Mantle then uses `preserve-cache-paths-v1` with `cache-only-preserve-v1` or
+`cache-inputs-build-roots-v1`. It verifies the exporter signature, NAR facts,
+references, limits, and exact `/nix/store` paths. It does not run Nix, Guix,
+GuixPkgs, or `guix-transfer`.
 
 The exporter signature authenticates the exported translated bytes. It does not
 prove Guix translation correctness or original `/gnu/store` identity. A failed
