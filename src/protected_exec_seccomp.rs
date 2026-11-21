@@ -1350,19 +1350,27 @@ mod linux {
             );
         }
 
-        fn run_rename_swap_race_child() {
-            use std::os::unix::fs::PermissionsExt;
+        /// Write an executable script whose bytes and exit status identify it.
+        /// The interpreter is the shell the flake check phase exports, so the
+        /// test needs no host `/bin/true` or `/bin/false` inside the Nix sandbox.
+        fn write_exit_script(path: &Path, exit_status: u8) {
+            let shell = std::env::var_os("MANTLE_TEST_SCRIPT_SHELL").unwrap_or_else(|| "/bin/sh".into());
+            std::fs::write(path, format!("#!{}\nexit {exit_status}\n", Path::new(&shell).display())).unwrap();
+            make_executable(path);
+        }
 
+        fn run_rename_swap_race_child() {
             let root = tempfile::tempdir().unwrap();
             let approved = root.path().join("approved");
             let shell = root.path().join("shell");
             let replacement = root.path().join("replacement");
-            std::fs::copy("/bin/true", &approved).unwrap();
-            std::fs::copy("/bin/true", &shell).unwrap();
-            std::fs::copy("/bin/false", &replacement).unwrap();
-            for path in [&approved, &shell, &replacement] {
-                std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
-            }
+            write_exit_script(&approved, 0);
+            write_exit_script(&shell, 0);
+            write_exit_script(&replacement, 1);
+            // The race outcome is read from the exit status, so both programs must
+            // behave as declared before any exec is supervised.
+            assert!(Command::new(&approved).status().unwrap().success());
+            assert!(!Command::new(&replacement).status().unwrap().success());
             let digest = blake3_file_hex(&approved).unwrap();
             let inventory = Stage0Inventory {
                 executable_entries: vec![
@@ -1398,7 +1406,7 @@ mod linux {
             racer.join().unwrap();
             set_seccomp_race_config(None);
 
-            assert!(!status.success(), "raced exec must run the replaced /bin/false bytes");
+            assert!(!status.success(), "raced exec must run the replacement's bytes");
             let events = supervisor.audit_events();
             assert_eq!(events.len(), 1);
             assert_eq!(events[0].policy_decision, "allowed");
