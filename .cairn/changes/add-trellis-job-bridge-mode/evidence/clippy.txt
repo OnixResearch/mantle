@@ -1,0 +1,8 @@
+# cargo clippy -p crunch-verification-bridge-core -p crunch-verification-bridge --all-targets --no-deps -- -D warnings
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-verification-bridge-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-verification-bridge-core)
+    Checking crunch-verification-bridge v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-verification-bridge)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.04s
+EXIT=0

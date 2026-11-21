@@ -225,3 +225,63 @@ Nix closure is not evidence that Mantle source-built the tool graph. Likewise
 the fixture packaging proof is not real producer execution. Record the actual
 route, provenance, supported graph fragment and limits rather than silently
 substituting either weaker result. No current build/proof completion is claimed.
+
+## Trellis Verus producer job (`trellis-job`)
+
+`trellis-job` binds a Trellis-owned Verus producer job without reusing the
+Aeneas pilot schemas:
+
+```sh
+target/debug/mantle-verification-bridge trellis-job \
+  /path/to/trellis-producer-output /tmp/trellis-producer-export \
+  COMMITTED_REVISION /tmp/trellis-real-handoff
+```
+
+`OUTPUT '-'` inspects without exporting, as in the other modes.
+`consume_trellis_job` reads `profile.json`, the receipt at the path the
+profile's `verus.receipt_path` names, `producer-report.json`, and every
+material the profile names (source paths, artifact `locator`s, the receipt,
+`proof-cards.json`, `evidence.json`) under the existing document, material,
+aggregate-byte, count and no-symlink bounds. Packaging identities reuse the
+Trellis derivation from `consumer.provider`, `consumer.source.paths[0]`,
+`provider_tools` and `extraction`; the profile's own bytes remain the profile
+identity.
+
+`observe_trellis_job` requires schema versions
+`trellis-verus-producer-profile/v1` (profile), `octet-verus-proof-receipt/v1`
+(Verus proof receipt) and `trellis-verus-producer-report/v1` (Terrane's own
+report). It checks the profile digest and provider identity, receipt
+`status == "passed"` and non-empty `checked_scope`, every profile source path
+and artifact locator as an exact material with its recorded byte count, every
+receipt `source_bindings` row against a profile source path by digest and path
+suffix (the receipt binds repository-relative paths, the profile the
+output-relative copies), the selected source path against the packaging source
+identity, `provider_tools`/`extraction` digests, each profile artifact against
+a receipt artifact row (`stdout_artifact`, `stderr_artifact`, comparing every
+field the receipt records and ignoring the profile's `role`), and the profile's
+`verus.receipt_identity`/`verus.receipt_path` against the selected receipt
+bytes. The producer report's exact bytes become
+`external_report_identity`; it is not interpreted. `proof_acceptance` stays
+`not-evaluated-by-mantle`.
+
+`bind_trellis_job` shares one job binder with `octet-job`. The Trellis job must
+declare `trellis-mantle-producer-job/v1`, owner `Trellis`, matching
+profile/provider identities, `execution.rail_id` equal to the receipt's
+`checked_scope`, `execution.network_allowed == false`, a flake revision equal to
+the packaging source revision, and a complete valid v4 or legacy tool graph
+rooted at `root_derivation`. `check_tool_graph` is unchanged. The association
+binds the job, graph, root derivation, flake metadata/lock and the producer
+report. A failed/blocked receipt, a wrong job schema, owner, rail, network
+declaration or revision, tampered bytes, a missing report/card/evidence
+document, and an absent root or incomplete closure all fail closed.
+
+`export` is unchanged, so the exported handoff carries the exact producer
+`profile.json`, receipt, report, cards, evidence, source and artifact bytes
+with the job metadata; replay points both explicit roots at that directory and
+performs no ambient Terrane/Nix/Verus lookup. ADR 0168 records the decision.
+
+Synthetic boundary tests live in
+`crates/crunch-verification-bridge/tests/trellis_job.rs`. They build the output
+contract in temporary directories and cover the positive observation, export
+replay, and every negative above. They are not the real Terrane producer run;
+the realized output is exercised separately in the WP8 stage-2 handoff.

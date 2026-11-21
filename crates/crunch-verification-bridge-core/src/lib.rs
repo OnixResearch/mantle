@@ -29,6 +29,7 @@ pub use producer::BoundProducerHandoff;
 pub use producer::MAX_TOOL_GRAPH_BYTES;
 pub use producer::ProducerBinding;
 pub use producer::bind_octet_job;
+pub use producer::bind_trellis_job;
 
 pub const MAX_DOCUMENT_BYTES: usize = 1_048_576;
 pub const MAX_MATERIAL_BYTES: usize = 8_388_608;
@@ -722,6 +723,285 @@ fn check_trellis_artifacts(
     checked.push(verus_path.to_string());
     for row in rows {
         let path = text(row, "/path")?;
+        let bytes = material(materials, path, Expected(text(row, "/blake3")?))?;
+        if row.get("bytes").and_then(Value::as_u64) != Some(bytes.len() as u64) {
+            return Err(BridgeError::ArtifactByteCountMismatch(path.to_string()));
+        }
+        checked.push(path.to_string());
+    }
+    debug_assert!(rows.len() <= MAX_MATERIALS);
+    debug_assert!(checked.iter().all(|path| is_relative_path(path)));
+    Ok(())
+}
+
+/// The relative path of Terrane's own producer report.
+const TRELLIS_JOB_REPORT_PATH: &str = "producer-report.json";
+/// The paths of the producer's uninterpreted proof-card and evidence documents.
+const TRELLIS_JOB_PROOF_CARDS_PATH: &str = "proof-cards.json";
+const TRELLIS_JOB_EVIDENCE_PATH: &str = "evidence.json";
+/// The Trellis producer-job profile schema version.
+const TRELLIS_JOB_PROFILE_SCHEMA: &str = "trellis-verus-producer-profile/v1";
+/// Octet's Verus proof receipt schema version.
+const VERUS_PROOF_RECEIPT_SCHEMA: &str = "octet-verus-proof-receipt/v1";
+/// Terrane's producer report schema version.
+const TRELLIS_JOB_REPORT_SCHEMA: &str = "trellis-verus-producer-report/v1";
+
+/// Consume Terrane/Trellis's Verus producer job: Trellis's producer-job
+/// profile, Octet's Verus proof receipt, every payload the profile and receipt
+/// name, and Terrane's own producer report.
+///
+/// Mantle links exact bytes and identities only. It never runs Verus, judges
+/// the bounds theorem, or admits a proof; the report identity is recorded, not
+/// interpreted.
+// r[impl verification_bridge.trellis_job_mode]
+pub fn observe_trellis_job(request: ObservationRequest) -> Result<ObservedHandoff, BridgeError> {
+    let mut checked =
+        observe_trellis_job_inner(&request.inputs, &request.profile, &request.receipt, &request.materials)?;
+    let report_bytes = trellis_job_report_bytes(&request.materials)?;
+    let report = document(report_bytes)?;
+    if text(&report, "/schema_version")? != TRELLIS_JOB_REPORT_SCHEMA {
+        return Err(BridgeError::UnsupportedTrellisProducerReport);
+    }
+    let receipt_identity = digest(&request.receipt);
+    let report_identity = digest(report_bytes);
+    checked.push(TRELLIS_JOB_REPORT_PATH.to_string());
+    for path in [TRELLIS_JOB_PROOF_CARDS_PATH, TRELLIS_JOB_EVIDENCE_PATH] {
+        if !request.materials.iter().any(|row| row.path == path) {
+            return Err(BridgeError::MissingPayload(path.to_string()));
+        }
+        checked.push(path.to_string());
+    }
+    let mut observation = finish(request.inputs, &request.receipt, "Trellis", checked)?;
+    observation.association_identity = trellis_job_association_identity(TrellisJobAssociation {
+        observation_identity: &observation.association_identity,
+        report_identity: &report_identity,
+    })?;
+    observation.external_report_identity = Some(report_identity);
+    debug_assert!(!receipt_identity.is_empty());
+    debug_assert!(observation.proof_acceptance == "not-evaluated-by-mantle");
+    Ok(ObservedHandoff {
+        observation,
+        profile: request.profile,
+        receipt: request.receipt,
+        materials: request.materials,
+    })
+}
+
+/// The bytes of Terrane's own producer report.
+fn trellis_job_report_bytes(materials: &[Material]) -> Result<&[u8], BridgeError> {
+    materials
+        .iter()
+        .find(|row| row.path == TRELLIS_JOB_REPORT_PATH)
+        .map(|row| row.bytes.as_slice())
+        .ok_or(BridgeError::MissingTrellisProducerReport)
+}
+
+/// The two identities one Trellis producer-job association binds.
+struct TrellisJobAssociation<'a> {
+    observation_identity: &'a str,
+    report_identity: &'a str,
+}
+
+/// The job association binds the observation to the exact producer report.
+fn trellis_job_association_identity(association: TrellisJobAssociation<'_>) -> Result<String, BridgeError> {
+    let bytes = serde_json::to_vec(&(
+        "mantle.external-producer-report-association.v1",
+        association.observation_identity,
+        association.report_identity,
+    ))
+    .map_err(BridgeError::Serialization)?;
+    Ok(digest(&bytes))
+}
+
+fn observe_trellis_job_inner(
+    inputs: &PackagingInputs,
+    profile_bytes: &[u8],
+    receipt_bytes: &[u8],
+    materials: &[Material],
+) -> Result<Vec<String>, BridgeError> {
+    validate_inputs(inputs, materials)?;
+    let profile = document(profile_bytes)?;
+    let receipt = document(receipt_bytes)?;
+    check_trellis_job_schemas(&profile, &receipt)?;
+    equal(&digest(profile_bytes), Expected(&inputs.profile_identity), "profile bytes")?;
+    equal(
+        text(&profile, "/consumer/provider/profile_identity")?,
+        Expected(&inputs.provider_identity),
+        "provider",
+    )?;
+    equal(text(&receipt, "/status")?, Expected("passed"), "externally reported status")?;
+    text(&receipt, "/checked_scope")?;
+    let source_path = check_trellis_job_source(inputs, &profile, materials)?;
+    check_trellis_options_contract(inputs, &profile)?;
+    let mut checked = alloc::vec![source_path.to_string()];
+    check_trellis_job_source_bindings(materials, &profile, &receipt, source_path, inputs, &mut checked)?;
+    check_trellis_job_artifacts(materials, &profile, &receipt, receipt_bytes, &mut checked)?;
+    debug_assert!(!source_path.is_empty());
+    debug_assert!(checked.iter().all(|path| is_relative_path(path)));
+    Ok(checked)
+}
+
+/// The Trellis producer-job profile and Verus proof receipt must carry their
+/// published schema versions.
+fn check_trellis_job_schemas(profile: &Value, receipt: &Value) -> Result<(), BridgeError> {
+    if text(profile, "/schema_version")? != TRELLIS_JOB_PROFILE_SCHEMA {
+        return Err(BridgeError::UnsupportedTrellisJobProfile);
+    }
+    if text(receipt, "/schema_version")? != VERUS_PROOF_RECEIPT_SCHEMA {
+        return Err(BridgeError::UnsupportedVerusProofReceipt);
+    }
+    debug_assert!(TRELLIS_JOB_PROFILE_SCHEMA.contains("trellis-"));
+    debug_assert!(VERUS_PROOF_RECEIPT_SCHEMA.contains("verus"));
+    Ok(())
+}
+
+/// The profile's first source path must be the selected source material.
+fn check_trellis_job_source<'a>(
+    inputs: &PackagingInputs,
+    profile: &'a Value,
+    materials: &[Material],
+) -> Result<&'a str, BridgeError> {
+    let paths = profile
+        .get("consumer")
+        .and_then(|consumer| consumer.get("source"))
+        .and_then(|source| source.get("paths"))
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingSourcePaths)?;
+    if paths.is_empty() || paths.len() > MAX_MATERIALS {
+        return Err(BridgeError::MissingSourcePaths);
+    }
+    equal(text(&paths[0], "/identity")?, Expected(&inputs.source_identity), "profile source")?;
+    let source_path = text(&paths[0], "/path")?;
+    material(materials, source_path, Expected(&inputs.source_identity))?;
+    debug_assert!(paths.len() <= MAX_MATERIALS);
+    Ok(source_path)
+}
+
+/// Every profile source path must be an exact material, every receipt source
+/// binding must match a profile source path by digest and path suffix, and the
+/// selected source path must be bound with the packaging source identity.
+fn check_trellis_job_source_bindings(
+    materials: &[Material],
+    profile: &Value,
+    receipt: &Value,
+    source_path: &str,
+    inputs: &PackagingInputs,
+    checked: &mut Vec<String>,
+) -> Result<(), BridgeError> {
+    let paths = profile
+        .get("consumer")
+        .and_then(|consumer| consumer.get("source"))
+        .and_then(|source| source.get("paths"))
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingSourcePaths)?;
+    if paths.is_empty() || paths.len() > MAX_MATERIALS {
+        return Err(BridgeError::MissingSourcePaths);
+    }
+    for row in paths {
+        let path = text(row, "/path")?;
+        material(materials, path, Expected(text(row, "/identity")?))?;
+        checked.push(path.to_string());
+    }
+    let rows = receipt
+        .get("source_bindings")
+        .and_then(Value::as_array)
+        .ok_or(BridgeError::MissingTrellisSourceBindings)?;
+    if rows.is_empty() || rows.len() > MAX_MATERIALS {
+        return Err(BridgeError::TrellisSourceBindingCountBound);
+    }
+    let mut binds_source = false;
+    for row in rows {
+        let path = text(row, "/path")?;
+        let identity = text(row, "/blake3")?;
+        let profile_source = find_bound_profile_source(paths, path, identity)?;
+        if text(profile_source, "/path")? == source_path {
+            equal(identity, Expected(&inputs.source_identity), "receipt source binding")?;
+            binds_source = true;
+        }
+    }
+    if !binds_source {
+        return Err(BridgeError::MissingProfileSource);
+    }
+    debug_assert!(rows.len() <= MAX_MATERIALS);
+    debug_assert!(checked.iter().all(|path| is_relative_path(path)));
+    Ok(())
+}
+
+/// Finds the profile source path one receipt binding names: the digest is the
+/// binding's authority and the path must be the same file (the receipt binds
+/// the repository-relative path, the profile the output-relative copy).
+fn find_bound_profile_source<'a>(paths: &'a [Value], path: &str, identity: &str) -> Result<&'a Value, BridgeError> {
+    let suffix = format!("/{path}");
+    for row in paths {
+        let profile_path = text(row, "/path")?;
+        if profile_path != path && !profile_path.ends_with(&suffix) {
+            continue;
+        }
+        if digest_equal(text(row, "/identity")?, Expected(identity), "receipt source binding").is_ok() {
+            return Ok(row);
+        }
+    }
+    Err(BridgeError::MissingProfileSource)
+}
+
+/// The receipt artifact the selected Verus proof receipt records.
+fn trellis_job_receipt_artifacts(receipt: &Value) -> Result<Vec<&Value>, BridgeError> {
+    let mut artifacts = Vec::with_capacity(2);
+    for pointer in ["/stdout_artifact", "/stderr_artifact"] {
+        let artifact = receipt
+            .pointer(pointer)
+            .filter(|value| value.is_object())
+            .ok_or(BridgeError::MissingTrellisArtifacts)?;
+        artifacts.push(artifact);
+    }
+    debug_assert!(artifacts.len() == 2);
+    Ok(artifacts)
+}
+
+/// True when every field the receipt artifact records equals the profile row's.
+fn artifact_row_matches(profile_row: &Value, receipt_row: &Value) -> bool {
+    let (Some(profile_row), Some(receipt_row)) = (profile_row.as_object(), receipt_row.as_object()) else {
+        return false;
+    };
+    receipt_row.iter().all(|(field, value)| profile_row.get(field) == Some(value))
+}
+
+/// The profile artifacts must each describe one receipt artifact row, every
+/// artifact must be an exact material, and the profile's receipt path and
+/// identity must name the selected Verus proof receipt byte-for-byte.
+fn check_trellis_job_artifacts(
+    materials: &[Material],
+    profile: &Value,
+    receipt: &Value,
+    receipt_bytes: &[u8],
+    checked: &mut Vec<String>,
+) -> Result<(), BridgeError> {
+    let rows = profile.get("artifacts").and_then(Value::as_array).ok_or(BridgeError::MissingProfileArtifacts)?;
+    if rows.is_empty() || rows.len() > MAX_MATERIALS {
+        return Err(BridgeError::ProfileArtifactMismatch);
+    }
+    let receipt_rows = trellis_job_receipt_artifacts(receipt)?;
+    if receipt_rows.len() != rows.len() {
+        return Err(BridgeError::ProfileArtifactMismatch);
+    }
+    let mut matched = alloc::vec![false; rows.len()];
+    for receipt_row in &receipt_rows {
+        let found = rows
+            .iter()
+            .enumerate()
+            .find(|(index, row)| !matched[*index] && artifact_row_matches(row, receipt_row));
+        let Some((index, _)) = found else {
+            return Err(BridgeError::ProfileArtifactMismatch);
+        };
+        matched[index] = true;
+    }
+    let receipt_identity = digest(receipt_bytes);
+    equal(text(profile, "/verus/receipt_identity")?, Expected(&receipt_identity), "verifier receipt identity")?;
+    let verus_path = text(profile, "/verus/receipt_path")?;
+    material(materials, verus_path, Expected(&receipt_identity))?;
+    checked.push(verus_path.to_string());
+    for row in rows {
+        let path = text(row, "/locator")?;
         let bytes = material(materials, path, Expected(text(row, "/blake3")?))?;
         if row.get("bytes").and_then(Value::as_u64) != Some(bytes.len() as u64) {
             return Err(BridgeError::ArtifactByteCountMismatch(path.to_string()));

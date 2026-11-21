@@ -11,6 +11,11 @@ fn run() -> Result<(), String> {
             crunch_verification_bridge::consume_octet_job(Path::new(&args[1]), Path::new(&args[2]), &args[3])?,
             &args[4],
         )
+    } else if args.len() == 5 && args[0] == "trellis-job" {
+        (
+            crunch_verification_bridge::consume_trellis_job(Path::new(&args[1]), Path::new(&args[2]), &args[3])?,
+            &args[4],
+        )
     } else if args.len() == 6 {
         let producer = match args[0].as_str() {
             "octet" => Producer::Octet,
@@ -20,7 +25,7 @@ fn run() -> Result<(), String> {
         };
         (consume_selected(producer, Path::new(&args[1]), &args[2], &args[3], &args[4])?, &args[5])
     } else {
-        return Err("usage: mantle-verification-bridge <octet|octet-verified|trellis> ROOT PROFILE RECEIPT SOURCE_REVISION OUTPUT; or octet-job OWNER_OUTPUT PRODUCER_EXPORT SOURCE_REVISION OUTPUT (OUTPUT '-' inspects; Mantle does not grant theorem admission)".into());
+        return Err("usage: mantle-verification-bridge <octet|octet-verified|trellis> ROOT PROFILE RECEIPT SOURCE_REVISION OUTPUT; or octet-job OWNER_OUTPUT PRODUCER_EXPORT SOURCE_REVISION OUTPUT; or trellis-job OWNER_OUTPUT PRODUCER_EXPORT SOURCE_REVISION OUTPUT (OUTPUT '-' inspects; Mantle does not grant theorem admission)".into());
     };
     let handoff = if destination != "-" {
         export(handoff, Path::new(destination))?

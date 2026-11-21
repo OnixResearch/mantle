@@ -30,6 +30,7 @@ pub enum Producer {
     Octet,
     OctetVerified,
     Trellis,
+    TrellisJob,
 }
 
 pub struct Handoff {
@@ -94,12 +95,12 @@ pub fn packaging_inputs(producer: Producer, profile: Vec<u8>, revision: &str) ->
     let value = json(&identified.bytes)?;
     let consumer = match producer {
         Producer::Octet | Producer::OctetVerified => &value,
-        Producer::Trellis => value.get("consumer").ok_or("missing consumer")?,
+        Producer::Trellis | Producer::TrellisJob => value.get("consumer").ok_or("missing consumer")?,
     };
     let provider = text(consumer, "/provider/profile_identity")?.to_owned();
     let tool = match producer {
         Producer::Octet | Producer::OctetVerified => provider.clone(),
-        Producer::Trellis => {
+        Producer::Trellis | Producer::TrellisJob => {
             identity(
                 serde_json::to_vec(value.get("provider_tools").ok_or("missing provider tools")?)
                     .map_err(|error| error.to_string())?,
@@ -109,7 +110,7 @@ pub fn packaging_inputs(producer: Producer, profile: Vec<u8>, revision: &str) ->
     };
     let options = match producer {
         Producer::Octet | Producer::OctetVerified => consumer.get("resource_policy"),
-        Producer::Trellis => value.get("extraction"),
+        Producer::Trellis | Producer::TrellisJob => value.get("extraction"),
     }
     .ok_or("missing producer options")?;
     debug_assert!(identified.bytes.len() <= crunch_verification_bridge_core::MAX_DOCUMENT_BYTES);
@@ -181,6 +182,7 @@ fn consume_profile(
         Producer::Octet => crunch_verification_bridge_core::observe_octet(request),
         Producer::OctetVerified => crunch_verification_bridge_core::observe_octet_verified(request),
         Producer::Trellis => crunch_verification_bridge_core::observe_trellis(request),
+        Producer::TrellisJob => crunch_verification_bridge_core::observe_trellis_job(request),
     }
     .map_err(|error| error.to_string())?;
     debug_assert!(!observed.observation.schema.is_empty());
@@ -200,6 +202,7 @@ fn material_paths(producer: Producer, parsed: &Value) -> Result<BTreeSet<String>
     match producer {
         Producer::Octet | Producer::OctetVerified => octet_material_paths(parsed, &mut paths)?,
         Producer::Trellis => trellis_material_paths(parsed, &mut paths)?,
+        Producer::TrellisJob => return Err("trellis-job selects its material plan from its profile".into()),
     }
     Ok(paths)
 }
@@ -362,6 +365,111 @@ pub fn consume_octet_job(root: &Path, producer_export: &Path, source_revision: &
         materials: bound.handoff.materials,
         producer_binding: Some(bound.binding),
     })
+}
+
+/// The Trellis producer-job profile, receipt, report and uninterpreted
+/// materials. These names are the producer job's own output contract.
+const TRELLIS_JOB_PROFILE_PATH: &str = "profile.json";
+const TRELLIS_JOB_REPORT_PATH: &str = "producer-report.json";
+const TRELLIS_JOB_PROOF_CARDS_PATH: &str = "proof-cards.json";
+const TRELLIS_JOB_EVIDENCE_PATH: &str = "evidence.json";
+
+/// Bind a Trellis-owned Verus producer job output to an acquisition-only frozen
+/// executable graph. Both roots are explicit inputs; execution never discovers
+/// or invokes Nix, Verus, or an ambient checkout.
+// r[impl verification_bridge.trellis_job_mode]
+pub fn consume_trellis_job(root: &Path, producer_export: &Path, source_revision: &str) -> Result<Handoff, String> {
+    use crunch_verification_bridge_core::ObservedHandoff;
+    use crunch_verification_bridge_core::ProducerBinding;
+    use crunch_verification_bridge_core::bind_trellis_job;
+    let profile =
+        read_bounded(root, TRELLIS_JOB_PROFILE_PATH.to_owned(), crunch_verification_bridge_core::MAX_DOCUMENT_BYTES)?
+            .bytes;
+    let ProfileInputs { inputs, profile } = packaging_inputs(Producer::TrellisJob, profile, source_revision)?;
+    let profile_value = json(&profile)?;
+    let receipt_path = text(&profile_value, "/verus/receipt_path")?.to_owned();
+    let receipt = read_bounded(root, receipt_path, crunch_verification_bridge_core::MAX_DOCUMENT_BYTES)?.bytes;
+    let mut paths = trellis_job_material_paths(&profile_value)?;
+    paths.insert(TRELLIS_JOB_PROFILE_PATH.to_owned());
+    let materials = read_materials(root, paths, None)?;
+    let observed = crunch_verification_bridge_core::observe_trellis_job(ObservationRequest {
+        inputs,
+        profile,
+        receipt,
+        materials,
+    })
+    .map_err(|error| error.to_string())?;
+    let job =
+        read_bounded(producer_export, "job.json".into(), crunch_verification_bridge_core::MAX_DOCUMENT_BYTES)?.bytes;
+    let graph = read_bounded(
+        producer_export,
+        "tool-closure.derivation-json.json".into(),
+        crunch_verification_bridge_core::MAX_TOOL_GRAPH_BYTES,
+    )?
+    .bytes;
+    let root_derivation = read_bounded(producer_export, "root-derivation".into(), 4096)?.bytes;
+    let flake_metadata = read_bounded(
+        producer_export,
+        "flake-metadata.json".into(),
+        crunch_verification_bridge_core::MAX_DOCUMENT_BYTES,
+    )?
+    .bytes;
+    let flake_lock =
+        read_bounded(producer_export, "flake.lock".into(), crunch_verification_bridge_core::MAX_DOCUMENT_BYTES)?.bytes;
+    let root_derivation = String::from_utf8(root_derivation).map_err(|error| error.to_string())?.trim().to_owned();
+    let bound = bind_trellis_job(
+        ObservedHandoff {
+            observation: observed.observation,
+            profile: observed.profile,
+            receipt: observed.receipt,
+            materials: observed.materials,
+        },
+        ProducerBinding {
+            job,
+            graph,
+            flake_metadata,
+            flake_lock,
+            root_derivation,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    debug_assert!(bound.handoff.observation.producer_job_identity.is_some());
+    debug_assert!(bound.handoff.observation.tool_graph_identity.is_some());
+    debug_assert!(bound.handoff.observation.external_report_identity.is_some());
+    Ok(Handoff {
+        observation: bound.handoff.observation,
+        profile: bound.handoff.profile,
+        receipt: bound.handoff.receipt,
+        materials: bound.handoff.materials,
+        producer_binding: Some(bound.binding),
+    })
+}
+
+/// The paths a Trellis producer-job profile names for its own materials, plus
+/// the uninterpreted report, proof-card and evidence documents.
+fn trellis_job_material_paths(profile: &Value) -> Result<BTreeSet<String>, String> {
+    let mut paths = BTreeSet::new();
+    paths.insert(text(profile, "/verus/receipt_path")?.to_owned());
+    let sources = profile
+        .pointer("/consumer/source/paths")
+        .and_then(Value::as_array)
+        .ok_or("missing profile source paths")?;
+    let artifacts = profile.get("artifacts").and_then(Value::as_array).ok_or("missing profile artifacts")?;
+    if sources.len() > crunch_verification_bridge_core::MAX_MATERIALS
+        || artifacts.len() > crunch_verification_bridge_core::MAX_MATERIALS
+    {
+        return Err("external artifact count exceeds bound".into());
+    }
+    for row in sources {
+        paths.insert(text(row, "/path")?.to_owned());
+    }
+    for row in artifacts {
+        paths.insert(text(row, "/locator")?.to_owned());
+    }
+    paths.insert(TRELLIS_JOB_REPORT_PATH.to_owned());
+    paths.insert(TRELLIS_JOB_PROOF_CARDS_PATH.to_owned());
+    paths.insert(TRELLIS_JOB_EVIDENCE_PATH.to_owned());
+    Ok(paths)
 }
 
 /// Publish exact external bytes without normalization. The destination must not

@@ -1,0 +1,4 @@
+# cargo fmt --check -p crunch-verification-bridge-core
+EXIT=0
+# cargo fmt --check -p crunch-verification-bridge
+EXIT=0

@@ -165,3 +165,4 @@ compatibility surface, crate name, or historical decision.
 | [0165](0165-pin-the-primary-rust-compiler-cohort.md) | Pin the primary Rust compiler cohort to a dated nightly | Proposed |
 | [0166](0166-bound-foreign-import-graphs-by-the-producer-tool-graph-contract.md) | Bound foreign-import graphs by the producer tool-graph contract | Accepted |
 | [0167](0167-admit-octet-current-producer-layout-in-the-verification-bridge.md) | Admit Octet's current producer layout in the verification bridge | Accepted |
+| [0168](0168-admit-a-trellis-verus-producer-job-in-the-verification-bridge.md) | Admit a Trellis-owned Verus producer job in the verification bridge | Accepted |
