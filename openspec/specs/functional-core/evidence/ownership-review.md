@@ -120,6 +120,9 @@ Date: 2026-08-03
   - CLI smoke coverage only; no first-wave core logic reintroduced
 - `tests/project_refresh_cli.rs` → `unrelated`
   - CLI refresh integration coverage only; no first-wave core logic reintroduced
+- `tests/cache_inputs_build_route.rs` → `unrelated`
+  - CLI integration coverage of the cache-inputs build-roots route only; no
+    first-wave core logic reintroduced
 
 ## Scoped adapter enrollment source review (2026-10-18)
 
@@ -1031,6 +1034,7 @@ extracted first-wave algorithms.
 - `crates/crunch-store/tests/authority_source_policy.rs` → `unrelated`
 - `crates/crunch-test/src/tests.rs` → `unrelated`
 - `crates/crunch-verification-bridge/tests/boundaries.rs` → `unrelated`
+- `crates/crunch-verification-bridge/tests/trellis_job.rs` → `unrelated`
 - `crates/crunch-wasm-component-core/src/tests.rs` → `unrelated`
 - `crates/crunch-wasm-component/src/process_tests.rs` → `unrelated`
 - `crates/crunch-wasm-component/src/toolchain_tests.rs` → `unrelated`
