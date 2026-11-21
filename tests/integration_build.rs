@@ -1591,11 +1591,20 @@ fn casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_s
         let canonical_url = url::Url::parse(&remote.url).unwrap().as_str().to_string();
         config.source_admission = Some(std::sync::Arc::new(CacheSourceAdmission(canonical_url)));
         let mut destination = crunch_store::StoreHandle::open(config).await.unwrap();
-        let error = destination.try_substitute_remote(*path.digest(), &path, "out", true, None).await.unwrap_err();
-        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        // Remote admission rejects an untrusted signer before publication, so
+        // the attempt reports no substitution instead of surfacing the
+        // destination store's policy error through the remote path.
+        let substituted = destination.try_substitute_remote(*path.digest(), &path, "out", true, None).await.unwrap();
+        assert!(substituted.is_none(), "an unlisted cache signer must not substitute");
         assert_eq!(std::fs::read(&destination_policy).unwrap(), policy_bytes.as_bytes());
         assert!(!destination_store.join(selector).exists());
         assert!(!destination_state.join("casita-gc-fence.json").exists());
+        // The destination policy itself still refuses the signer when the same
+        // PathInfo is offered for publication.
+        let error = destination.pathinfo_service().put(signed.clone()).await.unwrap_err();
+        assert!(error.to_string().contains("casita-signer-untrusted"), "{error}");
+        assert_eq!(std::fs::read(&destination_policy).unwrap(), policy_bytes.as_bytes());
+        assert!(!destination_store.join(selector).exists());
         std::fs::write(&destination_policy, format!("{public_key}\n")).unwrap();
         assert!(destination.pathinfo_service().get(*path.digest()).await.unwrap().is_none());
         std::fs::write(&destination_policy, &policy_bytes).unwrap();
