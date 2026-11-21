@@ -9,10 +9,10 @@
 
 let DefaultAgedAfterEpochs = 4 in
 let DefaultProtectedAfterEpochs = 8 in
-let DefaultMaxKnownGoals = 10000 in
-let DefaultMaxKnownEdges = 640000 in
+let DefaultMaxKnownGoals = 32768 in
+let DefaultMaxKnownEdges = 2097152 in
 let DefaultMaxBlockedRootPressure = 256 in
-let DefaultMaxHistoryEntries = 10000 in
+let DefaultMaxHistoryEntries = 32768 in
 let DefaultMaxHistoryKeyBytesTotal = 4194304 in
 let DefaultMaxHistorySnapshotBytes = 8388608 in
 let DefaultMaxResourceClasses = 32 in
