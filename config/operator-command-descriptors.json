@@ -1351,6 +1351,7 @@
       "--package-index",
       "--plan-out",
       "--policy",
+      "--realization-route",
       "--receipt-out",
       "--remote-binding-config",
       "--state-dir",
