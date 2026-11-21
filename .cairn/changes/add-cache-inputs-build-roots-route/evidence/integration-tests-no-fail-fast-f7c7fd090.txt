@@ -1,0 +1,1496 @@
+waiting for another Nix process to finish fetching input 'git+https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://github.com/trailofbits/dylint?rev=0e0a71eefe6f01563d11acc6e1d7af1d505934a9&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://github.com/tvlfyi/wu-manber.git?rev=0d5b22bea136659f7de60b102a7030e0daaa503d&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+ssh://git@github.com/OnixResearch/onix-artifact.git?rev=e41340bec587b6d049b5cc518ec7db925dde84be&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git?rev=29dac88ecded94457572db3fdfaaaab95fa91525&submodules=1'...
+waiting for another Nix process to finish fetching input 'git+https://seed.radicle.garden/z2wsvXm5S2sJGvuV1k5JHiwi1PbKE.git?rev=5d99f4e9bb954743443e340baece31256b4c53f1&submodules=1'...
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 3 ms: Could not connect to server; retrying in 59 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 184 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 1 ms: Could not connect to server; retrying in 210 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 5 ms: Could not connect to server; retrying in 618 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+error: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 51.73s
+     Running tests/android_apk.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/android_apk-5fabd77771d72a43)
+
+running 7 tests
+test explicit_signing_is_a_plan_member_not_an_ambient_secret ... ok
+test forced_embedded_stdlib_authors_the_reviewed_apk_plan ... ok
+test malicious_or_incomplete_apk_authoring_fails_before_tool_fetch ... ok
+test native_authoring_rejects_unsupported_abi_api_toolchain_and_asset_collisions ... ok
+test published_apk_entrypoint_does_not_infer_reviewed_authority_from_plan_shape ... ok
+test published_zip_and_reviewed_jar_date_policies_have_explicit_endpoints ... ok
+test reviewed_apk_authoring_matches_core_wire_shape ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.14s
+
+     Running tests/android_sources.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/android_sources-b16f8e8e7fcff53c)
+
+running 9 tests
+test canonical_metadata_ignores_input_field_order ... ok
+test cli_forced_embedded_android_source_resolves_nested_module ... ok
+test embedded_android_module_resolves_nested_imports ... ok
+test file_source_bundle_replays_offline_and_unmatched_request_fails_closed ... ok
+test malformed_sources_are_rejected_before_fetch_lowering ... ok
+test published_source_and_reviewed_metadata_cannot_cross_identity_domains ... ok
+test reviewed_binding_declares_fetch_and_rejects_metadata_drift ... ok
+test reviewed_cohort_identity_is_blake3_of_normalized_metadata ... ok
+test reviewed_tool_binding_uses_one_validated_source_v1_fetch_for_each_alias ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.27s
+
+     Running tests/android_sources_offline.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/android_sources_offline-b70988d7312468c7)
+
+running 2 tests
+test android_pinned_fetch_request_replays_only_matching_kind_and_url ... ok
+test bound_android_tool_cannot_execute_after_real_fixed_output_digest_drift ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.38s
+
+     Running tests/attest_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/attest_cli-eb73e2b6f023eca6)
+
+running 10 tests
+test attest_build_workflow_and_cached_second_build ... ok
+test attest_closure_and_verify_runtime_roots ... ok
+test attest_diff_accepts_existing_exported_artifact_selectors ... ok
+test attest_input_limit_rejects_before_store_initialization ... ok
+test attest_project_verify_and_diff ... ok
+test attest_project_workflow_on_built_root ... ok
+test attest_remote_substitution_workflow_persists_sidecars_and_verifies ... ok
+test attest_show_and_verify_artifact ... ok
+test attest_store_query_rejection_initializes_only_its_selected_store ... ok
+test casita_rejects_substituted_output_signed_only_by_cache_key_outside_policy ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.18s
+
+     Running tests/audit_support.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/audit_support-abe0d322c2e16ec7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/benchmark_harness.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/benchmark_harness-18421633add92dc7)
+
+running 25 tests
+test benchmark_docs_cover_all_workloads_and_entry_points ... ok
+test benchmark_entry_points_are_checked_in_examples ... ok
+test benchmark_runtime_boundary_stays_out_of_library_path ... ok
+test benchmark_support::tests::build_result_allows_workloads_without_phase_metrics ... ok
+test benchmark_support::tests::compare_benchmark_files_reads_fixed_fixtures ... ok
+test benchmark_support::tests::compare_bundles_do_not_fabricate_missing_phase_metrics ... ok
+test benchmark_support::tests::compare_bundles_highlight_largest_regressions_and_wins ... ok
+test benchmark_support::tests::compare_bundles_matches_workloads_and_metrics ... ok
+test benchmark_support::tests::compare_bundles_report_sparse_metric_omissions_per_workload ... ok
+test benchmark_support::tests::compare_rejects_threshold_application_across_mismatched_resource_cohorts ... ok
+test benchmark_support::tests::compatible_cohorts_apply_named_memory_thresholds_and_report_missing_values ... ok
+test benchmark_support::tests::default_benchmark_paths_stay_under_target ... ok
+test benchmark_support::tests::record_root_count_rejects_drift ... ok
+test benchmark_support::tests::render_bundle_json_keeps_schema ... ok
+test benchmark_support::tests::suite_workload_descriptors_cover_required_kinds ... ok
+test benchmark_support::tests::suite_workload_setup_is_deterministic ... ok
+test benchmark_support::tests::sum_samples_ns_adds_all_samples ... ok
+test eval_smoke_benchmark_writes_machine_readable_bundle ... ok
+test lazy_selected_root_nonselected_force_count_is_zero ... ok
+test store_metrics_only_appear_on_store_aware_workload ... ok
+test suite_benchmark_writes_full_workload_matrix_bundle ... ok
+test suite_has_checked_in_multi_phase_workflow_result ... ok
+test suite_phase_metrics_cover_phase_two_scope ... ok
+test suite_workload_descriptors_stay_deterministic ... ok
+test toml_section_keeps_dotted_subsections ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 34.10s
+
+     Running tests/bootstrap_eval.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/bootstrap_eval-46da5cf44ebe2823)
+
+running 36 tests
+test all_bootstrap_entrypoints_evaluate ... ok
+test binutils_tcc_uses_declared_generators_and_checks_the_full_tool_matrix ... ok
+test bison_23_musl_builds_complete_declared_sources_with_bounded_hash_semantics ... ok
+test bootstrap_entrypoints_do_not_inline_raw_seed_provider_details ... ok
+test diffutils_musl_uses_proven_tcc_and_rejects_compiler_teardown_outputs ... ok
+test eval_crunch_bootstrap_imports_shared_seed ... ok
+test eval_make_bootstrap_imports_shared_seed ... ok
+test eval_seed_module_exposes_selected_full_source_provider_metadata ... ok
+test flex_musl_bounds_varargs_and_declares_m4_with_both_fixture_polarities ... ok
+test full_source_host_tools_bind_the_selected_linux_header_identity ... ok
+test full_source_provider_records_authenticated_closure_and_is_selected ... ok
+test gawk_musl_uses_proven_tcc_with_bounded_numeric_runtime_and_generator_checks ... ok
+test gawk_string_macros_are_config_header_owned ... ok
+test gcc40_cxx_defaults_random_seeds_to_main_input_identity ... ok
+test gcc_built_binutils_defaults_to_deterministic_archives ... ok
+test gcc_native_diagnostic_uses_runtime_tcc_without_autotools_claims ... ok
+test gcc_pass3_linker_uses_only_relocatable_stagex_authority ... ok
+test gcc_pass4_tool_wrappers_use_only_relocatable_stagex_authority ... ok
+test gcc_pass5_archives_bind_deterministic_binutils_metadata ... ok
+test gzip_marks_generated_crc_helper_executable_before_running_it ... ok
+test legacy_seed_derivation_writes_shared_provider_metadata_schema ... ok
+test linux_header_derivation_evaluates_with_direct_runtime_inputs ... ok
+test m4_musl_builds_genuine_prefix_capable_binary_with_fixture_polarities ... ok
+test native_musl_candidate_preserves_runtime_sources ... ok
+test native_tcc_diagnostics_remain_bounded_and_non_admitted ... ok
+test perl_gcc_generators_keep_normalized_inputs_and_runtime_rails ... ok
+test perl_gcc_runtime_contract_rejects_stale_malformed_source_diagnostic ... ok
+test rust_source_route_registry_disqualifies_compatibility_and_import_routes ... ok
+test rust_source_route_registry_selects_only_the_full_source_musl_candidate ... ok
+test seed_selector_selects_full_source_without_legacy_fallback_or_self_recursion ... ok
+test self_hosting_proof_defaults_to_full_source_provider_identity ... ok
+test selfhosted_tinycc_candidate_rebuilds_compiler_source ... ok
+test source_built_coreutils_handoff_rejects_busybox_output_wrappers ... ok
+test source_built_linux_headers_replace_legacy_seed_header_assumption ... ok
+test source_built_sbase_remains_separate_from_bounded_gcc_tool_path ... ok
+test tcc_musl_v2_installs_and_exercises_its_stdarg_contract ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.50s
+
+     Running tests/bootstrap_parity_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/bootstrap_parity_cli-77d9f5a85e8eae93)
+
+running 21 tests
+test bootstrap_capabilities_report_missing_host_tools_without_process_path ... ok
+test bootstrap_parity_report_accepts_independently_receipted_early_native_rows ... ok
+test bootstrap_parity_report_emits_json_gap_report ... ok
+test bootstrap_parity_report_keeps_stale_final_native_evidence_partial ... ok
+test bootstrap_parity_report_preserves_absolute_missing_derivation_paths ... ok
+test bootstrap_parity_report_rejects_corrupt_predecessor_attestation ... ok
+test bootstrap_parity_report_rejects_cross_row_final_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_cross_row_receipt_substitution ... ok
+test bootstrap_parity_report_rejects_forbidden_host_tool_discovery ... ok
+test bootstrap_parity_report_rejects_legacy_self_build_proof_without_unblocking_axes ... ok
+test bootstrap_parity_report_rejects_malformed_row_receipt ... ok
+test bootstrap_parity_report_rejects_missing_final_runtime_member ... ok
+test bootstrap_parity_report_rejects_missing_output_artifact_evidence ... ok
+test bootstrap_parity_report_rejects_stale_generated_artifact_status ... ok
+test bootstrap_parity_report_rejects_stale_row_source_digest ... ok
+test bootstrap_parity_report_rejects_state_pinned_final_source ... ok
+test bootstrap_parity_report_rejects_untrusted_acceptance_fingerprint ... ok
+test bootstrap_parity_report_rejects_wrapper_delegation_marker ... ok
+test bootstrap_parity_report_require_fails_closed_on_gaps ... ok
+test bootstrap_parity_report_requires_binutils_row_receipt_for_live_bootstrap_and_guix ... ok
+test bootstrap_parity_report_stagex_requires_lineage_seed_provider ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.91s
+
+     Running tests/bootstrap_validate_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/bootstrap_validate_cli-165890f4b7cd2e6a)
+
+running 5 tests
+test bootstrap_validate_build_child_uses_selected_casita_backend ... ok
+test bootstrap_validate_preflight_failure_writes_evidence_bundle ... ok
+test bootstrap_validate_success_writes_logs_and_summary ... ok
+test native_closure_existing_output_is_not_overwritten_by_failed_input_read ... ok
+test provider_admission_rejects_invalid_digest_before_creating_report ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.10s
+
+     Running tests/cache_inputs_build_route.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cache_inputs_build_route-4a1094ad7faa3587)
+
+running 6 tests
+test cache_inputs_route_builds_the_root_from_hydrated_inputs ... ok
+test cache_inputs_route_is_refused_on_a_recompute_plan ... ok
+test cache_inputs_route_refuses_a_missing_input ... ok
+test cache_inputs_route_refuses_a_root_offered_by_the_cache ... ok
+test cache_inputs_route_refuses_an_untrusted_signer ... ok
+test cache_inputs_route_rejects_a_nonempty_source_bundle ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
+
+     Running tests/cargo_build_bundle_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cargo_build_bundle_cli-595f41f77bc326ac)
+
+running 8 tests
+test inspect_prints_the_admitted_manifest_for_matching_compatibility ... ok
+test inspect_refuses_a_compatibility_expectation_the_manifest_does_not_satisfy ... ok
+test inspect_refuses_a_manifest_whose_content_no_longer_matches_its_identity ... ok
+test inspect_refuses_missing_and_malformed_inputs_without_a_report ... ok
+test inspect_without_its_required_inputs_is_a_usage_error ... ok
+test verify_refuses_a_bundle_whose_declared_payloads_are_absent ... ok
+test verify_refuses_a_trust_policy_that_is_not_the_one_the_manifest_declares ... ok
+test verify_without_a_trusted_key_is_a_usage_error ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/cargo_free_self_build_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cargo_free_self_build_cli-711e88dc476184e5)
+
+running 15 tests
+test cargo_free_fixed_point_builds_tiny_mantle_fixture ... ok
+test cargo_free_fixed_point_enforces_matching_toolchain_closure_manifest_without_claiming_proof ... ok
+test cargo_free_fixed_point_fails_if_stage_invokes_cargo ... ok
+test cargo_free_fixed_point_rejects_inherited_cache_before_creating_attempt ... ok
+test cargo_free_fixed_point_rejects_inside_source_output_dir ... ok
+test cargo_free_fixed_point_rejects_invalid_toolchain_closure_manifest ... ok
+test cargo_free_fixed_point_reports_missing_rustc_toolchain ... ok
+test cargo_free_fixed_point_reports_stage_digest_mismatch ... ok
+test cargo_free_self_build_builds_tiny_mantle_fixture ... ok
+test cargo_free_self_build_enforces_matching_toolchain_closure_manifest_without_claiming_proof ... ok
+test cargo_free_self_build_fails_if_ambient_cargo_is_invoked ... ok
+test cargo_free_self_build_rejects_invalid_toolchain_closure_manifest ... ok
+test cargo_free_self_build_rejects_placeholder_seed_exception_manifest ... ok
+test cargo_free_self_build_rejects_undeclared_host_rustc_before_unit_execution ... ok
+test cargo_free_self_build_reports_seed_exception_accounting_without_claiming_proof ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.83s
+
+     Running tests/cargo_import_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cargo_import_cli-3856b4e67ec8641f)
+
+running 14 tests
+test cargo_import_apply_fails_before_writing_conflicting_files ... ok
+test cargo_import_apply_matches_reviewed_plan_bytes_and_is_repeatable ... ok
+test cargo_import_apply_rejects_stale_vendor_checksum_before_writes ... ok
+test cargo_import_apply_wires_vendor_input_into_generated_project ... ok
+test cargo_import_apply_writes_bounded_files_and_project_shape ... ok
+test cargo_import_blocks_missing_lockfile_and_unsupported_registry_source ... ok
+test cargo_import_ignores_ambient_cargo_home_vendor_material ... ok
+test cargo_import_plan_accepts_declared_vendored_registry_source ... ok
+test cargo_import_plan_is_reviewable_and_side_effect_free ... ok
+test cargo_import_rejects_changed_lock_checksum_at_package_boundary ... ok
+test cargo_import_rejects_overlapping_output_targets_before_writing ... ok
+test cargo_import_rejects_symlink_output_parent_before_any_write ... ok
+test cargo_import_rejects_unchecksummed_vendor_file ... ok
+test cargo_import_rejects_vendor_symlink_even_when_target_hash_matches ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests/causal_build_trace.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/causal_build_trace-0798e85e72c3c11d)
+
+running 3 tests
+test real_failure_has_causal_leaf_chain_without_changing_report_or_receipt ... ok
+test trace_flag_rejects_evaluation_stream ... ok
+test traced_store_preflight_preserves_failed_report_without_inventing_a_worker_trace ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.66s
+
+     Running tests/composition_root_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/composition_root_cli-d2ffd6b02e4fc7fc)
+
+running 3 tests
+test composition_cli_has_stable_identity_and_realizes_complete_roots ... ok
+test composition_cli_rejects_frontend_intent_and_missing_roots_without_receipts ... ok
+test composition_plan_fixtures_are_order_independent_and_frontend_neutral ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+     Running tests/demand_runtime.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/demand_runtime-bddbfd8329208595)
+
+running 1 test
+test real_gateway_derived_demand_and_ordinary_reports_keep_quantified_blocker ... ignored, requires the real CLI and retained signed Busybox input cache; parent runs serially
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/elf_dynamic_reference_scanner.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/elf_dynamic_reference_scanner-f651b282d5515479)
+
+running 1 test
+test actual_snix_scanner_keeps_exact_references_after_native_elf_fixup ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+     Running tests/elf_dynamic_relocation.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/elf_dynamic_relocation-231be98b6f2c202b)
+
+running 8 tests
+test actual_native_shared_binary_relocates_across_two_prefixes ... ok
+test native_binary_refuses_capacity_mismatch_and_wrong_dependency_without_publication ... ok
+test native_binary_refuses_symbol_name_inside_needed_string ... ok
+test native_binary_refuses_unsupported_and_truncated_images ... ok
+test native_no_soname_alias_reserves_needed_capacity_and_runs_after_copy ... ok
+test relocation_refuses_dynamic_string_aliases_and_symbol_prefix_overlap ... ok
+test relocation_refuses_loader_tokens_search_separators_and_escaping_members ... ok
+test unwritable_output_directory_returns_publication_error_without_partial_bytes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.61s
+
+     Running tests/evaluator_budget_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/evaluator_budget_cli-321484fce4ea7f49)
+
+running 13 tests
+test cancellation_is_terminal_and_reaps_a_late_worker ... ok
+test deadline_is_terminal_and_worker_is_reaped ... ok
+test discovered_root_limit_fails_with_its_stable_class ... ok
+test hidden_worker_is_not_listed_in_public_help ... ok
+test invalid_policy_fixtures_fail_before_report_publication ... ok
+test observe_only_keeps_in_process_path_and_marks_operation_scoped_metrics_unavailable ... ok
+test process_fixtures_bound_stderr_and_make_late_results_terminal ... ok
+test process_fixtures_classify_crash_signal_protocol_overflow_and_memory ... ok
+test selected_and_all_root_requests_report_honest_force_counts ... ok
+test simulated_reap_failure_blocks_a_clean_terminal_claim ... ok
+test strict_worker_confines_imports_to_admitted_roots ... ok
+test strict_worker_matches_existing_eval_and_reports_supported_resources ... ok
+test worker_preserves_declared_imports_and_bounded_evaluator_errors ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.32s
+
+     Running tests/example_projects.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/example_projects-fd51ce54098fd3e6)
+
+running 38 tests
+test artifact_provenance_walkthrough_inspects_verifies_and_diffs_evidence ... ok
+test artifact_provenance_walkthrough_rejects_tampered_and_missing_evidence ... ok
+test c_library_project_builds_library_cli_and_check ... ignored, realizes the pinned bootstrap C toolchain on first build
+test c_library_project_exports_and_keeps_positive_and_negative_tests ... ok
+test casita_local_action_result_reuses_verified_output_after_export_removal ... ok
+test codegen_project_builds_runnable_package_and_check ... ok
+test developer_shell_and_run_loop_executes_named_profiles ... ok
+test developer_shell_and_run_loop_rejects_invalid_selection_and_arguments ... ok
+test fetched_and_patched_project_builds_check_and_rejects_invalid_patch ... ignored, uses the live crates.io fixed-output source
+test fetched_and_patched_project_declares_fixed_positive_and_negative_patches ... ok
+test fixed_source_projects_assemble_authoritative_files ... ok
+test generated_site_project_builds_package_and_check ... ok
+test hermetic_plan_and_rebuild_match_across_ambient_host_changes ... ok
+test hermetic_plan_rejects_impure_mode_and_scopes_identity_to_inputs_and_store_prefix ... ok
+test locked_dependency_lifecycle_detects_staleness_refreshes_and_upgrades ... ok
+test locked_dependency_refresh_rejects_a_missing_local_patch ... ok
+test locked_dependency_refresh_rejects_an_unresolved_revision ... ok
+test missing_project_selector_fails_closed ... ok
+test multi_output_sdk_builds_outputs_and_selected_consumers ... ignored, realizes the pinned bootstrap C toolchain and all selected SDK outputs
+test multi_output_sdk_source_assembles_and_project_evaluates ... ok
+test offline_source_bundle_round_trips_and_rejects_tampering ... ok
+test production_workflow_projects_evaluate_and_keep_negative_paths ... ok
+test project_output_parser_accepts_named_outputs_and_rejects_duplicates ... ok
+test reproducible_release_matches_blake3_and_detects_tampering ... ok
+test reviewed_file_generation_applies_current_plan_and_tracks_state ... ok
+test reviewed_file_generation_classifies_a_partial_state_before_plan_reporting ... ok
+test reviewed_file_generation_rejects_drift_conflict_and_escape ... ok
+test reviewed_file_generation_rejects_missing_contract_field ... ok
+test reviewed_file_generation_rejects_plan_publication_failure ... ok
+test reviewed_file_generation_rejects_unsupported_schema_before_applying ... ok
+test rust_workspace_project_builds_package_and_smoke_check ... ignored, realizes the source-built Rust, seed-toolchain, and musl closure on first build
+test rust_workspace_project_exports_and_keeps_positive_and_negative_tests ... ok
+test schema_codegen_builds_bindings_and_rejects_invalid_schema ... ok
+test schema_codegen_builds_both_languages_and_integration_check ... ignored, realizes both bootstrap C and source-built Rust toolchains
+test shared_action_result_roundtrip_rejects_unknown_signer_missing_output_and_corrupt_artifact ... ok
+test shared_action_result_roundtrip_reuses_trusted_http_result_and_separates_action_identity ... ok
+test signed_cache_roundtrip_substitutes_through_an_admitted_trusted_cache ... ok
+test static_cache_request_paths_accept_normal_files_and_reject_escape ... ok
+
+test result: ok. 33 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 93.67s
+
+     Running tests/examples_build.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/examples_build-5aa6790b0f20323c)
+
+running 24 tests
+test build_crate_crc64_example_builds_binary ... ignored, heavy bootstrap build; run explicitly when validating the real crate example
+test build_environment_example_persists_configured_values ... ok
+test cowsay_example_builds_and_runs_default_and_custom_messages ... ok
+test dependency_chain_example_consumes_producer_output ... ok
+test diamond_dependency_example_joins_both_shared_branches ... ok
+test fail_example_reports_expected_failure ... ok
+test fetch_crate_crc64_example_builds ... ok
+test fix_flag_updates_temp_fetchurl_fixture_hash ... ok
+test hello_example_builds_flat_output ... ok
+test hello_json_build_report_exposes_artifact_attestation_shape ... ok
+test invalid_output_selection_fails_before_builder_execution ... ok
+test local_multi_output_fixture_builds_named_layout ... ok
+test local_output_layout_example_builds_named_outputs ... ok
+test multi_step_example_builds_structured_output ... ok
+test multiple_roots_example_builds_each_independent_root ... ok
+test offline_fetch_tarball_fixture_builds_without_network ... ok
+test offline_fetcher_wrong_hashes_fail_closed ... ok
+test offline_fetchgit_fixture_builds_without_network ... ok
+test offline_fetchurl_fixture_builds_without_network ... ok
+test portable_receipt_project_builds_payload_for_handoff ... ok
+test project_check_fixture_builds_result_output ... ok
+test project_missing_selector_fails_before_build_success ... ok
+test selected_output_example_mounts_the_requested_development_output ... ok
+test static_site_example_builds_html_and_stylesheet ... ok
+
+test result: ok. 23 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 25.58s
+
+     Running tests/examples_eval.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/examples_eval-c0ee9a44be3d231b)
+
+running 7 tests
+test bootstrap_no_nix_example_uses_store_env_glob ... ok
+test cataloged_eval_examples_export_json ... ok
+test eval_bootstrap_no_nix_example_uses_shared_seed ... ok
+test eval_build_crate_crc64_example ... ok
+test eval_fetch_crate_crc64_example ... ok
+test malformed_example_fails_before_export ... ok
+test seed_dependent_example_without_seed_fails_loudly ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.16s
+
+     Running tests/examples_inventory.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/examples_inventory-77e6d0b19ed4840b)
+
+running 17 tests
+test documented_crunch_ncl_identifier_is_allowed ... ok
+test examples_catalog_covers_checked_in_user_facing_examples ... ok
+test examples_catalog_rejects_duplicate_ids_and_paths ... ok
+test examples_catalog_rejects_fetchers_without_offline_and_negative_rails ... ok
+test examples_catalog_rejects_invalid_tier_and_silent_skip ... ok
+test examples_catalog_rejects_missing_required_workflow_rail ... ok
+test examples_catalog_rejects_readme_lane_order_and_missing_project_outputs ... ok
+test examples_catalog_rejects_readme_omissions_and_stale_paths ... ok
+test examples_catalog_rejects_stale_crunch_branding_in_user_docs ... ok
+test examples_catalog_rejects_trust_docs_without_non_claims ... ok
+test examples_catalog_supports_lane_inventory_for_docs ... ok
+test flake_source_keeps_project_and_transcript_support_trees ... ok
+test only_transcript_markdown_is_a_user_facing_markdown_example ... ok
+test project_indexes_are_documentation_support_files ... ok
+test project_sources_are_grouped_under_their_mantle_entrypoint ... ok
+test registry_oci_workflow_catalog_and_docs_preserve_signed_immutable_admission_boundary ... ok
+test remote_resumable_workflow_catalog_and_docs_name_the_production_boundary ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+     Running tests/examples_workflow_gallery.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/examples_workflow_gallery-d05df7efd185eb8e)
+
+running 12 tests
+test cargo_import_example_plans_applies_and_fails_before_invalid_writes ... ok
+test cargo_import_example_rejects_ambiguous_default_package ... ok
+test checked_gallery_transcript_executes_with_the_real_mantle_binary ... ok
+test foreign_import_example_accepts_checked_inputs_and_rejects_untrusted_cache ... ok
+test nixpkgs_tool_use_binds_the_imported_builder_and_negative_cases ... ok
+test receipt_example_exports_lists_and_rejects_tamper ... ok
+test remote_ticket_example_delivers_once_redacts_and_revokes ... ok
+test remote_ticket_example_rejects_unknown_ticket ... ok
+test semantic_graph_example_explains_output_and_dependents ... ok
+test semantic_graph_example_reports_incomplete_evidence_without_invention ... ok
+test wasm_workflow_rejects_empty_world_at_the_typed_boundary ... ok
+test workflow_entrypoints_evaluate_to_their_declared_shapes ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.17s
+
+     Running tests/finish_gates.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/finish_gates-18ec20c8ebfa760a)
+
+running 8 tests
+test legacy_raw_recipe_builds_without_implicitly_adopting_gates ... ok
+test real_builder_default_requires_matching_executable_version ... ok
+test real_builder_exit_and_shell_syntax_cannot_skip_required_version ... ok
+test real_builder_partial_gate_policy_keeps_version_defaults_and_explicit_override ... ok
+test real_finish_gate_denies_build_tree_wrapper_leak_and_reports_native_prefix ... ok
+test real_finish_gate_denies_matching_version_with_nonzero_exit_without_publication ... ok
+test real_finish_gate_denies_wrong_version_missing_binary_and_relocation_failure ... ok
+test real_finish_gate_passes_version_and_relocation_and_reports_clean_scan ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 33.97s
+
+     Running tests/foreign_import_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/foreign_import_cli-26e2265444123e8f)
+
+running 19 tests
+test foreign_import_cli_does_not_require_foreign_frontend_commands ... ok
+test foreign_import_cli_prepares_exact_nario_source_and_rejects_unmatched_records ... ok
+test foreign_import_cli_produce_aterm_matches_nix_and_emits_guix_directory_artifacts ... ok
+test foreign_import_cli_produce_aterm_rejects_bad_bundles_without_partial_artifacts ... ok
+test foreign_import_cli_produce_aterm_rejects_duplicate_and_bounded_byte_inputs ... ok
+test foreign_import_cli_produce_aterm_rejects_input_mode_conflicts_without_artifacts ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_from_drv_dir_without_nix ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_from_drv_files_without_nix ... ok
+test foreign_import_cli_produces_nixpkgs_artifacts_then_validates_and_plans_without_nix ... ok
+test foreign_import_cli_realizes_two_node_graph_and_reuses_exact_outputs ... ok
+test foreign_import_cli_rejects_drv_dir_missing_reachable_input_without_partial_artifacts ... ok
+test foreign_import_cli_rejects_malformed_drv_without_partial_artifacts ... ok
+test foreign_import_cli_rejects_malformed_json_and_policy_failures ... ok
+test foreign_import_cli_reports_fixed_output_mismatch_from_admitted_source_state ... ok
+test foreign_import_cli_validates_and_plans_checked_fixtures ... ok
+test foreign_plan_refuses_success_when_distinct_output_names_alias ... ok
+test produce_backend_fix_and_host_nix_emit_parity_artifacts ... ignored, requires MANTLE_TEST_FIX_BACKEND_BINARY, MANTLE_TEST_NIX_INSTANTIATE_BINARY, and a reachable Nix daemon
+test produce_backend_rejects_conflicting_target_modes ... ok
+test produce_backend_rejects_unknown_backend ... ok
+
+test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 15.01s
+
+     Running tests/freshness_offline_rail.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/freshness_offline_rail-d482a0a4ad27d3d7)
+
+running 5 tests
+test freshness_offline_rail_command_probe_failures_are_deterministic ... ok
+test freshness_offline_rail_composes_full_workflow ... ok
+test freshness_offline_rail_evidence_has_required_fields ... ok
+test freshness_offline_rail_network_probe_reported_as_network_required ... ok
+test freshness_offline_rail_repeated_runs_are_deterministic ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+
+     Running tests/gateway_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/gateway_cli-a920b8a73ab26b0a)
+
+running 7 tests
+test provision_quota_initializes_once_and_never_rewrites_an_existing_ledger ... ok
+test provision_quota_refuses_a_missing_directory_without_creating_it ... ok
+test quota_fault_campaign_is_deterministic_per_seed_and_labelled_a_local_fixture ... ok
+test quota_fault_campaign_refuses_to_reuse_a_directory_and_leaves_it_untouched ... ok
+test store_read_binding_digest_is_deterministic_and_bound_to_generation_and_opcode ... ok
+test store_read_binding_refuses_zero_generation_and_non_store_paths_without_a_report ... ok
+test upload_binding_commits_to_the_byte_bound_and_refuses_an_unbounded_or_exposed_header ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests/identity_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/identity_cli-55b443d00df9dd5b)
+
+running 3 tests
+test legacy_crunch_binary_is_alias_to_mantle_help ... ok
+test mantle_help_reports_canonical_identity ... ok
+test mantle_version_reports_canonical_binary_name ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/integration.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/integration-3560ef4b15c6e238)
+
+running 81 tests
+test bootstrap_creates_seed_file ... ok
+test bootstrap_seed_is_importable ... ok
+test build_accepts_jobs_flag ... ok
+test build_accepts_no_substitute_flag ... ok
+test build_accepts_short_j_flag ... ok
+test build_accepts_substituters_flag ... ok
+test build_missing_store_exits_3 ... ok
+test build_tests::build_evaluation_stream_emits_complete_success_contract ... ok
+test build_tests::build_evaluation_stream_preserves_partial_results_and_exit_status ... ok
+test build_tests::build_evaluation_stream_rejects_broken_stdout ... ok
+test build_tests::build_evaluation_stream_repeated_signal_forces_non_success ... ok
+test build_tests::build_evaluation_stream_sigint_emits_cancelled_summary ... ok
+test build_tests::build_evaluation_stream_sigterm_emits_cancelled_summary ... ok
+test build_tests::build_failing_builder_exits_1 ... ok
+test build_tests::build_json_failure_keeps_report_on_stdout_and_stderr_empty ... ok
+test build_tests::build_json_success_emits_machine_readable_report ... ok
+test build_tests::build_persists_signed_pathinfo ... ok
+test build_tests::build_trivial_derivation ... ok
+test build_tests::build_writes_log_file ... ok
+test casita_repair_final_nar_rejects_before_creating_or_mutating_state ... ok
+test default_eval_does_not_emit_runtime_fingerprint ... ok
+test develop_alias_exists ... ok
+test eval_core_derivation_rejects_builder_only_provenance ... ok
+test eval_invalid_nickel_exits_2 ... ok
+test eval_json_flag_emits_json_error ... ok
+test eval_mkderivation_custom_phase_overrides_default ... ok
+test eval_mkderivation_empty_phase_skips ... ok
+test eval_mkderivation_has_default_phases ... ok
+test eval_mkderivation_provenance_exported_from_builder_layer ... ok
+test eval_mkderivation_src_wired_to_env ... ok
+test eval_mkshell_produces_valid_derivation ... ok
+test eval_mkshell_sidecar_empty_inputs ... ok
+test eval_mkshell_sidecar_with_hook ... ok
+test eval_multi_derivation_prints_both ... ok
+test eval_multi_output_derivation ... ok
+test eval_nonexistent_file_exits_2 ... ok
+test eval_output_is_valid_json ... ok
+test eval_output_selection_with_select ... ok
+test eval_simple_derivation_prints_json ... ok
+test eval_still_uses_json_export_after_build_path_switch ... ok
+test eval_with_import_path_flag ... ok
+test evaluation_stream_requires_explicit_non_json_build_mode ... ok
+test fetchurl_wrong_hash_shows_correct_hash ... ok
+test fix_flag_rewrites_hash ... ok
+test json_verbose_eval_keeps_stdout_parseable_and_diagnostics_on_stderr ... ok
+test log_subcommand_lists_logs ... ok
+test log_subcommand_no_logs ... ok
+test log_subcommand_query_not_found ... ok
+test log_subcommand_rejects_missing_log_file ... ok
+test log_subcommand_rejects_unreadable_log_before_printing_any_listing ... ok
+test log_subcommand_rejects_unreadable_matched_file ... ok
+test log_subcommand_shows_log_by_query ... ok
+test shell_build_tests::shell_env_vars_visible_in_command ... ok
+test shell_build_tests::shell_exit_code_propagation ... ok
+test shell_build_tests::shell_hook_output_appears ... ok
+test shell_build_tests::shell_missing_sidecar_clear_error ... ok
+test shell_build_tests::shell_no_hook_suppresses_hook ... ok
+test shell_build_tests::shell_strict_hooks_exits_on_failure ... ok
+test shell_build_tests::shell_with_adds_path_entry ... ok
+test shell_command_run_mutual_exclusion ... ok
+test shell_help_shows_new_flags ... ok
+test shell_with_nonexistent_path_fails ... ok
+test store_pull_closure_conflicts_with_all ... ok
+test store_pull_directory_rejects_closure_mode ... ok
+test store_pull_http_closure_rejects_multiple_roots ... ok
+test store_pull_http_closure_requires_exactly_one_root ... ok
+test store_pull_http_closure_round_trip_imports_root ... ok
+test store_pull_http_rejects_all ... ok
+test store_pull_http_requires_explicit_paths ... ok
+test store_pull_http_round_trip_imports_path ... ok
+test store_pull_http_without_endpoint_binding_is_refused ... ok
+test store_pull_rejects_http_url_with_userinfo ... ok
+test store_pull_rejects_unsupported_url_scheme ... ok
+test store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent ... ok
+test store_repair_final_nar_enables_archive_export_after_execution ... ok
+test store_repair_final_nar_rejects_fragment_without_mutation ... ok
+test store_sign_all_signs_existing_unsigned_entries ... ok
+test store_verify_cli_uses_filesystem_nar_observation_and_reports_tampering ... ok
+test verbose_build_plan_emits_build_mode_fingerprint_before_preflight_result ... ok
+test verbose_eval_emits_runtime_fingerprint_to_stderr ... ok
+test verbose_store_roots_emits_store_fingerprint ... ok
+
+test result: ok. 81 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.16s
+
+     Running tests/integration_build.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/integration_build-28eead236cb17489)
+
+running 20 tests
+test cache_hit_skips_build ... ok
+test casita_explicit_external_signing_key_outside_policy_cannot_publish ... ok
+test casita_explicit_trust_policy_revokes_local_signer_across_fresh_processes ... ok
+test casita_external_config_signer_requires_destination_policy_for_build_and_read ... ok
+test casita_external_signer_policy_removal_rejects_fresh_lookup_verify_gc ... ok
+test casita_legacy_bootstrap_fetch_uses_durable_local_signer_and_exclusive_policy ... ok
+test casita_local_build_without_policy_verifies_and_unlisted_cache_signer_cannot_substitute ... ok
+test end_to_end_ca_build ... ok
+test end_to_end_overlay_build_reads_base_only_input_without_backfill ... ok
+test end_to_end_trivial_build ... ok
+test eval_hello_world_with_seed ... ok
+test fetch_tarball_unpacks_and_strips_prefix ... ok
+test fetchgit_downloads_requested_revision_and_verifies_recursive_hash ... ok
+test fetchgit_wrong_recursive_hash_reports_mismatch ... ok
+test fetchurl_downloads_and_verifies_hash ... ok
+test fod_hash_mismatch_error ... ok
+test independently_built_backend_closures_have_identical_archives_and_offline_source_reports ... ok
+test signed_fixed_output_cli_cache_restores_missing_export_in_fresh_processes ... ok
+test typed_nickel_workspace_policy_matches_rust_and_rejects_invalid_bounds ... ok
+test workspace_action_identity_uses_snapshot_ref_but_clean_derivation_drops_mutable_identity ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 65.93s
+
+     Running tests/kernel_bundle_oci_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/kernel_bundle_oci_cli-3312c95d88e3d1c7)
+
+running 4 tests
+test checked_gallery_fixture_rejects_tampered_layer_before_import_report ... ok
+test checked_gallery_fixture_round_trips_through_the_public_cli ... ok
+test oci_export_rejects_unsealed_unknown_projection_before_object_reads ... ok
+test oci_projection_commands_are_public_and_document_the_local_boundary ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.34s
+
+     Running tests/kernel_bundle_oci_registry_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/kernel_bundle_oci_registry_cli-1c90b5c2609ff3ef)
+
+running 11 tests
+test distribution_registry::distribution_config_is_bounded_to_loopback_filesystem_storage ... ok
+test distribution_registry::distribution_version_normalization_removes_only_the_local_executable_path ... ok
+test registry_cli_interoperates_with_pinned_distribution_and_rejects_wrong_signature_digest ... ignored, requires the repository-pinned independent OCI Distribution registry binary
+test registry_cli_pushes_and_pulls_exact_admitted_layout_into_fresh_state ... ok
+test registry_pull_rejects_bad_signature_bytes_before_content_closure_or_admission ... ok
+test registry_pull_rejects_mutable_image_tag_before_layout_or_admission ... ok
+test registry_pull_rejects_signature_tag_drift_before_layout_or_admission ... ok
+test registry_pull_rejects_tampered_metadata_blob_before_layout_or_admission ... ok
+test registry_pull_rejects_unknown_signer_before_content_closure_or_admission ... ok
+test registry_pull_rejects_wrong_repository_and_revoked_policy_before_network_outputs ... ok
+test registry_push_requires_credentials_and_reuses_blobs_after_interruption ... ok
+
+test result: ok. 10 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 16.65s
+
+     Running tests/kernelscript_experiment.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/kernelscript_experiment-daee7b181f63307e)
+
+running 6 tests
+test fixture_files_are_regular_and_makefile_is_evidence_not_an_executable_test_input ... ok
+test fixture_source_blake3_matches_typed_profile_without_embedding_source_in_receipts ... ok
+test nickel_contract_rejects_default_enable_and_unknown_production_field ... ok
+test official_source_derivation_is_flat_fixed_output_and_does_not_claim_compiler_closure ... ok
+test production_shell_delegates_shape_and_receipt_semantics_to_the_core_adapter ... ok
+test typed_nickel_profile_matches_pure_core_and_exact_fixture_files ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.91s
+
+     Running tests/lock_importer_offline_rail.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/lock_importer_offline_rail-a5ffb9574e5470f8)
+
+running 5 tests
+test lock_importer_offline_rail_apply_creates_planned_files ... ok
+test lock_importer_offline_rail_composition_semantics_are_blockers ... ok
+test lock_importer_offline_rail_evidence_has_required_non_claim ... ok
+test lock_importer_offline_rail_evidence_redaction ... ok
+test lock_importer_offline_rail_plan_no_mutate ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s
+
+     Running tests/machine_schema_contracts.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/machine_schema_contracts-612da336a2238cc0)
+
+running 4 tests
+test generated_contracts_accept_positive_and_reject_adversarial_fixtures ... ok
+test inventory_is_typed_nickel_data ... ok
+test shared_oci_identity_predicates_are_callable_and_fail_closed ... ok
+test shared_string_bounds_count_utf8_bytes_exactly ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 45.38s
+
+     Running tests/nix_free_demo_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/nix_free_demo_cli-29897d9c9ec27bd2)
+
+running 12 tests
+test nix_free_demo_cli_generate_failed_write_exits_internal_without_report_or_bundle ... ok
+test nix_free_demo_cli_generate_partial_write_failure_reports_no_bundle ... ok
+test nix_free_demo_cli_generate_rejects_bad_inputs_without_partial_valid_bundle ... ok
+test nix_free_demo_cli_generate_rejects_unreadable_inputs_first_without_writing ... ok
+test nix_free_demo_cli_generate_reports_exactly_the_files_it_wrote ... ok
+test nix_free_demo_cli_generates_valid_deterministic_bundle ... ok
+test nix_free_demo_cli_keeps_distinct_exit_classes_for_malformed_and_unreadable_summaries ... ok
+test nix_free_demo_cli_readme_of_unclaimable_summary_renders_and_exits_one ... ok
+test nix_free_demo_cli_rejects_missing_fixed_point_without_success_claim ... ok
+test nix_free_demo_cli_rejects_missing_guard_as_json ... ok
+test nix_free_demo_cli_renders_readme_from_summary ... ok
+test nix_free_demo_cli_validates_claimable_bundle_as_json ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/offline_build_runbook_docs.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/offline_build_runbook_docs-9b382a7dcfdb7989)
+
+running 3 tests
+test cli_help_exposes_source_bundle_and_offline_source_preflight ... ok
+test offline_build_runbook_docs_cover_commands_evidence_and_non_claims ... ok
+test offline_build_runbook_validator_rejects_missing_commands_and_overclaims ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/offline_cargo_project.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/offline_cargo_project-8ad7be5c5e118d43)
+
+running 4 tests
+test offline_cargo_helper_rejects_missing_binary_name ... ok
+test offline_cargo_native_admission_rejects_ambient_paths_and_control_overrides ... ok
+test offline_cargo_native_roles_resolve_under_a_declared_logical_prefix ... ok
+test offline_cargo_project_run_executes_declared_sandbox_cargo_output ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.20s
+
+     Running tests/operator_diagnostics.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/operator_diagnostics-e959ec05f8847081)
+
+running 30 tests
+test build_human_failure_reports_log_persistence_failure_without_saved_log_path ... ok
+test build_human_failure_summary_matches_json_facts ... ok
+test build_json_failure_envelope_includes_saved_log_path ... ok
+test build_json_preflight_failure_omits_saved_log_path ... ok
+test build_json_success_reports_log_persistence_failure_without_fake_log_file ... ok
+test build_plan_json_reports_action_schema ... ok
+test build_plan_reports_build_for_uncached_root ... ok
+test build_plan_reports_cached_after_fetchurl_build ... ok
+test build_plan_reports_preflight_error_for_missing_store_dir ... ok
+test build_without_plan_still_executes_fetchurl ... ok
+test doctor_default_profile_is_build_and_does_not_mutate_paths ... ok
+test doctor_explicit_self_build_profile_checks_nightly_visibility ... ok
+test doctor_failure_names_missing_prerequisite_and_profile ... ok
+test doctor_json_failure_reports_missing_prerequisite ... ok
+test doctor_json_output_reports_selected_profile ... ok
+test empty_log_directory_environment_rejects_before_log_or_transcript_effects ... ok
+test empty_selected_state_environment_rejects_artifact_import_before_any_write ... ok
+test empty_state_environment_rejects_bootstrap_validate_before_evidence_write ... ok
+test explicit_state_dir_overrides_empty_environment_and_preserves_relative_path ... ok
+test operator_contract_exports_sorted_public_clap_paths ... ok
+test refactor_apply_reports_only_the_verified_renamed_content ... ok
+test refactor_inspection_adapter_fault_cannot_emit_a_success_plan ... ok
+test relative_selected_state_environment_rejects_artifact_import_without_cwd_writes ... ok
+test selected_crunch_state_dir_ignores_empty_lower_priority_fallbacks ... ok
+test selected_log_directory_and_relative_state_override_preserve_log_output ... ok
+test selected_non_utf8_log_environment_keeps_its_exact_path ... ok
+test selected_non_utf8_state_environment_keeps_its_exact_path ... ok
+test selected_xdg_and_home_fallbacks_store_artifacts_outside_working_directory ... ok
+test terminal_report_output_failure_is_a_cli_error_not_a_panic ... ok
+test unset_home_retains_tmp_state_fallback_without_creating_cwd_state ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.62s
+
+     Running tests/pin_import_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/pin_import_cli-fe287b22d06be58a)
+
+running 6 tests
+test pins_import_apply_fails_before_writing_on_blockers_or_conflicts ... ok
+test pins_import_apply_matches_reviewed_plan_bytes_and_is_repeatable ... ok
+test pins_import_apply_writes_only_planned_mantle_files ... ok
+test pins_import_plan_is_no_mutate_and_reviewable ... ok
+test pins_import_rejects_overlapping_output_targets_before_writing ... ok
+test pins_import_rejects_symlink_output_parent_before_any_write ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running tests/profile_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/profile_cli-1183fc196dfba293)
+
+running 6 tests
+test a_mutation_without_an_expected_generation_is_refused_before_any_filesystem_effect ... ok
+test a_non_canonical_expected_generation_is_refused ... ok
+test a_relative_profile_target_is_refused_before_any_filesystem_effect ... ok
+test an_unknown_subcommand_is_a_usage_error ... ok
+test domain_blockers_exit_as_blocked_and_print_no_success_report ... ok
+test inspection_reports_each_requested_operation_for_an_empty_profile_without_applying ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+     Running tests/project_build_smoke.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/project_build_smoke-adc6c203d71ef99f)
+
+running 19 tests
+test project_build_check_selector ... ok
+test project_build_default_package ... ok
+test project_build_deterministic_paths ... ok
+test project_build_from_subdirectory ... ok
+test project_build_invalid_selector_fails ... ok
+test project_build_no_crunch_ncl_fails ... ok
+test project_build_qualified_check_selector ... ok
+test project_build_qualified_selector ... ok
+test project_build_selector_by_name ... ok
+test project_run_bare_name_ignores_same_named_path ... ok
+test project_run_bin_selects_requested_binary ... ok
+test project_run_default ... ok
+test project_run_explicit_file_singleton_record_target ... ok
+test project_run_explicit_file_target ... ok
+test project_run_hello ... ok
+test project_run_no_bin_dir_fails ... ok
+test project_run_with_args ... ok
+test run_help_lists_bin_and_passthrough ... ok
+test run_rejects_strict_hermetic_flag ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.07s
+
+     Running tests/project_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/project_cli-1e4d564cc1c80c3e)
+
+running 22 tests
+test check_detects_drift ... ok
+test check_detects_missing_inputs_file ... ok
+test check_fails_on_conflicting_legacy_project_files ... ok
+test check_fails_without_init ... ok
+test check_json_explicit_probe_and_trust_mode_labels_behavior ... ok
+test check_json_failure_stdout_is_parseable_report ... ok
+test check_json_passes_on_fresh_project_with_bounded_non_claims ... ok
+test check_passes_on_fresh_project ... ok
+test check_static_accepts_build_fetch_policy_without_fetching_remote_url ... ok
+test init_creates_project_files ... ok
+test init_fails_if_already_initialized ... ok
+test interrupted_retention_state_is_not_reported_as_pinned ... ok
+test list_stale_on_empty_project ... ok
+test overbound_project_resolution_blocks_without_mutating_project_files ... ok
+test refresh_current_retention_writes_root_and_show_reports_pinned ... ok
+test refresh_hashes_local_patch_relative_to_project_root ... ok
+test refresh_inputs_write_fault_retains_partial_lock_without_claiming_completion ... ok
+test refresh_on_empty_project ... ok
+test show_on_empty_project ... ok
+test untracked_input_refresh_remains_gc_eligible_without_roots ... ok
+test upgrade_observes_persisted_legacy_lock_and_generated_inputs ... ok
+test upgrade_on_current_version ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.08s
+
+     Running tests/project_refresh_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/project_refresh_cli-7a749042f3f88d92)
+
+running 14 tests
+test build_fetch_policy_refresh_uses_expected_hash_without_network_resolution ... ok
+test failed_recursive_observation_does_not_mutate_lock_or_generated_inputs ... ok
+test freshness_command_missing_timeout_and_output_limit_fail_deterministically ... ok
+test freshness_git_ref_probe_reports_stale_without_mutating_lock ... ok
+test freshness_http_json_template_refreshes_selected_stale_input ... ok
+test freshness_local_directory_probe_updates_lock_digest ... ok
+test freshness_no_network_mode_does_not_contact_http_probe ... ok
+test list_stale_reports_stale_and_failed_without_mutating_files ... ok
+test refresh_git_input_locks_resolved_rev_and_tree_hash ... ok
+test refresh_partial_failure_writes_successes_and_exits_nonzero ... ok
+test refresh_tarball_supports_each_recursive_hash_algorithm ... ok
+test refresh_tarball_uses_unpacked_tree_hash_not_archive_bytes ... ok
+test refresh_trusted_file_input_with_wrong_signature_rejects_lock_write ... ok
+test refresh_trusted_file_input_writes_lock_evidence_and_show_reports_claim ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.67s
+
+     Running tests/release_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/release_cli-0882fcff45be3191)
+
+running 154 tests
+test attest_key_show_explicit_signing_key_prints_trusted_public_key ... ok
+test attest_key_show_missing_signing_key_fails_without_generation ... ok
+test attest_key_show_uses_default_config_signing_key ... ok
+test attest_policy_init_force_atomically_replaces_compatibility_policy ... ok
+test attest_policy_init_optional_witness_writes_zero_threshold_policy ... ok
+test attest_policy_init_rejects_existing_policy_without_force ... ok
+test attest_policy_init_rejects_invalid_new_profile_parameters_without_files ... ok
+test attest_policy_init_self_proof_only_writes_policy_files ... ok
+test attest_policy_init_single_witness_writes_policy_files ... ok
+test attest_policy_init_witness_quorum_writes_explicit_threshold_and_selector ... ok
+test attest_release_show_prints_release_attestation_envelope ... ok
+test attest_release_verify_accepts_matching_agreement_attachment ... ok
+test attest_release_verify_classifies_invalid_optional_witness_without_policy_failure ... ok
+test attest_release_verify_classifies_invalid_signature_witness ... ok
+test attest_release_verify_classifies_malformed_witness_environment ... ok
+test attest_release_verify_classifies_revoked_witness ... ok
+test attest_release_verify_keeps_multiple_optional_witnesses_without_quorum_claim ... ok
+test attest_release_verify_rejects_duplicate_agreement_attachment ... ok
+test attest_release_verify_rejects_invalid_release_signature ... ok
+test attest_release_verify_rejects_mismatched_agreement_attachment ... ok
+test attest_release_verify_reports_optional_witness_quorum_not_required ... ok
+test attest_release_verify_reports_policy_insufficient_for_untrusted_witness_identity ... ok
+test attest_release_verify_reports_policy_insufficient_for_wrong_release_digest_witness ... ok
+test attest_release_verify_reports_two_independent_witness_agreement ... ok
+test attest_release_verify_reports_unsatisfied_for_same_host_class ... ok
+test attest_release_verify_skips_witness_signed_by_unknown_key_when_quorum_still_holds ... ok
+test attest_witness_create_prints_human_summary_without_json ... ok
+test attest_witness_create_rejects_rebuilt_binary_count_mismatch ... ok
+test attest_witness_create_rejects_too_long_identity ... ok
+test attest_witness_create_writes_signed_witness_attestation ... ok
+test attest_witness_show_and_release_verify_report_quorum_satisfied ... ok
+test bootstrap_capabilities_reports_honest_public_status ... ok
+test cross_machine_witness_handoff_reports_quorum_satisfied ... ok
+test function_address_binding_cli_accepts_optional_valence_without_kamacite ... ok
+test function_address_binding_cli_emits_cairn_ready_required_receipt ... ok
+test function_address_binding_cli_negative_fixture_matrix_fails_closed ... ok
+test function_address_binding_cli_preserves_overclaim_rejection_receipt ... ok
+test function_address_binding_cli_rejects_stale_kamacite_logical_link ... ok
+test function_address_binding_cli_rejects_stale_valence_bytes_before_output ... ok
+test function_address_preserves_binding_cli_accepts_optional_without_json_projection ... ok
+test function_address_preserves_binding_cli_emits_required_receipt ... ok
+test function_address_preserves_binding_cli_negative_fixture_matrix_fails_closed ... ok
+test onix_release_profile_accepts_measured_handoff_and_strict_deterministic_evidence ... ok
+test onix_release_profile_rejects_missing_cairn_and_strict_deterministic_evidence ... ok
+test onix_release_profile_rejects_practical_and_impure_deterministic_receipts ... ok
+test release_attest_honors_json_output ... ok
+test release_attest_writes_signed_release_attestation_and_default_dir ... ok
+test release_create_and_verify_cairn_handoff_through_cli ... ok
+test release_create_and_verify_external_evidence_sidecar ... ok
+test release_create_and_verify_stack_provenance_sidecar ... ok
+test release_create_can_package_optional_reproducibility_report ... ok
+test release_create_can_package_provider_fixed_point_proof ... ok
+test release_create_fails_when_proof_bundle_is_missing ... ok
+test release_create_records_git_source_metadata ... ok
+test release_create_rejects_conflicting_source_acquisition_flags ... ok
+test release_create_rejects_directory_symlink_escape_without_external_writes ... ok
+test release_create_rejects_git_source_url_without_commit ... ok
+test release_create_rejects_invalid_provider_fixed_point_proof ... ok
+test release_create_rejects_precreated_empty_destination_without_mutation ... ok
+test release_create_rejects_prerequisite_only_proof_bundle ... ok
+test release_create_without_reproducibility_report_stays_ordinary_bundle ... ok
+test release_manifest_schema_constant_matches_fixture_expectation ... ok
+test release_nix_witness_defaults_receipt_into_bundle_without_an_explicit_destination ... ok
+test release_nix_witness_keeps_legacy_path_bound_receipt_non_promoting ... ok
+test release_nix_witness_rejects_deterministic_proof_source_drift ... ok
+test release_nix_witness_rejects_missing_mantle_deterministic_proof ... ok
+test release_nix_witness_require_match_fails_closed_on_digest_mismatch ... ok
+test release_nix_witness_writes_match_receipt_from_located_nix_artifacts ... ok
+test release_nix_witness_writes_mismatch_receipt_without_promoting_proof_class ... ok
+test release_reproduce_fails_closed_without_deterministic_proof_sandbox ... ok
+test release_reproduce_fails_on_byte_length_drift ... ok
+test release_reproduce_fails_on_digest_drift ... ok
+test release_reproduce_fails_on_output_name_drift ... ok
+test release_reproduce_fails_when_rebuilt_artifact_is_missing ... ok
+test release_reproduce_generated_two_clean_store_proof_verifies_deterministic_release ... ok
+test release_reproduce_rejects_copy_hardlink_and_symlink_target_aliases ... ok
+test release_reproduce_rejects_direct_target_copy_authority_before_proof ... ok
+test release_reproduce_rejects_matched_rebuild_with_oversized_output ... ok
+test release_reproduce_rejects_recipe_bundle_authority_before_sandbox ... ok
+test release_reproduce_rejects_unknown_workflow_version ... ok
+test release_reproduce_rejects_whole_bundle_prior_and_ordinary_output_inputs ... ok
+test release_reproduce_writes_deterministic_proof_from_repeated_clean_runs ... ok
+test release_reproduce_writes_matched_report_from_isolated_rebuild_output ... ok
+test release_verify_blocks_bundled_deterministic_proof_digest_mismatch ... ok
+test release_verify_fails_when_binary_artifact_is_missing ... ok
+test release_verify_fails_when_prerequisite_inventory_is_missing ... ok
+test release_verify_fails_when_proof_bundle_directory_is_missing ... ok
+test release_verify_fails_when_source_archive_is_missing ... ok
+test release_verify_human_rejects_missing_required_reproducibility_without_success_marker ... ok
+test release_verify_human_rejects_unsatisfied_stagex_without_success_marker ... ok
+test release_verify_json_rejects_external_role_count_above_fixed_limit ... ok
+test release_verify_json_rejects_missing_required_deterministic_proof_once ... ok
+test release_verify_json_rejects_missing_required_external_role_once ... ok
+test release_verify_json_rejects_missing_required_provider_proof_once ... ok
+test release_verify_json_rejects_missing_required_stack_provenance_once ... ok
+test release_verify_json_rejects_unsatisfied_stagex_policy_once ... ok
+test release_verify_json_reports_absent_reproducibility ... ok
+test release_verify_json_reports_matched_reproducibility ... ok
+test release_verify_json_reports_mismatched_reproducibility ... ok
+test release_verify_keeps_legacy_path_bound_receipt_non_promoting ... ok
+test release_verify_provider_fixed_point_external_override_reports_source ... ok
+test release_verify_rejects_claim_boundary_violation ... ok
+test release_verify_rejects_compiler_cache_receipts_as_deterministic_rebuild_evidence ... ok
+test release_verify_rejects_compiler_cache_receipts_as_provider_stage_execution ... ok
+test release_verify_rejects_corrupted_bundled_deterministic_proof_file ... ok
+test release_verify_rejects_fake_proof_bundle_even_if_manifest_digest_matches ... ok
+test release_verify_rejects_manifest_schema_mismatch ... ok
+test release_verify_rejects_missing_bundled_deterministic_proof_file ... ok
+test release_verify_rejects_missing_workflow_provenance ... ok
+test release_verify_rejects_non_canonical_reproducibility_report ... ok
+test release_verify_rejects_noncanonical_deterministic_isolation_evidence ... ok
+test release_verify_rejects_proof_linkage_source_digest_mismatch ... ok
+test release_verify_rejects_reproducibility_report_artifact_set_mismatch ... ok
+test release_verify_rejects_reproducibility_report_linkage_mismatch ... ok
+test release_verify_rejects_stale_cairn_policy_through_cli ... ok
+test release_verify_rejects_tampered_cairn_handoff_through_cli ... ok
+test release_verify_reports_external_deterministic_override_source ... ok
+test release_verify_reports_matched_reproducibility_report ... ok
+test release_verify_reports_required_deterministic_release_from_artifacts ... ok
+test release_verify_require_deterministic_release_rejects_missing_isolation_evidence ... ok
+test release_verify_require_reproducible_accepts_matched_report ... ok
+test release_verify_require_reproducible_fails_when_report_absent ... ok
+test release_verify_required_provider_fixed_point_fails_when_missing ... ok
+test release_verify_required_provider_fixed_point_uses_bundled_proof ... ok
+test release_verify_required_stack_provenance_fails_when_missing ... ok
+test release_verify_requires_bundled_deterministic_artifacts_when_no_override_is_supplied ... ok
+test release_verify_source_review_is_optional_until_explicitly_required ... ok
+test release_verify_strict_requirement_coverage_accepts_typed_bundle_evidence ... ok
+test release_verify_strict_requirement_coverage_rejects_legacy_only_bundle ... ok
+test release_verify_succeeds_using_bundle_local_contents_only ... ok
+test release_verify_uses_bundle_local_deterministic_release_artifacts ... ok
+test witness_export_rejects_release_id_mismatch ... ok
+test witness_export_writes_request_directory ... ok
+test witness_import_accepts_directory_source_and_skips_exact_duplicates ... ok
+test witness_import_rejects_conflicting_duplicate_identity ... ok
+test witness_import_rejects_missing_signature_sidecar ... ok
+test witness_import_rejects_wrong_release_attestation_digest ... ok
+test witness_rebuild_cli_check_is_preflight_only ... ok
+test witness_rebuild_cli_happy_path_writes_sidecars_and_audit ... ok
+test witness_rebuild_cli_rejects_published_output_name_mismatch_before_running_driver ... ok
+test witness_rebuild_cli_rejects_request_paths_that_escape_request_dir ... ok
+test witness_rebuild_cli_rejects_symlinked_helper_owned_scratch_entry_before_launching_driver ... ok
+test witness_rebuild_cli_rejects_symlinked_scratch_root_before_launching_driver ... ok
+test witness_rebuild_cli_rejects_unmatched_rebuilt_output_digest ... ok
+test witness_rebuild_cli_rejects_unsupported_workflow_before_running_driver ... ok
+test witness_rebuild_helper_check_accepts_provider_bound_inputs ... ok
+test witness_rebuild_helper_check_is_preflight_only ... ok
+test witness_rebuild_helper_happy_path_writes_sidecars_and_audit ... ok
+test witness_rebuild_helper_provider_bound_driver_passes_default_target ... ok
+test witness_rebuild_helper_rejects_empty_provider_target ... ok
+test witness_rebuild_helper_rejects_incomplete_provider_bound_inputs ... ok
+test witnessed_self_hosting_rebuild_workflow_reports_quorum_satisfied ... ok
+test witnessed_self_hosting_release_workflow_reports_quorum_satisfied ... ok
+test witnessed_self_hosting_release_workflow_with_generated_keys_and_key_show_reports_quorum_satisfied ... ok
+
+test result: ok. 154 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.94s
+
+     Running tests/release_gauntlet_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/release_gauntlet_cli-3af05a25c8fc679e)
+
+running 4 tests
+test aggregate_actions_refuse_missing_evidence_without_writing_their_report ... ok
+test aggregate_actions_require_at_least_one_evidence_input ... ok
+test canonicalize_refuses_malformed_and_wrong_shaped_reports_without_publishing ... ok
+test canonicalize_rejects_an_unknown_report_kind_as_a_usage_error ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests/remote_credentials_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/remote_credentials_cli-65d6cdba36686720)
+
+running 9 tests
+test bootstrap_sops_provider_resolves_inside_bounded_worker ... ok
+test build_ticket_fd_accepts_valid_input_and_rejects_invalid_oversized_and_terminal_inputs ... ok
+test explicit_legacy_migration_invalidates_plaintext_tickets ... ok
+test hanging_sops_provider_is_killed_without_state_or_secret_output ... ok
+test key_rotation_invalidates_tickets_from_retired_verifier_key ... ok
+test oversized_sops_output_is_rejected_without_state_write ... ok
+test rejected_provider_fails_before_ticket_state_or_delivery_changes ... ok
+test ticket_creation_delivers_only_to_fd_and_persists_verifier_only_state ... ok
+test ticket_creation_with_relative_state_dir_reaches_secret_worker_in_same_state ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.76s
+
+     Running tests/remote_hexagon_v2_parity.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/remote_hexagon_v2_parity-835e7579f5427ebe)
+
+running 7 tests
+test accepted_stdio_matches_independently_observed_origin_wire_receipt_and_durable_ticket ... ok
+test malformed_frame_rejects_with_distinct_original_diagnostic_before_ticket_state ... ok
+test original_executable_plan_preimage_matches_extracted_receipt_core ... ok
+test physical_failed_adapter_preserves_original_post_dispatch_failure_semantics ... ok
+test physical_production_signed_output_and_fenced_transfer_match_original_semantics ... ok
+test physical_production_untrusted_key_rejects_after_input_without_client_output_claim ... ok
+test physical_production_upload_quota_rejects_before_ticket_or_transfer ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.55s
+
+     Running tests/remote_rail_offline_rail.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/remote_rail_offline_rail-992e7f6adf4f5fd6)
+
+running 5 tests
+test remote_rail_evidence_has_mandated_fields ... ok
+test remote_rail_evidence_omits_unbounded_logs ... ok
+test remote_rail_negative_cases_have_phase_and_reason_code ... ok
+test remote_rail_redaction_omits_secrets ... ok
+test remote_rail_repeated_runs_are_deterministic ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/remote_stdio_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/remote_stdio_cli-36c90380836ce309)
+
+running 8 tests
+test concurrent_one_use_redemption_commits_exactly_once ... ok
+test live_subscriber_pipe_flushes_snapshot_and_later_real_goal_before_daemon_stops ... ok
+test remote_serve_stdio_once_exchanges_frames_and_redeems_ticket ... ok
+test remote_serve_stdio_once_rejects_unknown_ticket_without_stdout_frames ... ok
+test remote_stdio_readiness_acknowledges_success_and_retains_failed_sessions ... ok
+test selected_casita_remote_child_rejects_snix_worker_state_before_loading_secrets ... ok
+test stdio_rejects_clock_rollback_before_any_success_frame ... ok
+test stdio_rejects_endpoint_bound_ticket_without_authenticated_peer ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.79s
+
+     Running tests/remote_transfer_production.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/remote_transfer_production-98cf32976ea8aa66)
+
+running 34 tests
+test failed_output_admission_replays_under_new_fence_without_rewriting_original_bundle ... ok
+test failed_remote_sandbox_captures_allowlisted_artifact_before_cleanup_without_changing_failure_truth ... ok
+test gallery_resumable_remote_transfer_rejects_tampered_acknowledged_content ... ok
+test gallery_resumable_remote_transfer_resumes_verified_chunks_and_admits_once ... ok
+test oversized_remote_sandbox_artifact_is_rejected_without_rewriting_execution_failure ... ok
+test production_pool_admits_a_live_private_source_input ... ok
+test production_pool_admits_and_builds_a_returned_dynamic_plan_chain ... ok
+test production_pool_cancellation_settles_the_attempt ... ok
+test production_pool_diamond_runs_on_one_endpoint_at_concurrency_one ... ok
+test production_pool_diamond_worker_lifetimes_overlap ... ok
+test production_pool_dispatches_a_content_addressed_diamond_across_two_workers ... ok
+test production_pool_dispatches_a_diamond_across_two_workers ... ok
+test production_pool_dispatches_one_content_addressed_goal_through_the_worker ... ok
+test production_pool_dispatches_one_goal_through_the_worker ... ok
+test production_pool_enforces_declared_resource_quantities ... ok
+test production_pool_failures_release_attempt_capacity ... ok
+test production_pool_local_fallback_cancellation_stops_the_local_goal ... ok
+test production_pool_local_fallback_runs_when_no_endpoint_fits ... ok
+test production_pool_output_matches_local_build ... ok
+test production_pool_rejects_a_malformed_ticket_credential ... ok
+test production_pool_rejects_a_stale_completion_after_reassignment ... ok
+test production_pool_rejects_ambiguous_output_keys_before_dispatch ... ok
+test production_pool_rejects_revoked_endpoint_binding_before_dispatch ... ok
+test production_pool_respects_the_global_job_limit ... ok
+test production_pool_respects_the_session_concurrency_limit ... ok
+test production_pool_second_build_hits_the_client_cache ... ok
+test production_single_builder_and_pool_outputs_match ... ok
+test production_stdio_delta_unavailable_falls_back_to_bounded_full_nar_and_admits ... ok
+test production_stdio_drops_malformed_trace_and_survives_otlp_outage ... ok
+test production_stdio_exports_prometheus_and_propagates_bounded_trace_context ... ok
+test production_stdio_rejects_ticket_upload_quota_before_checkpoint_or_admission ... ok
+test production_stdio_resumes_interrupted_multi_chunk_input_upload ... ok
+test production_stdio_resumes_missing_chunks_and_imports_output ... ok
+test production_stdio_streams_and_admits_8_mib_output ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 92.17s
+
+     Running tests/removed_system_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/removed_system_cli-c4ae663e0659b1a5)
+
+running 6 tests
+test external_frontend_can_hand_mantle_build_shaped_input ... ok
+test help_succeeds_without_system_subcommand ... ok
+test implementation_surface_does_not_gain_module_layer_coupling ... ok
+test public_docs_and_stdlib_do_not_reference_system_eval_surface ... ok
+test raw_module_inventory_is_rejected_as_build_plan_input ... ok
+test system_eval_is_not_a_supported_subcommand ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+
+     Running tests/resource_gateway_runtime.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/resource_gateway_runtime-e215ad5ac75a54b1)
+
+running 2 tests
+test real_gateway_public_usage_process_only_and_authority_negatives ... ignored, requires signed static BusyBox descriptor and bwrap; retains actual private gateway/CLI artifacts
+test real_gateway_signed_oom_retry_usage_and_negative_controls ... ignored, requires CPU+memory delegated cgroup-v2 root with swap disabled, signed BusyBox descriptor and bwrap
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/retention_interest_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/retention_interest_cli-fc24caf1606a2519)
+
+running 1 test
+test concurrent_cli_owners_remain_distinct_and_release_is_scoped ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/retention_offline_rail.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/retention_offline_rail-171f2b0e2a28c8db)
+
+running 5 tests
+test retention_offline_rail_current_input_is_pinned ... ok
+test retention_offline_rail_evidence_has_required_fields ... ok
+test retention_offline_rail_evidence_redaction ... ok
+test retention_offline_rail_stale_root_is_diagnosed ... ok
+test retention_offline_rail_untracked_is_gc_eligible ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running tests/rust_compatibility_rail.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/rust_compatibility_rail-1d0b3169a115c9f5)
+
+running 4 tests
+test native_path_only_surface_reports_matrix_binding_without_cargo_fallback ... ok
+test representative_rust_plan_receipt_is_bounded_success_or_blocker_without_cargo_fallback ... ok
+test supported_unit_plan_matrix_rows_retain_bounded_non_claims ... ok
+test unit_plan_matrix_rejects_supported_rows_without_named_fixture ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+     Running tests/rust_plan_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/rust_plan_cli-a7acc8db29fa9811)
+
+running 59 tests
+test casita_rust_plan_reuses_compiled_unit_in_fresh_process ... ok
+test rust_plan_cli_accepts_rlib_cdylib_mixed_library_for_derivation ... ok
+test rust_plan_cli_admits_inactive_target_cfg_dependency_before_rustc ... ok
+test rust_plan_cli_admits_member_feature_additions_on_workspace_dependencies ... ok
+test rust_plan_cli_admits_workspace_dependency_topology_with_member_features ... ok
+test rust_plan_cli_binds_build_script_native_link_metadata ... ok
+test rust_plan_cli_binds_conventional_vendor_deps_layout_to_registry_packages ... ok
+test rust_plan_cli_blocks_all_features_vendored_registry_topology_before_rustc ... ok
+test rust_plan_cli_blocks_explicit_patch_source_registry_topology_before_rustc ... ok
+test rust_plan_cli_blocks_host_artifact_topology_when_native_host_graph_is_not_ready ... ok
+test rust_plan_cli_blocks_host_artifact_topology_without_host_units ... ok
+test rust_plan_cli_blocks_malformed_build_script_metadata ... ok
+test rust_plan_cli_blocks_native_host_unit_graph_when_native_fragment_is_unsupported ... ok
+test rust_plan_cli_blocks_stale_unified_topology_cached_output ... ok
+test rust_plan_cli_blocks_target_topology_with_proc_macro_host_artifact ... ok
+test rust_plan_cli_blocks_unified_topology_when_native_host_graph_is_not_ready ... ok
+test rust_plan_cli_blocks_unsupported_build_script_link_metadata ... ok
+test rust_plan_cli_blocks_unsupported_dev_dependency_test_harness_before_rustc ... ok
+test rust_plan_cli_blocks_unsupported_patch_source_registry_before_rustc ... ok
+test rust_plan_cli_blocks_unsupported_workspace_member_glob_before_rustc ... ok
+test rust_plan_cli_does_not_select_disabled_default_feature_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_build_dependency_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_build_script_metadata_topology ... ok
+test rust_plan_cli_executes_dependency_chain_from_explicit_receipt_material ... ok
+test rust_plan_cli_executes_explicit_patch_source_registry_topology ... ok
+test rust_plan_cli_executes_explicit_workspace_dependency_vendored_registry_topology ... ok
+test rust_plan_cli_executes_feature_gated_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_native_dev_dependency_test_topology ... ok
+test rust_plan_cli_executes_patch_source_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_proc_macro_host_artifact_topology ... ok
+test rust_plan_cli_executes_supported_unit_from_explicit_receipt_material ... ok
+test rust_plan_cli_executes_target_cfg_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_target_unit_topology_from_explicit_receipt_material ... ok
+test rust_plan_cli_executes_transitive_vendored_registry_dependencies_in_unified_topology ... ok
+test rust_plan_cli_executes_unified_topology_for_proc_macro_shape ... ok
+test rust_plan_cli_executes_unified_topology_with_build_script_and_bin ... ok
+test rust_plan_cli_executes_vendored_registry_build_script_host_artifact_topology ... ok
+test rust_plan_cli_executes_vendored_registry_build_script_in_unified_topology ... ok
+test rust_plan_cli_executes_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_vendored_registry_proc_macro_in_unified_topology ... ok
+test rust_plan_cli_executes_workspace_dependency_vendored_registry_dependency_in_unified_topology ... ok
+test rust_plan_cli_executes_workspace_member_glob_topology ... ok
+test rust_plan_cli_ignores_dev_dependency_options_in_normal_build_topology ... ok
+test rust_plan_cli_ignores_out_of_scope_transitive_vendored_registry_targets ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_host_artifact_targets ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_proc_macro_targets ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_targets ... ok
+test rust_plan_cli_ignores_out_of_scope_vendored_registry_unified_host_targets ... ok
+test rust_plan_cli_no_cargo_oracle_blocks_unsupported_surface_without_cargo_fallback ... ok
+test rust_plan_cli_no_cargo_oracle_executes_path_workspace_without_invoking_cargo ... ok
+test rust_plan_cli_normal_topology_does_not_consume_dev_dependency_test_units ... ok
+test rust_plan_cli_plans_dev_dependency_test_topology_evidence ... ok
+test rust_plan_cli_plans_featured_build_dependency_vendored_registry_source_edge ... ok
+test rust_plan_cli_replays_build_script_with_local_cache_and_empty_package_description ... ok
+test rust_plan_cli_reports_native_host_unit_graph_for_build_script ... ok
+test rust_plan_cli_reports_native_host_unit_graph_for_proc_macro_dependency ... ok
+test rust_plan_cli_reuses_unified_topology_outputs_on_repeat_run ... ok
+test rust_plan_cli_selects_implicit_optional_dependency_feature_from_unit_graph ... ok
+test rust_plan_cli_supports_workspace_package_version_inheritance ... ok
+
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 77.97s
+
+     Running tests/scheduling_policy.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/scheduling_policy-b22e4fec8892b4fa)
+
+running 3 tests
+test nickel_default_scheduling_policy_matches_rust_runtime_default ... ok
+test nickel_scheduling_bounds_match_rust_kernel_limits ... ok
+test nickel_scheduling_contract_rejects_unknown_preference_field ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/self_hosting.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/self_hosting-d262da7d9dcf04c2)
+
+running 58 tests
+test append_no_host_tools_stage0_args_preserves_base_command_and_adds_inventory ... ok
+test audit_hashing_rejects_excessively_deep_trees ... ok
+test collect_embedded_store_paths_filters_relevant_entries ... ok
+test create_stage0_scrubbed_path_blocks_nix_binaries ... ok
+test diff_binary_bytes_reports_first_mismatch ... ok
+test expected_store_prefix_defaults_to_crunch_store ... ok
+test expected_store_prefix_matches_nix_compat_precedence ... ok
+test filtered_proof_tool_names_removes_blocked_host_tools_for_no_host_mode ... ok
+test full_source_provider_admission_preserves_authenticated_source_authority ... ok
+test full_source_provider_admission_rejects_tampered_status_output_and_source_authority ... ok
+test proof_mode_defaults_to_fixed_point ... ok
+test proof_scripts_reject_inherited_compiler_runtime_before_starting_work ... ok
+test prove_self_hosting_cache_boundary_allows_unrelated_environment_names ... ok
+test prove_self_hosting_script_accepts_exact_scratch_threshold ... ok
+test prove_self_hosting_script_anchors_default_scratch_root_to_repo_root_from_non_repo_cwd ... ok
+test prove_self_hosting_script_anchors_relative_bundle_dir_and_updates_latest ... ok
+test prove_self_hosting_script_anchors_relative_sandbox_shell_to_repo_root ... ok
+test prove_self_hosting_script_anchors_relative_scratch_override_to_repo_root_from_non_repo_cwd ... ok
+test prove_self_hosting_script_creates_selected_scratch_root_when_missing ... ok
+test prove_self_hosting_script_discovers_repo_local_default_sandbox_shell_when_env_is_bin_sh ... ok
+test prove_self_hosting_script_exports_authenticated_source_authority ... ok
+test prove_self_hosting_script_exports_no_host_tools_inventory_and_blocks_host_tools ... ok
+test prove_self_hosting_script_exports_non_nix_host_mode_and_inventory_doc ... ok
+test prove_self_hosting_script_exports_strict_later_stage_hermeticity_by_default ... ok
+test prove_self_hosting_script_fails_fast_when_default_sandbox_shell_missing_without_nix_build_fallback ... ok
+test prove_self_hosting_script_generates_no_host_tools_inventory_from_explicit_seeds ... ok
+test prove_self_hosting_script_no_host_tools_requires_inventory_before_launch ... ok
+test prove_self_hosting_script_preserves_absolute_bundle_dir_and_updates_latest ... ok
+test prove_self_hosting_script_preserves_absolute_scratch_override_path ... ok
+test prove_self_hosting_script_rejects_below_threshold_override_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_below_threshold_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_create_failure_default_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_create_failure_scratch_override_without_fallback ... ok
+test prove_self_hosting_script_rejects_option_like_bundle_dir_value ... ok
+test prove_self_hosting_script_rejects_unpaired_source_authority_before_launch ... ok
+test prove_self_hosting_script_rejects_unusable_default_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_unusable_scratch_override_without_fallback ... ok
+test prove_self_hosting_script_rejects_unwritable_default_scratch_before_proof_work ... ok
+test prove_self_hosting_script_rejects_unwritable_scratch_override_without_fallback ... ok
+test prove_self_hosting_script_reports_default_scratch_policy_in_check_mode ... ok
+test prove_self_hosting_script_reports_scratch_override_in_check_mode ... ok
+test prove_self_hosting_script_routes_spawned_tmpdir_and_cargo_target_under_default_scratch_root ... ok
+test prove_self_hosting_script_uses_bundle_dir_env_when_cli_arg_absent ... ok
+test record_stage_evidence_with_populated_store_avoids_audit_limit ... ok
+test record_stage_evidence_writes_audit_and_diagnostics_paths ... ok
+test remove_crunch_outputs_ignores_non_mantle_entries ... ok
+test remove_crunch_outputs_removes_read_only_crunch_output ... ok
+test render_stage_diagnostics_includes_proof_lines_and_paths ... ok
+test resolve_proof_bundle_dir_anchors_relative_env_to_repo_root ... ok
+test resolve_proof_bundle_dir_preserves_absolute_env_path ... ok
+test run_command_live_writes_stage_stream_files ... stdout-1
+stderr-1
+stdout-2
+stderr-2
+ok
+test self_hosting_controlled_failure_reports_breadcrumbs ... ok
+test self_hosting_controlled_failure_reports_breadcrumbs_trigger ... ok
+test self_hosting_stage0_stage1_stage2 ... ignored
+test stage_context_reads_saved_snapshot_from_disk ... ok
+test test_script_shebang_leaves_non_script_payload_unchanged ... ok
+test test_script_shebang_uses_declared_absolute_shell ... ok
+test write_proof_bundle_copies_stage_artifacts_and_manifest ... ok
+
+test result: ok. 57 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 20.17s
+
+     Running tests/smoke.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/smoke-3c9d5c02641cf249)
+
+running 19 tests
+test pool_mode_rejects_unsupported_modes_before_build ... ok
+test pool_plan_validates_selection_without_tickets ... ok
+test smoke_build_and_run_shell_script ... ok
+test smoke_build_ca_derivation ... ok
+test smoke_build_cached_on_second_run ... ok
+test smoke_build_directory_output_with_structure ... ok
+test smoke_build_failure_reports_error ... ok
+test smoke_build_flat_file_and_read_content ... ok
+test smoke_build_multi_derivation_file ... ok
+test smoke_build_multi_derivation_partial_failure_keeps_successful_root ... ok
+test smoke_build_package_set_record_direct_path_regression ... ok
+test smoke_build_push_http_pull_round_trip ... ok
+test smoke_build_push_pull_round_trip ... ok
+test smoke_build_single_derivation_direct_path_regression ... ok
+test smoke_build_symlink_in_output ... ok
+test smoke_build_then_push_narinfo_and_nar_match ... ok
+test smoke_deterministic_output_path ... ok
+test smoke_fetchurl_downloads_and_stores ... ok
+test smoke_push_nix_store_prefix_consumable_by_nix ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.29s
+
+     Running tests/source_bundle_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/source_bundle_cli-d95303ee96e94db0)
+
+running 9 tests
+test source_bundle_cli_caches_pinned_https_archive_for_offline_import_and_preflight ... ok
+test source_bundle_cli_preflight_reports_network_required_before_build ... ok
+test source_bundle_cli_preflight_reports_unpinned_imported_state ... ok
+test source_bundle_cli_preflights_dynamic_producer_sources_before_and_after_import ... ok
+test source_bundle_cli_preserves_pinned_query_url_and_archive_path_containing_equals ... ok
+test source_bundle_cli_rejects_tampered_bundle_without_persisting_records ... ok
+test source_bundle_cli_rejects_wrong_duplicate_and_drifted_cached_https_archives ... ok
+test source_bundle_cli_reports_stale_imported_state ... ok
+test source_bundle_cli_round_trips_imported_source_state ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.70s
+
+     Running tests/source_bundle_hydration_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/source_bundle_hydration_cli-62ec3da81e4e00f3)
+
+running 2 tests
+test hydrate_self_build_cli_materializes_fresh_clone_and_emits_contracted_report ... ok
+test hydrate_self_build_cli_rejects_wrong_external_identity_without_outputs ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/stdlib_tests.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/stdlib_tests-a092239fb1dd3c1b)
+
+running 29 tests
+test contract_catches_missing_name ... ok
+test contract_catches_wrong_type ... ok
+test contract_rejects_extra_fields ... ok
+test enum_tags_deserialize_direct_serde ... ok
+test enum_tags_deserialize_via_json ... ok
+test fetch_git_produces_git_env ... ok
+test fetch_tarball_produces_recursive_hash ... ok
+test fetchurl_custom_name ... ok
+test fetchurl_invalid_hash_passes_eval ... ok
+test fetchurl_preserves_optional_fetch_policy_env ... ok
+test fetchurl_produces_fod_record ... ok
+test fetchurl_rejects_empty_url ... ok
+test fixed_output_contract ... ok
+test full_serde_round_trip ... ok
+test i386_linux_system_tag_is_accepted ... ok
+test lock_vendor_evaluation_defers_missing_lock_and_fetch_to_the_declared_producer ... ok
+test mixed_inputs_array_validates ... ok
+test python_recipe_lowers_declared_roots_to_a_named_derivation ... ok
+test recursive_record_self_reference ... ok
+test select_produces_correct_structure ... ok
+test select_round_trip_through_glue ... ok
+test store_path_validator_accepts_custom_store_prefix ... ok
+test store_path_validator_accepts_nix_store_path ... ok
+test store_path_validator_rejects_invalid ... ok
+test wasm_component_export_is_deterministic ... ok
+test wasm_component_export_rejects_digest_role_confusion ... ok
+test wasm_component_manifest_exports_owned_tool_inputs ... ok
+test wasm_component_manifest_rejects_empty_world ... ok
+test wasm_component_manifest_rejects_unknown_output_class ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.02s
+
+     Running tests/store_archive_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/store_archive_cli-0690d0264eaee2d6)
+
+running 14 tests
+test admitted_backends_share_signed_core_gc_identity_and_profile_conformance_rail ... ok
+test casita_archive_import_rejects_unprovisioned_keys_and_unnamed_signer_without_mutation ... ok
+test casita_rejects_base_store_and_nario_unsigned_before_state_access ... ok
+test casita_rejects_unsigned_archive_before_creating_state ... ok
+test default_and_explicit_snix_preserve_prechange_signed_and_gc_golden_facts ... ok
+test independent_snix_stores_agree_on_signed_bytes_only_with_the_same_fixture_key ... ok
+test legacy_and_populated_identityless_snix_reopen_preserve_signed_output_and_unrelated_state ... ok
+test nario_v2_cli_lists_imports_and_skips_pinned_producer_fixture ... ok
+test nario_v2_cli_rejects_bad_input_wrong_prefix_untrusted_and_export ... ok
+test nario_v2_cli_rejects_durable_negative_fixture_corpus ... ok
+test snix_to_casita_cli_migration_pins_root_without_modifying_source ... ok
+test store_archive_cli_exports_lists_json_and_imports_from_file ... ok
+test store_archive_cli_requires_unsigned_escape_hatch ... ok
+test store_archive_cli_streams_stdout_and_stdin ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 128.41s
+
+     Running tests/store_gc_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/store_gc_cli-51e1e3d43a0fc30b)
+
+running 20 tests
+test ambient_backend_name_cannot_override_default_snix_selection ... ok
+test casita_gc_cli_recovers_removed_root_before_planning_without_removing_other_roots ... ok
+test casita_store_gc_cli_collects_unpinned_signed_output_and_preserves_retained_nar ... ok
+test casita_store_gc_missing_retained_cache_root_fails_before_removing_signed_output ... ok
+test casita_store_gc_without_cache_state_collects_only_unpinned_signed_output ... ok
+test identityless_casita_repository_rejects_both_backends_with_or_without_snix_state ... ok
+test identityless_foreign_content_rejects_casita_before_state_or_output_mutation ... ok
+test selected_backend_is_recorded_and_mismatch_rejects_without_mutation ... ok
+test selected_backend_states_preserve_frozen_hello_and_signed_facts_under_provisioned_fixture_keys ... ok
+test selected_backends_reopen_the_same_signed_ca_closure_and_plan_the_same_gc_candidate ... ok
+test store_gc_dry_run_reports_candidate_without_mutating ... ok
+test store_gc_execution_refuses_when_mutation_lock_is_held ... ok
+test store_info_rejects_writable_base_before_overlay_creation ... ok
+test store_info_reports_base_layer_without_mutating_base ... ok
+test store_pin_and_unpin_round_trip ... ok
+test store_roots_migrates_legacy_records_without_inventing_ownership ... ok
+test unknown_backend_is_rejected_before_creating_state ... ok
+test wrong_backend_build_rejects_before_creating_a_signer_or_changing_state ... ok
+test wrong_backend_overlay_base_build_rejects_before_creating_a_signer ... ok
+test wrong_backend_sign_rejects_before_creating_a_signer_or_changing_state ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.67s
+
+     Running tests/transactional_reconciliation_pilot.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/transactional_reconciliation_pilot-7fa4c72468291b84)
+
+running 1 test
+test exact_gc_plan_is_current_and_changed_plan_is_stale ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/transcript_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/transcript_cli-98fdc004164c5c39)
+
+running 14 tests
+test checked_fast_fixtures_parse_through_transcript_runner ... transcript ok: 1 visible step(s); output: /datapool/mantle-store/t/.tmpQB24md/fixture.output.json
+ok
+test transcript_child_uses_selected_casita_store_backend ... ok
+test transcript_real_child_reopens_selected_casita_and_rejects_dropped_selection_without_mutation ... ok
+test transcript_run_executes_hidden_setup_before_visible_command ... ok
+test transcript_run_passes_expected_failure_when_diagnostic_matches ... ok
+test transcript_run_passes_success_and_injects_isolated_state_and_writes_output ... ok
+test transcript_run_rejects_empty_expect_block ... ok
+test transcript_run_rejects_empty_expect_json_block ... ok
+test transcript_run_rejects_expected_failure_without_expectation ... ok
+test transcript_run_rejects_in_place_without_explicit_allowance_before_command_execution ... ok
+test transcript_run_runs_cleanup_even_after_failure ... ok
+test transcript_run_supports_json_expectations ... ok
+test transcript_run_uses_transcript_directory_and_ignores_prose_fences ... ok
+test transcript_unexpected_success_preserves_partial_evidence_without_success_report ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+
+     Running tests/trust_policy_offline_rail.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/trust_policy_offline_rail-89950f5d1c92d41d)
+
+running 5 tests
+test trust_policy_offline_rail_evidence_redaction ... ok
+test trust_policy_offline_rail_hash_only_is_content_integrity ... ok
+test trust_policy_offline_rail_missing_signature_blocks ... ok
+test trust_policy_offline_rail_trusted_refresh_accepted ... ok
+test trust_policy_offline_rail_untrusted_key_blocks ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/wasm_component_cli.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/wasm_component_cli-73fa3ca9724a026d)
+
+running 3 tests
+test production_cli_binds_target_specific_wasmtime_aot_without_promoting_portability ... ok
+test production_cli_executes_pinned_pipeline_and_publishes_rehashable_component_evidence ... ok
+test production_cli_fails_closed_on_identity_interface_composition_and_runtime_drift ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 208.58s
+
