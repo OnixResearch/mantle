@@ -98,6 +98,16 @@ const fn guard_is_held(_guard: &std::sync::MutexGuard<'static, ()>) -> bool {
     true
 }
 
+/// Executable pinned as an unrouted pool transport.
+///
+/// These pool tests require an endpoint whose profile does not fit, so the
+/// local fallback runs and the pinned program is never spawned. The Nix check
+/// sandbox has no host `/run/current-system` tree, so use the sandbox shell the
+/// check environment exports.
+fn test_transport_program() -> PathBuf {
+    PathBuf::from(std::env::var_os("SNIX_BUILD_SANDBOX_SHELL").unwrap_or_else(|| "/bin/sh".into()))
+}
+
 /// Pool mode: one admitted endpoint executes a ready goal through the ordinary
 /// Worker, using the same ticket, binding, and local-build receiver as the
 /// single-endpoint path.
@@ -819,7 +829,7 @@ fn production_pool_local_fallback_runs_when_no_endpoint_fits() {
     fs::create_dir_all(&client_store).expect("client store");
     write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 4, &[BUILDER_ID]);
     write_replayable_derivation(&build_file);
-    let program = PathBuf::from("/run/current-system/sw/bin/true");
+    let program = test_transport_program();
     let digest = blake3::hash(&fs::read(&program).expect("program bytes")).to_hex().to_string();
     let pool_source = |policy: &str| {
         format!(
@@ -1436,7 +1446,7 @@ fn production_pool_local_fallback_cancellation_stops_the_local_goal() {
     fs::create_dir_all(&client_store).expect("client store");
     write_ticket_state_full(&state_dir, MAX_UPLOAD_BYTES, 4, &[BUILDER_ID]);
     write_slow_derivation(&slow_file);
-    let program = PathBuf::from("/run/current-system/sw/bin/true");
+    let program = test_transport_program();
     let digest = blake3::hash(&fs::read(&program).expect("program bytes")).to_hex().to_string();
     let pool_source = format!(
         r#"{{

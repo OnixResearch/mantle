@@ -31,6 +31,15 @@ const DISABLE_FUSE_ENV: &str = "CRUNCH_NO_FUSE";
 const DISABLE_FUSE_ENV_VALUE: &str = "1";
 const LOOPBACK_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
 
+/// Executable pinned as an unspawned pool transport.
+///
+/// Pool planning validates the pinned program bytes but never executes the
+/// transport. The Nix check sandbox has no host `/run/current-system` tree, so
+/// use the sandbox shell the check environment exports.
+fn test_transport_program() -> PathBuf {
+    PathBuf::from(std::env::var_os("SNIX_BUILD_SANDBOX_SHELL").unwrap_or_else(|| "/bin/sh".into()))
+}
+
 #[test]
 fn pool_mode_rejects_unsupported_modes_before_build() {
     let temp = tempfile::tempdir().expect("pool preflight tempdir");
@@ -88,7 +97,10 @@ fn pool_plan_validates_selection_without_tickets() {
         builder: Some("plan-builder"),
         substituters: &[],
     });
-    let program = PathBuf::from("/run/current-system/sw/bin/true");
+    // The pool validates the pinned program bytes but never spawns the
+    // transport for a plan; take an executable the dev shell and the Nix check
+    // sandbox both provide instead of a host-only path.
+    let program = test_transport_program();
     let digest = blake3::hash(&std::fs::read(&program).expect("program bytes")).to_hex().to_string();
     let pool_source = format!(
         r#"{{
