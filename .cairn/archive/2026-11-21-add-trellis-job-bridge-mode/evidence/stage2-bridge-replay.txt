@@ -1,0 +1,34 @@
+# wp8 bridge replay from the exported handoff 2026-11-21T04:16:37-05:00
+$ PATH=/var/empty /datapool/mantle-store/wp8-20261121/bridge-target/release/mantle-verification-bridge trellis-job /home/brittonr/wt/convergence-evidence/wp8/handoff /home/brittonr/wt/convergence-evidence/wp8/handoff a143be37c7e56f2d3d66ce9d947f025585d66064 /home/brittonr/wt/convergence-evidence/wp8/handoff-replay
+{
+  "schema": "mantle-external-evidence-observation-v1",
+  "packaging": {
+    "source_revision": "a143be37c7e56f2d3d66ce9d947f025585d66064",
+    "source_identity": "b3:4b297b4ad379c7bd58fbb5a82826660e3292cfdfcef7a20270303d702f0d1676",
+    "profile_identity": "b3:fe5b1e55df944133734a28d5fda5abe065b569b74d24d6b0c59c8e9942192e70",
+    "provider_identity": "b3:ff95cfcf82c969e36b960e9cfb193e24dd593c1525ed4e4e47a0046316bf81f1",
+    "tool_contract_identity": "b3:a572ced2e4149734f6f3794bbb6d7196fc0ae9d807c4eac83f7c99e8cda707a3",
+    "options_identity": "b3:3efd9fb1acd95400d7892e6cf8586b338ff5909e096f905bb9247903a7f2c679"
+  },
+  "receipt_identity": "b3:8edab4c4f03d50de976097ebbf8699868f111e6df0fd7d8f76cc41d9cf717345",
+  "association_identity": "b3:42c00e811d1686813fac3f3376d824077a21b200294b6f6ae4ef4d9314be6c58",
+  "producer": "Trellis",
+  "externally_reported_outcome": "supported",
+  "checked_materials": [
+    "artifacts/verus.command",
+    "artifacts/verus.stderr",
+    "artifacts/verus.stdout",
+    "evidence.json",
+    "producer-report.json",
+    "proof-cards.json",
+    "source/src/bounds.rs",
+    "source/src/lib.rs",
+    "verus-receipt.json"
+  ],
+  "proof_acceptance": "not-evaluated-by-mantle",
+  "external_report_identity": "b3:cdcb0d1eee9519d42a35a53047028fe1c171bf58f48a1b3d04ce80494e640135",
+  "producer_job_identity": "b3:387008d0189b305a08613a375c91f603c8c7dbd6fd09b9ce69eb8d227d9b4ab4",
+  "tool_graph_identity": "b3:ccce8659b979631a69dcc1bbc1f38b229a823c3b2c764040ca6ea4576ab2279c",
+  "boundary": "Mantle checks selected exact-byte links only; producer receipts remain opaque external evidence, not build success, theorem admission, or release eligibility"
+}
+EXIT=0

@@ -28,17 +28,68 @@ pub struct BoundProducerHandoff {
 
 /// Consume the externally authored job plus Nix's complete ordinary derivation
 /// graph. No action is executed and no proof policy is inferred from the graph.
-pub fn bind_octet_job(
-    mut handoff: ObservedHandoff,
+pub fn bind_octet_job(handoff: ObservedHandoff, binding: ProducerBinding) -> Result<BoundProducerHandoff, BridgeError> {
+    bind_producer_job(handoff, binding, JobExpectation {
+        schema: "octet-mantle-producer-job/v1",
+        owner: "Octet",
+        receipt_scope: "/rail_id",
+        required_report: RequiredReport::Verification,
+    })
+}
+
+/// Bind a Trellis-owned Verus producer job to the observed profile, Verus proof
+/// receipt and producer report. The job graph is admitted unchanged; Mantle
+/// still judges no theorem.
+// r[impl verification_bridge.trellis_job_mode]
+pub fn bind_trellis_job(
+    handoff: ObservedHandoff,
     binding: ProducerBinding,
 ) -> Result<BoundProducerHandoff, BridgeError> {
+    bind_producer_job(handoff, binding, JobExpectation {
+        schema: "trellis-mantle-producer-job/v1",
+        owner: "Trellis",
+        receipt_scope: "/checked_scope",
+        required_report: RequiredReport::ProducerReport,
+    })
+}
+
+/// The owner and schemas one producer job is expected to declare.
+struct JobExpectation {
+    schema: &'static str,
+    owner: &'static str,
+    /// The receipt field that names the job's rail identity.
+    receipt_scope: &'static str,
+    required_report: RequiredReport,
+}
+
+/// The external report a bound producer job must already have observed.
+#[derive(Clone, Copy)]
+enum RequiredReport {
+    Verification,
+    ProducerReport,
+}
+
+impl RequiredReport {
+    fn error(self) -> BridgeError {
+        match self {
+            Self::Verification => BridgeError::ProducerJobRequiresVerification,
+            Self::ProducerReport => BridgeError::TrellisJobRequiresReport,
+        }
+    }
+}
+
+fn bind_producer_job(
+    mut handoff: ObservedHandoff,
+    binding: ProducerBinding,
+    expectation: JobExpectation,
+) -> Result<BoundProducerHandoff, BridgeError> {
     if handoff.observation.external_report_identity.is_none() {
-        return Err(BridgeError::ProducerJobRequiresVerification);
+        return Err(expectation.required_report.error());
     }
     let job = document(&binding.job)?;
-    check_producer_job_identity(&job, &handoff)?;
+    check_producer_job_identity(&job, &handoff.observation.packaging, &expectation)?;
     let receipt = document(&handoff.receipt)?;
-    check_producer_job_rail(&job, &receipt)?;
+    check_producer_job_rail(&job, &receipt, expectation.receipt_scope)?;
     if job.pointer("/execution/network_allowed").and_then(Value::as_bool) != Some(false) {
         return Err(BridgeError::ProducerNetworkNotDenied);
     }
@@ -74,28 +125,29 @@ pub fn bind_octet_job(
     Ok(BoundProducerHandoff { handoff, binding })
 }
 
-/// The producer job must name the selected profile and provider.
-fn check_producer_job_identity(job: &Value, handoff: &ObservedHandoff) -> Result<(), BridgeError> {
-    equal(text(job, "/schema_version")?, Expected("octet-mantle-producer-job/v1"), "producer job schema")?;
-    equal(text(job, "/owner")?, Expected("Octet"), "producer owner")?;
-    equal(
-        text(job, "/profile/identity")?,
-        Expected(&handoff.observation.packaging.profile_identity),
-        "job profile",
-    )?;
-    equal(
-        text(job, "/provider/identity")?,
-        Expected(&handoff.observation.packaging.provider_identity),
-        "job provider",
-    )?;
+/// The producer job must declare the expected schema and owner and name the
+/// selected profile and provider.
+fn check_producer_job_identity(
+    job: &Value,
+    packaging: &crate::PackagingInputs,
+    expectation: &JobExpectation,
+) -> Result<(), BridgeError> {
+    if text(job, "/schema_version")? != expectation.schema {
+        return Err(BridgeError::UnsupportedProducerJobSchema);
+    }
+    if text(job, "/owner")? != expectation.owner {
+        return Err(BridgeError::UnsupportedProducerOwner);
+    }
+    equal(text(job, "/profile/identity")?, Expected(&packaging.profile_identity), "job profile")?;
+    equal(text(job, "/provider/identity")?, Expected(&packaging.provider_identity), "job provider")?;
     debug_assert!(job.get("schema_version").is_some());
     debug_assert!(job.get("owner").is_some());
     Ok(())
 }
 
 /// The producer job must run on the same rail as the observed receipt.
-fn check_producer_job_rail(job: &Value, receipt: &Value) -> Result<(), BridgeError> {
-    equal(text(job, "/execution/rail_id")?, Expected(text(receipt, "/rail_id")?), "job rail")?;
+fn check_producer_job_rail(job: &Value, receipt: &Value, receipt_scope: &str) -> Result<(), BridgeError> {
+    equal(text(job, "/execution/rail_id")?, Expected(text(receipt, receipt_scope)?), "job rail")?;
     Ok(())
 }
 

@@ -32,9 +32,19 @@ pub enum BridgeError {
     MissingProviderTools,
     MissingExtractionOptions,
     MissingTrellisArtifacts,
+    MissingTrellisSourceBindings,
+    TrellisSourceBindingCountBound,
+    InvalidTrellisArtifactIdentity,
+    UnsupportedTrellisJobProfile,
+    UnsupportedVerusProofReceipt,
+    UnsupportedTrellisProducerReport,
+    MissingTrellisProducerReport,
     MissingProfileArtifacts,
     ProfileArtifactMismatch,
+    UnsupportedProducerJobSchema,
+    UnsupportedProducerOwner,
     ProducerJobRequiresVerification,
+    TrellisJobRequiresReport,
     ProducerNetworkNotDenied,
     ToolGraphByteBound,
     InvalidToolGraphShape,
@@ -98,6 +108,26 @@ impl fmt::Display for BridgeError {
             Self::MissingProviderTools => formatter.write_str("missing provider tools"),
             Self::MissingExtractionOptions => formatter.write_str("missing extraction options"),
             Self::MissingTrellisArtifacts => formatter.write_str("missing Trellis artifacts"),
+            Self::MissingTrellisSourceBindings => {
+                formatter.write_str("missing Trellis producer receipt source bindings")
+            }
+            Self::TrellisSourceBindingCountBound => {
+                formatter.write_str("invalid Trellis producer receipt source binding count")
+            }
+            Self::InvalidTrellisArtifactIdentity => {
+                formatter.write_str("invalid Trellis producer receipt proof artifact identity")
+            }
+            Self::UnsupportedTrellisJobProfile => {
+                formatter.write_str("unsupported Trellis producer-job profile schema")
+            }
+            Self::UnsupportedVerusProofReceipt => formatter.write_str("unsupported Verus proof receipt schema"),
+            Self::UnsupportedTrellisProducerReport => formatter.write_str("unsupported Trellis producer report schema"),
+            Self::MissingTrellisProducerReport => formatter.write_str("missing Trellis producer report"),
+            Self::UnsupportedProducerJobSchema => formatter.write_str("unsupported producer job schema"),
+            Self::UnsupportedProducerOwner => formatter.write_str("unsupported producer job owner"),
+            Self::TrellisJobRequiresReport => {
+                formatter.write_str("Trellis producer job binding requires the exact producer report")
+            }
             Self::MissingProfileArtifacts => formatter.write_str("missing profile artifacts"),
             Self::ProfileArtifactMismatch => formatter.write_str("receipt artifacts differ from producer profile"),
             Self::ProducerJobRequiresVerification => {

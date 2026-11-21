@@ -1,0 +1,2247 @@
+# ./scripts/check-no-std-core.sh
+toolchain: nightly-2026-04-08-x86_64-unknown-linux-gnu
+[1/12] openspec validate functional-core
+running: openspec validate functional-core
+Specification 'functional-core' is valid
+⚠ [WARNING] requirements[0]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+⚠ [WARNING] requirements[1]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+⚠ [WARNING] requirements[2]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+⚠ [WARNING] requirements[3]: Requirement text is very long (>500 characters). Move examples and edge cases into scenarios, or split it into separate requirements that each state one behavior.
+[2/12] host cargo checks
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-attestation-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling serde_core v1.0.228
+   Compiling serde_json v1.0.149
+    Checking memchr v2.8.0
+    Checking data-encoding v2.10.0
+    Checking serde v1.0.228
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.53s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-project-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-project-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-project-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.91s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-shell-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-shell-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.59s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-release-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling version_check v0.9.5
+    Checking typenum v1.20.1
+   Compiling semver v1.0.28
+    Checking cpufeatures v0.2.17
+    Checking signature v2.2.0
+    Checking subtle v2.6.1
+    Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking ed25519 v2.2.3
+   Compiling rustc_version v0.4.1
+   Compiling generic-array v0.14.7
+   Compiling curve25519-dalek v4.1.3
+   Compiling syn v2.0.117
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+    Checking digest v0.10.7
+    Checking sha2 v0.10.9
+   Compiling serde_derive v1.0.228
+   Compiling curve25519-dalek-derive v0.1.1
+    Checking ed25519-dalek v2.2.0
+    Checking serde v1.0.228
+    Checking artifact-auth-core v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking crunch-source-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-source-core)
+    Checking artifact-auth-ed25519 v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-release-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.07s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-delta-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-delta-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.68s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-gc-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-gc-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.96s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-repair-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-repair-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.68s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-cmake-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-cmake-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-cmake-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.07s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-esp-idf-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-esp-idf-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-esp-idf-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.06s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-fpga-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-fpga-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-fpga-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.01s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-gpu-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-gpu-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-gpu-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.81s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-model-conversion-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-model-conversion-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-model-conversion-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.68s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-pnpm-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-source-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-source-core)
+    Checking crunch-pnpm-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-pnpm-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.93s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-python-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-python-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-python-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.47s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-test-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-spacewasm-core)
+    Checking crunch-test-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-test-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.32s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-verification-bridge-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-verification-bridge-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-verification-bridge-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.79s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-zephyr-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-zephyr-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-zephyr-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.59s
+[3/12] wasm cargo checks
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-attestation-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+    Checking arrayref v0.3.9
+    Checking cfg-if v1.0.4
+    Checking arrayvec v0.7.6
+    Checking memchr v2.8.0
+    Checking itoa v1.0.18
+    Checking constant_time_eq v0.4.2
+    Checking data-encoding v2.10.0
+   Compiling cc v1.2.59
+   Compiling syn v2.0.117
+   Compiling blake3 v1.8.5
+   Compiling serde_derive v1.0.228
+    Checking crunch-attestation-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.84s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-project-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-project-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-project-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.16s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-shell-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-shell-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-shell-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.73s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-release-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling version_check v0.9.5
+    Checking typenum v1.20.1
+   Compiling semver v1.0.28
+    Checking subtle v2.6.1
+    Checking signature v2.2.0
+    Checking bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+    Checking artifact-auth-core v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking crunch-source-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-source-core)
+    Checking ed25519 v2.2.3
+   Compiling rustc_version v0.4.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling generic-array v0.14.7
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+    Checking digest v0.10.7
+    Checking sha2 v0.10.9
+    Checking ed25519-dalek v2.2.0
+    Checking artifact-auth-ed25519 v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+    Checking crunch-release-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-release-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.99s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-delta-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-delta-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-delta-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.65s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-gc-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-gc-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-gc-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.71s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-repair-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-repair-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-repair-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.03s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-cmake-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-cmake-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-cmake-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.85s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-esp-idf-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-esp-idf-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-esp-idf-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.85s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-fpga-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-fpga-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-fpga-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.26s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-gpu-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-gpu-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-gpu-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.64s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-model-conversion-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-model-conversion-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-model-conversion-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.61s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-pnpm-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-pnpm-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-pnpm-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.66s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-python-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-python-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-python-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.58s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-test-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-spacewasm-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-spacewasm-core)
+    Checking crunch-test-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-test-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.03s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-verification-bridge-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-verification-bridge-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-verification-bridge-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.80s
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo check -p crunch-zephyr-core --target wasm32-unknown-unknown
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Checking crunch-zephyr-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-zephyr-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.66s
+[4/12] core tests
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-attestation-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling serde_core v1.0.228
+   Compiling memchr v2.8.0
+   Compiling data-encoding v2.10.0
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.18s
+     Running unittests src/lib.rs (target/debug/deps/crunch_attestation_core-e5ba1e78c8b4012d)
+
+running 82 tests
+test canonical::tests::canonicalization_rejects_closure_root_missing_from_members ... ok
+test canonical::tests::artifact_digest_ignores_node_and_edge_insertion_order ... ok
+test canonical::tests::canonicalization_rejects_invalid_closure_root_kind ... ok
+test canonical::tests::canonicalization_rejects_invalid_project_root ... ok
+test canonical::tests::project_digest_changes_when_schema_version_changes ... ok
+test canonical::tests::canonicalization_rejects_empty_required_field ... ok
+test policy::tests::insufficient_quorum_fails_policy_with_technical_success ... ok
+test digest::tests::digest_rejects_uppercase_hex ... ok
+test canonical::tests::closure_digest_ignores_discovery_order ... ok
+test policy::tests::compatibility_profiles_keep_canonical_policy_fields ... ok
+test canonical::tests::project_digest_ignores_selection_order ... ok
+test digest::tests::digest_round_trip_hex ... ok
+test policy::tests::one_matching_witness_raises_technical_class ... ok
+test policy::tests::distinct_signer_keys_can_satisfy_signer_key_independence ... ok
+test policy::tests::new_profiles_reject_duplicate_names_and_unbounded_thresholds ... ok
+test canonical::tests::canonicalization_rejects_missing_edge_endpoint ... ok
+test canonical::tests::canonicalization_rejects_invalid_artifact_subject ... ok
+test canonical::tests::canonicalization_rejects_duplicate_node_ids ... ok
+test canonical::tests::canonicalization_rejects_oversized_alias_collection ... ok
+test policy::tests::empty_selected_independence_field_is_rejected ... ok
+test policy::tests::policy_rejects_wrong_schema_tag ... ok
+test policy::tests::policy_rejects_unsupported_independence_field ... ok
+test policy::tests::quorum_profile_accepts_each_supported_selector ... ok
+test policy::tests::revocations_applied_before_quorum_counting ... ok
+test policy::tests::revocations_json_round_trip ... ok
+test policy::tests::quorum_profile_succeeds_under_each_supported_selector ... ok
+test policy::tests::quorum_profile_rejects_missing_or_invalid_parameters ... ok
+test policy::tests::optional_policy_excludes_stale_mismatched_and_revoked_witnesses_without_failure ... ok
+test policy::tests::optional_profile_accepts_trusted_witnesses_without_quorum ... ok
+test policy::tests::revocations_rejects_wrong_schema_tag ... ok
+test policy::tests::policy_json_round_trip ... ok
+test policy::tests::policy_change_does_not_affect_attestation_digests ... ok
+test policy::tests::witness_with_wrong_release_reference_does_not_count ... ok
+test policy::tests::zero_witnesses_yield_self_proof_valid ... ok
+test release::tests::detached_signature_rejects_wrong_length ... ok
+test release::tests::final_class_ordering_matches_spec ... ok
+test policy::tests::revoked_attestation_digest_degrades_policy ... ok
+test release::tests::matching_digest_sets_compare_equal ... ok
+test release::tests::mismatched_digest_sets_compare_unequal ... ok
+test release::tests::detached_signature_round_trip ... ok
+test release::tests::detached_signature_rejects_empty_key_name ... ok
+test release::tests::insufficient_policy_mirrors_technical_class ... ok
+test policy::tests::optional_policy_keeps_one_or_multiple_valid_witnesses_without_quorum_claim ... ok
+test release::tests::independent_agreement_report_classifies_all_skip_reasons ... ok
+test release::tests::detached_signature_rejects_empty_payload ... ok
+test release::tests::detached_signature_rejects_missing_colon ... ok
+test release::tests::not_evaluated_policy_mirrors_technical_class ... ok
+test release::tests::release_attestation_binds_manifest_and_binary_digests ... ok
+test release::tests::release_attestation_digest_is_stable_across_serializations ... ok
+test release::tests::release_attestation_json_round_trip ... ok
+test release::tests::release_attestation_effect_claims_and_facts_affect_digest ... ok
+test policy::tests::same_identity_cannot_satisfy_independence ... ok
+test policy::tests::same_signer_key_cannot_satisfy_signer_key_independence ... ok
+test policy::tests::satisfied_quorum_promotes_final_class ... ok
+test policy::tests::shared_host_class_cannot_satisfy_host_class_independence ... ok
+test release::tests::binary_digests_sorted_regardless_of_insertion_order ... ok
+test release::tests::release_canonical_json_has_correct_key_order ... ok
+test policy::tests::revoked_key_degrades_policy_without_changing_technical_result ... ok
+test release::tests::release_rejects_empty_binary_digest_name ... ok
+test release::tests::release_rejects_empty_release_id ... ok
+test release::tests::final_class_serializes_as_kebab ... ok
+test release::tests::satisfied_policy_promotes_to_quorum_satisfied ... ok
+test release::tests::trust_tier_separates_all_three_fields ... ok
+test policy::tests::witness_with_wrong_rebuilt_digest_does_not_count ... ok
+test release::tests::technical_class_ordering_matches_spec ... ok
+test release::tests::independent_agreement_report_counts_skipped_and_failed_witnesses ... ok
+test release::tests::witness_attestation_binds_to_release_digest ... ok
+test release::tests::witness_accepts_legacy_payload_without_source_mode ... ok
+test release::tests::technical_class_serializes_as_kebab ... ok
+test release::tests::release_rejects_wrong_schema_tag ... ok
+test release::tests::witness_attestation_digest_is_stable_across_serializations ... ok
+test release::tests::witness_attestation_json_round_trip ... ok
+test release::tests::release_rejects_oversized_binary_digests ... ok
+test release::tests::witness_rejects_empty_witness_identity ... ok
+test release::tests::signature_suite_serializes_as_kebab ... ok
+test release::tests::witness_canonical_json_has_correct_key_order ... ok
+test release::tests::witness_rejects_oversized_source_acquisition_mode ... ok
+test release::tests::independent_agreement_report_digest_is_stable_across_witness_order ... ok
+test release::tests::independent_agreement_report_marks_zero_threshold_not_required ... ok
+test release::tests::independent_agreement_report_requires_counted_domain ... ok
+test release::tests::witness_rejects_wrong_schema_tag ... ok
+test release::tests::witness_rejects_oversized_env_field ... ok
+
+test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests crunch_attestation_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-project-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-project-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.08s
+     Running unittests src/lib.rs (target/debug/deps/crunch_project_core-d9369a3a07c8e9ca)
+
+running 164 tests
+test attestation::tests::project_attestation_rejects_missing_locked_patch ... ok
+test bootstrap_pins::tests::validates_roundtrip_and_rejects_unknown_missing_and_bad_hash ... ok
+test drift::tests::drifted ... ok
+test bootstrap_pins::tests::newer_candidate_after_long_equal_version_prefix_is_not_current ... ok
+test attestation::tests::project_attestation_records_locked_sources_patches_and_roots ... ok
+test bootstrap_pins::tests::decides_and_seals_reviewable_plan ... ok
+test fetch_policy::tests::build_fetch_policy_lowers_expected_hash_without_resolution ... ok
+test drift::tests::missing_file ... ok
+test fetch_policy::tests::build_fetch_policy_rejects_patched_inputs_until_patch_lowering_exists ... ok
+test fetch_policy::tests::missing_expected_hash_is_conflicting_for_build_fetch_without_lock ... ok
+test fetch_policy::tests::mismatched_source_identity_does_not_satisfy_imported_policy ... ok
+test fetch_policy::tests::non_generation_vcs_policy_requires_proven_identity_for_ambiguous_selector ... ok
+test drift::tests::empty_lock_in_sync_with_empty_generated ... ok
+test drift::tests::in_sync ... ok
+test fetch_policy::tests::imported_source_policy_binds_ready_source_state_digest ... ok
+test fetch_policy::tests::stale_source_state_does_not_satisfy_imported_policy ... ok
+test fetch_policy::tests::vcs_source_identity_uses_locked_native_identity ... ok
+test filegen::tests::apply_plan_detects_plan_drift ... ok
+test filegen::tests::plan_create_update_unchanged_and_stale_generated_files ... ok
+test filegen::tests::typed_valid_content_records_contract_identity ... ok
+test freshness::tests::builtin_observation_normalizes_digest_and_kind ... ok
+test freshness::tests::command_probe_validation_accepts_bounded_contract ... ok
+test fetch_policy::tests::offline_network_policy_reports_network_required_without_source_state ... ok
+test freshness::tests::command_probe_without_argv_is_rejected ... ok
+test filegen::tests::target_escape_existing_conflict_invalid_contract_and_bad_export_digest_fail_closed ... ok
+test filegen::tests::symlink_materialization_accepts_matching_managed_symlink ... ok
+test attestation::tests::project_attestation_canonicalizes_root_order ... ok
+test freshness::tests::empty_observed_value_is_rejected ... ok
+test freshness::tests::failed_observation_classifies_without_lock_mutation_claim ... ok
+test freshness::tests::diagnostics_are_bounded_deterministically ... ok
+test freshness::tests::invalid_template_variable_is_rejected ... ok
+test freshness::tests::network_required_observation_is_classified_in_offline_mode ... ok
+test freshness::tests::observation_for_unknown_input_is_rejected ... ok
+test freshness::tests::freshness_plan_classifies_selected_stale_and_unchanged ... ok
+test freshness::tests::observed_network_command_probe_in_offline_mode_is_rejected ... ok
+test freshness::tests::observed_network_probe_in_offline_mode_is_rejected ... ok
+test freshness::tests::oversized_observed_value_is_rejected ... ok
+test freshness::tests::rendered_template_bound_is_enforced ... ok
+test generate::tests::needs_quoting_cases ... ok
+test freshness::tests::template_renders_validated_freshness_value ... ok
+test generate::tests::escape_special_chars ... ok
+test generate::tests::fingerprint_deterministic ... ok
+test generate::tests::fingerprint_differs ... ok
+test generate::tests::generate_empty_lock ... ok
+test fetch_policy::tests::policy_plan_classifies_defaults_over_lock_without_fetching ... ok
+test generate::tests::generate_git_entry ... ok
+test generate::tests::generate_file_entry ... ok
+test generate::tests::generate_hyphenated_name_quoted ... ok
+test generate::tests::generate_includes_patch_metadata ... ok
+test generate::tests::generate_panics_on_unlocked_patch_reference ... ok
+test generate::tests::generate_quoted_name_escapes_embedded_quote ... ok
+test generate::tests::generate_quoted_patch_name_escapes_embedded_quote ... ok
+test generate::tests::generate_remote_patch_metadata ... ok
+test generate::tests::generate_vcs_entries_include_native_lock_metadata ... ok
+test generate::tests::generate_with_patches ... ok
+test importer::tests::existing_file_conflict_blocks_apply_but_keeps_review_plan ... ok
+test importer::tests::future_adapter_seams_block_recursive_composition_semantics ... ok
+test lock::tests::locked_patch_source_variants ... ok
+test importer::tests::malformed_hash_and_git_identity_fail_closed ... ok
+test importer::tests::negative_surfaces_block_without_partial_file_operations ... ok
+test lock::tests::locked_vcs_kinds_roundtrip_and_validate ... ok
+test lock::tests::empty_lockfile_is_valid ... ok
+test lock::tests::lockfile_default_version_is_current ... ok
+test importer::tests::nixtamal_supported_semantics_map_to_manifest_lock_and_inputs_plan ... ok
+test lock::tests::lock_validation_rejects_unproven_vcs_identity ... ok
+test lock::tests::lockfile_detects_empty_hash ... ok
+test manifest::tests::git_reference_default_is_main ... ok
+test lock::tests::lockfile_detects_unlocked_patch ... ok
+test lock::tests::lockfile_entry_with_all_fields ... ok
+test merge::tests::clean_merge ... ok
+test merge::tests::empty_manifest_and_lock_is_clean ... ok
+test lock::tests::lockfile_json_stability ... ok
+test lock::tests::lockfile_json_roundtrip ... ok
+test merge::tests::filter_inputs_finds_existing ... ok
+test manifest::tests::vcs_manifest_validation_rejects_forge_shortcuts_and_empty_selectors ... ok
+test manifest::tests::fetch_policy_default_is_generation_material ... ok
+test manifest::tests::build_fetch_policy_with_patches_is_invalid ... ok
+test manifest::tests::invalid_retention_generation_limit_is_rejected ... ok
+test manifest::tests::empty_name_is_invalid ... ok
+test manifest::tests::manifest_accepts_compatible_version ... ok
+test manifest::tests::manifest_detects_duplicate_names ... ok
+test manifest::tests::manifest_detects_undefined_patch ... ok
+test manifest::tests::manifest_rejects_bad_version ... ok
+test manifest::tests::manifest_rejects_incompatible_version ... ok
+test manifest::tests::manifest_serde_roundtrip ... ok
+test lock::tests::locked_kind_git_serde ... ok
+test manifest::tests::manifest_validates_clean ... ok
+test manifest::tests::vcs_input_selectors_roundtrip ... ok
+test merge::tests::filter_inputs_reports_missing ... ok
+test manifest::tests::retention_defaults_to_untracked ... ok
+test manifest::tests::schema_version_accessor ... ok
+test merge::tests::frozen_without_lock ... ok
+test merge::tests::inputs_needing_refresh_skips_frozen ... ok
+test merge::tests::kind_mismatch ... ok
+test lock::tests::lockfile_validates_clean ... ok
+test mirrors::tests::empty_url_rejected ... ok
+test mirrors::tests::unsupported_scheme_rejected ... ok
+test mirrors::tests::valid_mirrors ... ok
+test refresh::tests::freshness_network_required_decision_fails_closed_for_refresh ... ok
+test refresh::tests::apply_outcomes_reverts_input_when_patch_resolution_fails ... ok
+test refresh::tests::freshness_unchanged_decision_skips_resolution_work ... ok
+test merge::tests::missing_lock_entry ... ok
+test mirrors::tests::url_with_mirrors_order ... ok
+test mirrors::tests::url_with_no_mirrors ... ok
+test merge::tests::orphaned_lock_entry ... ok
+test refresh::tests::apply_outcomes_rejects_trusted_patch_without_evidence ... ok
+test refresh::tests::apply_outcomes_removes_orphaned_patches ... ok
+test merge::tests::inputs_needing_refresh_includes_missing ... ok
+test refresh::tests::apply_outcomes_updates_lock_and_resolves_patches ... ok
+test merge::tests::orphaned_entries_detected ... ok
+test refresh::tests::list_stale_separates_changed_and_failed_inputs ... ok
+test refresh::tests::plan_refresh_inputs_excludes_build_fetch_policy_from_resolver_work ... ok
+test refresh::tests::plan_refresh_inputs_filters_selected_inputs ... ok
+test refresh::tests::refresh_build_fetch_policy_locks_expected_hash_without_resolution ... ok
+test refresh::tests::refresh_imported_source_policy_fails_without_source_state ... ok
+test refresh::tests::refresh_imported_source_policy_requires_ready_source_state ... ok
+test mirrors::tests::duplicate_rejected ... ok
+test filegen::tests::over_limit_inputs_return_blockers_without_planning ... ok
+test manifest::tests::unknown_fetch_policy_string_is_rejected ... ok
+test refresh::tests::refresh_inputs_attaches_verified_trust_to_updated_lock ... ok
+test refresh::tests::refresh_inputs_marks_frozen_without_resolution ... ok
+test refresh::tests::refresh_inputs_rejects_trusted_input_without_evidence ... ok
+test refresh::tests::refresh_inputs_marks_resolved_entry_updated ... ok
+test retention::tests::input_override_beats_project_default ... ok
+test retention::tests::current_policy_plans_root_until_marker_exists ... ok
+test retention::tests::missing_root_marker_is_reported_as_absent ... ok
+test retention::tests::generation_policy_keeps_bounded_newest_history ... ok
+test retention::tests::root_for_unknown_input_is_rejected ... ok
+test retention::tests::invalid_generation_limit_and_interrupted_root_are_not_durable ... ok
+test soundness::tests::detects_missing_lock_entry ... ok
+test retention::tests::untracked_input_is_gc_eligible_and_does_not_retain_root ... ok
+test soundness::tests::detects_same_kind_source_identity_mismatch ... ok
+test version::tests::compatibility_check ... ok
+test retention::tests::stale_root_outside_generation_window_is_removed_after_create ... ok
+test version::tests::current_version_parses ... ok
+test soundness::tests::deterministic_issue_order_does_not_follow_manifest_order ... ok
+test refresh::tests::refresh_inputs_marks_matching_entry_unchanged ... ok
+test soundness::tests::warning_only_orphaned_lock_entry_keeps_report_valid ... ok
+test trust::tests::quorum_accepts_independent_trusted_signers ... ok
+test soundness::tests::detects_kind_and_source_mismatches ... ok
+test retention::tests::lock_digest_binding_changes_when_hash_changes ... ok
+test soundness::tests::detects_generated_input_missing_and_stale ... ok
+test trust::tests::trust_policy_requires_declared_evidence_and_bounds_quorum ... ok
+test soundness::tests::parse_error_report_is_invalid_and_stable ... ok
+test version::tests::parse_rejects_malformed ... ok
+test retention::tests::mismatched_lock_digest_does_not_satisfy_current_policy ... ok
+test upgrade::tests::upgrade_0_9_0_to_1_0_0 ... ok
+test upgrade::tests::upgrade_current_is_noop ... ok
+test trust::tests::locked_trust_validation_rejects_overbroad_claim ... ok
+test trust::tests::trust_policy_rejects_untrusted_signer_and_bad_quorum ... ok
+test soundness::tests::detects_patch_mirror_and_patch_definition_mismatches_as_warnings ... ok
+test upgrade::tests::upgrade_future_version_fails ... ok
+test upgrade::tests::upgrade_preserves_all_data ... ok
+test soundness::tests::explicit_probe_and_trust_modes_label_possible_side_effects ... ok
+test trust::tests::locked_trust_validation_rejects_wrong_digest_binding ... ok
+test upgrade::tests::upgrade_unknown_old_version_fails ... ok
+test soundness::tests::clean_project_state_is_valid_static_no_network ... ok
+test trust::tests::trust_policy_rejects_malformed_key_refs_and_unknown_verifier ... ok
+test soundness::tests::detects_hash_algorithm_and_expected_hash_mismatches ... ok
+test soundness::tests::supplemental_policy_trust_retention_and_freshness_facts_are_classified ... ok
+test version::tests::parse_roundtrip ... ok
+test version::tests::serde_roundtrip ... ok
+test trust::tests::trust_policy_accepts_matching_required_signer ... ok
+test version::tests::upgrade_check ... ok
+
+test result: ok. 164 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+   Doc-tests crunch_project_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-shell-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling yansi v1.0.1
+   Compiling diff v0.1.13
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-shell-core)
+   Compiling pretty_assertions v1.4.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.85s
+     Running unittests src/lib.rs (target/debug/deps/crunch_shell_core-2b86f7cc7b5c428d)
+
+running 24 tests
+test plan::tests::empty_path_is_error ... ok
+test plan::tests::env_merge_basic ... ok
+test plan::tests::crunch_shell_always_set ... ok
+test plan::tests::all_protected_vars_defended ... ok
+test plan::tests::hook_passthrough ... ok
+test plan::tests::no_hook ... ok
+test plan::tests::path_dedup_first_wins ... ok
+test plan::tests::protected_var_skipped_with_warning ... ok
+test plan::tests::crunch_shell_overrides_sidecar ... ok
+test profile::tests::ambiguous_default_is_rejected_without_silent_fallback ... ok
+test profile::tests::default_profile_resolution_prefers_dev_and_returns_activation_sidecar ... ok
+test plan::tests::path_ordering_with_before_sidecar_before_host ... ok
+test profile::tests::invalid_profile_name_and_missing_profile_fail_before_activation ... ok
+test profile::tests::explicit_profile_selection_chooses_build_over_dev ... ok
+test profile::tests::duplicate_env_key_after_normalization_is_rejected ... ok
+test types::tests::empty_sidecar_defaults ... ok
+test profile::tests::explicit_default_field_selects_profile ... ok
+test types::tests::unknown_fields_ignored ... ok
+test types::tests::sidecar_full_json_parse ... ok
+test types::tests::missing_version ... ok
+test types::tests::unsupported_version ... ok
+test profile::tests::services_relative_paths_and_overclaims_are_rejected ... ok
+test types::tests::version_zero_rejected ... ok
+test plan::tests::protected_var_absent_from_host_not_injected ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_shell_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-release-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling typenum v1.20.1
+   Compiling serde v1.0.228
+   Compiling cpufeatures v0.2.17
+   Compiling constant_time_eq v0.4.2
+   Compiling signature v2.2.0
+   Compiling subtle v2.6.1
+   Compiling zeroize v1.9.0
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.2
+   Compiling blake3 v1.8.5
+   Compiling curve25519-dalek v4.1.3
+   Compiling bounded-tree-core v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling ed25519 v2.2.3
+   Compiling hashbrown v0.17.1
+   Compiling generic-array v0.14.7
+   Compiling iddqd v0.4.6
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling artifact-auth-core v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-source-core)
+   Compiling ed25519-dalek v2.2.0
+   Compiling artifact-auth-ed25519 v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling valence-core v0.1.0 (https://github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-release-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 43.87s
+     Running unittests src/lib.rs (target/debug/deps/crunch_release_core-0c56354de0cbc1be)
+
+running 254 tests
+test ast_grep::tests::release_attachment_must_preserve_sidecar_non_claims ... ok
+test ast_grep::tests::negative_fixture_matrix_fails_closed_with_deterministic_diagnostics ... ok
+test ast_grep::tests::rule_test_summary_counts_must_balance ... ok
+test ast_grep::tests::self_consistent_unpinned_tool_version_fails_closed ... ok
+test cairn_handoff::tests::artifact_and_policy_paths_must_be_globally_unique ... ok
+test ast_grep::tests::positive_scan_and_rule_test_fixtures_validate ... ok
+test cairn_handoff::tests::required_profile_rejects_missing_receipt ... ok
+test chapter_transport::tests::invalid_entry_size_mode_and_shape_fail_closed ... ok
+test chapter_transport::tests::plan_is_input_order_independent_and_groups_roles ... ok
+test cairn_handoff::tests::stale_authentication_and_role_schema_swap_fail_closed ... ok
+test ast_grep::tests::canonical_sidecar_identity_is_order_independent ... ok
+test chapter_transport::tests::receipt_rejects_stale_digest_counts_and_non_claims ... ok
+test chapter_transport::tests::canonical_index_and_receipt_round_trip ... ok
+test chapter_transport::tests::invalid_plan_matrix_fails_closed ... ok
+test content_bound_nominal::tests::malformed_roles_fail_closed ... ok
+test content_bound_nominal::tests::nominal_content_bound_values_admit_valid_roles ... ok
+test cairn_handoff::tests::measured_handoff_and_same_bundle_receipt_pass ... ok
+test content_bound_requirements::tests::legacy_optional_absence_remains_bounded_and_readable ... ok
+test content_bound_requirements::tests::frozen_cairn_and_valence_contract_fixtures_match_selected_revisions ... ok
+test cairn_handoff::tests::stale_bytes_and_cross_bundle_reuse_fail_closed ... ok
+test content_bound_requirements::tests::producer_receipt_from_a_different_repository_fails ... ok
+test content_bound_requirements::tests::duplicate_coverage_missing_receipt_and_weakened_nonclaims_fail ... ok
+test content_bound_requirements::tests::selected_revision_integration_receipt_binds_exact_fixture_bytes ... ok
+test chapter_transport::tests::parse_rejects_noncanonical_and_unknown_fields ... ok
+test content_bound_requirements::tests::stale_registry_wrong_repository_and_domain_substitution_fail ... ok
+test determinism::tests::deterministic_receipt_accepts_policy_informational_audit_events ... ok
+test determinism::tests::deterministic_receipt_rejects_provider_kind_mismatch ... ok
+test content_bound_requirements::tests::strict_mode_rejects_missing_and_invalid_optional_evidence ... ok
+test function_address_binding::tests::optional_kamacite_metadata_is_all_present_or_all_absent ... ok
+test function_address_binding::tests::renderer_preserves_failure_verification_without_promoting_it ... ok
+test determinism::tests::deterministic_receipt_accepts_strict_matching_runs ... ok
+test function_address_binding::tests::rust_renderer_matches_registered_preserves_positive_fixture ... ok
+test determinism::tests::deterministic_release_claim_rejects_profile_family_mismatch ... ok
+test gauntlet::tests::bootstrap_pressure_blocks_undeclared_protected_exec ... ok
+test gauntlet::tests::continuous_gauntlet_accepts_current_track ... ok
+test gauntlet::tests::continuous_gauntlet_marks_stale_source_digest ... ok
+test gauntlet::tests::hermeticity_gauntlet_accepts_clean_strict_cell ... ok
+test determinism::tests::deterministic_receipt_rejects_digest_drift ... ok
+test gauntlet::tests::nix_mantle_comparison_matches_equivalent_digest_sets ... ok
+test gauntlet::tests::nix_mantle_comparison_blocks_missing_equivalence_policy ... ok
+test gauntlet::tests::repeatability_matrix_matches_fresh_isolated_cell ... ok
+test gauntlet::tests::repeatability_matrix_blocks_reused_fresh_store ... ok
+test gauntlet::tests::substitution_attack_accepts_trusted_case_and_rejects_malicious_strict_case ... ok
+test determinism::tests::deterministic_sandbox_isolation_evidence_canonical_bytes_sort_checks ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_sandbox_profile ... ok
+test function_address_binding::tests::malformed_and_stale_binding_receipts_fail_closed ... ok
+test determinism::tests::deterministic_receipt_blocks_degraded_audit_even_when_effect_is_declared ... ok
+test determinism::tests::deterministic_release_claim_rejects_failed_isolation_evidence ... ok
+test determinism::tests::deterministic_receipt_blocks_reused_output_store_identity ... ok
+test determinism::tests::deterministic_receipt_blocks_unknown_audit_events_closed_by_default ... ok
+test chapter_transport::tests::count_and_total_byte_limits_fail_closed ... ok
+test determinism::tests::deterministic_receipt_blocks_missing_or_unsupported_normalization_controls ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_effect_policy ... ok
+test determinism::tests::deterministic_receipt_canonical_bytes_are_stable ... ok
+test determinism::tests::deterministic_release_claim_requires_exact_digest_set ... ok
+test content_bound_requirements::tests::valid_content_bound_release_is_order_independent ... ok
+test determinism::tests::deterministic_release_claim_requires_isolation_evidence ... ok
+test function_address_binding::tests::canonical_receipt_hash_is_deterministic_and_binds_diagnostics ... ok
+test gauntlet::tests::substitution_attack_blocks_malicious_acceptance ... ok
+test determinism::tests::legacy_path_bound_receipt_remains_parseable_but_non_promoting ... ok
+test determinism::tests::deterministic_receipt_rejects_missing_effect_observations ... ok
+test gauntlet::tests::canonical_bytes_are_stable_for_equivalent_continuous_reports ... ok
+test genuine_rebuild::tests::authority_plan_accepts_declared_content_bound_inputs ... ok
+test function_address_binding::tests::rust_renderer_matches_registered_positive_fixture ... ok
+test gauntlet::tests::canonical_report_rejects_malformed_digest ... ok
+test gauntlet::tests::hermeticity_gauntlet_blocks_strict_violation ... ok
+test function_address_binding::tests::manifest_selection_rejects_stale_valence_kamacite_logical_link ... ok
+test function_address_binding::tests::receipt_hash_detects_non_linkage_tampering ... ok
+test genuine_rebuild::tests::authority_plan_blocks_target_copy_alias_and_symlink ... ok
+test genuine_rebuild::tests::descriptor_rejects_stale_argument_digest_and_single_run ... ok
+test genuine_rebuild::tests::authority_plan_blocks_whole_bundle_prior_and_ordinary_outputs ... ok
+test determinism::tests::deterministic_receipt_rejects_unsupported_workflow_version ... ok
+test function_address_binding::tests::renderer_maps_successful_verification_to_direct_cairn_fields ... ok
+test determinism::tests::deterministic_receipt_blocks_impure_mode ... ok
+test global_reproducibility::tests::global_reproducibility_report_accepts_tiny_eligible_universe ... ok
+test global_reproducibility::tests::release_scoped_witness_evidence_alone_does_not_become_global ... ok
+test genuine_rebuild::tests::descriptor_digest_changes_for_every_authority_identity_drift ... ok
+test immutable_release::tests::different_object_identity_creates_a_distinct_plan ... ok
+test immutable_release::tests::canonical_evidence_is_metadata_order_independent ... ok
+test global_reproducibility::tests::global_reproducibility_report_canonical_bytes_are_stable ... ok
+test determinism::tests::deterministic_receipt_rejects_undeclared_observed_effects ... ok
+test global_reproducibility::tests::global_reproducibility_blocks_required_negative_fixtures ... ok
+test immutable_release::tests::digest_role_substitution_and_missing_binding_fail_closed ... ok
+test immutable_release::tests::evidence_binds_object_pointer_metadata_and_roles ... ok
+test immutable_release::tests::immutable_object_accepts_new_and_identical_publication ... ok
+test immutable_release::tests::mutated_object_and_declared_identity_mismatch_fail_closed ... ok
+test immutable_release::tests::pointer_switch_and_rollback_preserve_previous_identity ... ok
+test immutable_release::tests::pointer_to_missing_object_fails_closed ... ok
+test manifest::tests::legacy_manifest_omits_additive_content_bound_requirement_field ... ok
+test manifest::tests::legacy_function_address_manifest_remains_readable ... ok
+test determinism::tests::deterministic_release_claim_rejects_missing_isolation_check ... ok
+test manifest::tests::observation_binding_is_covered_by_release_manifest_identity ... ok
+test manifest::tests::canonical_bytes_are_stable_and_compact ... ok
+test manifest::tests::extract_full_proof_identity_fields_accepts_valid_manifest ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_accepts_matching_binary ... ok
+test manifest::tests::extract_full_proof_identity_fields_rejects_missing_provider_kind ... ok
+test immutable_release::tests::deployment_retention_and_readiness_claims_fail_closed ... ok
+test manifest::tests::extract_full_proof_identity_fields_rejects_wrong_schema ... ok
+test manifest::tests::function_address_policy_accepts_optional_absent_evidence ... ok
+test manifest::tests::function_address_policy_accepts_optional_and_required_generic_binding ... ok
+test manifest::tests::function_address_policy_rejects_required_absent_evidence ... ok
+test manifest::tests::cairn_projection_preserves_manifest_encoding_and_excludes_receipt ... ok
+test manifest::tests::function_address_release_profile_maps_optional_and_required_modes ... ok
+test manifest::tests::function_address_release_profile_rejects_unsupported_profile_or_mode ... ok
+test manifest::tests::generic_binding_digest_changes_for_each_typed_link_domain ... ok
+test manifest::tests::generic_binding_receipt_is_deterministic_and_policy_order_independent ... ok
+test manifest::tests::function_address_preserves_binding_passes_optional_and_required_modes ... ok
+test manifest::tests::git_observation_rejects_revision_and_projection_drift ... ok
+test function_address_binding::tests::manifest_selection_keeps_artifact_and_logical_receipt_digests_distinct ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_rejects_malformed_digest ... ok
+test manifest::tests::release_profile_rejects_unsupported_profile_or_stack_mode ... ok
+test manifest::tests::trellis_proof_optional_mode_accepts_absence_without_observations ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_rejects_mismatch ... ok
+test manifest::tests::release_profile_maps_generic_and_onix_stack_modes ... ok
+test manifest::tests::provider_fixed_point_release_artifact_binding_rejects_missing_binaries ... ok
+test manifest::tests::release_manifest_rejects_unknown_selected_provider_kind ... ok
+test manifest::tests::stack_provenance_policy_accepts_optional_present_evidence ... ok
+test manifest::tests::stack_provenance_policy_accepts_required_valid_evidence ... ok
+test manifest::tests::function_address_preserves_binding_rejects_invalid_metadata_matrix ... ok
+test genuine_rebuild::tests::authority_plan_blocks_reused_and_overlapping_roots ... ok
+test manifest::tests::stack_provenance_policy_rejects_required_absent_evidence ... ok
+test manifest::tests::validate_accepts_deterministic_proof_artifacts ... ok
+test manifest::tests::validate_rejects_deterministic_proof_with_wrong_path ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_claim_scope ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_non_claims ... ok
+test manifest::tests::validate_accepts_manifest_with_valid_provenance_coverage ... ok
+test manifest::tests::validate_rejects_deterministic_proof_duplicate_path ... ok
+test manifest::tests::validate_accepts_stack_provenance_release_evidence_with_matching_sidecars ... ok
+test manifest::tests::validate_rejects_deterministic_proof_with_wrong_role ... ok
+test manifest::tests::validate_rejects_external_evidence_duplicate_role ... ok
+test manifest::tests::validate_keeps_non_trellis_proof_profiles_on_the_generic_contract ... ok
+test manifest::tests::validate_rejects_absolute_member_path ... ok
+test manifest::tests::validate_rejects_credential_bearing_git_source_url ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_role ... ok
+test manifest::tests::validate_rejects_external_evidence_empty_schema ... ok
+test manifest::tests::validate_rejects_git_source_archive_digest_mismatch ... ok
+test manifest::tests::validate_rejects_kani_missing_required_non_claim ... ok
+test manifest::tests::validate_rejects_kani_receipt_digest_mismatch ... ok
+test manifest::tests::validate_rejects_external_evidence_invalid_digest ... ok
+test manifest::tests::validate_rejects_external_evidence_path_escape ... ok
+test manifest::tests::validate_rejects_kani_stale_closure_identity ... ok
+test manifest::tests::validate_rejects_provenance_coverage_with_invalid_binary_hash ... ok
+test manifest::tests::validate_rejects_provenance_coverage_with_weakened_boundary ... ok
+test manifest::tests::validate_rejects_kani_semantic_promotion ... ok
+test manifest::tests::validate_rejects_kani_receipt_without_toolchain_identity ... ok
+test manifest::tests::validate_rejects_provider_fixed_point_proof_file_kind ... ok
+test manifest::tests::validate_rejects_provider_fixed_point_proof_with_wrong_role ... ok
+test manifest::tests::validate_rejects_source_acquisition_digest_mismatch ... ok
+test manifest::tests::validate_rejects_relabeled_content_digest_as_observation ... ok
+test manifest::tests::validate_rejects_stage2_digest_not_present_in_binaries ... ok
+test manifest::tests::validate_rejects_stack_provenance_digest_mismatch ... ok
+test nix_witness::tests::build_flag_order_changes_canonical_digest ... ok
+test manifest::tests::validate_rejects_stale_observation_payload_bytes ... ok
+test nix_witness::tests::canonicalization_preserves_flag_order_and_sorts_artifact_sets ... ok
+test manifest::tests::validate_rejects_stack_provenance_semantic_promotion ... ok
+test manifest::tests::function_address_generic_binding_rejects_invalid_fixture_matrix ... ok
+test manifest::tests::validate_rejects_kani_missing_version ... ok
+test nix_witness::tests::missing_mantle_proof_digest_is_rejected ... ok
+test manifest::tests::validate_rejects_prerequisite_inventory_linkage_mismatch ... ok
+test manifest::tests::validate_rejects_provenance_coverage_with_empty_all_covered_ids ... ok
+test manifest::tests::validate_rejects_unsupported_source_acquisition_url ... ok
+test manifest::tests::stack_provenance_policy_rejects_required_invalid_fixture_matrix ... ok
+test nix_witness::tests::canonical_receipt_is_compact_stable_and_digest_bound ... ok
+test manifest::tests::trellis_proof_formal_candidate_remains_recorded_only_in_mantle ... ok
+test nix_witness::tests::receipt_digest_must_match_canonical_bytes ... ok
+test manifest::tests::trellis_proof_optional_mode_rejects_stale_v1_without_observations ... ok
+test manifest::tests::trellis_proof_required_accepted_formal_proof_fixture_passes ... ok
+test manifest::tests::trellis_proof_required_mode_fails_closed_without_accepted_upstream_authority ... ok
+test manifest::tests::trellis_proof_registered_fixture_is_optional_recorded_only ... ok
+test manifest::tests::validate_accepts_kani_toolchain_evidence_with_matching_receipt ... ok
+test manifest::tests::validate_accepts_manifest_without_provenance_coverage ... ok
+test manifest::tests::validate_accepts_manifest_with_valid_external_evidence ... ok
+test manifest::tests::validate_accepts_function_address_through_generic_binding_without_projection ... ok
+test manifest::tests::validate_accepts_git_source_acquisition ... ok
+test manifest::tests::validate_accepts_matching_external_source_acquisition ... ok
+test manifest::tests::validate_accepts_provider_fixed_point_proof_artifact ... ok
+test manifest::tests::validate_accepts_non_function_lifecycle_stub_as_opaque_metadata ... ok
+test manifest::tests::validate_accepts_function_address_through_generic_binding_with_projection ... ok
+test manifest::tests::validate_accepts_multiple_profiles_for_same_non_function_kind ... ok
+test nix_witness::tests::verdict_must_match_digest_set_comparison ... ok
+test nix_witness::tests::mismatch_is_fail_closed_to_cross_builder_mismatch_verdict ... ok
+test nix_witness::tests::mismatch_receipt_must_not_report_nix_witness_proof_class ... ok
+test manifest::tests::validate_rejects_unsupported_observation_schema_and_version ... ok
+test oxide_worker::tests::accepts_valid_oxide_release_worker_fixture ... ok
+test manifest::tests::validate_rejects_kani_unsupported_solver_metadata ... ok
+test proof_audit::tests::clean_or_informational_audit_sets_are_admitted_with_stable_digest ... ok
+test proof_audit::tests::unknown_or_unapproved_audit_events_fail_closed ... ok
+test manifest::tests::validate_rejects_git_source_with_malformed_commit ... ok
+test proof_audit::tests::approved_downgrade_records_policy_basis_and_narrower_claim ... ok
+test oxide_worker::tests::rejects_invalid_oxide_release_worker_fixture_matrix ... ok
+test manifest::tests::validate_rejects_malformed_observation_digests ... ok
+test proof_eligibility::tests::clean_strict_evidence_is_admitted ... ok
+test manifest::tests::validate_rejects_observation_kind_and_profile_drift ... ok
+test proof_eligibility::tests::missing_or_degraded_fact_classes_are_reported ... ok
+test proof_eligibility::tests::unapproved_audit_events_fail_closed ... ok
+test publication::tests::plan_identity_is_deterministic_and_has_no_stage_name_input ... ok
+test manifest::tests::stack_provenance_policy_accepts_optional_absent_evidence ... ok
+test publication::tests::staged_artifacts_must_match_the_pre_mutation_plan ... ok
+test publication::tests::cleanup_failure_can_augment_one_phase_failure_only ... ok
+test publication::tests::plan_identity_changes_with_release_layout_input_or_policy ... ok
+test reproducibility::tests::reproducibility_report_accepts_matching_artifact_names_out_of_order ... ok
+test reproducibility::tests::reproducibility_report_accepts_mismatched_digest ... ok
+test reproducibility::tests::reproducibility_report_accepts_missing_rebuilt_artifact_fixture ... ok
+test reproducibility::tests::reproducibility_report_rejects_matched_artifact_with_drift ... ok
+test reproducibility::tests::reproducibility_report_rejects_rebuild_class_without_clean_store_identity ... ok
+test source_archive::tests::unsafe_paths_are_rejected ... ok
+test publication::tests::preexisting_destination_shapes_are_all_blockers ... ok
+test reproducibility::tests::reproducibility_report_canonical_bytes_are_stable_and_sorted ... ok
+test reproducibility::tests::reproducibility_report_rejects_failed_verdict_with_rebuild_claim ... ok
+test reproducibility::tests::reproducibility_report_digest_is_blake3_of_canonical_bytes ... ok
+test source_archive::tests::private_runtime_and_lifecycle_paths_are_excluded ... ok
+test manifest::tests::trellis_proof_negative_fixture_matrix_fails_closed ... ok
+test reproducibility::tests::reproducibility_report_rejects_missing_artifact_with_observed_digest ... ok
+test reproducibility::tests::reproducibility_report_rejects_output_name_drift_fixture ... ok
+test source_archive::tests::symlink_targets_must_stay_relative ... ok
+test source_archive::tests::submodules_are_rejected ... ok
+test publication::tests::state_machine_accepts_only_the_verified_commit_sequence ... ok
+test source_archive::tests::source_paths_with_target_named_components_are_preserved ... ok
+test source_archive::tests::unordered_entries_produce_stable_member_order ... ok
+test reproducibility::tests::reproducibility_report_rejects_impure_rebuild_claim ... ok
+test reproducibility::tests::reproducibility_report_rejects_proof_linkage_mismatch_fixture ... ok
+test strict_regression::tests::strict_regression_suite_accepts_clean_and_poisoned_fixture_outcomes ... ok
+test strict_regression::tests::strict_regression_suite_blocks_missing_required_axis ... ok
+test publication::tests::invalid_layout_and_policy_fail_closed ... ok
+test proof_eligibility::tests::practical_impure_and_missing_modes_are_blocked ... ok
+test reproducibility::tests::reproducibility_report_accepts_matching_linkage ... ok
+test publication::tests::verification_rejection_and_commit_race_are_terminal_failures ... ok
+test tree_copy::tests::zero_limits_are_rejected_before_entry_validation ... ok
+test verification_decision::tests::all_required_contributors_accept_only_when_satisfied ... ok
+test strict_regression::tests::strict_regression_suite_blocks_when_poisoned_fixture_is_admitted ... ok
+test verification_decision::tests::one_required_blocker_rejects_manifest_success ... ok
+test verification_decision::tests::diagnostic_overflow_is_bounded_and_fails_closed ... ok
+test strict_regression::tests::strict_regression_suite_blocks_unstable_clean_output_digest ... ok
+test tree_copy::tests::compatibility_order_uses_mantle_string_paths_not_component_order ... ok
+test tree_copy::tests::symlink_policy_accepts_only_relative_targets_naming_another_planned_entry ... ok
+test tree_copy::tests::deterministic_plan_orders_directories_files_then_internal_symlinks ... ok
+test verification_decision::tests::multiple_required_blockers_keep_contributor_and_diagnostic_order ... ok
+test publication::tests::state_machine_rejects_skips_and_post_commit_failures ... ok
+test tree_copy::tests::invalid_paths_parent_shapes_duplicates_and_special_files_are_rejected ... ok
+test tree_copy::tests::named_entry_depth_and_path_bounds_fail_closed ... ok
+test verification_decision::tests::completeness_guard_maps_every_required_contributor ... ok
+test verification_decision::tests::optional_absence_does_not_block_acceptance ... ok
+test strict_regression::tests::strict_regression_suite_marks_unsupported_axis_as_non_claim ... ok
+test tree_copy::tests::blocker_order_is_deterministic_by_path_and_kind ... ok
+test source_review::tests::release_archive_and_current_claim_root_are_independent_mandatory_bindings ... ok
+test source_review::tests::unsupported_snapshot_profiles_and_weakened_nonclaims_fail_closed ... ok
+test source_review::tests::a_producer_acceptance_string_cannot_replace_actual_signature_or_trust ... ok
+test source_review::tests::canonical_observation_is_accepted_but_an_arbitrary_identity_is_not ... ok
+test source_review::tests::closed_receipts_reject_duplicate_fields_even_with_a_matching_last_value ... ok
+test source_review::tests::needs_revision_is_authenticated_but_cannot_fulfill_approval_threshold ... ok
+test source_review::tests::explicit_policy_and_exact_valence_artifact_linkage_cannot_be_substituted ... ok
+test source_review::tests::duplicate_full_key_aliases_never_become_two_reviewers ... ok
+test source_review::tests::distinct_full_keys_with_identical_labels_satisfy_only_the_selected_review_gate ... ok
+test source_review::tests::authors_revocation_generation_and_role_are_enforced_without_receipt_authority ... ok
+
+test result: ok. 254 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+   Doc-tests crunch_release_core
+
+running 1 test
+test crates/crunch-release-core/src/content_bound_nominal.rs - content_bound_nominal::CheckedRequirementDigest (line 210) - compile fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-delta-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-delta-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-delta-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.29s
+     Running unittests src/lib.rs (target/debug/deps/crunch_delta_core-25aef0c182681757)
+
+running 7 tests
+test model::tests::blob_validation_rejects_mismatched_chunk_total ... ok
+test model::tests::chunk_profile_v1_matches_spec ... ok
+test negotiation::tests::chunk_profile_wire_v1_matches_runtime_profile ... ok
+test negotiation::tests::duplicate_version_offer_is_rejected ... ok
+test planner::tests::planner_matches_fixed_suite_targets ... ok
+test planner::tests::prefix_mismatch_is_rejected ... ok
+test planner::tests::known_output_reuses_whole_output ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_delta_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-gc-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-gc-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.89s
+     Running unittests src/lib.rs (target/debug/deps/crunch_gc_core-793597f6b37d31b5)
+
+running 27 tests
+test retention::tests::ineligible_owner_scope_is_rejected_for_the_root_class ... ok
+test retention::tests::superseded_generation_expires_and_requires_explicit_removal ... ok
+test retention::tests::unsafe_lease_is_quarantined_and_clock_rollback_fails_closed ... ok
+test retention::tests::duplicate_roots_and_decision_bounds_are_rejected ... ok
+test retention::tests::usage_counts_shared_content_once_and_keeps_root_views_separate ... ok
+test retention::tests::usage_preserves_unknown_bytes_and_rejects_overflow ... ok
+test retention::tests::project_generations_and_active_lease_are_deterministic ... ok
+test retention::tests::generation_sets_share_a_rank_and_unknown_policy_is_rejected ... ok
+test interest::tests::merge_preserves_two_owners_and_release_is_scoped ... ok
+test retention::tests::legacy_root_remains_protected_and_unclassified ... ok
+test tests::base_to_overlay_reference_is_rejected ... ok
+test tests::duplicate_identity_is_rejected ... ok
+test tests::empty_execute_plan_keeps_execution_disposition ... ok
+test tests::dry_run_preserves_candidates_without_execution_authority ... ok
+test tests::missing_reference_is_rejected ... ok
+test tests::missing_root_is_rejected ... ok
+test tests::more_requested_roots_than_entries_reports_missing_root ... ok
+test tests::observed_reclaim_summary_uses_checked_arithmetic ... ok
+test tests::noncanonical_path_identity_is_rejected ... ok
+test tests::shuffled_facts_produce_the_same_plan_identity ... ok
+test tests::unreachable_base_is_reported_but_never_collected ... ok
+test tests::unrooted_observed_entries_are_candidates_until_a_root_retains_their_closure ... ok
+test tests::overlapping_roots_and_cycles_terminate_without_duplicate_retention ... ok
+test tests::reclaim_overflow_is_rejected ... ok
+test tests::overlay_root_can_reach_base_without_base_mutation_intent ... ok
+test tests::reachability_and_candidates_are_canonical ... ok
+test interest::tests::record_count_above_bound_is_rejected ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests crunch_gc_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-repair-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-repair-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+     Running unittests src/lib.rs (target/debug/deps/crunch_repair_core-75b04b7e0e507df4)
+
+running 7 tests
+test tests::absent_sidecar_is_not_fabricated ... ok
+test tests::changed_facts_produce_ordered_mutation_and_rollback_intents ... ok
+test tests::path_identity_is_validated_and_bound_to_plan_identity ... ok
+test tests::report_never_claims_mutation_before_completion ... ok
+test tests::every_failure_phase_denies_success_and_has_rollback_policy ... ok
+test tests::every_unsafe_candidate_is_rejected ... ok
+test tests::current_facts_preserve_signing_and_sidecar_state ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_repair_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-cmake-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-cmake-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-cmake-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.53s
+     Running unittests src/lib.rs (target/debug/deps/crunch_cmake_core-9cd7db1ba83d9d48)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/validation.rs (target/debug/deps/validation-86618cae1fd5c876)
+
+running 4 tests
+test platform_mismatch_and_unbounded_outputs_fail_before_execution ... ok
+test undeclared_roles_never_acquire_ambient_authority ... ok
+test user_definitions_cannot_override_isolation_or_inject_host_roots ... ok
+test tool_and_source_members_cannot_escape_admitted_roots ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_cmake_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-esp-idf-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-esp-idf-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-esp-idf-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
+     Running unittests src/lib.rs (target/debug/deps/crunch_esp_idf_core-ea6685b7e6c10ce2)
+
+running 5 tests
+test tests::bounded_collections_and_identities_fail_closed ... ok
+test tests::identities_are_content_digests_not_versions ... ok
+test tests::target_cohort_and_toolchain_are_jointly_validated ... ok
+test tests::members_cannot_escape_or_inject_cmake_lists ... ok
+test tests::managed_components_require_lock_and_declared_content ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_esp_idf_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-fpga-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-fpga-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-fpga-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.08s
+     Running unittests src/lib.rs (target/debug/deps/crunch_fpga_core-6bbc14f0270f77f6)
+
+running 6 tests
+test tests::report_json_facts_preserve_nested_numbers_and_nulls ... ok
+test tests::netlist_ports_must_exactly_match_required_pins ... ok
+test tests::timing_checks_actual_facts_not_process_success ... ok
+test tests::utilization_limits_and_device_capacity_are_both_enforced ... ok
+test tests::stage_merkle_boundaries_track_only_affected_inputs ... ok
+test tests::unsupported_part_missing_constraints_and_ambient_tool_paths_fail_closed ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_fpga_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-gpu-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-gpu-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-gpu-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.30s
+     Running unittests src/lib.rs (target/debug/deps/crunch_gpu_core-8772fb4eb3241a32)
+
+running 2 tests
+test tests::rejects_unsupported_backend_architecture_and_tool_combinations ... ok
+test tests::rejects_paths_missing_roles_and_flag_injection ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests crunch_gpu_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-model-conversion-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-model-conversion-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-model-conversion-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.35s
+     Running unittests src/lib.rs (target/debug/deps/crunch_model_conversion_core-078d4c3226a4695f)
+
+running 2 tests
+test tests::missing_shard_and_duplicate_members_fail_early ... ok
+test tests::rejects_execution_and_calibration_not_in_supported_fragment ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_model_conversion_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-pnpm-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-source-core)
+   Compiling crunch-pnpm-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-pnpm-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.84s
+     Running unittests src/lib.rs (target/debug/deps/crunch_pnpm_core-24606f824eec786f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contract.rs (target/debug/deps/contract-497a9dd30f596305)
+
+running 3 tests
+test non_normalized_outputs_and_unbounded_runtime_authority_are_rejected ... ok
+test unsupported_tool_cohort_and_duplicate_targets_fail_closed ... ok
+test output_and_permission_changes_invalidate_the_build_identity ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_pnpm_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-python-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-python-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-python-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s
+     Running unittests src/lib.rs (target/debug/deps/crunch_python_core-815917202987ed6c)
+
+running 1 test
+test tests::target_and_artifact_identity_fail_closed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_python_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-test-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-spacewasm-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-spacewasm-core)
+   Compiling crunch-test-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-test-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.58s
+     Running unittests src/lib.rs (target/debug/deps/crunch_test_core-be2cf9793e191d50)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contract.rs (target/debug/deps/contract-83383ef48672ea88)
+
+running 4 tests
+test ambient_inputs_unknown_options_and_services_fail_closed ... ok
+test selection_is_ordered_filtered_then_disjointly_sharded ... ok
+test crash_incomplete_wrong_test_and_contradictory_exit_never_pass ... ok
+test changed_inputs_seed_repeat_selection_deadline_and_nonce_invalidate_identity ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests crunch_test_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-verification-bridge-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-verification-bridge-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-verification-bridge-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.43s
+     Running unittests src/lib.rs (target/debug/deps/crunch_verification_bridge_core-dddcb27f4a3149d5)
+
+running 13 tests
+test producer::tests::legacy_node_carrying_versioned_keys_fails_closed ... ok
+test producer::tests::legacy_tool_graph_with_store_paths_is_admitted ... ok
+test producer::tests::versioned_dynamic_output_selection_fails_closed ... ok
+test producer::tests::unsupported_top_level_graph_version_fails_closed ... ok
+test producer::tests::versioned_tool_graph_with_basenames_is_admitted ... ok
+test producer::tests::versioned_dependency_outside_the_closure_fails_closed ... ok
+test provider_profile_tests::absent_provider_profile_row_fails_closed ... ok
+test producer::tests::versioned_root_absent_fails_closed ... ok
+test producer::tests::versioned_node_carrying_legacy_inputs_fails_closed ... ok
+test provider_profile_tests::duplicate_provider_profile_rows_fail_closed ... ok
+test provider_profile_tests::escaping_provider_profile_locator_fails_closed ... ok
+test provider_profile_tests::provider_profile_digest_mismatch_fails_closed ... ok
+test provider_profile_tests::rail_named_provider_profile_locator_is_selected ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests crunch_verification_bridge_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-zephyr-core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling crunch-zephyr-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-zephyr-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.53s
+     Running unittests src/lib.rs (target/debug/deps/crunch_zephyr_core-1272f772c3db5252)
+
+running 3 tests
+test tests::rejects_board_qualifiers_and_escaping_configuration ... ok
+test tests::rejects_incomplete_or_misresolved_module_closure ... ok
+test tests::roots_and_versions_cannot_substitute_for_content ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crunch_zephyr_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[5/12] first-wave std adapter tests
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-attestation shell_adapter_keeps_discovery_outside_core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling thiserror v2.0.18
+   Compiling data-encoding v2.10.0
+   Compiling syn v2.0.117
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling serde v1.0.228
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation-core)
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.71s
+     Running unittests src/lib.rs (target/debug/deps/crunch_attestation-7df5be8d0aff2a98)
+
+running 1 test
+test discovery::tests::shell_adapter_keeps_discovery_outside_core ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-project shell_adapter_keeps_refresh_io_outside_core
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling regex-syntax v0.8.10
+   Compiling memchr v2.8.0
+   Compiling either v1.15.0
+   Compiling libc v0.2.186
+   Compiling parking_lot_core v0.9.12
+   Compiling foldhash v0.2.0
+   Compiling rustversion v1.0.22
+   Compiling smallvec v1.15.1
+   Compiling scopeguard v1.2.0
+   Compiling hashbrown v0.16.1
+   Compiling siphasher v1.0.2
+   Compiling libm v0.2.16
+   Compiling bytemuck v1.25.0
+   Compiling log v0.4.29
+   Compiling keccak v0.1.6
+   Compiling precomputed-hash v0.1.1
+   Compiling bit-vec v0.8.0
+   Compiling crypto-common v0.1.7
+   Compiling ryu v1.0.23
+   Compiling lock_api v0.4.14
+   Compiling digest v0.10.7
+   Compiling phf_shared v0.11.3
+   Compiling new_debug_unreachable v1.0.6
+   Compiling same-file v1.0.6
+   Compiling term v1.2.1
+   Compiling fixedbitset v0.5.7
+   Compiling sha3 v0.10.8
+   Compiling itertools v0.14.0
+   Compiling ena v0.14.4
+   Compiling malachite-nz v0.9.2
+   Compiling pico-args v0.5.0
+   Compiling safe_arch v1.2.0
+   Compiling walkdir v2.5.0
+   Compiling unicode-xid v0.2.6
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling blake3 v1.8.5
+   Compiling foldhash v0.1.5
+   Compiling aho-corasick v1.1.4
+   Compiling indexmap v2.13.1
+   Compiling ascii-canvas v4.0.0
+   Compiling bit-set v0.8.0
+   Compiling unicode-width v0.2.2
+   Compiling serde_json v1.0.149
+   Compiling wide v1.7.0
+   Compiling winnow v1.0.1
+   Compiling fnv v1.0.7
+   Compiling hashbrown v0.15.5
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling termcolor v1.4.1
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling heck v0.4.1
+   Compiling winnow v0.7.15
+   Compiling petgraph v0.7.1
+   Compiling bitmaps v3.2.1
+   Compiling hashlink v0.10.0
+   Compiling codespan-reporting v0.13.1
+   Compiling arrayvec v0.5.2
+   Compiling arraydeque v0.5.1
+   Compiling regex-automata v0.4.14
+   Compiling malachite-base v0.9.2
+   Compiling typed-arena v2.0.2
+   Compiling imbl-sized-chunks v0.1.3
+   Compiling ouroboros_macro v0.18.5
+   Compiling paste v1.0.15
+   Compiling aliasable v0.1.3
+   Compiling static_assertions v1.1.0
+   Compiling nickel-lang-vector v0.2.0
+   Compiling pretty v0.12.5
+   Compiling saphyr-parser v0.0.6
+   Compiling codespan v0.13.1
+   Compiling vte v0.14.1
+   Compiling thiserror-impl v2.0.18
+   Compiling serde_spanned v1.1.1
+   Compiling simple-counter v0.1.0
+   Compiling unsafe-libyaml v0.2.11
+   Compiling once_cell v1.21.4
+   Compiling bumpalo v3.20.2
+   Compiling strip-ansi-escapes v0.2.1
+   Compiling sha2 v0.10.9
+   Compiling sha-1 v0.10.1
+   Compiling md-5 v0.10.6
+   Compiling json_scanner v0.1.0
+   Compiling base64 v0.22.1
+   Compiling colorchoice v1.0.5
+   Compiling indoc v2.0.7
+   Compiling unicode-segmentation v1.13.2
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling strsim v0.11.1
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation-core)
+   Compiling tempfile v3.27.0
+   Compiling parking_lot v0.12.5
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling string_cache v0.8.9
+   Compiling regex v1.12.3
+   Compiling lalrpop-util v0.22.2
+   Compiling thiserror v2.0.18
+   Compiling logos-codegen v0.16.1
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation)
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-project-core)
+   Compiling ouroboros v0.18.5
+   Compiling lalrpop v0.22.2
+   Compiling logos-derive v0.16.1
+   Compiling logos v0.16.1
+   Compiling crunch-project v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-project)
+   Compiling nickel-lang-parser v0.3.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling malachite-q v0.9.2
+   Compiling malachite-float v0.9.2
+   Compiling malachite v0.9.2
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-eval)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 15s
+     Running unittests src/lib.rs (target/debug/deps/crunch_project-74d2e92f4ad733d9)
+
+running 1 test
+test refresh_adapter::tests::shell_adapter_keeps_refresh_io_outside_core ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/integration_nickel.rs (target/debug/deps/integration_nickel-9b27e6af861db802)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+[6/12] shell activation boundary tests
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-shell adapter_preserves_path_order_and_appends_bin
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling serde v1.0.228
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-shell-core)
+   Compiling crunch-shell v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-shell)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.25s
+     Running unittests src/lib.rs (target/debug/deps/crunch_shell-fe31662ac414108f)
+
+running 1 test
+test adapter::tests::adapter_preserves_path_order_and_appends_bin ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p crunch-shell non_utf8_with_path_is_rejected
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running unittests src/lib.rs (target/debug/deps/crunch_shell-fe31662ac414108f)
+
+running 1 test
+test adapter::tests::non_utf8_with_path_is_rejected ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+[7/12] release boundary tests
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p mantle --bin mantle create_and_verify_release_bundle_round_trip
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling proc-macro2 v1.0.106
+   Compiling libc v0.2.186
+   Compiling crossbeam-utils v0.8.21
+   Compiling smallvec v1.15.1
+   Compiling typenum v1.20.1
+   Compiling subtle v2.6.1
+   Compiling scopeguard v1.2.0
+   Compiling parking_lot_core v0.9.12
+   Compiling generic-array v0.14.7
+   Compiling const-oid v0.9.6
+   Compiling regex-automata v0.4.14
+   Compiling crossbeam-epoch v0.9.20
+   Compiling stable_deref_trait v1.2.1
+   Compiling serde_json v1.0.149
+   Compiling jobserver v0.1.34
+   Compiling rayon-core v1.13.0
+   Compiling rustix v1.1.4
+   Compiling hashbrown v0.16.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling log v0.4.29
+   Compiling lock_api v0.4.14
+   Compiling same-file v1.0.6
+   Compiling pin-project-lite v0.2.17
+   Compiling crc32fast v1.5.0
+   Compiling autocfg v1.5.0
+   Compiling walkdir v2.5.0
+   Compiling futures-core v0.3.32
+   Compiling byteorder v1.5.0
+   Compiling cc v1.2.59
+   Compiling tinyvec_macros v0.1.1
+   Compiling gix-trace v0.1.18
+   Compiling tinyvec v1.11.0
+   Compiling pkg-config v0.3.32
+   Compiling getrandom v0.4.2
+   Compiling libm v0.2.16
+   Compiling rand_core v0.10.0
+   Compiling fnv v1.0.7
+   Compiling either v1.15.0
+   Compiling human_format v1.2.1
+   Compiling bytesize v2.3.1
+   Compiling unicode-normalization v0.1.25
+   Compiling futures-io v0.3.32
+   Compiling winnow v0.7.15
+   Compiling zlib-rs v0.6.3
+   Compiling crossbeam-channel v0.5.15
+   Compiling futures-sink v0.3.32
+   Compiling futures-channel v0.3.32
+   Compiling slab v0.4.12
+   Compiling futures-task v0.3.32
+   Compiling tracing-core v0.1.36
+   Compiling writeable v0.6.3
+   Compiling base64ct v1.8.3
+   Compiling heapless v0.8.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling hash32 v0.3.1
+   Compiling quote v1.0.45
+   Compiling litemap v0.8.2
+   Compiling jiff v0.2.23
+   Compiling utf8_iter v1.0.4
+   Compiling indexmap v2.13.1
+   Compiling num-traits v0.2.19
+   Compiling icu_normalizer_data v2.2.0
+   Compiling syn v2.0.117
+   Compiling pem-rfc7468 v0.7.0
+   Compiling syn v3.0.3
+   Compiling icu_properties_data v2.2.0
+   Compiling cmake v0.1.58
+   Compiling write16 v1.0.0
+   Compiling fs_extra v1.3.0
+   Compiling utf16_iter v1.0.5
+   Compiling blake3 v1.8.5
+   Compiling percent-encoding v2.3.2
+   Compiling dunce v1.0.5
+   Compiling cfg_aliases v0.2.1
+   Compiling ring v0.17.14
+   Compiling aws-lc-rs v1.18.1
+   Compiling getrandom v0.2.17
+   Compiling errno v0.3.14
+   Compiling mio v1.2.0
+   Compiling socket2 v0.6.3
+   Compiling parking_lot v0.12.5
+   Compiling signal-hook-registry v1.4.8
+   Compiling rand_core v0.6.4
+   Compiling faster-hex v0.10.0
+   Compiling prodash v31.0.0
+   Compiling aws-lc-sys v0.45.0
+   Compiling spin v0.9.9
+   Compiling unicode-xid v0.2.6
+   Compiling zerocopy v0.8.48
+   Compiling lazy_static v1.5.0
+   Compiling memmap2 v0.9.10
+   Compiling encoding_rs v0.8.35
+   Compiling adler2 v2.0.1
+   Compiling untrusted v0.9.0
+   Compiling ipnet v2.12.0
+   Compiling simd-adler32 v0.3.9
+   Compiling httparse v1.10.1
+   Compiling heck v0.5.0
+   Compiling miniz_oxide v0.8.9
+   Compiling hashbrown v0.15.5
+   Compiling regex v1.12.3
+   Compiling ident_case v1.0.1
+   Compiling rustls v0.23.46
+   Compiling siphasher v1.0.2
+   Compiling bytemuck_derive v1.12.1
+   Compiling getrandom v0.3.4
+   Compiling thread_local v1.1.9
+   Compiling synstructure v0.13.2
+   Compiling anyhow v1.0.102
+   Compiling form_urlencoded v1.2.2
+   Compiling tower-service v0.3.3
+   Compiling try-lock v0.2.5
+   Compiling atomic-waker v1.1.2
+   Compiling signal-hook v0.4.4
+   Compiling want v0.3.1
+   Compiling itertools v0.14.0
+   Compiling hashbrown v0.14.5
+   Compiling nonempty v0.12.0
+   Compiling num-integer v0.1.46
+   Compiling sync_wrapper v1.0.2
+   Compiling rand_core v0.9.5
+   Compiling tower-layer v0.3.3
+   Compiling object v0.37.3
+   Compiling openssl-probe v0.2.1
+   Compiling sharded-slab v0.1.7
+   Compiling matchers v0.2.0
+   Compiling tracing-log v0.2.0
+   Compiling nu-ansi-term v0.50.3
+   Compiling gimli v0.32.3
+   Compiling iri-string v0.7.12
+   Compiling arc-swap v1.9.1
+   Compiling anstyle v1.0.14
+   Compiling dashmap v6.1.0
+   Compiling rustc-demangle v0.1.28
+   Compiling iana-time-zone v0.1.65
+   Compiling mime v0.3.17
+   Compiling owo-colors v4.3.0
+   Compiling syn v1.0.109
+   Compiling convert_case v0.10.0
+   Compiling unicode-linebreak v0.1.5
+   Compiling is_ci v1.2.0
+   Compiling utf8parse v0.2.2
+   Compiling bytemuck v1.25.0
+   Compiling glob v0.3.3
+   Compiling unicode-bom v2.0.3
+   Compiling textwrap v0.16.2
+   Compiling anstyle-parse v1.0.0
+   Compiling supports-color v3.0.2
+   Compiling darling_core v0.23.0
+   Compiling filetime v0.2.27
+   Compiling zstd-sys v2.0.16+zstd.1.5.7
+   Compiling libloading v0.8.9
+   Compiling proc-macro-error-attr v0.4.12
+   Compiling unicode-width v0.1.14
+   Compiling tempfile v3.27.0
+   Compiling clang-sys v1.9.1
+   Compiling terminal_size v0.4.4
+   Compiling bumpalo v3.20.2
+   Compiling prettyplease v0.2.37
+   Compiling serde_derive v1.0.228
+   Compiling zeroize_derive v1.5.0
+   Compiling thiserror-impl v2.0.18
+   Compiling tokio-macros v2.7.0
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling futures-macro v0.3.32
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling ppv-lite86 v0.2.21
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling addr2line v0.25.1
+   Compiling miette-derive v7.6.0
+   Compiling zeroize v1.9.0
+   Compiling derive_more-impl v2.1.1
+   Compiling der v0.7.10
+   Compiling rustls-pki-types v1.14.0
+   Compiling strum_macros v0.26.4
+   Compiling backtrace v0.3.76
+   Compiling futures-util v0.3.32
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling rustls-native-certs v0.8.3
+   Compiling rand_chacha v0.9.0
+   Compiling icu_locale_data v2.2.0
+   Compiling rand v0.9.3
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling backtrace-ext v0.2.1
+   Compiling inout v0.1.4
+   Compiling anstyle-query v1.1.5
+   Compiling rustix v0.38.44
+   Compiling supports-unicode v3.0.0
+   Compiling digest v0.10.7
+   Compiling zerofrom v0.1.7
+   Compiling yoke v0.8.2
+   Compiling thiserror v2.0.18
+   Compiling sha1 v0.10.6
+   Compiling sha2 v0.10.9
+   Compiling spki v0.7.3
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling pkcs8 v0.10.2
+   Compiling signature v2.2.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling sha1-checked v0.10.0
+   Compiling ed25519 v2.2.3
+   Compiling supports-hyperlinks v3.2.0
+   Compiling portable-atomic v1.13.1
+   Compiling sha1_smol v1.0.1
+   Compiling rustc-hash v2.1.2
+   Compiling miette v7.6.0
+   Compiling tracing v0.1.44
+   Compiling uuid v1.23.0
+   Compiling anstream v1.0.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling serde v1.0.228
+   Compiling cipher v0.4.4
+   Compiling universal-hash v0.5.1
+   Compiling syn-mid v0.5.4
+   Compiling darling_macro v0.23.0
+   Compiling pin-project-internal v1.1.11
+   Compiling kstring v2.0.2
+   Compiling memoffset v0.9.1
+   Compiling bytes v1.11.1
+   Compiling bstr v1.12.1
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling ed25519-dalek v2.2.0
+   Compiling chrono v0.4.44
+   Compiling proc-macro-error v0.4.12
+   Compiling proc-macro-hack v0.5.20+deprecated
+   Compiling winnow v1.0.1
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling linux-raw-sys v0.4.15
+   Compiling gix-validate v0.11.0
+   Compiling gix-utils v0.3.1
+   Compiling tokio v1.51.0
+   Compiling gix-error v0.2.1
+   Compiling http v1.4.0
+   Compiling gix-date v0.15.1
+   Compiling gix-chunk v0.7.0
+   Compiling gix-quote v0.7.0
+   Compiling strum v0.26.3
+   Compiling derive_more v2.1.1
+   Compiling clap_lex v1.1.0
+   Compiling io-lifetimes v3.0.1
+   Compiling shell-words v1.1.1
+   Compiling opaque-debug v0.3.1
+   Compiling parking v2.2.1
+   Compiling icu_collator_data v2.2.0
+   Compiling minimal-lexical v0.2.1
+   Compiling http-body v1.0.1
+   Compiling io-lifetimes v2.0.4
+   Compiling futures-lite v2.6.1
+   Compiling polyval v0.6.2
+   Compiling gix-path v0.11.2
+   Compiling icu_provider v2.2.0
+   Compiling http-body-util v0.1.3
+   Compiling gix-features v0.46.2
+   Compiling gix-actor v0.40.0
+   Compiling gix-config-value v0.17.1
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling gix-command v0.8.0
+   Compiling nom v7.1.3
+   Compiling pin-project v1.1.11
+   Compiling clap_builder v4.6.0
+   Compiling darling v0.23.0
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling futures-executor v0.3.32
+   Compiling turso_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling clap_derive v4.6.0
+   Compiling async-trait v0.1.89
+   Compiling simsimd v6.5.16
+   Compiling gix-hash v0.23.0
+   Compiling gix-fs v0.19.2
+   Compiling gix-glob v0.24.0
+   Compiling gix-hashtable v0.13.0
+   Compiling gix-commitgraph v0.35.0
+   Compiling gix-object v0.58.0
+   Compiling aegis v0.9.8
+   Compiling libmimalloc-sys v0.1.44
+   Compiling gix-tempfile v21.0.2
+   Compiling crc32c v0.6.8
+   Compiling gix-lock v21.0.2
+   Compiling branches v0.4.6
+   Compiling bigdecimal v0.4.11
+   Compiling uncased v0.9.10
+   Compiling zstd-safe v7.2.4
+   Compiling bindgen v0.69.5
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling io-extras v0.19.0
+   Compiling gix-attributes v0.31.0
+   Compiling turso_ext v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling home v0.5.12
+   Compiling io-uring v0.7.15
+   Compiling which v4.4.2
+   Compiling idna_adapter v1.2.1
+   Compiling toml_edit v0.25.10+spec-1.1.0
+   Compiling gix-revwalk v0.29.0
+   Compiling clap v4.6.0
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling idna v1.1.0
+   Compiling cexpr v0.6.0
+   Compiling futures v0.3.32
+   Compiling tower-http v0.6.8
+   Compiling icu_locale v2.2.0
+   Compiling h2 v0.4.16
+   Compiling tokio-stream v0.1.18
+   Compiling serde_with_macros v3.18.0
+   Compiling url v2.5.8
+   Compiling ghash v0.5.1
+   Compiling ctr v0.9.2
+   Compiling aes v0.8.4
+   Compiling twox-hash v2.1.2
+   Compiling aead v0.5.2
+   Compiling async-stream-impl v0.3.6
+   Compiling aristo-macros v0.4.1
+   Compiling xattr v1.6.1
+   Compiling num-bigint v0.4.8
+   Compiling darling_core v0.20.11
+   Compiling turso_core v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling nix v0.31.3
+   Compiling bzip2-sys v0.1.13+1.0.8
+   Compiling lzma-sys v0.1.20
+   Compiling itertools v0.12.1
+   Compiling memoffset v0.6.5
+   Compiling vte v0.15.0
+   Compiling powerfmt v0.2.0
+   Compiling typeid v1.0.3
+   Compiling softaes v0.1.7
+   Compiling rustc-hash v1.1.0
+   Compiling cap-primitives v4.0.2
+   Compiling lazycell v1.3.0
+   Compiling genawaiter-proc-macro v0.99.1
+   Compiling async-stream v0.3.6
+   Compiling deranged v0.5.8
+   Compiling vt100 v0.16.2
+   Compiling serde_with v3.18.0
+   Compiling aristo v0.4.1
+   Compiling turso_parser v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling hyper v1.9.0
+   Compiling aes-gcm v0.10.3
+   Compiling icu_collator v2.2.1
+   Compiling fs-set-times v0.20.3
+   Compiling intrusive-collections v0.9.7
+   Compiling proc-macro-crate v3.5.0
+   Compiling gix-traverse v0.55.0
+   Compiling darling_macro v0.20.11
+   Compiling hyper-util v0.1.20
+   Compiling gix-packetline v0.21.2
+   Compiling hmac v0.12.1
+   Compiling rustix-linux-procfs v0.1.1
+   Compiling polling v3.11.0
+   Compiling roaring v0.11.4
+   Compiling pack1 v1.1.0
+   Compiling fastbloom v0.14.1
+   Compiling n0-future v0.3.2
+   Compiling console v0.16.3
+   Compiling rapidhash v4.5.1
+   Compiling chacha20 v0.10.0
+   Compiling diatomic-waker v0.2.3
+   Compiling allocator-api2 v0.4.0
+   Compiling maybe-owned v0.3.4
+   Compiling fallible-iterator v0.3.0
+   Compiling spin v0.10.0
+   Compiling pastey v0.2.3
+   Compiling ambient-authority v0.0.2
+   Compiling cfg_block v0.1.1
+   Compiling time-core v0.1.8
+   Compiling num-conv v0.2.1
+   Compiling bitflags v1.3.2
+   Compiling thiserror v1.0.69
+   Compiling genawaiter-macro v0.99.1
+   Compiling unit-prefix v0.5.2
+   Compiling simdutf8 v0.1.5
+   Compiling hex v0.4.3
+   Compiling cordyceps v0.3.4
+   Compiling cap-std v4.0.2
+   Compiling erased-serde v0.4.10
+   Compiling indicatif v0.18.4
+   Compiling time v0.3.47
+   Compiling genawaiter v0.99.1
+   Compiling futures-buffered v0.2.13
+   Compiling rand v0.10.1
+   Compiling darling v0.20.11
+   Compiling num_enum_derive v0.7.6
+   Compiling mimalloc v0.1.48
+   Compiling serde_urlencoded v0.7.1
+   Compiling quick-xml v0.40.1
+   Compiling md-5 v0.10.6
+   Compiling spez v0.1.2
+   Compiling thiserror-impl v1.0.69
+   Compiling n0-error-macros v0.1.3
+   Compiling prost-derive v0.14.3
+   Compiling flate2 v1.1.9
+   Compiling gix-sec v0.13.2
+   Compiling itertools v0.15.0
+   Compiling hybrid-array v0.4.13
+   Compiling env_filter v2.0.0
+   Compiling nibble_vec v0.1.0
+   Compiling endian-type v0.1.2
+   Compiling redb v3.1.3
+   Compiling matchit v0.8.4
+   Compiling cap-fs-ext v4.0.2
+   Compiling symlink v0.1.0
+   Compiling nix-compat v0.1.0 (/home/brittonr/wt/mantle-trellis-job/vendor/nix-compat)
+   Compiling humantime v2.3.0
+   Compiling fuse-backend-rs v0.12.0 (/home/brittonr/wt/mantle-trellis-job/vendor/fuse-backend-rs)
+   Compiling ref-cast v1.0.25
+   Compiling tracing-appender v0.2.5
+   Compiling radix_trie v0.2.1
+   Compiling env_logger v0.11.11
+   Compiling nix v0.24.3
+   Compiling tracing-indicatif v0.3.14
+   Compiling bzip2 v0.5.2
+   Compiling derive_builder_core v0.20.2
+   Compiling vmm-sys-util v0.11.2
+   Compiling astral-tokio-tar v0.6.4
+   Compiling clap-verbosity-flag v3.0.4
+   Compiling n0-error v0.1.3
+   Compiling gix-bitmap v0.3.0
+   Compiling artifact-auth-core v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling crunch-attestation-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation-core)
+   Compiling cobs v0.3.0
+   Compiling nix-compat-derive v0.1.0 (/home/brittonr/wt/mantle-trellis-job/vendor/nix-compat-derive)
+   Compiling num_enum v0.7.6
+   Compiling irpc-derive v0.10.0
+   Compiling ref-cast-impl v1.0.25
+   Compiling auto_impl v1.3.0
+   Compiling turso_sdk_kit_macros v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling phf_shared v0.11.3
+   Compiling num_cpus v1.17.0
+   Compiling vm-memory v0.10.0
+   Compiling caps v0.5.6
+   Compiling turso_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling mio v0.8.11
+   Compiling proc-macro-error-attr2 v2.0.0
+   Compiling nom v8.0.0
+   Compiling prost v0.14.3
+   Compiling snix-castore v0.1.0 (/home/brittonr/wt/mantle-trellis-job/vendor/snix-castore)
+   Compiling fixedbitset v0.4.2
+   Compiling string_cache v0.8.9
+   Compiling petgraph v0.6.5
+   Compiling sha3 v0.10.8
+   Compiling derive_builder_macro v0.20.2
+   Compiling threadpool v1.8.1
+   Compiling postcard v1.1.3
+   Compiling serde_qs v0.12.0
+   Compiling gix-index v0.49.0
+   Compiling serde_tagged v0.3.0
+   Compiling crypto-common v0.2.2
+   Compiling irpc v0.13.0
+   Compiling block-buffer v0.12.1
+   Compiling gix-filter v0.28.0
+   Compiling fastcdc v3.2.1
+   Compiling gix-ref v0.61.0
+   Compiling gix-ignore v0.19.1
+   Compiling safe_arch v0.7.4
+   Compiling proc-macro-error2 v2.0.1
+   Compiling safe_arch v1.2.0
+   Compiling ff v0.13.1
+   Compiling nix v0.29.0
+   Compiling inplace-vec-builder v0.1.1
+   Compiling serde_bytes v0.11.19
+   Compiling const-oid v0.10.2
+   Compiling binary-merge v0.1.2
+   Compiling base16ct v0.2.0
+   Compiling wu-manber v0.1.0 (https://github.com/tvlfyi/wu-manber.git#0d5b22be)
+   Compiling sec1 v0.7.3
+   Compiling zstd v0.13.3
+   Compiling digest v0.11.3
+   Compiling lalrpop v0.22.2
+   Compiling range-collections v0.4.6
+   Compiling gix-worktree v0.50.0
+   Compiling wide v1.7.0
+   Compiling group v0.13.0
+   Compiling wide v0.7.33
+   Compiling getset v0.1.6
+   Compiling derive_builder v0.20.2
+   Compiling crunch-attestation v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-attestation)
+   Compiling hkdf v0.12.4
+   Compiling iroh-io v0.6.2
+   Compiling malachite-base v0.9.2
+   Compiling gix-pathspec v0.16.1
+   Compiling crypto-bigint v0.5.5
+   Compiling rand_chacha v0.3.1
+   Compiling typed-builder-macro v0.22.0
+   Compiling rand_xoshiro v0.7.0
+   Compiling positioned-io v0.3.5
+   Compiling self_cell v1.3.0
+   Compiling snix-store v0.1.0 (/home/brittonr/wt/mantle-trellis-job/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/wt/mantle-trellis-job/vendor/snix-build)
+   Compiling archery v1.2.3
+   Compiling imbl-sized-chunks v0.2.0
+   Compiling bao-tree v0.16.1
+   Compiling rand v0.8.6
+   Compiling md-5 v0.11.0
+   Compiling fastcdc v5.0.0
+   Compiling tar v0.4.45
+   Compiling imbl v7.0.2
+   Compiling oci-spec v0.7.1
+   Compiling elliptic-curve v0.13.8
+   Compiling gix-url v0.35.2
+   Compiling mantle-rust-plan-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-rust-plan-core)
+   Compiling nix-archive v0.6.0
+   Compiling nix-archive v0.1.0
+   Compiling fs4 v1.1.0
+   Compiling xz2 v0.1.7
+   Compiling lru v0.16.4
+   Compiling async-compression v0.4.19
+   Compiling count-write v0.1.0
+   Compiling proc-macro2-diagnostics v0.10.1
+   Compiling crunch-action-result-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-action-result-core)
+   Compiling rfc6979 v0.4.0
+   Compiling gix-revision v0.43.0
+   Compiling gix-prompt v0.14.1
+   Compiling crunch-composition-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-composition-core)
+   Compiling logos-codegen v0.16.1
+   Compiling imara-diff v0.2.0
+   Compiling imara-diff v0.1.8
+   Compiling crunch-overlay-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-overlay-core)
+   Compiling crunch-repair-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-repair-core)
+   Compiling typed-builder v0.22.0
+   Compiling crunch-gc-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-gc-core)
+   Compiling fs2 v0.4.3
+   Compiling verus_syn v0.0.0-2026-01-25-0057
+   Compiling indexmap v1.9.3
+   Compiling signal-hook v0.3.18
+   Compiling crunch-nar v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-nar)
+   Compiling verus_prettyplease v0.0.0-2026-01-25-0057
+   Compiling codespan-reporting v0.13.1
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling logos-derive v0.16.1
+   Compiling gix-diff v0.61.0
+   Compiling gix-credentials v0.37.1
+   Compiling gix-refspec v0.39.0
+   Compiling ouroboros_macro v0.18.5
+   Compiling ecdsa v0.16.9
+   Compiling gix-discover v0.49.0
+   Compiling hashlink v0.10.0
+   Compiling clru v0.6.3
+   Compiling uluru v3.1.0
+   Compiling num-bigint-dig v0.8.6
+   Compiling hashbrown v0.12.3
+   Compiling saphyr-parser v0.0.6
+   Compiling gix-dir v0.23.0
+   Compiling gix-pack v0.68.0
+   Compiling malachite-nz v0.9.2
+   Compiling logos v0.16.1
+   Compiling codespan v0.13.1
+   Compiling nickel-lang-vector v0.2.0
+   Compiling toml_edit v0.24.1+spec-1.1.0
+   Compiling gix-config v0.54.0
+   Compiling gix-worktree-stream v0.30.0
+   Compiling artifact-auth-ed25519 v0.1.0 (https://github.com/OnixResearch/onix-artifact.git?rev=5f3962d7471d1547e044f57daeda72f56621fd52#5f3962d7)
+   Compiling gix-negotiate v0.29.0
+   Compiling gix-shallow v0.10.0
+   Compiling crunch-rust-cache-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-rust-cache-core)
+   Compiling maybe-async v0.2.10
+   Compiling num-iter v0.1.46
+   Compiling lalrpop-util v0.22.2
+   Compiling ouroboros v0.18.5
+   Compiling io-close v0.3.7
+   Compiling litrs v1.0.0
+   Compiling vstd v0.0.0-2026-01-25-0057
+   Compiling redb v2.6.4
+   Compiling crc-catalog v2.4.0
+   Compiling linkme-impl v0.3.37
+   Compiling gix-worktree-state v0.28.0
+   Compiling gix-submodule v0.28.0
+   Compiling gix-odb v0.78.0
+   Compiling crc v3.4.0
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling document-features v0.2.12
+   Compiling gix-archive v0.30.0
+   Compiling signal-hook-mio v0.2.5
+   Compiling gix-status v0.28.0
+   Compiling gix-blame v0.11.0
+   Compiling mantle-rust-differential-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-rust-differential-core)
+   Compiling primeorder v0.13.6
+   Compiling gix-mailmap v0.32.0
+   Compiling ureq-proto v0.6.0
+   Compiling crunch-remote-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-remote-core)
+   Compiling nickel-lang-parser v0.3.0
+   Compiling nickel-lang-core v0.18.0
+   Compiling pkcs1 v0.7.5
+   Compiling sha-1 v0.10.1
+   Compiling webpki-roots v1.0.10
+   Compiling linkme v0.3.37
+   Compiling verus_builtin v0.0.0-2026-01-25-0057
+   Compiling utf8-zero v0.8.1
+   Compiling crunch-build v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-build)
+   Compiling rsa v0.9.10
+   Compiling crossterm v0.29.0
+   Compiling gethostname v0.5.0
+   Compiling lzma-rs v0.3.0
+   Compiling snafu-derive v0.8.9
+   Compiling ruzstd v0.9.1
+   Compiling verus_state_machines_macros v0.0.0-2026-01-25-0057
+   Compiling verus_builtin_macros v0.0.0-2026-01-25-0057
+   Compiling mantle-causal-trace-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-causal-trace-core)
+   Compiling serde_spanned v0.6.9
+   Compiling crunch-spacewasm-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-spacewasm-core)
+   Compiling toml_datetime v0.6.11
+   Compiling replay-ledger-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling fuzzy-matcher v0.3.7
+   Compiling bzip2-rs v0.1.2
+   Compiling toml_write v0.1.2
+   Compiling dyn-clone v1.0.20
+   Compiling bs58 v0.5.1
+   Compiling crunch-test-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-test-core)
+   Compiling toml_edit v0.22.27
+   Compiling inquire v0.9.4
+   Compiling p256 v0.13.2
+   Compiling p384 v0.13.1
+   Compiling k256 v0.13.4
+   Compiling crunch-glue v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-glue)
+   Compiling ucan-core v0.1.0 (https://github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling snafu v0.8.9
+   Compiling crunch-wasm-component-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-wasm-component-core)
+   Compiling revocation-view-core v0.1.0 (https://seed.radicle.garden/z3kGDT73ja8rewvGLwJFLF5MTx1ih.git?rev=a0de79303f3f45c18a34fff535b690a85cb3cf59#a0de7930)
+   Compiling secrecy v0.10.3
+   Compiling etcetera v0.11.0
+   Compiling colored v3.1.1
+   Compiling detect-coding-agent v0.1.0
+   Compiling predicates-core v1.0.10
+   Compiling dotenvy v0.15.7
+   Compiling jsonwebtoken v11.0.0
+   Compiling crunch-test-app v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-test-app)
+   Compiling toml v0.8.23
+   Compiling ucan-nostr v0.1.0 (https://github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling bounded-tree-cap v0.1.0 (https://seed.radicle.garden/zqhtZvsteJhxCJE96dMAZSZ9y1PX.git?rev=250f3b25d0933c2fa106aa82d1cc17a496716f06#250f3b25)
+   Compiling secretspec v0.17.0
+   Compiling crunch-project-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-project-core)
+   Compiling crunch-shell-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-shell-core)
+   Compiling crunch-source-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-source-core)
+   Compiling crunch-evaluation-stream-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-evaluation-stream-core)
+   Compiling float-cmp v0.10.0
+   Compiling difflib v0.4.0
+   Compiling crunch-watch-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-watch-core)
+   Compiling normalize-line-endings v0.3.0
+   Compiling crunch-nix-gateway-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-nix-gateway-core)
+   Compiling assert_cmd v2.2.0
+   Compiling termtree v0.5.1
+   Compiling predicates-tree v1.0.13
+   Compiling predicates v3.1.4
+   Compiling crunch-shell v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-shell)
+   Compiling crunch-release-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-release-core)
+   Compiling crunch-wasm-component v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-wasm-component)
+   Compiling crunch-test v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-test)
+   Compiling valence-core v0.1.0 (https://github.com/OnixResearch/valence.git?rev=15e72b5a330b08139ac7c809ac31e7e87f825b22#15e72b5a)
+   Compiling crunch-remote-app v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-remote-app)
+   Compiling malachite-q v0.9.2
+   Compiling mantle-rust-plan-app v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-rust-plan-app)
+   Compiling mantle-application-contract v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-application-contract)
+   Compiling mantle-cargo-build-bundle-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-cargo-build-bundle-core)
+   Compiling chapter-tgz v0.1.0
+   Compiling crunch-hardware-simulation-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-hardware-simulation-core)
+   Compiling mantle-portable-client-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-portable-client-core)
+   Compiling mantlepkgs-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantlepkgs-core)
+   Compiling mantle-build-contract v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-build-contract)
+   Compiling malachite-float v0.9.2
+   Compiling crunch-eval-budget-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-eval-budget-core)
+   Compiling crunch-project v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-project)
+   Compiling crunch-bootstrap-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-bootstrap-core)
+   Compiling nickel-export-core v0.1.0 (https://github.com/OnixResearch/nickel-export?rev=257fafc1c746f1faf156207043a4c826bfb16d49#257fafc1)
+   Compiling nix-derivation v0.1.0
+   Compiling durable-file-publication v0.1.0 (https://git.onix.computer/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git?rev=951c27f59003cea9bfdb40ed4d89653d50fada1f#951c27f5)
+   Compiling wait-timeout v0.2.1
+   Compiling crunch-service-readiness-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-service-readiness-core)
+   Compiling mantle-lock-vendor-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-lock-vendor-core)
+   Compiling malachite v0.9.2
+   Compiling verified-logic v0.2.0 (https://github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling crunch-hardware-simulation v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-hardware-simulation)
+   Compiling mantle-wasm-consumer-verifier v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/mantle-wasm-consumer-verifier)
+   Compiling crunch-android-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-android-core)
+   Compiling crunch-kernelscript-core v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-kernelscript-core)
+   Compiling transactional-reconciliation-core v0.1.0 (https://seed.radicle.garden/z4Tky6zvC8w4Y6c4YBzNxVbq5n752.git?rev=606489b5f40298181214bb76bc3457b607f225d9#606489b5)
+   Compiling turso_sync_engine v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling ucan v0.1.0 (https://github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling rustls-webpki v0.103.16
+   Compiling basalt v0.1.0 (https://github.com/OnixResearch/basalt.git?rev=4c5c9e919b4573a7865559db2dc98a99c0c58144#4c5c9e91)
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.6.2
+   Compiling ureq v3.3.0
+   Compiling hyper-rustls v0.27.7
+   Compiling reqwest v0.13.2
+   Compiling reqwest-middleware v0.5.1
+   Compiling object_store v0.14.0
+   Compiling gix-transport v0.55.1
+   Compiling gix-protocol v0.59.0
+   Compiling reqwest-tracing v0.6.0
+   Compiling snix-tracing v0.1.0 (/home/brittonr/wt/mantle-trellis-job/vendor/snix-tracing)
+   Compiling gix v0.81.0
+   Compiling turso_sync_sdk_kit v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling turso v0.8.0-pre.7 (https://github.com/cachix/turso.git?rev=dca55133caa690f90dcdd58d3c4329fb0703659c#dca55133)
+   Compiling casita v0.1.0 (https://github.com/cachix/casita?rev=90404fcb1cfb3d83f2233715448dfefe913f5fd1#90404fcb)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-eval)
+   Compiling crunch-store v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-rustc-wrapper)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-pipeline)
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/wt/mantle-trellis-job/crates/crunch-nix-gateway)
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-trellis-job)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11m 47s
+     Running unittests src/main.rs (target/debug/deps/mantle-f78bc45cd0e538e7)
+
+running 1 test
+test release_evidence::tests::create_and_verify_release_bundle_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3013 filtered out; finished in 0.03s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p mantle --bin mantle load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.95s
+     Running unittests src/main.rs (target/debug/deps/mantle-f78bc45cd0e538e7)
+
+running 1 test
+test release_evidence::tests::load_full_self_hosting_proof_identity_rejects_prerequisite_only_artifact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3013 filtered out; finished in 0.00s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p mantle --test release_cli release_verify_rejects_manifest_schema_mismatch
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-trellis-job)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5m 19s
+     Running tests/release_cli.rs (target/debug/deps/release_cli-d2205074faca6382)
+
+running 1 test
+test release_verify_rejects_manifest_schema_mismatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.35s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p mantle --test release_cli release_verify_rejects_missing_workflow_provenance
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.06s
+     Running tests/release_cli.rs (target/debug/deps/release_cli-d2205074faca6382)
+
+running 1 test
+test release_verify_rejects_missing_workflow_provenance ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.19s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p mantle --test release_cli release_verify_rejects_claim_boundary_violation
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.63s
+     Running tests/release_cli.rs (target/debug/deps/release_cli-d2205074faca6382)
+
+running 1 test
+test release_verify_rejects_claim_boundary_violation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.29s
+
+running: rustup run nightly-2026-04-08-x86_64-unknown-linux-gnu cargo test -p mantle --test release_cli release_verify_rejects_proof_linkage_source_digest_mismatch
+warning: /home/brittonr/wt/mantle-trellis-job/Cargo.toml: file `/home/brittonr/wt/mantle-trellis-job/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.67s
+     Running tests/release_cli.rs (target/debug/deps/release_cli-d2205074faca6382)
+
+running 1 test
+test release_verify_rejects_proof_linkage_source_digest_mismatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 153 filtered out; finished in 0.34s
+
+[8/12] dependency boundary
+running: ./scripts/check-no-std-core-deps.sh
+dependency allowlist OK: arrayref, arrayvec, artifact-auth-core, artifact-auth-ed25519, blake3, block-buffer, bounded-tree-core, cfg-if, constant_time_eq, crunch-attestation-core, crunch-cmake-core, crunch-delta-core, crunch-esp-idf-core, crunch-fpga-core, crunch-gc-core, crunch-gpu-core, crunch-model-conversion-core, crunch-pnpm-core, crunch-project-core, crunch-python-core, crunch-release-core, crunch-repair-core, crunch-shell-core, crunch-source-core, crunch-spacewasm-core, crunch-test-core, crunch-verification-bridge-core, crunch-zephyr-core, crypto-common, curve25519-dalek, data-encoding, digest, ed25519, ed25519-dalek, generic-array, itoa, memchr, serde, serde_core, serde_json, sha2, signature, subtle, typenum, zmij
+[9/12] purity
+running: ./scripts/check-no-std-core-purity.sh
+purity check OK
+[10/12] scope
+running: ./scripts/check-no-std-core-scope.sh
+scope check OK
+[11/12] API shape
+running: ./scripts/check-no-std-core-api-shape.sh
+API shape check OK
+[12/12] ownership
+running: ./scripts/check-no-std-core-ownership.sh
+error: openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: crates/mantle-wasm-consumer-verifier/tests/support/mod.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: crates/mantle-wasm-consumer-verifier/tests/wrpc-telemetry.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_fixed_point_receipt_fixture.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_fixed_point_stagex_adoption.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_macro_smoke_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_macros_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_minicargo_resolve_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_native_smoke_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_successors_graph_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_successors_macro_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_successors_profile_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_programs_translation_tests.rs
+openspec/specs/functional-core/evidence/ownership-review.md missing touched std classification entry: src/source_built_rust_resolve_tests.rs
+EXIT=1

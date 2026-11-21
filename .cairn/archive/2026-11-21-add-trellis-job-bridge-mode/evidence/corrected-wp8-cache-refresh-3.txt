@@ -1,0 +1,6 @@
+# cache update for root 5hqkrl54 2026-11-21T04:24:52-05:00
+copying 1 paths...
+copying path '/nix/store/5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job' to 'file:///datapool/mantle-store/wp8-20261121/cache'...
+COPY_EXIT=0
+added 1 signatures
+SIGN_EXIT=0

@@ -1,0 +1,16 @@
+# WP8.10 negatives 2026-11-21T04:16:56-05:00
+
+## wrong NAR: tampered preserved copy must fail store verify
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+PermissionError: [Errno 13] Permission denied: '/datapool/mantle-store/wp8-20261121/store-tamper/3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job/profile.json'
+UNTRUSTED 3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job  trusted_signatures=0/2  signers=britton-desktop-1,wp8-20261121-1
+1 checked, 1 mismatches
+{"error":"1 path(s) failed verification","code":1,"kind":"build"}
+TAMPER_EXIT=1
+
+## untrusted signer: a different key must not admit the preserved path
+UNTRUSTED 3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job  trusted_signatures=0/2  signers=britton-desktop-1,wp8-20261121-1
+1 checked, 1 mismatches
+{"error":"1 path(s) failed verification","code":1,"kind":"build"}
+UNTRUSTED_EXIT=1

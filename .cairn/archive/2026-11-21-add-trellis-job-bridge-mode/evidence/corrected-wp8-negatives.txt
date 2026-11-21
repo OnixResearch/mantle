@@ -1,0 +1,14 @@
+# negatives for root 5hqkrl54 2026-11-21T04:27:48-05:00
+## wrong NAR
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+PermissionError: [Errno 13] Permission denied: '/datapool/mantle-store/wp8-20261121/store-tamper-2/5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job/profile.json'
+UNTRUSTED 5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job  trusted_signatures=0/2  signers=britton-desktop-1,wp8-20261121-1
+1 checked, 1 mismatches
+{"error":"1 path(s) failed verification","code":1,"kind":"build"}
+TAMPER_EXIT=1
+## different signer
+UNTRUSTED 5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job  trusted_signatures=0/2  signers=britton-desktop-1,wp8-20261121-1
+1 checked, 1 mismatches
+{"error":"1 path(s) failed verification","code":1,"kind":"build"}
+UNTRUSTED_EXIT=1
