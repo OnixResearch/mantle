@@ -228,20 +228,31 @@ fn input_trust_policy_ncl(signature_path: &str, trusted_public_key: &str) -> Str
     )
 }
 
-fn create_unreadable_tarball(parent: &Path) -> PathBuf {
-    const UNREADABLE_MODE: u32 = 0o000;
-    const PAYLOAD: &[u8] = b"unreadable source\n";
-    let tarball = parent.join("unreadable.tar.gz");
-    let file = std::fs::File::create(&tarball).unwrap();
-    let encoder = GzEncoder::new(file, Compression::default());
-    let mut builder = tar::Builder::new(encoder);
-    let mut header = tar::Header::new_gnu();
-    header.set_path("unreadable-1.0/secret").unwrap();
-    header.set_mode(UNREADABLE_MODE);
-    header.set_size(u64::try_from(PAYLOAD.len()).unwrap());
-    header.set_cksum();
-    builder.append(&header, PAYLOAD).unwrap();
-    builder.finish().unwrap();
+/// A tarball whose gzip stream is cut short before its trailer.
+///
+/// Recursive resolution fails while decompressing the input, which holds for
+/// any uid and does not depend on the extracted member mode: tar extraction
+/// sanitizes declared modes to 0644/0755, so a mode-000 member is still
+/// readable.
+fn create_corrupt_tarball(parent: &Path) -> PathBuf {
+    const PAYLOAD: &[u8] = b"corrupt source\n";
+    let tarball = parent.join("corrupt.tar.gz");
+    let mut bytes = Vec::new();
+    {
+        let encoder = GzEncoder::new(&mut bytes, Compression::default());
+        let mut builder = tar::Builder::new(encoder);
+        let mut header = tar::Header::new_gnu();
+        header.set_path("corrupt-1.0/secret").unwrap();
+        header.set_mode(0o644);
+        header.set_size(u64::try_from(PAYLOAD.len()).unwrap());
+        header.set_cksum();
+        builder.append(&header, PAYLOAD).unwrap();
+        let encoder = builder.into_inner().unwrap();
+        encoder.finish().unwrap();
+    }
+    assert!(bytes.len() > 2);
+    bytes.truncate(bytes.len() / 2);
+    std::fs::write(&tarball, &bytes).unwrap();
     assert!(tarball.is_file());
     assert!(tarball.metadata().unwrap().len() > 0);
     tarball
@@ -382,12 +393,12 @@ fn refresh_tarball_supports_each_recursive_hash_algorithm() {
 fn failed_recursive_observation_does_not_mutate_lock_or_generated_inputs() {
     let directory = TempDir::new().unwrap();
     init_project(directory.path());
-    let tarball = create_unreadable_tarball(directory.path());
+    let tarball = create_corrupt_tarball(directory.path());
     let tarball_url = format!("file://{}", tarball.display());
     let manifest = format!(
         r#"{{
   version = "1.0.0",
-  inputs = [{{ name = "unreadable", kind = {{ type = "tarball", url = {} }} }}],
+  inputs = [{{ name = "corrupt", kind = {{ type = "tarball", url = {} }} }}],
   patches = [],
 }}
 "#,
