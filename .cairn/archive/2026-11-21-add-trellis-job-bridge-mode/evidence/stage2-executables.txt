@@ -1,0 +1,157 @@
+# WP8 stage 2 E step 1: clean-export build
+# worktree: /home/brittonr/wt/mantle-trellis-job at 5cd6bc73f
+# source:   /datapool/mantle-store/wp8-20261121/mantle-src (git archive of 5cd6bc73f)
+# date:     2026-11-20T19:24:02-05:00
+# the workspace package 'crunch' (also 'default') provides both the mantle CLI and mantle-verification-bridge; flake.nix has no separate bridge package attribute
+$ nix --option min-free 0 --option builders '' build --no-write-lock-file --no-link --print-out-paths path:/datapool/mantle-store/wp8-20261121/mantle-src#crunch
+this derivation will be built:
+  /nix/store/yk04p6jssncadkz88apx466b2sl4j3hp-mantle-0.1.0.drv
+building '/nix/store/yk04p6jssncadkz88apx466b2sl4j3hp-mantle-0.1.0.drv'...
+
+# rerun after the harness 3600s command deadline stopped the first attempt; no nix build error was observed before the deadline
+# date: 2026-11-20T20:24:11-05:00
+$ nix --option min-free 0 --option builders '' build --no-write-lock-file --no-link --print-out-paths path:/datapool/mantle-store/wp8-20261121/mantle-src#crunch
+this derivation will be built:
+  /nix/store/yk04p6jssncadkz88apx466b2sl4j3hp-mantle-0.1.0.drv
+building '/nix/store/yk04p6jssncadkz88apx466b2sl4j3hp-mantle-0.1.0.drv'...
+error: Cannot build '/nix/store/yk04p6jssncadkz88apx466b2sl4j3hp-mantle-0.1.0.drv'.
+       Reason: builder failed with exit code 101.
+       Output paths:
+         /nix/store/ywz9c79yidfyfvac3kh7r6dkr0dxw5kz-mantle-0.1.0
+       Last 25 log lines:
+       > running 1 test
+       > test protected_exec_seccomp::linux::tests::seccomp_supervisor_continue_race_executes_replaced_bytes ... FAILED
+       >
+       > failures:
+       >
+       > failures:
+       >     protected_exec_seccomp::linux::tests::seccomp_supervisor_continue_race_executes_replaced_bytes
+       >
+       > test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 267 filtered out; finished in 0.00s
+       >
+       >
+       > stderr=
+       > thread 'protected_exec_seccomp::linux::tests::seccomp_supervisor_continue_race_executes_replaced_bytes' (18092) panicked at src/protected_exec_seccomp.rs:1360:51:
+       > called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+       > note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+       >
+       > note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+       >
+       >
+       > failures:
+       >     protected_exec_seccomp::linux::tests::seccomp_supervisor_continue_race_executes_replaced_bytes
+       >
+       > test result: FAILED. 267 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.80s
+       >
+       > error: test failed, to rerun pass `--lib`
+       For full logs, run:
+         nix log /nix/store/yk04p6jssncadkz88apx466b2sl4j3hp-mantle-0.1.0.drv
+EXIT=1
+
+# diagnosis (2026-11-20T21:26:35-05:00):
+# - the failing test is unchanged from origin/main (git show origin/main:src/protected_exec_seccomp.rs lines 1360-1362 copy /bin/true and /bin/false)
+# - the Nix build sandbox has no /bin/true or /bin/false; the host checkout does not either, but the dev shell run of the same test passes
+# - full build log: transcripts/clean-build-check-failure-5cd6bc73f.txt
+# - no executable identity was produced for 5cd6bc73f; the step stops here per the stage-2 spec
+
+# clean-export rebuild of rebased HEAD 49064d666 (includes upstream sandbox-test fix 2de7d856a)
+# source: /datapool/mantle-store/wp8-20261121/mantle-src-49064d6
+# date: 2026-11-21T00:53:49-05:00
+$ nix --option min-free 0 --option builders '' build --no-write-lock-file --no-link --print-out-paths path:/datapool/mantle-store/wp8-20261121/mantle-src-49064d6#crunch
+this derivation will be built:
+  /nix/store/zqk5vimqk9xbg4pppgxmzzzlxiymmz4a-mantle-0.1.0.drv
+building '/nix/store/zqk5vimqk9xbg4pppgxmzzzlxiymmz4a-mantle-0.1.0.drv'...
+
+# CANCELLED by orchestrator at 2026-11-21T02:01:42-05:00: a second sandbox-only test failure (tests/example_projects.rs signing-key permissions, fixed upstream next) would fail this check phase; no executable identity was produced for 49064d666.
+
+# clean-export build T of rebased HEAD 05d141ce2 (base 0ad917cc2: sandbox-safe seccomp + private fixture signing keys)
+# source: /datapool/mantle-store/wp8-20261121/mantle-src-05d141c
+# date: 2026-11-21T02:07:34-05:00
+# this build serves WP8 and Kiln's realize cohort
+$ nix --option min-free 0 --option builders '' build --no-write-lock-file --no-link --print-out-paths path:/datapool/mantle-store/wp8-20261121/mantle-src-05d141c#crunch
+this derivation will be built:
+  /nix/store/4zh737xsxxq2yr7yhz3xilb0cswlx6ba-mantle-0.1.0.drv
+building '/nix/store/4zh737xsxxq2yr7yhz3xilb0cswlx6ba-mantle-0.1.0.drv'...
+error: Cannot build '/nix/store/4zh737xsxxq2yr7yhz3xilb0cswlx6ba-mantle-0.1.0.drv'.
+       Reason: builder failed with exit code 101.
+       Output paths:
+         /nix/store/d16vixj0avs3kii2kpqfmfmdvvbf1lax-mantle-0.1.0
+       Last 25 log lines:
+       > \x1b[2m2026-11-21T08:14:30.877558Z\x1b[0m \x1b[33m WARN\x1b[0m \x1b[2mredb::db\x1b[0m\x1b[2m:\x1b[0m Database \"FileBackend { lock_supported: true, file: File { fd: 10, path: \\\"/build/.tmpceLZr8/directories.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing
+       > error: signing key permissions are not private
+       > ```
+       > ```
+       > command=`CRUNCH_STATE_DIR="/build/.tmpceLZr8" "/build/source/target/release/crunch" "--store" "/build/.tmp1IJuT8" "store" "repair-final-nar" "/mantle/store/58m2laia58m2laia58m2laia58m2laia-stale-final-nar" "--execute" "--signing-key" "/build/.tmpceLZr8/verify.key"`
+       > code=3
+       > stdout=""
+       > stderr=```
+       > \x1b[2m2026-11-21T08:14:30.877558Z\x1b[0m \x1b[33m WARN\x1b[0m \x1b[2mredb::db\x1b[0m\x1b[2m:\x1b[0m Database \"FileBackend { lock_supported: true, file: File { fd: 10, path: \\\"/build/.tmpceLZr8/directories.redb\\\", read: true, write: true } }\" not shutdown cleanly. Repairing
+       > error: signing key permissions are not private
+       > ```
+       >
+       >
+       >
+       >
+       > failures:
+       >     build_tests::build_persists_signed_pathinfo
+       >     store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent
+       >     store_repair_final_nar_enables_archive_export_after_execution
+       >     store_sign_all_signs_existing_unsigned_entries
+       >     store_verify_cli_uses_filesystem_nar_observation_and_reports_tampering
+       >
+       > test result: FAILED. 76 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.96s
+       >
+       > error: test failed, to rerun pass `--test integration`
+       For full logs, run:
+         nix log /nix/store/4zh737xsxxq2yr7yhz3xilb0cswlx6ba-mantle-0.1.0.drv
+EXIT=1
+# build T (05d141ce2) check phase FAILED, exit 101; 5 tests in tests/integration fail with 'error: signing key permissions are not private':
+#   build_tests::build_persists_signed_pathinfo
+#   store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent
+#   store_repair_final_nar_enables_archive_export_after_execution
+#   store_sign_all_signs_existing_unsigned_entries
+#   store_verify_cli_uses_filesystem_nar_observation_and_reports_tampering
+# full log: transcripts/clean-build-check-failure-05d141ce2.txt
+
+# clean-export build T2 of rebased HEAD 54cb49885 (base 705305b3a: seccomp, example and integration fixture keys, scheduling bounds)
+# source: /datapool/mantle-store/wp8-20261121/mantle-src-54cb498
+# date: 2026-11-21T03:27:31-05:00
+# non-claim (verbatim, orchestrator route decision 2026-11-21):
+Executables come from the clean export of T2 built as Mantle's `mantle` package (`doCheck = false`). T2's canonical `#default` check phase does not yet pass; the remaining failures (listed) are in remote-pool, project-refresh, Casita and smoke tests outside foreign-import realize and the verification bridge. A checked build of the repaired head is pending; if the repairs are test-only, its `bin/mantle` BLAKE3 must equal this one, and that comparison will be recorded.
+# remaining check-phase failures from the orchestrator diagnostic: integration_build x1, project_refresh_cli x1, remote_transfer_production x4, smoke x1
+
+$ nix --option min-free 0 --option builders '' build --no-write-lock-file --no-link --print-out-paths path:/datapool/mantle-store/wp8-20261121/mantle-src-54cb498#mantle
+error: flake 'path:/datapool/mantle-store/wp8-20261121/mantle-src-54cb498' does not provide attribute 'packages.x86_64-linux.mantle', 'legacyPackages.x86_64-linux.mantle' or 'mantle'
+EXIT=1
+
+# NOTE: the flake exposes no packages.x86_64-linux.mantle attribute (flake.nix line 1115 is an internal binding). The same derivation is built directly with the flake's own override:
+$ nix --option min-free 0 --option builders '' build --impure --no-write-lock-file --no-link --print-out-paths --expr '(builtins.getFlake "path:/datapool/mantle-store/wp8-20261121/mantle-src-54cb498").packages.x86_64-linux.crunch.overrideAttrs (_: { doCheck = false; })'
+this derivation will be built:
+  /nix/store/72ajy7cp1jjk2m4mw0fscms45qx4xihj-mantle-0.1.0.drv
+building '/nix/store/72ajy7cp1jjk2m4mw0fscms45qx4xihj-mantle-0.1.0.drv'...
+/nix/store/6fq4isdp8jhsswq0i9s4bfvrrrji2qs3-mantle-0.1.0
+EXIT=0
+
+# the clean-export package does NOT install the workspace-member bridge binary (cargo install covers the root package only); flake.nix has no bridge attribute. Build the same crate from the same clean export:
+$ nix ... build --impure ... --expr '(...crunch.overrideAttrs (_: { doCheck = false; cargoExtraArgs = "--package crunch-verification-bridge --bin mantle-verification-bridge"; }))'
+this derivation will be built:
+  /nix/store/v8lvc6h2w4liiykg4a6qp7djq8lxg1hv-mantle-0.1.0.drv
+building '/nix/store/v8lvc6h2w4liiykg4a6qp7djq8lxg1hv-mantle-0.1.0.drv'...
+/nix/store/40glni1gnw89vdj3wlqzp9wyhd7bwa20-mantle-0.1.0
+EXIT=0
+
+# T2 executable identities 2026-11-21T04:02:19-05:00
+# mantle package: /nix/store/6fq4isdp8jhsswq0i9s4bfvrrrji2qs3-mantle-0.1.0
+# bridge package: /nix/store/40glni1gnw89vdj3wlqzp9wyhd7bwa20-mantle-0.1.0
+mantle bin/mantle b3=27fb14972a47976e7dcefc61a6357413d54f4446d6d42ae2fe9f117e366164dc
+mantle bin/crunch b3=93040d80ac6fe9e363f44f432f274b9edb2a2077c8de4141473ae9cce26346af
+bridge bin/mantle-verification-bridge b3=
+
+# the cargoExtraArgs override alone did not install the workspace-member bin; install it explicitly:
+this derivation will be built:
+  /nix/store/w8mh4hsgjxsiqhf48xw74z4fjg83k8bz-mantle-0.1.0.drv
+building '/nix/store/w8mh4hsgjxsiqhf48xw74z4fjg83k8bz-mantle-0.1.0.drv'...
+/nix/store/jgvlrsb9v171b78h0ambl6xgh80s3gsb-mantle-0.1.0
+EXIT=0
+# bridge bin package: /nix/store/jgvlrsb9v171b78h0ambl6xgh80s3gsb-mantle-0.1.0
+bridge bin/mantle-verification-bridge b3=

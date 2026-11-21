@@ -1,0 +1,77 @@
+# preserved realization store observations 2026-11-21T04:09:13-05:00
+$ mantle --state-dir /datapool/mantle-store/wp8-20261121/realize-preserve-state --store /datapool/mantle-store/wp8-20261121/store-preserve --store-prefix /nix/store store info 3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job --json
+{
+  "backend": "snix",
+  "backend_capabilities": {
+    "atomic_batch_import": true,
+    "core": [
+      "output-admission",
+      "lookup",
+      "fresh-process-reopen",
+      "closure-resolution",
+      "export",
+      "store-archive-export",
+      "store-archive-import",
+      "gc-plan",
+      "plan-bound-gc",
+      "action-result-pathinfo-output-reuse",
+      "store-sign",
+      "store-repair-final-nar"
+    ],
+    "max_root_changes": null,
+    "overlay_composition": true,
+    "rust_unit_cache": true,
+    "unsigned_admission": true
+  },
+  "overlay": null,
+  "paths": [
+    {
+      "ca": null,
+      "deriver": "bgvhgd03ziqwani101savwl9iblrl24q-trellis-bounds-verus-job",
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_sha256": "f8fe3a5ad8804a83229ba5e83e28d773fb96fb90e2e06237984ed8686f7fcb57",
+      "nar_size": 9867816,
+      "node": "Directory { digest: blake3-cwY9uubFWlEzSJQ1cb9MCRtfG6bVVQTSwccTvfHzAf0=, size: 888 }",
+      "references": [
+        "3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job",
+        "p72j1v14s37w7v91gfi03svh54d6ccwi-terrane-verus-0.2026.10.18.7d82994"
+      ],
+      "retention_interests": {
+        "interests": [
+          {
+            "owner": "legacy-unmanaged",
+            "reason": "legacy-root-registered",
+            "record_id": "2636fbadfae2cc61c84c440f72775a61d2a86153023b66b43e3cddefaeb1cf60"
+          }
+        ],
+        "legacy_unmanaged": false,
+        "logical_path": "/nix/store/3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job",
+        "record_count": 1
+      },
+      "shadows": [],
+      "signatures": [
+        "britton-desktop-1:hF05nkzT5sB+D9u2Nt+PsxFg/1BWd9BeSD+R3gxMKbY7X2Hc8KgCGZ7Dm+C/yyyIudR7z+h+wHPpaXbtM32KDw==",
+        "wp8-20261121-1:PLgt3uV8NPw/pj3cFMDjWhVScTc01XunKWemhH/g4ny7d6txq446CEeB652C/RwTkL0a9hcf4FC49OhII0jDAw=="
+      ],
+      "store_path": "3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job"
+    }
+  ],
+  "schema": "mantle-store-info-v3"
+}
+EXIT=0
+
+$ nix hash path --type sha256 /datapool/mantle-store/wp8-20261121/store-preserve/3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job
+sha256-+P46WtiASoMim6XoPijXc/uW+5Di4GI3mE7YaG9/y1c=
+EXIT=0
+
+$ nix path-info --json /nix/store/3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job
+warning: '--json' without '--json-format' is deprecated; please specify '--json-format 1' or '--json-format 2'. This will become an error in a future release.
+{"/nix/store/3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job":{"ca":null,"deriver":"/nix/store/bgvhgd03ziqwani101savwl9iblrl24q-trellis-bounds-verus-job.drv","narHash":"sha256-+P46WtiASoMim6XoPijXc/uW+5Di4GI3mE7YaG9/y1c=","narSize":9867816,"references":["/nix/store/3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job","/nix/store/p72j1v14s37w7v91gfi03svh54d6ccwi-terrane-verus-0.2026.10.18.7d82994"],"registrationTime":1795243156,"signatures":["britton-desktop-1:hF05nkzT5sB+D9u2Nt+PsxFg/1BWd9BeSD+R3gxMKbY7X2Hc8KgCGZ7Dm+C/yyyIudR7z+h+wHPpaXbtM32KDw=="],"storeDir":"/nix/store","ultimate":true,"version":1}}
+
+EXIT=0
+
+# physical root: /datapool/mantle-store/wp8-20261121/store-preserve/3fc1649f0nlh149q07137cg6wq16vyj0-trellis-bounds-verus-job
+# diff of the two trees:
+DIFF_EXIT=0

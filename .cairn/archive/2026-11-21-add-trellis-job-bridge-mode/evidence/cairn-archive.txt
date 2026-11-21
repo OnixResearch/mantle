@@ -1,0 +1,323 @@
+$ CAIRN_ARCHIVE_DATE=2026-11-21 cairn archive add-trellis-job-bridge-mode --root . --execute
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: add-trellis-job-bridge-mode",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode"
+    }
+  ],
+  "blocked": false,
+  "change": "add-trellis-job-bridge-mode",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "772978a797b7e4cfbbc60ffdf2d483d2b5877aec55febb339a3789ee234aa7f1",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "275c2e98e09b461ad08a27f78d5983c2beb4ae29417243dcb1d1d689c8de9590",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/design.md"
+        },
+        {
+          "content_hash": "2c2cf3ad28089e35f3a565fd738ff6ba3be63f0503b87be3b6922fc8b5a0f048",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/cairn-archive.txt"
+        },
+        {
+          "content_hash": "cd7132adda878c833379bece9e36c6c7e64985b859fcca34f85cb9c18acd3509",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/cairn-gates-final.txt"
+        },
+        {
+          "content_hash": "78faf4ddb72af3b226042897ea085e804fd4f5cd256fe3930d4959d4fb9b61f8",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/cairn-gates.txt"
+        },
+        {
+          "content_hash": "b54c5c2a4648776598ad17e603b676cadfd9b35d990fb94cabb4c6bda57339e7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/cairn-sync.txt"
+        },
+        {
+          "content_hash": "a710848fb85c4d85731777a9723d2d2a050ebf4ac1ecbdc6e6f273decd3a3493",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/check-no-std-core.txt"
+        },
+        {
+          "content_hash": "1aefa50839a560f6c81afc6d1306cab9b86d5c7ae6015057ddeb0287938f0001",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/clippy.txt"
+        },
+        {
+          "content_hash": "1093691e68d77a2f70dd5764c3149b3a6ecff5660dfd55a0dfc43170c3e7e9ed",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/fmt.txt"
+        },
+        {
+          "content_hash": "dd10a154dcfeae90359f6be1472d01fe8e34c6d98a9d5e496cdc9835e05758b2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/focused-tests.txt"
+        },
+        {
+          "content_hash": "829d576d39e3306ddfb82079ae1c570ca1ca74e28f1b2deba72d84055342663b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/no-std-origin-main-step12.txt"
+        },
+        {
+          "content_hash": "89acb78e36d6d0c07e845db0fd51ee18baba8d7b0061f39182f50b4ae715f656",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/report.md"
+        },
+        {
+          "content_hash": "dc8c8da2a56c076ae6272441f8a4e4a826ac152a4d13d74e9f010618ea7ef446",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-bridge-build.txt"
+        },
+        {
+          "content_hash": "a3c9ade7a1a64eab28f75461df61287268a7c469c519b6d8279e2062449266db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-bridge-replay.txt"
+        },
+        {
+          "content_hash": "dcd98c34d463d9301e5c1090dcbba9f73336c1b4acc11da87bff523d342398d9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-bridge-run.txt"
+        },
+        {
+          "content_hash": "82e4ec5c42f59fcdf8b455350091623e31566d793309d74af84e50bacc3a033c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-executables.txt"
+        },
+        {
+          "content_hash": "b0956217f215629a28da60fe665b344cf6f5a905c084261f3a8ecfdc3686b73f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-handoff-observation.json"
+        },
+        {
+          "content_hash": "35993d94b04e4339579781865231f7453c4e7de272527776d1e74ff7ae86499b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-negatives.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-preserve-diff.txt"
+        },
+        {
+          "content_hash": "ed997eb7b87157358f034aa91606e88b48c313fb30d21ad6fb23e857a02ee414",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-real-build-unsupported.md"
+        },
+        {
+          "content_hash": "e7a8735eb7cc8ea54ea494b8f0fc2af4209e48d3295b87527e8d91efd420eb19",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-realization-receipt.json"
+        },
+        {
+          "content_hash": "bf42bf8fd7c7aa918aa38e0a2a60c06bb2046c38ba768b7f8f680ba735311369",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/evidence/stage2-store-info.txt"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/metadata.json"
+        },
+        {
+          "content_hash": "33200388b0c8ce3b2a08ebb4b90dc06c7736d58161c5f45f7b8a3d4250c85608",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/proposal.md"
+        },
+        {
+          "content_hash": "b595519e22c410253ca6ada8b01b8cca83854bb253708000502152e24b359c61",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/specs/verification-bridge/spec.md"
+        },
+        {
+          "content_hash": "a4a355aab059ec60ccca5fdecd1f15310f9c3106504b7a6495e9e4ad83dacb0b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-trellis-job-bridge-mode/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode"
+        }
+      ],
+      "manifest_hash": "1dcff4a0383f177e2dadce9d8f39eda725f1f0e219dcd127c40b54371217d83c"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "275c2e98e09b461ad08a27f78d5983c2beb4ae29417243dcb1d1d689c8de9590",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/design.md"
+        },
+        {
+          "content_hash": "2c2cf3ad28089e35f3a565fd738ff6ba3be63f0503b87be3b6922fc8b5a0f048",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/cairn-archive.txt"
+        },
+        {
+          "content_hash": "cd7132adda878c833379bece9e36c6c7e64985b859fcca34f85cb9c18acd3509",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/cairn-gates-final.txt"
+        },
+        {
+          "content_hash": "78faf4ddb72af3b226042897ea085e804fd4f5cd256fe3930d4959d4fb9b61f8",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/cairn-gates.txt"
+        },
+        {
+          "content_hash": "b54c5c2a4648776598ad17e603b676cadfd9b35d990fb94cabb4c6bda57339e7",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/cairn-sync.txt"
+        },
+        {
+          "content_hash": "a710848fb85c4d85731777a9723d2d2a050ebf4ac1ecbdc6e6f273decd3a3493",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/check-no-std-core.txt"
+        },
+        {
+          "content_hash": "1aefa50839a560f6c81afc6d1306cab9b86d5c7ae6015057ddeb0287938f0001",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/clippy.txt"
+        },
+        {
+          "content_hash": "1093691e68d77a2f70dd5764c3149b3a6ecff5660dfd55a0dfc43170c3e7e9ed",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/fmt.txt"
+        },
+        {
+          "content_hash": "dd10a154dcfeae90359f6be1472d01fe8e34c6d98a9d5e496cdc9835e05758b2",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/focused-tests.txt"
+        },
+        {
+          "content_hash": "829d576d39e3306ddfb82079ae1c570ca1ca74e28f1b2deba72d84055342663b",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/no-std-origin-main-step12.txt"
+        },
+        {
+          "content_hash": "89acb78e36d6d0c07e845db0fd51ee18baba8d7b0061f39182f50b4ae715f656",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/report.md"
+        },
+        {
+          "content_hash": "dc8c8da2a56c076ae6272441f8a4e4a826ac152a4d13d74e9f010618ea7ef446",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-bridge-build.txt"
+        },
+        {
+          "content_hash": "a3c9ade7a1a64eab28f75461df61287268a7c469c519b6d8279e2062449266db",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-bridge-replay.txt"
+        },
+        {
+          "content_hash": "dcd98c34d463d9301e5c1090dcbba9f73336c1b4acc11da87bff523d342398d9",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-bridge-run.txt"
+        },
+        {
+          "content_hash": "82e4ec5c42f59fcdf8b455350091623e31566d793309d74af84e50bacc3a033c",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-executables.txt"
+        },
+        {
+          "content_hash": "b0956217f215629a28da60fe665b344cf6f5a905c084261f3a8ecfdc3686b73f",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-handoff-observation.json"
+        },
+        {
+          "content_hash": "35993d94b04e4339579781865231f7453c4e7de272527776d1e74ff7ae86499b",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-negatives.txt"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-preserve-diff.txt"
+        },
+        {
+          "content_hash": "ed997eb7b87157358f034aa91606e88b48c313fb30d21ad6fb23e857a02ee414",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-real-build-unsupported.md"
+        },
+        {
+          "content_hash": "e7a8735eb7cc8ea54ea494b8f0fc2af4209e48d3295b87527e8d91efd420eb19",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-realization-receipt.json"
+        },
+        {
+          "content_hash": "bf42bf8fd7c7aa918aa38e0a2a60c06bb2046c38ba768b7f8f680ba735311369",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/evidence/stage2-store-info.txt"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/metadata.json"
+        },
+        {
+          "content_hash": "33200388b0c8ce3b2a08ebb4b90dc06c7736d58161c5f45f7b8a3d4250c85608",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/proposal.md"
+        },
+        {
+          "content_hash": "b595519e22c410253ca6ada8b01b8cca83854bb253708000502152e24b359c61",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/specs/verification-bridge/spec.md"
+        },
+        {
+          "content_hash": "a4a355aab059ec60ccca5fdecd1f15310f9c3106504b7a6495e9e4ad83dacb0b",
+          "exists": true,
+          "path": "./.cairn/changes/add-trellis-job-bridge-mode/tasks.md"
+        }
+      ],
+      "manifest_hash": "833fff4abc30ac70b212348691511ebc92996539bf25449b2c48e36c6c769052"
+    },
+    "kind": "archive",
+    "manifest_hash": "3d8282869f6e70a3b660694b23b7b2ad93b6b896e907c422a857f6ce567596c3"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "cc56dd2c9e5a87ced682ffe030517f2e8f6619374fb4c56143cf9e4e64f8604c",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "b221218e22c91dfbc9b73092f0b2b0f31292c952c0705be2ec56caf093afc003",
+  "reasons": [],
+  "receipt_hash": "74fc5ad2580fe0e76afb8117d9712d1cb6bda772abd87812f231c461e38bb3f2",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
+EXIT=0
