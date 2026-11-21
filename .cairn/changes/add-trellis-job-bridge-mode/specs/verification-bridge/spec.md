@@ -15,16 +15,18 @@ aggregate-byte, count and no-symlink bounds. It MUST require the profile schema
 `trellis-verus-producer-report/v1`; MUST require the profile bytes to hash to
 the packaging profile identity and `consumer.provider.profile_identity` to equal
 the packaging provider identity; MUST require receipt `status` to be `passed`
-and `checked_scope` to be present; MUST require every profile source path and
-every artifact locator to be an exact material with its recorded byte count;
-MUST require every receipt source binding to name a profile source path by
-digest and path suffix and the selected source path to carry the packaging
-source identity; MUST require each receipt `stdout_artifact` and
-`stderr_artifact` row to match a profile artifact row on every field the
-receipt records; and MUST require the profile's `verus.receipt_identity` and
-`verus.receipt_path` to name the selected receipt bytes. The exact producer
-report bytes MUST become `Observation.external_report_identity`, and the
-association identity MUST bind it. `proof_acceptance` MUST remain
+and `checked_scope` to be present; MUST require every profile source path to be
+an exact material; MUST require every receipt source binding to name a profile
+source path by digest and path suffix and the selected source path to carry the
+packaging source identity; MUST require the profile's artifact locator set to
+equal the artifacts the receipt binds — its `stdout_artifact`, its
+`stderr_artifact`, and the `<locator>#<digest>` in `proof_artifact_identity` —
+with every such artifact an exact material carrying the receipt's digest and
+recorded byte count and any profile-declared `blake3` or `bytes` in agreement;
+and MUST require the profile's `verus.receipt_path` to name the selected
+receipt bytes, with a declared `verus.receipt_identity` in agreement. The exact
+producer report bytes MUST become `Observation.external_report_identity`, and
+the association identity MUST bind it. `proof_acceptance` MUST remain
 `not-evaluated-by-mantle`; the bridge MUST NOT run Verus, interpret the report,
 proof cards or evidence, re-derive a receipt field, or admit the proved
 theorem.

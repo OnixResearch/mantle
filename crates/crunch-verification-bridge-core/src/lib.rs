@@ -944,31 +944,46 @@ fn find_bound_profile_source<'a>(paths: &'a [Value], path: &str, identity: &str)
     Err(BridgeError::MissingProfileSource)
 }
 
-/// The receipt artifact the selected Verus proof receipt records.
-fn trellis_job_receipt_artifacts(receipt: &Value) -> Result<Vec<&Value>, BridgeError> {
-    let mut artifacts = Vec::with_capacity(2);
+/// One artifact row the selected Verus proof receipt binds.
+struct ReceiptArtifact<'a> {
+    locator: &'a str,
+    digest: &'a str,
+    bytes: Option<u64>,
+}
+
+/// The artifacts the selected Verus proof receipt binds: its verifier stream
+/// rows and the `<locator>#<digest>` proof artifact identity.
+fn trellis_job_receipt_artifacts(receipt: &Value) -> Result<Vec<ReceiptArtifact<'_>>, BridgeError> {
+    let mut artifacts = Vec::with_capacity(3);
     for pointer in ["/stdout_artifact", "/stderr_artifact"] {
-        let artifact = receipt
+        let row = receipt
             .pointer(pointer)
             .filter(|value| value.is_object())
             .ok_or(BridgeError::MissingTrellisArtifacts)?;
-        artifacts.push(artifact);
+        artifacts.push(ReceiptArtifact {
+            locator: text(row, "/locator")?,
+            digest: text(row, "/blake3")?,
+            bytes: row.get("bytes").and_then(Value::as_u64),
+        });
     }
-    debug_assert!(artifacts.len() == 2);
+    let proof = text(receipt, "/proof_artifact_identity")?;
+    let (locator, digest) = proof.split_once('#').ok_or(BridgeError::InvalidTrellisArtifactIdentity)?;
+    if locator.is_empty() || digest.is_empty() {
+        return Err(BridgeError::InvalidTrellisArtifactIdentity);
+    }
+    artifacts.push(ReceiptArtifact {
+        locator,
+        digest,
+        bytes: None,
+    });
+    debug_assert!(artifacts.len() == 3);
     Ok(artifacts)
 }
 
-/// True when every field the receipt artifact records equals the profile row's.
-fn artifact_row_matches(profile_row: &Value, receipt_row: &Value) -> bool {
-    let (Some(profile_row), Some(receipt_row)) = (profile_row.as_object(), receipt_row.as_object()) else {
-        return false;
-    };
-    receipt_row.iter().all(|(field, value)| profile_row.get(field) == Some(value))
-}
-
-/// The profile artifacts must each describe one receipt artifact row, every
-/// artifact must be an exact material, and the profile's receipt path and
-/// identity must name the selected Verus proof receipt byte-for-byte.
+/// The profile artifacts must name exactly the artifacts the receipt binds,
+/// every artifact must be an exact material with its recorded byte count, any
+/// profile digest or byte count it declares must agree, and the profile's
+/// receipt path (and optional identity) must name the selected receipt bytes.
 fn check_trellis_job_artifacts(
     materials: &[Material],
     profile: &Value,
@@ -980,34 +995,45 @@ fn check_trellis_job_artifacts(
     if rows.is_empty() || rows.len() > MAX_MATERIALS {
         return Err(BridgeError::ProfileArtifactMismatch);
     }
+    let mut declared = alloc::collections::BTreeSet::new();
+    for row in rows {
+        text(row, "/role")?;
+        if !declared.insert(text(row, "/locator")?) {
+            return Err(BridgeError::ProfileArtifactMismatch);
+        }
+    }
     let receipt_rows = trellis_job_receipt_artifacts(receipt)?;
-    if receipt_rows.len() != rows.len() {
+    if receipt_rows.len() != declared.len() {
         return Err(BridgeError::ProfileArtifactMismatch);
     }
-    let mut matched = alloc::vec![false; rows.len()];
-    for receipt_row in &receipt_rows {
-        let found = rows
+    for artifact in &receipt_rows {
+        let profile_row = rows
             .iter()
-            .enumerate()
-            .find(|(index, row)| !matched[*index] && artifact_row_matches(row, receipt_row));
-        let Some((index, _)) = found else {
-            return Err(BridgeError::ProfileArtifactMismatch);
-        };
-        matched[index] = true;
+            .find(|row| row.pointer("/locator").and_then(Value::as_str) == Some(artifact.locator))
+            .ok_or(BridgeError::ProfileArtifactMismatch)?;
+        if let Some(profile_digest) = profile_row.get("blake3").and_then(Value::as_str) {
+            digest_equal(profile_digest, Expected(artifact.digest), "profile artifact")?;
+        }
+        let bytes = material(materials, artifact.locator, Expected(artifact.digest))?;
+        if let Some(declared_bytes) = profile_row.get("bytes").and_then(Value::as_u64)
+            && declared_bytes != bytes.len() as u64
+        {
+            return Err(BridgeError::ArtifactByteCountMismatch(artifact.locator.to_string()));
+        }
+        if let Some(receipt_bytes) = artifact.bytes
+            && receipt_bytes != bytes.len() as u64
+        {
+            return Err(BridgeError::ArtifactByteCountMismatch(artifact.locator.to_string()));
+        }
+        checked.push(artifact.locator.to_string());
     }
     let receipt_identity = digest(receipt_bytes);
-    equal(text(profile, "/verus/receipt_identity")?, Expected(&receipt_identity), "verifier receipt identity")?;
+    if let Some(declared_identity) = profile.pointer("/verus/receipt_identity").and_then(Value::as_str) {
+        equal(declared_identity, Expected(&receipt_identity), "verifier receipt identity")?;
+    }
     let verus_path = text(profile, "/verus/receipt_path")?;
     material(materials, verus_path, Expected(&receipt_identity))?;
     checked.push(verus_path.to_string());
-    for row in rows {
-        let path = text(row, "/locator")?;
-        let bytes = material(materials, path, Expected(text(row, "/blake3")?))?;
-        if row.get("bytes").and_then(Value::as_u64) != Some(bytes.len() as u64) {
-            return Err(BridgeError::ArtifactByteCountMismatch(path.to_string()));
-        }
-        checked.push(path.to_string());
-    }
     debug_assert!(rows.len() <= MAX_MATERIALS);
     debug_assert!(checked.iter().all(|path| is_relative_path(path)));
     Ok(())

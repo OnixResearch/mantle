@@ -19,6 +19,7 @@ const LIB_PATH: &str = "source/src/lib.rs";
 const BOUNDS_PATH: &str = "source/src/bounds.rs";
 const STDOUT_PATH: &str = "artifacts/verus.stdout";
 const STDERR_PATH: &str = "artifacts/verus.stderr";
+const COMMAND_PATH: &str = "artifacts/verus.command";
 const ROOT_DRV: &str = "00000000000000000000000000000000-root.drv";
 const SOURCE_STORE: &str = "11111111111111111111111111111111-source";
 
@@ -47,6 +48,7 @@ struct SyntheticJob {
     bounds_rs: Vec<u8>,
     stdout_bytes: Vec<u8>,
     stderr_bytes: Vec<u8>,
+    command_bytes: Vec<u8>,
     cards: Vec<u8>,
     evidence: Vec<u8>,
 }
@@ -60,6 +62,9 @@ impl SyntheticJob {
                 .to_vec();
         let stdout_bytes = b"verus: 4 verified, 0 errors\n".to_vec();
         let stderr_bytes = b"note: bounds claim scoped to src/bounds.rs\n".to_vec();
+        let command_bytes =
+            b"terrane-verus --triggers-mode silent --rlimit 20 --crate-type=lib --edition 2024 source/src/lib.rs\n"
+                .to_vec();
         let cards = serde_json::to_vec(
             &json!({"schema_version": "octet-proof-cards/v1", "cards": [{"card_id": "trellis.bounds.verus#rail-0"}]}),
         )
@@ -79,20 +84,9 @@ impl SyntheticJob {
             "truncated": false,
         });
         let artifacts = vec![
-            json!({
-                "role": "verus-stdout",
-                "locator": STDOUT_PATH,
-                "blake3": digest(&stdout_bytes),
-                "bytes": stdout_bytes.len(),
-                "truncated": false,
-            }),
-            json!({
-                "role": "verus-stderr",
-                "locator": STDERR_PATH,
-                "blake3": digest(&stderr_bytes),
-                "bytes": stderr_bytes.len(),
-                "truncated": false,
-            }),
+            json!({"role": "verus.stdout", "locator": STDOUT_PATH}),
+            json!({"role": "verus.stderr", "locator": STDERR_PATH}),
+            json!({"role": "verus.command", "locator": COMMAND_PATH}),
         ];
         let receipt = json!({
             "schema_version": "octet-verus-proof-receipt/v1",
@@ -105,7 +99,7 @@ impl SyntheticJob {
             "checker_id": "terrane-verus-checker",
             "status": "passed",
             "pass_signal": "verus: 4 verified, 0 errors",
-            "proof_artifact_identity": digest(&stdout_bytes),
+            "proof_artifact_identity": format!("{COMMAND_PATH}#{}", digest(&command_bytes)),
             "stdout_artifact": stdout_row,
             "stderr_artifact": stderr_row,
             "source_bindings": [
@@ -146,7 +140,7 @@ impl SyntheticJob {
                 "rlimit": 20,
             },
             "artifacts": artifacts,
-            "verus": {"receipt_path": "verus-receipt.json", "receipt_identity": digest(&receipt_bytes(&receipt))},
+            "verus": {"receipt_path": "verus-receipt.json"},
             "non_claims": ["does not prove Verus or Z3 soundness", "does not establish release eligibility"],
         });
         let profile_bytes = serde_json::to_vec(&profile).unwrap();
@@ -207,6 +201,7 @@ impl SyntheticJob {
             bounds_rs,
             stdout_bytes,
             stderr_bytes,
+            command_bytes,
             cards,
             evidence,
         }
@@ -223,7 +218,6 @@ impl SyntheticJob {
     /// Recompute the cross-document identities, then write both directories.
     fn commit(&mut self) {
         let receipt_bytes = serde_json::to_vec(&self.receipt).unwrap();
-        self.profile["verus"]["receipt_identity"] = Value::String(digest(&receipt_bytes));
         let profile_bytes = serde_json::to_vec(&self.profile).unwrap();
         self.job["profile"]["identity"] = Value::String(digest(&profile_bytes));
         self.report["profile_identity"] = Value::String(digest(&profile_bytes));
@@ -237,6 +231,7 @@ impl SyntheticJob {
         write(&owner, BOUNDS_PATH, &self.bounds_rs);
         write(&owner, STDOUT_PATH, &self.stdout_bytes);
         write(&owner, STDERR_PATH, &self.stderr_bytes);
+        write(&owner, COMMAND_PATH, &self.command_bytes);
         let export = self.export.path().to_path_buf();
         write(&export, "job.json", &serde_json::to_vec(&self.job).unwrap());
         write(&export, "tool-closure.derivation-json.json", &serde_json::to_vec(&self.graph).unwrap());
@@ -253,10 +248,6 @@ impl SyntheticJob {
         self.commit();
         consume_trellis_job(&self.root(), &self.export_root(), REVISION)
     }
-}
-
-fn receipt_bytes(receipt: &Value) -> Vec<u8> {
-    serde_json::to_vec(receipt).unwrap()
 }
 
 fn rejected(job: &mut SyntheticJob, expected: &str) {
@@ -293,6 +284,7 @@ fn synthetic_trellis_job_observation_binds_exact_bytes() {
         "verus-receipt.json",
         STDOUT_PATH,
         STDERR_PATH,
+        COMMAND_PATH,
         "producer-report.json",
         "proof-cards.json",
         "evidence.json",
@@ -341,7 +333,21 @@ fn mutated_receipt_source_binding_fails_closed() {
 fn mutated_receipt_artifact_row_fails_closed() {
     let mut job = SyntheticJob::new();
     job.receipt["stdout_artifact"]["blake3"] = Value::String(digest(b"changed artifact"));
-    rejected(&mut job, "receipt artifacts differ from producer profile");
+    rejected(&mut job, "artifacts/verus.stdout mismatch");
+}
+
+#[test]
+fn mutated_proof_artifact_identity_fails_closed() {
+    let mut job = SyntheticJob::new();
+    job.receipt["proof_artifact_identity"] = Value::String(format!("{COMMAND_PATH}#{}", digest(b"changed command")));
+    rejected(&mut job, "artifacts/verus.command mismatch");
+}
+
+#[test]
+fn mutated_profile_artifact_digest_fails_closed() {
+    let mut job = SyntheticJob::new();
+    job.profile["artifacts"][0]["blake3"] = Value::String(digest(b"changed profile artifact"));
+    rejected(&mut job, "profile artifact mismatch");
 }
 
 #[test]

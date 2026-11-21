@@ -26,13 +26,15 @@ also Octet-specific: it hard-codes `octet-mantle-producer-job/v1`, owner
   names, inside the existing byte, count, and no-symlink bounds.
 - `observe_trellis_job` checks the three schema versions, the profile and
   provider identities, a `passed` receipt with a `checked_scope`, every source
-  path and artifact locator as an exact material with its byte count, every
-  receipt source binding against a profile source path by digest and path
-  suffix, the tool/options contract digests, each profile artifact against the
-  receipt's `stdout_artifact`/`stderr_artifact` rows, and the profile's
-  `verus.receipt_identity`/`verus.receipt_path` against the selected receipt
-  bytes. The exact producer-report bytes become `external_report_identity`;
-  `proof_acceptance` stays `not-evaluated-by-mantle`.
+  path as an exact material, every receipt source binding against a profile
+  source path by digest and path suffix, the tool/options contract digests, the
+  profile artifact locator set against the artifacts the receipt binds
+  (`stdout_artifact`, `stderr_artifact`, and `proof_artifact_identity`'s
+  `<locator>#<digest>`) with exact bytes and byte counts, and the profile's
+  `verus.receipt_path` (and optional `verus.receipt_identity`) against the
+  selected receipt bytes. The exact producer-report bytes become
+  `external_report_identity`; `proof_acceptance` stays
+  `not-evaluated-by-mantle`.
 - `bind_trellis_job` shares the Octet job binder with the expected schema,
   owner, and receipt rail field as parameters. The Trellis job must name
   `trellis-mantle-producer-job/v1`, owner `Trellis`, the observed

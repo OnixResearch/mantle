@@ -34,6 +34,7 @@ pub enum BridgeError {
     MissingTrellisArtifacts,
     MissingTrellisSourceBindings,
     TrellisSourceBindingCountBound,
+    InvalidTrellisArtifactIdentity,
     UnsupportedTrellisJobProfile,
     UnsupportedVerusProofReceipt,
     UnsupportedTrellisProducerReport,
@@ -112,6 +113,9 @@ impl fmt::Display for BridgeError {
             }
             Self::TrellisSourceBindingCountBound => {
                 formatter.write_str("invalid Trellis producer receipt source binding count")
+            }
+            Self::InvalidTrellisArtifactIdentity => {
+                formatter.write_str("invalid Trellis producer receipt proof artifact identity")
             }
             Self::UnsupportedTrellisJobProfile => {
                 formatter.write_str("unsupported Trellis producer-job profile schema")

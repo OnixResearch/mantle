@@ -63,12 +63,16 @@ profile, receipt, report, and tool graph without pretending Mantle judged the
   digest and path suffix (the receipt binds the repository-relative path, the
   profile the output-relative copy), and the selected source path is bound with
   `packaging.source_identity`; `provider_tools`/`extraction` hashes equal the
-  tool-contract and options identities; the profile artifacts each describe one
-  receipt artifact (`stdout_artifact`, `stderr_artifact`) on every field the
-  receipt records, ignoring the profile's `role`; every artifact `locator` is
-  an exact material with its recorded byte count; the profile's
-  `verus.receipt_identity` and `verus.receipt_path` name the selected receipt
-  byte-for-byte. `external_report_identity` is the BLAKE3 of the exact
+  tool-contract and options identities; each profile artifact row declares a
+  `role` and a `locator`, and the locator set equals the artifacts the receipt
+  binds — its `stdout_artifact`, its `stderr_artifact`, and the
+  `<locator>#<digest>` in `proof_artifact_identity`; every such artifact is an
+  exact material with the receipt's digest and recorded byte count, a
+  profile-declared `blake3`/`bytes` must agree when present, and the profile's
+  `verus.receipt_path` names the selected receipt byte-for-byte (a declared
+  `verus.receipt_identity` must also agree). The measured producer contract
+  declares the artifact set in the profile and the identities in Octet's Verus
+  receipt. `external_report_identity` is the BLAKE3 of the exact
   `producer-report.json` bytes, and the association identity is extended with
   it. `proof_acceptance` remains `not-evaluated-by-mantle` and no receipt field
   is re-derived.

@@ -11,16 +11,18 @@ The producer contract for the WP8 pilot, measured by Terrane:
 
 | Document | Schema | Fields the bridge reads |
 | --- | --- | --- |
-| `profile.json` | `trellis-verus-producer-profile/v1` | `consumer.provider.profile_identity`; `consumer.source.paths[{path,identity}]`; `provider_tools`; `extraction`; `artifacts[{role,locator,blake3,bytes,truncated}]`; `verus.receipt_path`, `verus.receipt_identity` |
-| receipt | `octet-verus-proof-receipt/v1` | `status`, `checked_scope`, `source_bindings[{path,blake3}]`, `stdout_artifact`, `stderr_artifact` |
+| `profile.json` | `trellis-verus-producer-profile/v1` | `consumer.provider.profile_identity`; `consumer.source.paths[{path,identity}]`; `provider_tools`; `extraction`; `artifacts[{role,locator}]`; `verus.receipt_path` (optional `verus.receipt_identity`) |
+| receipt | `octet-verus-proof-receipt/v1` | `status`, `checked_scope`, `source_bindings[{path,blake3}]`, `stdout_artifact`, `stderr_artifact`, `proof_artifact_identity` |
 | `producer-report.json` | `trellis-verus-producer-report/v1` | only `schema_version`; the exact bytes are the report identity |
 | `job.json` | `trellis-mantle-producer-job/v1` | `owner`, `profile.identity`, `provider.identity`, `execution.rail_id`, `execution.network_allowed` |
 
 Source paths are output-relative (`source/src/lib.rs`); receipt source
 bindings are repository-relative (`src/lib.rs`) and carry only `{path, blake3}`.
-The receipt has no artifact array: its artifact rows are
-`stdout_artifact`/`stderr_artifact`, with the profile rows recording the same
-fields plus a `role`.
+The profile declares the artifact set as `{role, locator}` rows. The receipt
+carries the identities: `stdout_artifact` and `stderr_artifact` rows with
+`{locator, blake3, bytes, truncated}`, and `proof_artifact_identity` as
+`<locator>#<blake3>` (the command record). `verus.command` therefore has no
+`stdout_artifact`-style row; its digest comes from `proof_artifact_identity`.
 
 ## Decisions
 
@@ -77,24 +79,29 @@ would risk weakening the closure bound. The Octet association tuple and
 `check_tool_graph` are byte-identical, so recorded Octet observations keep
 their identities.
 
-### Decision: Match the receipt's source bindings and artifact rows structurally
+### Decision: Match the receipt's source bindings and artifact set structurally
 
 **Choice:** Each receipt `source_bindings` row must name a profile source path
 whose output-relative path equals the binding path or ends with `/{binding}`
 and whose identity equals the binding digest; the selected profile source path
-must be bound with `packaging.source_identity`. Each receipt
-`stdout_artifact`/`stderr_artifact` row must match exactly one profile artifact
-row on every field the receipt records (`locator`, `blake3`, `bytes`,
-`truncated`), ignoring the profile's `role`; counts must agree. Every artifact
-locator is an exact material with its recorded byte count, and the profile's
-`verus.receipt_identity` and `verus.receipt_path` must name the selected
-receipt bytes.
+must be bound with `packaging.source_identity`. Each profile artifact row
+declares a `role` and `locator`; the locator set must equal the artifacts the
+receipt binds — `stdout_artifact`, `stderr_artifact`, and the
+`<locator>#<digest>` in `proof_artifact_identity`. Every such artifact is an
+exact material with the receipt's digest and recorded byte count; a
+profile-declared `blake3`/`bytes` must agree when present; and the profile's
+`verus.receipt_path` must name the selected receipt bytes (a declared
+`verus.receipt_identity` must agree).
 
-**Rationale:** The receipt is Octet's Verus contract and is not reshaped to
-contain a duplicate artifact array. Matching by digest and path suffix keeps
-both documents authoritative without inventing fields; the receipt's paths are
-repository-relative while the bridge materializes the job's output-relative
-copies.
+**Rationale:** This is the producer's measured contract: the profile declares
+which artifacts exist, and Octet's Verus receipt carries the identities for the
+two verifier streams and the proof command. Matching by digest and path suffix,
+and by locator set, keeps both documents authoritative without inventing fields;
+the receipt's source paths are repository-relative while the bridge materializes
+the job's output-relative copies. An earlier synthetic fixture that duplicated
+`blake3`/`bytes` into the profile rows and added a `receipt_identity` to the
+profile did not match the real output and was corrected against the frozen
+producer bytes.
 
 ## Risks / Trade-offs
 

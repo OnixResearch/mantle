@@ -252,15 +252,19 @@ identity.
 (Verus proof receipt) and `trellis-verus-producer-report/v1` (Terrane's own
 report). It checks the profile digest and provider identity, receipt
 `status == "passed"` and non-empty `checked_scope`, every profile source path
-and artifact locator as an exact material with its recorded byte count, every
-receipt `source_bindings` row against a profile source path by digest and path
-suffix (the receipt binds repository-relative paths, the profile the
-output-relative copies), the selected source path against the packaging source
-identity, `provider_tools`/`extraction` digests, each profile artifact against
-a receipt artifact row (`stdout_artifact`, `stderr_artifact`, comparing every
-field the receipt records and ignoring the profile's `role`), and the profile's
-`verus.receipt_identity`/`verus.receipt_path` against the selected receipt
-bytes. The producer report's exact bytes become
+as an exact material, every receipt `source_bindings` row against a profile
+source path by digest and path suffix (the receipt binds repository-relative
+paths, the profile the output-relative copies), the selected source path
+against the packaging source identity, and `provider_tools`/`extraction`
+digests. Each profile artifact row declares a `role` and `locator`; the locator
+set must equal the artifacts the receipt binds — its `stdout_artifact`, its
+`stderr_artifact`, and the `<locator>#<digest>` in `proof_artifact_identity`.
+Every artifact is an exact material with the receipt's digest and recorded byte
+count; a profile-declared `blake3`/`bytes` must agree when present; and the
+profile's `verus.receipt_path` must name the selected receipt byte-for-byte
+(a declared `verus.receipt_identity` must also agree). This matches the
+producer's measured contract: the profile declares the artifact set, and the
+Verus receipt carries the identities. The producer report's exact bytes become
 `external_report_identity`; it is not interpreted. `proof_acceptance` stays
 `not-evaluated-by-mantle`.
 
