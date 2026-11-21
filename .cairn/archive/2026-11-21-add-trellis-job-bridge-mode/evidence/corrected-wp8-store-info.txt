@@ -1,0 +1,66 @@
+# preserved root 5hqkrl54 2026-11-21T04:27:16-05:00
+nix_hash_path=sha256-zUn6DMJIENyxoINDZMGptW0FLphtmE0ydx9mfM1ft1o=
+warning: '--json' without '--json-format' is deprecated; please specify '--json-format 1' or '--json-format 2'. This will become an error in a future release.
+nix_path_info_narHash=sha256-zUn6DMJIENyxoINDZMGptW0FLphtmE0ydx9mfM1ft1o=
+DIFF_EXIT=0
+{
+  "backend": "snix",
+  "backend_capabilities": {
+    "atomic_batch_import": true,
+    "core": [
+      "output-admission",
+      "lookup",
+      "fresh-process-reopen",
+      "closure-resolution",
+      "export",
+      "store-archive-export",
+      "store-archive-import",
+      "gc-plan",
+      "plan-bound-gc",
+      "action-result-pathinfo-output-reuse",
+      "store-sign",
+      "store-repair-final-nar"
+    ],
+    "max_root_changes": null,
+    "overlay_composition": true,
+    "rust_unit_cache": true,
+    "unsigned_admission": true
+  },
+  "overlay": null,
+  "paths": [
+    {
+      "ca": null,
+      "deriver": "cvgjzlyd2nn1ihbq4z4s5ns6slirx7is-trellis-bounds-verus-job",
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_sha256": "cd49fa0cc24810dcb1a0834364c1a9b56d052e986d984d32771f667ccd5fb75a",
+      "nar_size": 9867968,
+      "node": "Directory { digest: blake3-4ihdodTdPQlpLwv/4B+cE8ew6KU/L+Oqwd906KZIP5U=, size: 888 }",
+      "references": [
+        "5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+        "p72j1v14s37w7v91gfi03svh54d6ccwi-terrane-verus-0.2026.10.18.7d82994"
+      ],
+      "retention_interests": {
+        "interests": [
+          {
+            "owner": "legacy-unmanaged",
+            "reason": "legacy-root-registered",
+            "record_id": "046e21910f7d476fba8d0f88bed50b5050e645f2a2665264ce7f5781c74cd442"
+          }
+        ],
+        "legacy_unmanaged": false,
+        "logical_path": "/nix/store/5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+        "record_count": 1
+      },
+      "shadows": [],
+      "signatures": [
+        "britton-desktop-1:/Audydfwi/8aaefG9sfcWS8dwNIam6z30/gtGyIU1hGeHrIfssVGTv7StsfQyahcBUmhJm4lfwz1ILi1o047Aw==",
+        "wp8-20261121-1:eC6NGnd4moBc/Sldbywa83JOGCSr19t/Brb60ElYxFMLWbGYLN6BrkiMyHVXzez2tfFRX5pLwS6KSfwG28Z5AA=="
+      ],
+      "store_path": "5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job"
+    }
+  ],
+  "schema": "mantle-store-info-v3"
+}
+STORE_INFO_EXIT=0

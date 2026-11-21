@@ -1,0 +1,21 @@
+# Summary of corrected-wp8-plan-preserve-2.txt (orchestrator, 2026-11-21T09:40:19Z)
+The full transcript is 77124791 bytes, BLAKE3 835e478b372b8a48addb2cd4a50cd6a4743d1c609523f98b5e25675e23775fe1. It embeds the whole preserve plan JSON, whose identity the
+realization receipt binds (plan_blake3 8875c84be566c7ef39bc2ba821c8c5ef549324e3efd6592df07212950093949e). It is
+retained outside the repository, byte-identical, at
+/home/brittonr/wt/convergence-evidence/wp8/transcripts/wp8-plan-preserve-2.txt (and the plan itself in wp8/).
+
+Commands and outcomes in that transcript:
+1:# preserve plan for revision e8a961af 2026-11-21T04:24:54-05:00
+23:PRODUCE_EXIT=0
+24:{"error":"opening foreign import policy config/foreign-cache-closure/generated/preserve-nix.json: No such file or directory (os error 2)","code":3,"kind":"internal"}
+25:PLAN_EXIT=3
+27:# rerun plan with absolute policy/profile paths
+884056:PLAN_EXIT=0
+
+Accepted plan receipt digests (from the transcript):
+"producer_identity": "trellis@e8a961af3dbeb6f7a0f7dfbf82100bfe2abcb482",
+"raw_graph_digest": "c5fdb8d8e8c9646f27be693c47f6db40b1f5c43da3893a5224c9022770dacf01",
+"translation_policy_digest": "29ea216f911da613a92bd29fc40c4ee1d85a0c8e2e6b5b3bf9e81df01aa1ddde",
+"translated_graph_digest": "baf7b824ad00c30355eb3c6fa1754b930ea5414d5c029b27830cd078af3c515c",
+"package_index_digest": "5bfc3c2b67cdc845c2001fdc7959af5142659d89c1048862f3229736734463cf",
+"producer_identity": "trellis@e8a961af3dbeb6f7a0f7dfbf82100bfe2abcb482",
