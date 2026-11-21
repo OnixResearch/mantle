@@ -1,0 +1,35 @@
+$ MANTLE_TEST_BIN=/nix/store/wlz6l9m5jk17vx6yj0slk40nzndb0ngh-mantle-0.1.0/bin/mantle cargo test ... cache_inputs_route_builds_the_root_from_hydrated_inputs
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 41 ms (attempt 1/5)
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 0 ms: Could not connect to server; retrying in 188 ms (attempt 2/5)
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 1 ms: Could not connect to server; retrying in 132 ms (attempt 3/5)
+warning: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 8 ms: Could not connect to server; retrying in 2 ms (attempt 4/5)
+disabling binary cache 'http://100.100.103.95:39400' for 60 seconds
+error: unable to download 'http://100.100.103.95:39400/01sgz777f98jcmrxi4fj1q872fhg2br5.narinfo': Could not connect to server (7) Failed to connect to 100.100.103.95 port 39400 after 7 ms: Could not connect to server
+copying path '/nix/store/01sgz777f98jcmrxi4fj1q872fhg2br5-source' from 'http://100.100.103.95:5000'...
+warning: file 'nar/0vb8pdl7v7yi5zjlrm49b6q01dfpswh5r10mw5gvc1lr8l5pdyqf.nar?hash=01sgz777f98jcmrxi4fj1q872fhg2br5' does not exist in binary cache 'http://100.100.103.95:5000'
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.08s
+     Running tests/cache_inputs_build_route.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cache_inputs_build_route-4a1094ad7faa3587)
+
+running 1 test
+test cache_inputs_route_builds_the_root_from_hydrated_inputs ... FAILED
+
+failures:
+
+---- cache_inputs_route_builds_the_root_from_hydrated_inputs stdout ----
+
+thread 'cache_inputs_route_builds_the_root_from_hydrated_inputs' (2094660) panicked at tests/cache_inputs_build_route.rs:416:5:
+realize failed: 
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    cache_inputs_route_builds_the_root_from_hydrated_inputs
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.89s
+
+error: test failed, to rerun pass `-p mantle --test cache_inputs_build_route`
+EXIT=101

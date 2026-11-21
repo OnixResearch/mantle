@@ -435,6 +435,9 @@ pub struct Builder<BServ> {
     /// When true, a declared source input is never taken from the logical host
     /// store directory; only the admitted physical output authority is used.
     forbid_host_store_fallback: bool,
+    /// Derivations whose admitted outputs are already complete. Their goals
+    /// are never expanded into build-only inputs.
+    satisfied_derivations: BTreeSet<String>,
     /// Explicit pool executor. When present, ready goals are routed through the
     /// pool instead of the ordinary single build service.
     pool_dispatch: Option<Arc<crate::distributed::PoolDispatch>>,
@@ -563,6 +566,7 @@ where BServ: BuildService + 'static
             observed_source_paths: BTreeSet::new(),
             root_retention_source: None,
             forbid_host_store_fallback: false,
+            satisfied_derivations: BTreeSet::new(),
             pool_dispatch: None,
             rust_wait_units: None,
         }
@@ -631,6 +635,10 @@ where BServ: BuildService + 'static
 
     pub fn set_forbid_host_store_fallback(&mut self, forbid_host_store_fallback: bool) {
         self.forbid_host_store_fallback = forbid_host_store_fallback;
+    }
+
+    pub fn set_satisfied_derivations(&mut self, satisfied_derivations: BTreeSet<String>) {
+        self.satisfied_derivations = satisfied_derivations;
     }
     pub fn set_rust_wait_units(
         &mut self,
@@ -782,6 +790,19 @@ where BServ: BuildService + 'static
         }
         debug_assert!(max_jobs >= 1, "max_jobs must be at least 1");
         let mut worker = Worker::with_scheduling_policy(max_jobs, crate::scheduling::SchedulingPolicy::default())?;
+        if !self.satisfied_derivations.is_empty() {
+            let root_paths = roots
+                .iter()
+                .map(|root| root.to_absolute_path_with_prefix(known_paths.store_dir()))
+                .collect::<BTreeSet<_>>();
+            let satisfied = self
+                .satisfied_derivations
+                .iter()
+                .filter(|drv| !root_paths.contains(drv.as_str()))
+                .cloned()
+                .collect();
+            worker.set_satisfied_drvs(satisfied);
+        }
         for root in roots {
             worker.want(root, known_paths, true)?;
         }

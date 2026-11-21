@@ -1528,6 +1528,8 @@ pub struct Worker {
     dependency_failures: BTreeMap<String, FailedGoal>,
     /// Bounded build logs of failed non-root goals, kept once per failed goal.
     dependency_failure_logs: BTreeMap<String, String>,
+    /// Derivations whose outputs are already complete; their inputs are not goals.
+    satisfied_drvs: BTreeSet<String>,
     priority_decisions: Vec<PriorityDecisionEvidence>,
     plan_output_bindings: BTreeMap<String, Vec<PlanOutputBindingState>>,
     native_plan_binding_facts: BTreeMap<(String, String), NativePlanBindingFact>,
@@ -1580,6 +1582,7 @@ impl Worker {
             late_roots: BTreeSet::new(),
             dependency_failures: BTreeMap::new(),
             dependency_failure_logs: BTreeMap::new(),
+            satisfied_drvs: BTreeSet::new(),
             priority_decisions: Vec::new(),
             plan_output_bindings: BTreeMap::new(),
             native_plan_binding_facts: BTreeMap::new(),
@@ -1590,6 +1593,12 @@ impl Worker {
             streaming_cancellation: None,
             waiter_notifications: 0,
         })
+    }
+
+    /// Treat these derivations as complete: create their goal, but never expand
+    /// their inputs into new goals. Selected roots must not be included.
+    pub fn set_satisfied_drvs(&mut self, satisfied_drvs: BTreeSet<String>) {
+        self.satisfied_drvs = satisfied_drvs;
     }
 
     /// Enable observation only for this invocation; trace state never schedules work.
@@ -1889,14 +1898,18 @@ impl Worker {
             self.registry.insert(key.clone(), goal)?;
             self.pressure_dirty_goals.insert(key.clone());
 
-            // Enqueue deps for creation.
-            for dep_sp in &dep_drv_paths {
-                if !self.registry.contains(&dep_sp.to_absolute_path()) {
-                    queue.push_back((dep_sp.clone(), false));
+            // A complete derivation is realized as-is; expanding its build-only
+            // inputs would schedule work no realized path needs.
+            let expand_deps = root || !self.satisfied_drvs.contains(&key);
+            if expand_deps {
+                for dep_sp in &dep_drv_paths {
+                    if !self.registry.contains(&dep_sp.to_absolute_path()) {
+                        queue.push_back((dep_sp.clone(), false));
+                    }
                 }
             }
 
-            created.push((key, dep_drv_paths));
+            created.push((key, if expand_deps { dep_drv_paths } else { Vec::new() }));
         }
 
         debug_assert!(iterations <= goal_count_max);
@@ -4696,6 +4709,23 @@ mod tests {
         assert!(!diagnostic.contains("worker-secret"));
         assert!(diagnostic.contains("blake3:"));
         assert!(worker.goal_preferences.is_empty());
+    }
+
+    #[test]
+    fn satisfied_derivation_does_not_expand_its_inputs_into_goals() {
+        let mut kp = DerivationRegistry::default();
+        let leaf = register_drv(&mut kp, "leaf.drv", &make_drv());
+        let middle = register_drv(&mut kp, "middle.drv", &make_drv_with_deps(std::slice::from_ref(&leaf)));
+        let root = register_drv(&mut kp, "root.drv", &make_drv_with_deps(std::slice::from_ref(&middle)));
+
+        let mut worker = Worker::new(1);
+        worker.set_satisfied_drvs(BTreeSet::from([middle.to_absolute_path_with_prefix(kp.store_dir())]));
+        worker.want(&root, &kp, true).unwrap();
+
+        assert!(worker.registry.contains(&root.to_absolute_path_with_prefix(kp.store_dir())));
+        assert!(worker.registry.contains(&middle.to_absolute_path_with_prefix(kp.store_dir())));
+        assert!(!worker.registry.contains(&leaf.to_absolute_path_with_prefix(kp.store_dir())));
+        assert!(leaf.digest() != middle.digest());
     }
 
     #[test]

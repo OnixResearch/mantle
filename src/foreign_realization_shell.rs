@@ -41,6 +41,7 @@ use crate::foreign_realization::ForeignSourceAdmission;
 use crate::foreign_realization::cache_inputs_closure;
 use crate::foreign_realization::is_cache_inputs_build_roots_plan;
 use crate::foreign_realization::is_cache_only_foreign_plan;
+use crate::foreign_realization::satisfied_input_derivations;
 use crate::foreign_realization::validate_cache_inputs_roots;
 use crate::foreign_realization::validate_cache_only_source_bundle;
 use crate::foreign_realization::validate_foreign_cache_closure_policy;
@@ -283,6 +284,15 @@ pub(crate) async fn realize_foreign_plan(
         None
     };
 
+    let satisfied_derivations = if build_roots {
+        let hydrated_paths = cache_closure
+            .as_ref()
+            .map(|hydration| hydration.facts.iter().map(|fact| fact.logical_path.clone()).collect::<BTreeSet<_>>())
+            .unwrap_or_default();
+        satisfied_input_derivations(request.plan, request.selected_root_node_ids, &hydrated_paths)
+    } else {
+        BTreeSet::new()
+    };
     let mut registry = DerivationRegistry::new(&request.plan.target_store_prefix);
     let roots = admitted.selected_root_paths.clone();
     let selected_unit_ids = admitted.selected_root_node_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
@@ -373,6 +383,7 @@ pub(crate) async fn realize_foreign_plan(
             source_policy,
             cache_only,
             forbid_host_store_fallback: build_roots,
+            satisfied_derivations: &satisfied_derivations,
         })
         .await
         .map_err(|error| RunError::Internal(format!("realizing foreign derivation graph: {error}")))?;

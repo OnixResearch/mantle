@@ -324,6 +324,31 @@ pub(crate) fn cache_inputs_closure(
     Ok(seed_paths.into_iter().collect())
 }
 
+/// Non-root derivations whose every output is in the admitted hydrated set.
+///
+/// These are satisfied before scheduling: their goals are never built and their
+/// build-only inputs are never expanded into goals.
+pub(crate) fn satisfied_input_derivations(
+    plan: &ForeignExecutablePlan,
+    selected_root_node_ids: &[String],
+    hydrated_paths: &BTreeSet<String>,
+) -> BTreeSet<String> {
+    let selected_roots = selected_root_node_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let mut satisfied = BTreeSet::new();
+    for unit in &plan.native_units {
+        if selected_roots.contains(unit.node_id.as_str()) {
+            continue;
+        }
+        if unit.outputs.is_empty() {
+            continue;
+        }
+        if unit.outputs.values().all(|path| hydrated_paths.contains(path)) {
+            satisfied.insert(unit.target_derivation.clone());
+        }
+    }
+    satisfied
+}
+
 pub(crate) fn reject_fixed_output_roots(
     plan: &ForeignExecutablePlan,
     selected_root_node_ids: &[String],

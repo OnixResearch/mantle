@@ -294,6 +294,7 @@ pub struct RegisteredBuildRequest<'a> {
     pub source_policy: FetchSourcePolicy,
     pub cache_only: bool,
     pub forbid_host_store_fallback: bool,
+    pub satisfied_derivations: &'a std::collections::BTreeSet<String>,
 }
 
 #[derive(Debug)]
@@ -848,6 +849,7 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
     workspace_evidence_sink: crunch_build::WorkspaceReportCollector,
 ) -> Result<RegisteredBuildResult, Error> {
     builder.set_forbid_host_store_fallback(request.forbid_host_store_fallback);
+    builder.set_satisfied_derivations(request.satisfied_derivations.clone());
     let mut worker_result = builder
         .build_all_report(request.roots, known_paths, config.max_jobs)
         .await
@@ -889,9 +891,20 @@ async fn run_registered_builder<S: snix_build::buildservice::BuildService + 'sta
             .await
             .map_err(|error| Error::Build(format!("registering selected foreign root: {error}")))?;
     }
-    assert_eq!(worker_result.outcomes.len().saturating_add(worker_result.failed.len()), request.roots.len());
-    if worker_result.failed.is_empty() {
-        assert_eq!(outputs.len(), request.expected_outputs.len());
+    if request.satisfied_derivations.is_empty() {
+        assert_eq!(worker_result.outcomes.len().saturating_add(worker_result.failed.len()), request.roots.len());
+        if worker_result.failed.is_empty() {
+            assert_eq!(outputs.len(), request.expected_outputs.len());
+        }
+    } else if worker_result.failed.is_empty() {
+        // A pruned route satisfies non-root units without exporting them; the
+        // selected roots' retained outputs are the required result.
+        assert!(
+            request
+                .retained_outputs
+                .iter()
+                .all(|retained| { outputs.iter().any(|output| output.path_info.store_path == *retained) })
+        );
     }
     Ok(RegisteredBuildResult {
         outcomes: worker_result.all_outcomes,

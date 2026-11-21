@@ -36,6 +36,9 @@ const KEY_NAME: &str = "cache-inputs-test-1";
 const TRUST_SCOPE: &str = "trusted-binary-cache";
 
 fn mantle_cmd() -> Command {
+    if let Ok(path) = std::env::var("MANTLE_TEST_BIN") {
+        return Command::new(path);
+    }
     Command::cargo_bin("mantle").expect("mantle binary should be built")
 }
 
@@ -222,6 +225,32 @@ fn write_fixture(temp: &TempDir, cache_url_with_key: &str, recompute: bool) -> F
         "cache_url": cache_url_with_key,
         "trust_scope": TRUST_SCOPE,
     }]);
+    let grandchild = serde_json::json!({
+        "node_id": "nix:grandchild",
+        "original_derivation": "/nix/store/66666666666666666666666666666666-grandchild.drv",
+        "name": "grandchild",
+        "system": "x86_64-linux",
+        "builder": "/bin/sh",
+        "args": ["-c", "exit 1"],
+        "env": { "out": "/nix/store/77777777777777777777777777777777-grandchild" },
+        "outputs": {
+            "out": { "path": "/nix/store/77777777777777777777777777777777-grandchild", "hash": null }
+        },
+        "input_derivations": [],
+        "source_refs": [],
+        "fixed_output": null,
+        "builtin": "nix.derivation",
+        "declared_references": [],
+        "sandbox_capabilities": [],
+        "unsupported_features": [],
+        "cache_hints": []
+    });
+    graph["nodes"].as_array_mut().expect("nodes").push(grandchild);
+    graph["nodes"][0]["input_derivations"] = serde_json::json!([{ "node_id": "nix:grandchild", "output_name": "out" }]);
+    graph["nodes"][0]["env"]["grandchild"] =
+        serde_json::json!("/nix/store/77777777777777777777777777777777-grandchild");
+    graph["nodes"][0]["declared_references"] =
+        serde_json::json!([BUILDER_SOURCE, "/nix/store/77777777777777777777777777777777-grandchild"]);
     let graph_path = temp.path().join("graph.json");
     fs::write(&graph_path, serde_json::to_vec(&graph).expect("graph json")).expect("write graph");
     let index_path = temp.path().join("index.json");
@@ -395,6 +424,8 @@ fn cache_inputs_route_builds_the_root_from_hydrated_inputs() {
     assert_eq!(parent["execution_class"], "built");
     assert!(matches!(child["execution_class"].as_str(), Some("substituted" | "already-present")));
     assert!(!receipt["cache_closure"].as_array().expect("closure facts").is_empty());
+    let grandchild = units.iter().find(|unit| unit["node_id"] == "nix:grandchild").expect("grandchild unit");
+    assert_eq!(grandchild["execution_class"], "not-required-cache-only");
     let output = temp.path().join("output").join("22222222222222222222222222222222-parent");
     assert_eq!(fs::read_to_string(output).expect("built root output"), "child\n");
     let requests = cache.requests.lock().expect("requests");
