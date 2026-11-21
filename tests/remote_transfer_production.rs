@@ -673,6 +673,10 @@ fn production_pool_enforces_declared_resource_quantities() {
 /// Pool mode: a job reassigned to a newer fence between admission and
 /// completion must reject the stale completion before exporting its outputs.
 #[test]
+#[cfg_attr(
+    not(debug_assertions),
+    ignore = "needs the pool attempt-reassignment seam, which is compiled only with debug assertions"
+)]
 fn production_pool_rejects_a_stale_completion_after_reassignment() {
     let (output, _worker_store, root) = run_single_endpoint_pool_build_with(
         serial_transfer_guard(),
@@ -1151,6 +1155,10 @@ fn production_pool_dispatches_one_content_addressed_goal_through_the_worker() {
 /// Pool mode: a failed exchange settles its attempt so the endpoint's
 /// concurrency slot is not leaked to the next goal.
 #[test]
+#[cfg_attr(
+    not(debug_assertions),
+    ignore = "needs the pool output-NAR tamper seam, which is compiled only with debug assertions"
+)]
 fn production_pool_failures_release_attempt_capacity() {
     let _guard = serial_transfer_guard();
     let root = tempfile::tempdir().expect("pool failure tempdir");
