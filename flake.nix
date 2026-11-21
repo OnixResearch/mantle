@@ -1057,10 +1057,42 @@
           printf '%s\n' "$actualDigest" > "$out/binary.blake3"
         '';
 
+        # Shared environment for every check that runs the `mantle` integration
+        # rails through Cargo. Both the release-profile package check and the
+        # debug-profile pool seam check read this one definition so the
+        # debug-only rails cannot drift out of the check environment.
+        crunchCheckEnv = {
+          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
+          GIT = "${pkgs.git}/bin/git";
+          SSL_CERT_FILE = caCertificateBundlePath;
+          NIX_SSL_CERT_FILE = caCertificateBundlePath;
+          MANTLE_TEST_REAL_BWRAP = "${pkgs.bubblewrap}/bin/bwrap";
+          MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
+          MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
+          CRUNCH_NO_FUSE = "1";
+          SLEEPINESS = "0";
+          MANTLE_TEST_OFFLINE = "1";
+        };
+        crunchCheckInputs = [
+          pkgs.git
+          pkgs.openssh
+        ];
+
         # Build just the cargo dependencies for caching
         cargoArtifacts = craneLib.buildDepsOnly {
           inherit src nativeBuildInputs buildInputs;
           inherit cargoVendorDir;
+        };
+
+        # The release artifacts above are useless to a dev-profile (`--profile
+        # dev`) build: the pool tamper and attempt-reassignment seams in
+        # src/remote_build/pool_goal_executor.rs are compiled only under
+        # `debug_assertions`, and the canonical release check reports their
+        # tests as ignored. Cache the matching dependency closure separately.
+        cargoArtifactsDebug = craneLib.buildDepsOnly {
+          inherit src nativeBuildInputs buildInputs;
+          inherit cargoVendorDir;
+          CARGO_PROFILE = "dev";
         };
 
         # Compile the adapter offline against the pinned, patched Crane closure,
@@ -1075,32 +1107,41 @@
           SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
         };
         # Build the actual package
-        crunch = craneLib.buildPackage {
-          inherit
-            src
-            cargoArtifacts
-            cargoVendorDir
-            nativeBuildInputs
-            buildInputs
-            ;
-          # Match the serialized libtest policy in quality-gate-common.sh.
-          # Each test still exercises its own internal concurrency.
-          cargoTestExtraArgs = "-- --test-threads 1";
-          SNIX_BUILD_SANDBOX_SHELL = sandboxShellPath;
-          GIT = "${pkgs.git}/bin/git";
-          SSL_CERT_FILE = caCertificateBundlePath;
-          NIX_SSL_CERT_FILE = caCertificateBundlePath;
-          MANTLE_TEST_REAL_BWRAP = "${pkgs.bubblewrap}/bin/bwrap";
-          MANTLE_TEST_SCRIPT_SHELL = "${pkgs.bash}/bin/bash";
-          MANTLE_WASM_COMPONENT_TOOLCHAIN = "${wasmComponentToolchain}";
-          CRUNCH_NO_FUSE = "1";
-          SLEEPINESS = "0";
-          MANTLE_TEST_OFFLINE = "1";
-          nativeCheckInputs = [
-            pkgs.git
-            pkgs.openssh
-          ];
-        };
+        crunch = craneLib.buildPackage (
+          {
+            inherit
+              src
+              cargoArtifacts
+              cargoVendorDir
+              nativeBuildInputs
+              buildInputs
+              ;
+            # Match the serialized libtest policy in quality-gate-common.sh.
+            # Each test still exercises its own internal concurrency.
+            cargoTestExtraArgs = "-- --test-threads 1";
+            nativeCheckInputs = crunchCheckInputs;
+          }
+          // crunchCheckEnv
+        );
+
+        # The canonical `crunch` check above runs `cargo test --profile release`,
+        # where the debug-only pool seams are compiled out, so
+        # `production_pool_failures_release_attempt_capacity` and
+        # `production_pool_rejects_a_stale_completion_after_reassignment` are
+        # ignored. Run that integration target in the dev profile so the seams
+        # exist and both cases execute.
+        remotePoolSeamsDebug = craneLib.cargoTest (
+          {
+            pname = "mantle-remote-pool-seams-debug";
+            inherit src cargoVendorDir nativeBuildInputs buildInputs;
+            cargoArtifacts = cargoArtifactsDebug;
+            CARGO_PROFILE = "dev";
+            cargoTestExtraArgs = "--test remote_transfer_production -- --test-threads 1";
+            doInstallCargoArtifacts = false;
+            nativeCheckInputs = crunchCheckInputs;
+          }
+          // crunchCheckEnv
+        );
 
         wrpcAuthor = craneLib.buildPackage {
           pname = "mantle-wrpc-author";
@@ -1579,6 +1620,8 @@
 
         checks = {
           inherit crunch;
+          # Debug-profile rail for the pool seams that release builds drop.
+          remote-pool-seams-debug = remotePoolSeamsDebug;
           casita-crunch-store-check = casitaCrunchStoreCheck;
           # Builds exactly the locked, clean-source Crane dependency closure.
           casita-vendor-closure = cargoVendorDir;
