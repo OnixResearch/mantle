@@ -3475,13 +3475,20 @@ mod tests {
                 .to_string()
                 .contains("key count")
         );
-        plan.realization_route = Some(crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE.to_string());
-        assert!(
-            validate_nario_source_request(&plan, &[PathBuf::from("fixture.nario")], &[])
-                .unwrap_err()
-                .to_string()
-                .contains("cache-only")
-        );
+        assert!(validate_nario_source_request(&plan, &[PathBuf::from("fixture.nario")], &[]).is_ok());
+        for route in [
+            crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE,
+            crate::foreign_executable_plan::CACHE_INPUTS_BUILD_ROOTS_ROUTE,
+        ] {
+            plan.realization_route = Some(route.to_string());
+            assert!(
+                validate_nario_source_request(&plan, &[PathBuf::from("fixture.nario")], &[])
+                    .unwrap_err()
+                    .to_string()
+                    .contains("cache-hydrated plans reject Nario source projection"),
+                "{route}"
+            );
+        }
     }
 
     #[test]
