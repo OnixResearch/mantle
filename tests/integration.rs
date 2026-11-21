@@ -36,6 +36,24 @@ fn crunch_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// Mode Mantle requires of a signing-key file: no group or other access.
+const PRIVATE_KEY_MODE: u32 = 0o600;
+
+/// Write a test signing key the way an operator must store one: readable by
+/// its owner only. Mantle refuses a signing key whose mode has any group or
+/// other bit, and `std::fs::write` leaves the umask's 0644.
+fn write_private_key(path: &Path, key: &str) {
+    use std::os::unix::fs::OpenOptionsExt;
+    assert!(!key.is_empty(), "test signing key must not be empty");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(PRIVATE_KEY_MODE)
+        .open(path)
+        .expect("create private test signing key");
+    file.write_all(key.as_bytes()).expect("write private test signing key");
+}
+
 const RUNTIME_FINGERPRINT_PREFIX: &str = "mantle-runtime-fingerprint";
 const CLAP_USAGE_ERROR_CODE: i32 = 2;
 const LOOPBACK_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
@@ -1040,11 +1058,10 @@ mod build_tests {
         let store = tempfile::tempdir().unwrap();
         let state = tempfile::tempdir().unwrap();
         let key_file = dir.path().join("cache.key");
-        std::fs::write(
+        write_private_key(
             &key_file,
             "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n",
-        )
-        .unwrap();
+        );
 
         std::fs::write(
             dir.path().join("signed.ncl"),
@@ -1116,11 +1133,10 @@ fn store_sign_all_signs_existing_unsigned_entries() {
 
     let state = tempfile::tempdir().unwrap();
     let key_file = state.path().join("cache.key");
-    std::fs::write(
+    write_private_key(
         &key_file,
         "cache.example.com-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==\n",
-    )
-    .unwrap();
+    );
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1342,7 +1358,7 @@ fn store_repair_final_nar_dry_run_then_execute_is_explicit_and_idempotent() {
     let store = tempfile::tempdir().unwrap();
     let config = tempfile::tempdir().unwrap();
     let key_file = state.path().join("repair.key");
-    std::fs::write(&key_file, SIGNING_KEY_TEXT).unwrap();
+    write_private_key(&key_file, SIGNING_KEY_TEXT);
     let (logical_path, original) = seed_stale_final_nar_pathinfo(state.path());
 
     crunch_cmd()
@@ -1409,7 +1425,7 @@ fn store_verify_cli_uses_filesystem_nar_observation_and_reports_tampering() {
     let state = tempfile::tempdir().unwrap();
     let store = tempfile::tempdir().unwrap();
     let key_file = state.path().join("verify.key");
-    std::fs::write(&key_file, SIGNING_KEY_TEXT).unwrap();
+    write_private_key(&key_file, SIGNING_KEY_TEXT);
     let (logical_path, original) = seed_stale_final_nar_pathinfo(state.path());
     crunch_cmd()
         .env("CRUNCH_STATE_DIR", state.path())
@@ -1463,7 +1479,7 @@ fn store_repair_final_nar_enables_archive_export_after_execution() {
     let store = tempfile::tempdir().unwrap();
     let key_file = state.path().join("repair.key");
     let archive_file = state.path().join("repaired.msa");
-    std::fs::write(&key_file, SIGNING_KEY_TEXT).unwrap();
+    write_private_key(&key_file, SIGNING_KEY_TEXT);
     let (logical_path, original) = seed_stale_final_nar_pathinfo(state.path());
 
     crunch_cmd()
