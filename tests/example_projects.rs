@@ -437,6 +437,22 @@ fn check_result(run: &ProjectRun) -> String {
     std::fs::read_to_string(output_path(run).join("result.txt")).unwrap().trim().to_string()
 }
 
+/// Mode Mantle requires of a signing-key file: no group or other access.
+const PRIVATE_KEY_MODE: u32 = 0o600;
+
+/// Copy a checked-in fixture signing key to a private file under `dir`.
+/// Git checkouts and the Nix store keep fixtures group- and world-readable,
+/// and Mantle refuses a signing key whose permissions are not private.
+fn private_fixture_key(fixture: &Path, dir: &Path) -> PathBuf {
+    assert!(fixture.is_file(), "fixture signing key must exist");
+    assert!(dir.is_dir(), "private key directory must exist");
+    let private = dir.join(fixture.file_name().expect("fixture signing key has a file name"));
+    std::fs::copy(fixture, &private).expect("copy fixture signing key");
+    std::fs::set_permissions(&private, std::fs::Permissions::from_mode(PRIVATE_KEY_MODE))
+        .expect("make fixture signing key private");
+    private
+}
+
 const SIGNED_CACHE_VERIFIER: &str = "cache.example.com-1:yKUSiqP9yaMSduDmGtw8U9iVVd/Coyv9csB1rjHtiRM=";
 
 #[test]
@@ -461,6 +477,7 @@ fn signed_cache_roundtrip_substitutes_through_an_admitted_trusted_cache() {
         std::fs::create_dir_all(dir).expect("signed cache directory");
     }
     let project = project_root(SIGNED_CACHE_PROJECT);
+    let producer_key = private_fixture_key(&project.join("fixtures/cache.key"), root.path());
     let producer = mantle_cmd()
         .current_dir(&project)
         .args([
@@ -472,7 +489,7 @@ fn signed_cache_roundtrip_substitutes_through_an_admitted_trusted_cache() {
             ".#payload",
             "--no-substitute",
             "--signing-key",
-            "fixtures/cache.key",
+            producer_key.to_str().expect("UTF-8 producer signing key"),
         ])
         .output()
         .expect("run signed cache producer");
@@ -1399,7 +1416,10 @@ impl ActionResultWorkflow {
     }
 
     fn publish(&self) -> serde_json::Value {
-        let key = project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key");
+        let key = private_fixture_key(
+            &project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key"),
+            self._root.path(),
+        );
         let report = parse_successful_json(
             workflow_build_command(SHARED_ACTION_RESULT_PROJECT, &self.producer_store, &self.producer_state)
                 .args(["--nix-compat", "--no-substitute", "--signing-key"])
@@ -1620,7 +1640,7 @@ fn casita_local_action_result_reuses_verified_output_after_export_removal() {
             "PathInfo-only Builder opened Rust unit cache"
         );
     };
-    let key = project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key");
+    let key = private_fixture_key(&project_root(SHARED_ACTION_RESULT_PROJECT).join("fixtures/action.key"), root.path());
     let build = || {
         parse_successful_json(
             project_command_with_build_environment(SHARED_ACTION_RESULT_PROJECT)
