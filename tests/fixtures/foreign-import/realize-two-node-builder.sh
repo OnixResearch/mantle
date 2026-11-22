@@ -7,6 +7,7 @@ case "$1" in
   parent)
     IFS= read -r value < "$child"
     printf '%s\n' "$value" > "$out"
+    printf '%s\n' "parent builder ran"
     ;;
   parent-cores)
     printf '%s\n' "${NIX_BUILD_CORES:-unset}" > "$out"

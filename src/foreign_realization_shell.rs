@@ -96,6 +96,8 @@ pub(crate) struct ForeignRealizationOutcome {
     pub(crate) receipt: ForeignRealizationReceiptAny,
     /// Write-once built-root index files, published only after the receipt itself.
     pub(crate) built_root_index: Vec<(std::path::PathBuf, Vec<u8>)>,
+    /// Build-log persistence failures; they never change the receipt or the realization result.
+    pub(crate) diagnostic_persistence_failures: Vec<crate::build_log::DiagnosticPersistenceFailure>,
     _root_locks: Vec<std::fs::File>,
 }
 
@@ -393,6 +395,9 @@ pub(crate) async fn realize_foreign_plan(
     if build_or_reuse {
         assert_reused_roots_are_cache_hits(&build_result, &reuse, &request.plan.target_store_prefix)?;
     }
+    // r[impl foreign_derivation_import.realization_build_logs]
+    let diagnostic_persistence_failures =
+        write_realization_logs(request.state_dir, &request.plan.target_store_prefix, &build_result);
     let base = ForeignReceiptInput {
         plan: request.plan,
         source_bundle_manifest_blake3: request.expected_source_bundle_blake3,
@@ -409,6 +414,7 @@ pub(crate) async fn realize_foreign_plan(
         return Ok(ForeignRealizationOutcome {
             receipt: ForeignRealizationReceiptAny::V1(build_foreign_realization_receipt(base)?),
             built_root_index: Vec::new(),
+            diagnostic_persistence_failures,
             _root_locks: root_locks,
         });
     }
@@ -441,8 +447,55 @@ pub(crate) async fn realize_foreign_plan(
     Ok(ForeignRealizationOutcome {
         receipt: any,
         built_root_index,
+        diagnostic_persistence_failures,
         _root_locks: root_locks,
     })
+}
+
+/// Persist every captured realization build log the way `mantle build` does.
+///
+/// Cached or reused outcomes carry no log and therefore write nothing, and an existing
+/// `<state-dir>/logs/<drv>.log` is never touched by a reuse run. Failures are returned for the
+/// caller to report; they never change the receipt or the realization result.
+fn write_realization_logs(
+    state_dir: &Path,
+    store_dir: &str,
+    result: &crunch_pipeline::RegisteredBuildResult,
+) -> Vec<crate::build_log::DiagnosticPersistenceFailure> {
+    use crate::build_log::DiagnosticPersistenceFailure;
+
+    assert!(!state_dir.as_os_str().is_empty(), "realization log state directory must not be empty");
+    assert!(!store_dir.is_empty(), "realization log store prefix must not be empty");
+    let logs_dir = state_dir.join("logs");
+    let mut failures = Vec::new();
+    if let Err(error) = std::fs::create_dir_all(&logs_dir) {
+        failures.push(DiagnosticPersistenceFailure::create_log_dir(&logs_dir, &error));
+        return failures;
+    }
+    for outcome in &result.outcomes {
+        let Some(log) = outcome.log.as_deref() else {
+            continue;
+        };
+        if let Err(failure) =
+            crate::build_cmd::write_log(&logs_dir, &outcome.drv_path, outcome.drv_path.name(), true, log)
+        {
+            failures.push(failure);
+        }
+    }
+    for failed in &result.failed_roots {
+        let Some(log) = failed.build_log.as_deref() else {
+            continue;
+        };
+        let Some(drv_path) = crunch_pipeline::parse_drv_key(store_dir, &failed.drv_key) else {
+            continue;
+        };
+        if let Err(failure) = crate::build_cmd::write_log(&logs_dir, &drv_path, drv_path.name(), false, log) {
+            failures.push(failure);
+        }
+    }
+    debug_assert!(failures.len() <= result.outcomes.len().saturating_add(result.failed_roots.len()));
+    debug_assert!(!logs_dir.as_os_str().is_empty());
+    failures
 }
 
 async fn open_foreign_store(
@@ -1412,6 +1465,92 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
+
+    #[test]
+    fn realization_logs_write_executed_outcomes_and_leave_cached_ones_alone() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        let built = StorePath::<String>::from_name_and_digest_fixed("realize-log-built.drv", [5u8; 20]).unwrap();
+        let reused = StorePath::<String>::from_name_and_digest_fixed("realize-log-reused.drv", [6u8; 20]).unwrap();
+        let failed = StorePath::<String>::from_name_and_digest_fixed("realize-log-failed.drv", [7u8; 20]).unwrap();
+
+        let mut first = empty_registered_build_result();
+        first.outcomes.push(build_outcome(&built, Some("builder said hi\n"), false));
+        first.outcomes.push(build_outcome(&reused, None, true));
+        first.failed_roots.push(failed_goal(&failed, Some("output admission failed\n")));
+        let failures = write_realization_logs(&state_dir, "/nix/store", &first);
+        assert!(failures.is_empty(), "fresh logs directory must accept every log: {failures:?}");
+
+        let logs_dir = state_dir.join("logs");
+        let built_log = std::fs::read_to_string(logs_dir.join(format!("{built}.log"))).unwrap();
+        assert!(built_log.contains("builder said hi"));
+        assert!(built_log.contains("# status: success"));
+        let failed_log = std::fs::read_to_string(logs_dir.join(format!("{failed}.log"))).unwrap();
+        assert!(failed_log.contains("output admission failed"));
+        assert!(failed_log.contains("# status: failure"));
+        assert!(!logs_dir.join(format!("{reused}.log")).exists(), "a cached outcome without a log writes nothing");
+
+        std::fs::write(logs_dir.join(format!("{reused}.log")), "sentinel\n").unwrap();
+        let mut second = empty_registered_build_result();
+        second.outcomes.push(build_outcome(&reused, None, true));
+        let failures = write_realization_logs(&state_dir, "/nix/store", &second);
+        assert!(failures.is_empty());
+        assert_eq!(std::fs::read_to_string(logs_dir.join(format!("{reused}.log"))).unwrap(), "sentinel\n");
+    }
+
+    #[test]
+    fn realization_log_failures_are_diagnostics_not_errors() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::fs::write(state_dir.join("logs"), b"not a directory").unwrap();
+        let built = StorePath::<String>::from_name_and_digest_fixed("realize-log-blocked.drv", [8u8; 20]).unwrap();
+        let mut result = empty_registered_build_result();
+        result.outcomes.push(build_outcome(&built, Some("captured\n"), false));
+
+        let failures = write_realization_logs(&state_dir, "/nix/store", &result);
+
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].operation, "create-log-dir");
+        assert_eq!(failures[0].artifact, "build-log");
+        assert!(failures[0].attempted_path.ends_with("logs"), "attempted path: {}", failures[0].attempted_path);
+    }
+
+    fn empty_registered_build_result() -> crunch_pipeline::RegisteredBuildResult {
+        crunch_pipeline::RegisteredBuildResult {
+            outcomes: Vec::new(),
+            failed_roots: Vec::new(),
+            outputs: Vec::new(),
+            hermeticity_audit_events: Vec::new(),
+            build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
+            network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
+        }
+    }
+
+    fn build_outcome(drv_path: &StorePath<String>, log: Option<&str>, cached: bool) -> crunch_build::BuildOutcome {
+        crunch_build::BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: BTreeMap::new(),
+            substitutions: BTreeMap::new(),
+            cached,
+            log: log.map(str::to_owned),
+        }
+    }
+
+    fn failed_goal(drv_path: &StorePath<String>, build_log: Option<&str>) -> crunch_build::FailedGoal {
+        let drv_key = drv_path.to_absolute_path_with_prefix("/nix/store");
+        crunch_build::FailedGoal {
+            origin_drv_key: drv_key.clone(),
+            drv_key,
+            error: "realization root failed".to_string(),
+            origin_error: "realization root failed".to_string(),
+            build_log: build_log.map(str::to_owned),
+        }
+    }
 
     #[test]
     fn cache_only_observer_removes_every_builder_dependency_and_argument() {

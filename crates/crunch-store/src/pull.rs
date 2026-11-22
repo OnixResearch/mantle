@@ -68,6 +68,10 @@ const HTTP_PULL_USER_AGENT_PREFIX: &str = "crunch";
 const NIX_CACHE_INFO_FILE_NAME: &str = "nix-cache-info";
 /// Bound the physical NAR observation to the same 16 TiB limit as `store verify`.
 const MAX_PULL_NAR_OBSERVATION_BYTES: u64 = 17_592_186_044_416;
+/// Maximum bytes of a NAR refusal detail carried into an operator-visible error.
+const MAX_NAR_REFUSAL_DETAIL_BYTES: usize = 512;
+/// Bytes appended to a truncation message at the end of a bounded refusal detail.
+const NAR_REFUSAL_TRUNCATION_MARKER: &str = "...";
 
 /// Options controlling pull behavior.
 #[derive(Debug, Clone)]
@@ -383,7 +387,7 @@ fn resolve_relative_nar_url(cache_url: &Url, narinfo_url_field: &str) -> Result<
     }
     cache_url
         .join(narinfo_url_field)
-        .map_err(|e| format!("joining cache URL {cache_url} with {narinfo_url_field}: {e}"))
+        .map_err(|e| format!("joining narinfo URL {narinfo_url_field}: {e}"))
 }
 
 pub async fn import_paths_from_http_cache(
@@ -744,9 +748,16 @@ async fn import_planned_http_member(
         Error::Store(format!("http-closure-planned-narinfo-parse-failed: {}: {error}", member.store_path))
     })?;
     ensure_narinfo_matches_plan(&narinfo, &discovered.text, member, context.options, context.handle.store_dir())?;
-    let ingested = ingest_http_nar(context, &narinfo, &member.store_path, result)
-        .await?
-        .ok_or_else(|| Error::Store(format!("http-closure-content-admission-failed: {}", member.store_path)))?;
+    let ingested = match ingest_http_nar(context, &narinfo, &member.store_path, result).await? {
+        NarIngestion::Ingested(ingested) => ingested,
+        NarIngestion::Refused(refusal) => {
+            return Err(Error::Store(format!(
+                "http-closure-content-admission-failed: {}: {}",
+                member.store_path,
+                refusal.render()
+            )));
+        }
+    };
     if ingested.nar_sha256 != narinfo.nar_hash || ingested.nar_size_bytes != narinfo.nar_size {
         return Err(Error::Store(format!("http-closure-nar-facts-mismatch: {}", member.store_path)));
     }
@@ -890,7 +901,8 @@ async fn pull_single_http_path(
     ) else {
         return Ok(());
     };
-    let Some(ingested) = ingest_http_nar(context, &narinfo, &requested_path_text, result).await? else {
+    let NarIngestion::Ingested(ingested) = ingest_http_nar(context, &narinfo, &requested_path_text, result).await?
+    else {
         return Ok(());
     };
     if ingested.nar_sha256 != narinfo.nar_hash || ingested.nar_size_bytes != narinfo.nar_size {
@@ -974,10 +986,64 @@ fn parse_http_narinfo<'a>(input: HttpNarinfoParseInput<'a>, result: &mut PullRep
     Some(narinfo)
 }
 
+#[derive(Debug)]
 struct IngestedNar {
     node: Node,
     nar_sha256: [u8; 32],
     nar_size_bytes: u64,
+}
+
+/// Why one HTTP NAR ingestion was refused.
+// r[impl foreign_derivation_import.content_admission_diagnostics]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NarRefusal {
+    /// Stable kebab-case refusal class.
+    class: &'static str,
+    /// Bounded operator-facing detail, never empty.
+    detail: String,
+}
+
+impl NarRefusal {
+    fn new(class: &'static str, detail: impl Into<String>) -> Self {
+        assert!(!class.is_empty(), "NAR refusal class must not be empty");
+        assert!(
+            MAX_NAR_REFUSAL_DETAIL_BYTES > NAR_REFUSAL_TRUNCATION_MARKER.len(),
+            "NAR refusal detail limit must leave room for the truncation marker"
+        );
+        let detail = bounded_nar_refusal_detail(&detail.into());
+        assert!(!detail.is_empty(), "NAR refusal detail must not be empty");
+        Self { class, detail }
+    }
+
+    fn render(&self) -> String {
+        assert!(!self.class.is_empty());
+        assert!(!self.detail.is_empty());
+        format!("{}: {}", self.class, self.detail)
+    }
+}
+
+/// Outcome of one HTTP NAR download and ingestion attempt.
+#[derive(Debug)]
+enum NarIngestion {
+    Ingested(IngestedNar),
+    Refused(NarRefusal),
+}
+
+fn bounded_nar_refusal_detail(detail: &str) -> String {
+    assert!(!detail.is_empty(), "NAR refusal detail must not be empty");
+    if detail.len() <= MAX_NAR_REFUSAL_DETAIL_BYTES {
+        return detail.to_string();
+    }
+    let keep = MAX_NAR_REFUSAL_DETAIL_BYTES.saturating_sub(NAR_REFUSAL_TRUNCATION_MARKER.len());
+    let mut end = keep;
+    while end > 0 && !detail.is_char_boundary(end) {
+        end = end.saturating_sub(1);
+    }
+    let mut bounded = detail[..end].to_string();
+    bounded.push_str(NAR_REFUSAL_TRUNCATION_MARKER);
+    assert!(bounded.len() <= MAX_NAR_REFUSAL_DETAIL_BYTES);
+    assert!(bounded.len() >= NAR_REFUSAL_TRUNCATION_MARKER.len());
+    bounded
 }
 
 async fn ingest_http_nar(
@@ -985,7 +1051,7 @@ async fn ingest_http_nar(
     narinfo: &NarInfo<'_>,
     requested_path_text: &str,
     result: &mut PullReport,
-) -> Result<Option<IngestedNar>, Error> {
+) -> Result<NarIngestion, Error> {
     assert!(!requested_path_text.is_empty());
     assert!(matches!(context.cache_url.scheme(), "http" | "https"));
     let nar_url = match resolve_relative_nar_url(context.cache_url, narinfo.url) {
@@ -993,7 +1059,7 @@ async fn ingest_http_nar(
         Err(detail) => {
             tracing::warn!(requested_path = %requested_path_text, "rejecting HTTP narinfo URL: {detail}");
             result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
-            return Ok(None);
+            return Ok(NarIngestion::Refused(NarRefusal::new("nar-url-rejected", detail)));
         }
     };
     let nar_response = match context.client.get(nar_url.clone()).send().await {
@@ -1001,25 +1067,31 @@ async fn ingest_http_nar(
         Ok(response) if response.status().is_redirection() => {
             tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR redirect rejected with status {}", response.status());
             result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
-            return Ok(None);
+            let detail = format!("{} returned redirect status {}", narinfo.url, response.status());
+            return Ok(NarIngestion::Refused(NarRefusal::new("nar-redirect-rejected", detail)));
         }
         Ok(response) => {
             tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR download failed with status {}", response.status());
             result.skipped_missing_nar_count = result.skipped_missing_nar_count.saturating_add(1);
-            return Ok(None);
+            let detail = format!("{} returned status {}", narinfo.url, response.status());
+            return Ok(NarIngestion::Refused(NarRefusal::new("nar-http-status", detail)));
         }
         Err(error) => {
             tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR request failed: {error}");
             result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
-            return Ok(None);
+            let detail = format!("request for {} failed: {}", narinfo.url, error.without_url());
+            return Ok(NarIngestion::Refused(NarRefusal::new("nar-request-failed", detail)));
         }
     };
-    let response_stream = nar_response.bytes_stream().map_err(|error| std::io::Error::other(error.to_string()));
+    // A cache URL can carry userinfo or query tokens; the stream error must not echo it.
+    let response_stream =
+        nar_response.bytes_stream().map_err(|error| std::io::Error::other(error.without_url().to_string()));
     let response_reader = tokio::io::BufReader::new(StreamReader::new(response_stream));
     let Some(nar_reader) = decoded_nar_reader(response_reader, narinfo.compression) else {
         tracing::warn!(requested_path = %requested_path_text, "unsupported HTTP NAR compression: {:?}", narinfo.compression);
         result.skipped_parse_error_count = result.skipped_parse_error_count.saturating_add(1);
-        return Ok(None);
+        let detail = format!("unsupported compression {:?}", narinfo.compression);
+        return Ok(NarIngestion::Refused(NarRefusal::new("nar-compression-unsupported", detail)));
     };
     let nar_read_limit = narinfo.nar_size.saturating_add(1);
     let mut bounded_nar_reader = nar_reader.take(nar_read_limit);
@@ -1031,7 +1103,7 @@ async fn ingest_http_nar(
     )
     .await;
     match ingestion {
-        Ok((node, nar_sha256, nar_size_bytes)) => Ok(Some(IngestedNar {
+        Ok((node, nar_sha256, nar_size_bytes)) => Ok(NarIngestion::Ingested(IngestedNar {
             node,
             nar_sha256,
             nar_size_bytes,
@@ -1039,7 +1111,8 @@ async fn ingest_http_nar(
         Err(error) => {
             tracing::warn!(requested_path = %requested_path_text, nar_url = %nar_url, "HTTP NAR ingestion failed: {error}");
             result.skipped_hash_mismatch_count = result.skipped_hash_mismatch_count.saturating_add(1);
-            Ok(None)
+            let detail = format!("{}: {error}", narinfo.url);
+            Ok(NarIngestion::Refused(NarRefusal::new("nar-ingestion-failed", detail)))
         }
     }
 }
@@ -2897,6 +2970,227 @@ mod tests {
         assert!(error.to_string().contains("http-closure-content-admission-failed"));
         assert!(pull_store.pathinfo_service().get(*child.store_path.digest()).await.unwrap().is_none());
         assert!(pull_store.pathinfo_service().get(*root.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[test]
+    fn nar_refusal_detail_is_bounded_and_utf8_safe() {
+        assert_eq!(bounded_nar_refusal_detail("short detail"), "short detail");
+
+        let ascii = "a".repeat(MAX_NAR_REFUSAL_DETAIL_BYTES.saturating_mul(2));
+        let bounded = bounded_nar_refusal_detail(&ascii);
+        assert_eq!(bounded.len(), MAX_NAR_REFUSAL_DETAIL_BYTES);
+        assert!(bounded.ends_with(NAR_REFUSAL_TRUNCATION_MARKER));
+
+        let multibyte = "é".repeat(MAX_NAR_REFUSAL_DETAIL_BYTES);
+        let bounded = bounded_nar_refusal_detail(&multibyte);
+        assert!(bounded.len() <= MAX_NAR_REFUSAL_DETAIL_BYTES);
+        assert!(bounded.ends_with(NAR_REFUSAL_TRUNCATION_MARKER));
+        assert!(std::str::from_utf8(bounded.as_bytes()).is_ok());
+
+        let refusal = NarRefusal::new("nar-http-status", "status 503 Service Unavailable");
+        assert_eq!(refusal.render(), "nar-http-status: status 503 Service Unavailable");
+    }
+
+    #[tokio::test]
+    async fn http_closure_content_admission_failure_names_the_http_status() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-status-refusal")).await;
+        let child = make_signed_pathinfo(&push_store, "status-refusal-child", b"child").await;
+        let root = make_signed_pathinfo_with_references(&push_store, "status-refusal-root", b"root", vec![
+            child.store_path.clone(),
+        ])
+        .await;
+        let cache_dir = tmp.path().join("cache-status-refusal");
+        export_paths_to_cache_dir(&push_store, &[child.clone(), root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(nar_route(&cache_dir, &child.store_path), HttpResponse::Fixed {
+            status_line: "HTTP/1.1 503 Service Unavailable".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: b"pool is full".to_vec(),
+        });
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-status-refusal")).await;
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+
+        let message = error.to_string();
+        assert!(message.contains("http-closure-content-admission-failed"), "message: {message}");
+        assert!(message.contains(child.store_path.name()), "message: {message}");
+        assert!(message.contains("nar-http-status"), "message: {message}");
+        assert!(message.contains("503 Service Unavailable"), "message: {message}");
+        assert!(pull_store.pathinfo_service().get(*child.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_content_admission_failure_names_the_ingestion_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-ingestion-refusal")).await;
+        let child = make_signed_pathinfo(&push_store, "ingestion-refusal-child", b"child").await;
+        let root = make_signed_pathinfo_with_references(&push_store, "ingestion-refusal-root", b"root", vec![
+            child.store_path.clone(),
+        ])
+        .await;
+        let cache_dir = tmp.path().join("cache-ingestion-refusal");
+        export_paths_to_cache_dir(&push_store, &[child.clone(), root.clone()], &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(nar_route(&cache_dir, &child.store_path), HttpResponse::ok_bytes(b"not a nix archive".to_vec()));
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-ingestion-refusal")).await;
+
+        let error = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &root.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap_err();
+
+        let message = error.to_string();
+        assert!(message.contains("http-closure-content-admission-failed"), "message: {message}");
+        assert!(message.contains(child.store_path.name()), "message: {message}");
+        let (_, detail) = message
+            .split_once("nar-ingestion-failed: ")
+            .unwrap_or_else(|| panic!("message must name the ingestion class: {message}"));
+        assert!(!detail.trim().is_empty(), "ingestion detail must not be empty: {message}");
+        assert!(detail.len() <= MAX_NAR_REFUSAL_DETAIL_BYTES, "detail must be bounded: {message}");
+    }
+
+    #[tokio::test]
+    async fn http_nar_refusal_does_not_echo_cache_credentials() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-redaction")).await;
+        let root = make_signed_pathinfo(&push_store, "redaction-root", b"root").await;
+        let cache_dir = tmp.path().join("cache-redaction");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&root), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let narinfo_text = read_narinfo_text(&cache_dir, &root.store_path);
+        let locator =
+            narinfo_text.lines().find_map(|line| line.strip_prefix("URL: ")).expect("narinfo URL").to_string();
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(nar_route(&cache_dir, &root.store_path), HttpResponse::Fixed {
+            status_line: "HTTP/1.1 503 Service Unavailable".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: b"pool is full".to_vec(),
+        });
+        let server = HttpTestServer::spawn(routes);
+        // Source admission rejects credentialed cache URLs; ingest it directly to prove that a
+        // refusal value never carries the cache URL anyway.
+        let mut cache_url = server.base_url.clone();
+        cache_url.set_username("user").unwrap();
+        cache_url.set_password(Some("s3cret")).unwrap();
+        cache_url.set_query(Some("token=t0k3n"));
+        let pull_store = open_test_store(&tmp.path().join("pull-redaction")).await;
+        let client = reqwest::Client::new();
+        let options = default_pull_options();
+        let context = HttpPullContext {
+            handle: &pull_store,
+            client: &client,
+            cache_url: &cache_url,
+            options: &options,
+        };
+        let narinfo = NarInfo::parse_with_store_dir(&narinfo_text, pull_store.store_dir()).unwrap();
+        let mut report = empty_pull_report(1);
+
+        let refusal = match ingest_http_nar(&context, &narinfo, "redaction-root", &mut report).await.unwrap() {
+            NarIngestion::Refused(refusal) => refusal,
+            NarIngestion::Ingested(_) => panic!("a 503 NAR must be refused"),
+        };
+        let message = refusal.render();
+
+        assert!(message.contains("nar-http-status"), "message: {message}");
+        assert!(message.contains(&locator), "message must name the narinfo locator: {message}");
+        assert!(!message.contains("s3cret"), "detail must not echo cache credentials: {message}");
+        assert!(!message.contains("t0k3n"), "detail must not echo cache query tokens: {message}");
+        assert!(!message.contains("user:"), "detail must not echo cache userinfo: {message}");
+        assert_eq!(report.skipped_missing_nar_count, 1);
+    }
+
+    #[tokio::test]
+    async fn http_pull_status_refusal_still_skips_and_counts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-skip-status")).await;
+        let pi = make_signed_pathinfo(&push_store, "skip-status", b"skip status").await;
+        let cache_dir = tmp.path().join("cache-skip-status");
+        export_paths_to_cache_dir(&push_store, &[pi.clone()], &cache_dir, &PushOptions { trust_unsigned: false })
+            .await
+            .unwrap();
+        let mut routes = cache_routes(&cache_dir);
+        routes.insert(nar_route(&cache_dir, &pi.store_path), HttpResponse::Fixed {
+            status_line: "HTTP/1.1 503 Service Unavailable".to_string(),
+            headers: vec![("Content-Type".to_string(), "text/plain".to_string())],
+            body: b"pool is full".to_vec(),
+        });
+        let server = HttpTestServer::spawn(routes);
+        let pull_store = open_test_store(&tmp.path().join("pull-skip-status")).await;
+
+        let report = import_paths_from_http_cache(
+            &pull_store,
+            &server.base_url,
+            std::slice::from_ref(&pi.store_path),
+            &default_pull_options(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.imported_count, 0);
+        assert_eq!(report.skipped_missing_nar_count, 1);
+        assert_eq!(report.skipped_parse_error_count, 0);
+        assert!(pull_store.pathinfo_service().get(*pi.store_path.digest()).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn http_closure_successful_import_keeps_its_report() {
+        let tmp = tempfile::tempdir().unwrap();
+        let push_store = open_test_store(&tmp.path().join("push-unchanged")).await;
+        let pi = make_signed_pathinfo(&push_store, "unchanged-success", b"payload").await;
+        let cache_dir = tmp.path().join("cache-unchanged");
+        export_paths_to_cache_dir(&push_store, std::slice::from_ref(&pi), &cache_dir, &PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+        let server = HttpTestServer::spawn(cache_routes(&cache_dir));
+        let pull_store = open_test_store(&tmp.path().join("pull-unchanged")).await;
+
+        let report = import_http_cache_closure(
+            &pull_store,
+            &server.base_url,
+            &pi.store_path,
+            &default_pull_options(),
+            HttpClosureLimits::default(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(report.pull.imported_count, 1);
+        assert_eq!(report.pull.paths.len(), 1);
+        assert_eq!(report.pull.paths[0].store_path, pi.store_path.to_string());
+        assert_eq!(report.pull.paths[0].nar_size, pi.nar_size);
+        assert_eq!(report.pull.skipped_missing_nar_count, 0);
+        assert_eq!(report.pull.skipped_parse_error_count, 0);
+        assert_eq!(report.reused_complete_count, 0);
+        assert!(report.roots_admitted);
     }
 
     #[tokio::test]

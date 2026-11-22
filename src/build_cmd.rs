@@ -1654,7 +1654,7 @@ fn prepare_logs_dir(logs_dir: &Path) -> Result<(), DiagnosticPersistenceFailure>
     std::fs::create_dir_all(logs_dir).map_err(|error| DiagnosticPersistenceFailure::create_log_dir(logs_dir, &error))
 }
 
-fn print_diagnostic_persistence_failures(failures: &[DiagnosticPersistenceFailure]) {
+pub(crate) fn print_diagnostic_persistence_failures(failures: &[DiagnosticPersistenceFailure]) {
     for failure in failures {
         eprintln!("WARNING: diagnostic persistence failed");
         eprintln!("  operation: {}", failure.operation);

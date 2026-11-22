@@ -922,6 +922,49 @@ fn cache_inputs_build_roots_v1_still_refuses_a_present_root_and_keeps_receipt_v1
     assert_eq!(path_signatures(&temp, PARENT_OUTPUT), signatures_before, "refusal must not mint a signature");
 }
 
+#[test]
+fn cache_inputs_build_or_reuse_route_keeps_the_built_root_log_and_leaves_reused_roots_alone() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+
+    let first = realize_with_receipt(&temp, &fixture, &binding, "first-receipt.json");
+    assert!(first.status.success(), "first realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let receipt = json_file(&temp.path().join("first-receipt.json"));
+    assert_eq!(receipt["roots"][0]["disposition"], "built");
+    let derivation = receipt["roots"][0]["target_derivation"].as_str().expect("root derivation");
+    let basename = derivation.rsplit('/').next().expect("root derivation basename");
+    let state_dir = temp.path().join("state");
+    let log_path = state_dir.join("logs").join(format!("{basename}.log"));
+    assert!(log_path.is_file(), "realization must keep the built root log at {}", log_path.display());
+    let log = fs::read_to_string(&log_path).expect("read realization log");
+    assert!(log.contains("# status: success"), "log header: {log}");
+    assert!(log.contains("# derivation: "), "log must carry the mantle build header: {log}");
+    assert!(log.contains("parent builder ran"), "log must contain the builder's output: {log}");
+
+    let shown = mantle_cmd()
+        .args(["--state-dir", path_str(&state_dir), "log", basename])
+        .output()
+        .expect("run mantle log");
+    assert!(shown.status.success(), "mantle log failed: {}", String::from_utf8_lossy(&shown.stderr));
+    assert!(
+        String::from_utf8_lossy(&shown.stdout).contains("parent builder ran"),
+        "mantle log must show the captured builder output: {}",
+        String::from_utf8_lossy(&shown.stdout)
+    );
+
+    fs::write(&log_path, "sentinel\n").expect("seed sentinel log");
+    let second = realize_with_receipt(&temp, &fixture, &binding, "second-receipt.json");
+    assert!(second.status.success(), "second realize failed: {}", String::from_utf8_lossy(&second.stderr));
+    assert_eq!(json_file(&temp.path().join("second-receipt.json"))["roots"][0]["disposition"], "reused");
+    assert_eq!(
+        fs::read_to_string(&log_path).expect("read log after reuse"),
+        "sentinel\n",
+        "a reuse run must not create or rewrite the root log"
+    );
+}
+
 fn realize_with_build_cores(
     temp: &TempDir,
     fixture: &Fixture,

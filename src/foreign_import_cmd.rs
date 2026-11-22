@@ -2104,6 +2104,9 @@ fn run_realize(
         build_cores: request.build_cores,
     })?;
     let receipt = &outcome.receipt;
+    if !context.json {
+        crate::build_cmd::print_diagnostic_persistence_failures(&outcome.diagnostic_persistence_failures);
+    }
     port.publish(request.receipt_out, receipt, "foreign realization receipt")?;
     for (path, bytes) in &outcome.built_root_index {
         publish_built_root_index(path, bytes)?;
