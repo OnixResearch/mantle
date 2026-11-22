@@ -23,4 +23,4 @@
 ## Phase 4: Gates, commit and evidence
 
 - [x] [serial] T4.1 Run focused cargo tests, clippy `-D warnings`, fmt, `./scripts/check-no-std-core.sh`, `cairn validate` and the lifecycle gates; commit. r[foreign_derivation_import.cache_inputs_build_roots]
-- [ ] [serial] T4.2 Run the WP8 live qualification with the checked executable: filtered root-free cache, re-plan, realize, NAR/`diff -r` comparison, server-log shape; archive with evidence (large files outside the repository). r[foreign_derivation_import.cache_inputs_build_roots]
+- [x] [serial] T4.2 Run the WP8 live qualification with the checked executable: filtered root-free cache, re-plan, realize, NAR/`diff -r` comparison, server-log shape; archive with evidence (large files outside the repository). r[foreign_derivation_import.cache_inputs_build_roots]

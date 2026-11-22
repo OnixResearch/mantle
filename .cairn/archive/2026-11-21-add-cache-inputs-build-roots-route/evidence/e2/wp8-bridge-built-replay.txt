@@ -1,0 +1,33 @@
+# replay from exported handoff with PATH=/var/empty 2026-11-21T20:42:28-05:00
+{
+  "schema": "mantle-external-evidence-observation-v1",
+  "packaging": {
+    "source_revision": "e8a961af3dbeb6f7a0f7dfbf82100bfe2abcb482",
+    "source_identity": "b3:4b297b4ad379c7bd58fbb5a82826660e3292cfdfcef7a20270303d702f0d1676",
+    "profile_identity": "b3:fe5b1e55df944133734a28d5fda5abe065b569b74d24d6b0c59c8e9942192e70",
+    "provider_identity": "b3:ff95cfcf82c969e36b960e9cfb193e24dd593c1525ed4e4e47a0046316bf81f1",
+    "tool_contract_identity": "b3:a572ced2e4149734f6f3794bbb6d7196fc0ae9d807c4eac83f7c99e8cda707a3",
+    "options_identity": "b3:3efd9fb1acd95400d7892e6cf8586b338ff5909e096f905bb9247903a7f2c679"
+  },
+  "receipt_identity": "b3:e1186ca7f194c86a8ef512ef3ef0d1bc180e7f3b02cf70182adafa189f11ec89",
+  "association_identity": "b3:9fcafc24ab438a9153860ae627c5ee38ba53bedc0f5fc96d474561bca7af71b3",
+  "producer": "Trellis",
+  "externally_reported_outcome": "supported",
+  "checked_materials": [
+    "artifacts/verus.command",
+    "artifacts/verus.stderr",
+    "artifacts/verus.stdout",
+    "evidence.json",
+    "producer-report.json",
+    "proof-cards.json",
+    "source/src/bounds.rs",
+    "source/src/lib.rs",
+    "verus-receipt.json"
+  ],
+  "proof_acceptance": "not-evaluated-by-mantle",
+  "external_report_identity": "b3:5c2d65adee91831d059feee0bb926125362281f8863bdc50b40b0220eb128dd5",
+  "producer_job_identity": "b3:387008d0189b305a08613a375c91f603c8c7dbd6fd09b9ce69eb8d227d9b4ab4",
+  "tool_graph_identity": "b3:8bc04fed7cf257b27492382e29a8580820d564e900783e7650149f1e1d8928e8",
+  "boundary": "Mantle checks selected exact-byte links only; producer receipts remain opaque external evidence, not build success, theorem admission, or release eligibility"
+}
+REPLAY_EXIT=0

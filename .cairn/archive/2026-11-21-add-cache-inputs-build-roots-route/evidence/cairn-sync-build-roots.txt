@@ -1,0 +1,122 @@
+$ cairn sync add-cache-inputs-build-roots-route --root . --execute
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/add-cache-inputs-build-roots-route/specs/foreign-derivation-import/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/add-cache-inputs-build-roots-route/specs/foreign-derivation-import/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "add-cache-inputs-build-roots-route",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/add-cache-inputs-build-roots-route/specs/foreign-derivation-import/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "774014ed3d30d2ee76a545b4af1de6ebf909db712287c43edd052f6bbb7dd172",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "31d66b30ff711abb07199fdc01d3974990a8d46572a1375730ccdc7dfc87db69",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "6e2da096dcf3d64655dff81b46be9ea9e946a8dab8c4969349341719197a6886",
+        "destination": ".cairn/specs/foreign-derivation-import/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "bc3888c1b76b7a251fb7d86222f661d98f718bc90878cf8079587c5e23d018ed",
+        "operations": [
+          {
+            "block_hash": "b9828caf7d0c039ce88a57c1a9452f7b47a5c163fb0bd99aa8f1e170fba785df",
+            "heading": "### Requirement: Cache-inputs build roots",
+            "kind": "added",
+            "requirement_id": "foreign_derivation_import.cache_inputs_build_roots"
+          },
+          {
+            "block_hash": "b5d016bc07b77a83afb62d54e4e9f1b499696f60cb0e2ae7b34a7fb67bf704c1",
+            "heading": "### Requirement: Cache-only preserved foreign paths",
+            "kind": "modified",
+            "requirement_id": "foreign_derivation_import.cache_only_preserved_paths"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "foreign_derivation_import.cache_inputs_build_roots",
+            "state": "applied"
+          },
+          {
+            "kind": "modified",
+            "requirement_id": "foreign_derivation_import.cache_only_preserved_paths",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/add-cache-inputs-build-roots-route/specs/foreign-derivation-import/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "bc3888c1b76b7a251fb7d86222f661d98f718bc90878cf8079587c5e23d018ed",
+          "exists": true,
+          "path": "./.cairn/specs/foreign-derivation-import/spec.md"
+        }
+      ],
+      "manifest_hash": "b022168b750983d6f164a2f3536b21330874c048db0e1a5799c26c4489d93ae5"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "31d66b30ff711abb07199fdc01d3974990a8d46572a1375730ccdc7dfc87db69",
+          "exists": true,
+          "path": "./.cairn/specs/foreign-derivation-import/spec.md"
+        }
+      ],
+      "manifest_hash": "29b0759b41f45443f3620a48dc41dc77cc4cf73a9061325f10a648b4b4503a00"
+    },
+    "kind": "sync",
+    "manifest_hash": "d7a5d34d6f580feba9b723da6833324ead2878b547b4122ae7e85497a4591b45"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "c210ba35be9f4c0fc46650c5a716f84b5fb4df4f1d009e8e90a655bcfe4e1121",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "6d3967c89c26959ac29313733b23e7bdd15a6ea7d5ea192a5f606725ef03eb92",
+  "reasons": [],
+  "receipt_hash": "c03a2b030554ad861e6ae5b441d77bf2b4c6ab24e5b8af0a5d14431bacacf605",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
+SYNC_EXIT=0

@@ -1,0 +1,403 @@
+$ CAIRN_ARCHIVE_DATE=2026-11-21 cairn archive add-cache-inputs-build-roots-route --root . --execute
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: add-cache-inputs-build-roots-route",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route"
+    }
+  ],
+  "blocked": false,
+  "change": "add-cache-inputs-build-roots-route",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "af9b9beb0effedbd132e2e2b6f79cfcfa117293575c772bd2631376dddc8edff",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "edc64bb0aa266e8df6637839553ff6229efa2152f84e71bdde4eeab98bca8a50",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/design.md"
+        },
+        {
+          "content_hash": "cbb2d359bf3282f017aacd76794c7a3e3020b4a419c4a5860112aef4c6a6d17c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/cairn-gates.txt"
+        },
+        {
+          "content_hash": "50947e2a00647fb6a02302c7f82265978fd175e100234733e19845992ca57adf",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/check-no-std-core-datapool.txt"
+        },
+        {
+          "content_hash": "3086b1b604b7b8c604faa859d09e8a0fc17eafa64300900f0cf78a34e1de8ee2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/check-no-std-core.txt"
+        },
+        {
+          "content_hash": "530296f624a4a540a6db4f792664e7aba1f65511463b67505ec9539bc3c09898",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/clippy-and-store-tests.txt"
+        },
+        {
+          "content_hash": "9c4a1f6a9a5e01a34106406bdc15c98214abc9cd063e6cd11c517ab8fa42aa61",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/clippy-fmt-validate.txt"
+        },
+        {
+          "content_hash": "190e50e9c54121df7c73378f4116532495038c725d30cbc7c63bebb5566ad43b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/clippy.txt"
+        },
+        {
+          "content_hash": "f5481fd0ae9b94db4e6d40aa62821e812ac889660e34f250c734d404d7589639",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/E2.md"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/diff.txt"
+        },
+        {
+          "content_hash": "74d931c79c1f65bc5ab106235a2c563b2db5e316010e4162ba96de31b939d40e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/handoff-built-observation.json"
+        },
+        {
+          "content_hash": "74d931c79c1f65bc5ab106235a2c563b2db5e316010e4162ba96de31b939d40e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/handoff-built-replay-observation.json"
+        },
+        {
+          "content_hash": "1614b9f97b015bb34a3ced4ccfbb7152a4f9862b8f709a9c2482e1688b13031b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/realization-receipt.json"
+        },
+        {
+          "content_hash": "e67214dd899a3ca52f532c09a2e6afe1a575f85de2bd99da154d278402dcec2e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/realize.txt"
+        },
+        {
+          "content_hash": "b3e9a001717035ee09beb462c7455960217ebf4b4a12c6592c4704517850dee7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/wp8-bridge-build-5263dab.txt"
+        },
+        {
+          "content_hash": "f81750cac65a7bf9b01dc84de50a5bc6355a583d25e5d343a1648ce490a13f79",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/wp8-bridge-built-replay.txt"
+        },
+        {
+          "content_hash": "edd78bbc0efc6932d359c2e2237e759942d680f09d6954456908c713ef1da588",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/wp8-bridge-built.txt"
+        },
+        {
+          "content_hash": "561a8b3052da5b0737fd44040788183c17a129aae104b45b73691d8b540f2329",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/wp8-cache-build-roots-prep.txt"
+        },
+        {
+          "content_hash": "1d1d3e260fa48f707326b9ddb1c10fd6a203dc6a46ada08451a50ea2c6ddd291",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/wp8-cache-build-roots-server.log"
+        },
+        {
+          "content_hash": "454e4df310dc7b99deda23f1cc52458b419c386574657e5633f4a4fe24bda91a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/e2/wp8-negatives-built.txt"
+        },
+        {
+          "content_hash": "753d305b6b90df20a43a15da71eec9423458fee40b2815bd3882fcb93cebd199",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/fmt.txt"
+        },
+        {
+          "content_hash": "a400d63acda28c324cdb4d433da9fa2e5be1bda1adf6bdd1f7c067d39d4f7505",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/focused-tests-final.txt"
+        },
+        {
+          "content_hash": "e18905a2edc1b651cdb0b02ee30c9ca28d73e50362f7d8f1b5c98f03aa04554e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/focused-unit-tests.txt"
+        },
+        {
+          "content_hash": "8db6bcd991fc72a136cfff508bae415ebf9ff8e9fb6b089047ed86dbf577149e",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/host-store-fallback-test.txt"
+        },
+        {
+          "content_hash": "d72ad36ee3f2972cc644833611e3e4456a637c191588306214581b34ef3bf8b5",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/integration-tests-no-fail-fast-f7c7fd090.txt"
+        },
+        {
+          "content_hash": "0aec394f17d7db66f3fff4a0506fefe52884ab4b741c6d98fc6eb76186d19abe",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/pruning-tests-f7c7fd090-fail.txt"
+        },
+        {
+          "content_hash": "03f43a4755adfbfbf93d7b6d9a224d363323e39f96fab11c32a03abe613c870c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/pruning-tests.txt"
+        },
+        {
+          "content_hash": "865f46cf98e35b9e1c1e2594be194d05f03f617962b084543d1ecceae0362844",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/report.md"
+        },
+        {
+          "content_hash": "7ee372e538c61eaa20cfe824dc6426a228c496f3b4cc8dfda80c9ce706c7d639",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/seed-all-outputs-final.txt"
+        },
+        {
+          "content_hash": "5ea06c10b84415d552c32f6f2d188e1b15149a33d57508b572e4a3109240d2b7",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/evidence/seed-all-outputs-old-vs-fixed.txt"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/metadata.json"
+        },
+        {
+          "content_hash": "02c0d10ca100f68ea8f9275afbc6ca5aedd3fecb9313939f7771d3d7a7372462",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/proposal.md"
+        },
+        {
+          "content_hash": "6e2da096dcf3d64655dff81b46be9ea9e946a8dab8c4969349341719197a6886",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "1870742c6956ddf6c4b8e4b0b345b1c2942f4d953c7ea17e14ff0ebf1deedb78",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-21-add-cache-inputs-build-roots-route/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route"
+        }
+      ],
+      "manifest_hash": "aa51af3f7c3614c1a42dbe05c2d999bf28ae94b31a9761013b3c900f53edd885"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "edc64bb0aa266e8df6637839553ff6229efa2152f84e71bdde4eeab98bca8a50",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/design.md"
+        },
+        {
+          "content_hash": "cbb2d359bf3282f017aacd76794c7a3e3020b4a419c4a5860112aef4c6a6d17c",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/cairn-gates.txt"
+        },
+        {
+          "content_hash": "50947e2a00647fb6a02302c7f82265978fd175e100234733e19845992ca57adf",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/check-no-std-core-datapool.txt"
+        },
+        {
+          "content_hash": "3086b1b604b7b8c604faa859d09e8a0fc17eafa64300900f0cf78a34e1de8ee2",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/check-no-std-core.txt"
+        },
+        {
+          "content_hash": "530296f624a4a540a6db4f792664e7aba1f65511463b67505ec9539bc3c09898",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/clippy-and-store-tests.txt"
+        },
+        {
+          "content_hash": "9c4a1f6a9a5e01a34106406bdc15c98214abc9cd063e6cd11c517ab8fa42aa61",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/clippy-fmt-validate.txt"
+        },
+        {
+          "content_hash": "190e50e9c54121df7c73378f4116532495038c725d30cbc7c63bebb5566ad43b",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/clippy.txt"
+        },
+        {
+          "content_hash": "f5481fd0ae9b94db4e6d40aa62821e812ac889660e34f250c734d404d7589639",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/E2.md"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/diff.txt"
+        },
+        {
+          "content_hash": "74d931c79c1f65bc5ab106235a2c563b2db5e316010e4162ba96de31b939d40e",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/handoff-built-observation.json"
+        },
+        {
+          "content_hash": "74d931c79c1f65bc5ab106235a2c563b2db5e316010e4162ba96de31b939d40e",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/handoff-built-replay-observation.json"
+        },
+        {
+          "content_hash": "1614b9f97b015bb34a3ced4ccfbb7152a4f9862b8f709a9c2482e1688b13031b",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/realization-receipt.json"
+        },
+        {
+          "content_hash": "e67214dd899a3ca52f532c09a2e6afe1a575f85de2bd99da154d278402dcec2e",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/realize.txt"
+        },
+        {
+          "content_hash": "b3e9a001717035ee09beb462c7455960217ebf4b4a12c6592c4704517850dee7",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/wp8-bridge-build-5263dab.txt"
+        },
+        {
+          "content_hash": "f81750cac65a7bf9b01dc84de50a5bc6355a583d25e5d343a1648ce490a13f79",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/wp8-bridge-built-replay.txt"
+        },
+        {
+          "content_hash": "edd78bbc0efc6932d359c2e2237e759942d680f09d6954456908c713ef1da588",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/wp8-bridge-built.txt"
+        },
+        {
+          "content_hash": "561a8b3052da5b0737fd44040788183c17a129aae104b45b73691d8b540f2329",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/wp8-cache-build-roots-prep.txt"
+        },
+        {
+          "content_hash": "1d1d3e260fa48f707326b9ddb1c10fd6a203dc6a46ada08451a50ea2c6ddd291",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/wp8-cache-build-roots-server.log"
+        },
+        {
+          "content_hash": "454e4df310dc7b99deda23f1cc52458b419c386574657e5633f4a4fe24bda91a",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/e2/wp8-negatives-built.txt"
+        },
+        {
+          "content_hash": "753d305b6b90df20a43a15da71eec9423458fee40b2815bd3882fcb93cebd199",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/fmt.txt"
+        },
+        {
+          "content_hash": "a400d63acda28c324cdb4d433da9fa2e5be1bda1adf6bdd1f7c067d39d4f7505",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/focused-tests-final.txt"
+        },
+        {
+          "content_hash": "e18905a2edc1b651cdb0b02ee30c9ca28d73e50362f7d8f1b5c98f03aa04554e",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/focused-unit-tests.txt"
+        },
+        {
+          "content_hash": "8db6bcd991fc72a136cfff508bae415ebf9ff8e9fb6b089047ed86dbf577149e",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/host-store-fallback-test.txt"
+        },
+        {
+          "content_hash": "d72ad36ee3f2972cc644833611e3e4456a637c191588306214581b34ef3bf8b5",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/integration-tests-no-fail-fast-f7c7fd090.txt"
+        },
+        {
+          "content_hash": "0aec394f17d7db66f3fff4a0506fefe52884ab4b741c6d98fc6eb76186d19abe",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/pruning-tests-f7c7fd090-fail.txt"
+        },
+        {
+          "content_hash": "03f43a4755adfbfbf93d7b6d9a224d363323e39f96fab11c32a03abe613c870c",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/pruning-tests.txt"
+        },
+        {
+          "content_hash": "865f46cf98e35b9e1c1e2594be194d05f03f617962b084543d1ecceae0362844",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/report.md"
+        },
+        {
+          "content_hash": "7ee372e538c61eaa20cfe824dc6426a228c496f3b4cc8dfda80c9ce706c7d639",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/seed-all-outputs-final.txt"
+        },
+        {
+          "content_hash": "5ea06c10b84415d552c32f6f2d188e1b15149a33d57508b572e4a3109240d2b7",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/evidence/seed-all-outputs-old-vs-fixed.txt"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/metadata.json"
+        },
+        {
+          "content_hash": "02c0d10ca100f68ea8f9275afbc6ca5aedd3fecb9313939f7771d3d7a7372462",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/proposal.md"
+        },
+        {
+          "content_hash": "6e2da096dcf3d64655dff81b46be9ea9e946a8dab8c4969349341719197a6886",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "1870742c6956ddf6c4b8e4b0b345b1c2942f4d953c7ea17e14ff0ebf1deedb78",
+          "exists": true,
+          "path": "./.cairn/changes/add-cache-inputs-build-roots-route/tasks.md"
+        }
+      ],
+      "manifest_hash": "b11a83b163945908fc3e2ef6b887e3f75bfaa27a3b9bc37caee858b30a885c28"
+    },
+    "kind": "archive",
+    "manifest_hash": "0a722e943fd20e483e3820ea7155608e216460d606534c083155f63e6ad6f7c7"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "a2d195f7c9bdf7732775cd3b8824d278b98089af8741bc003b56b30bb9b51b63",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "105720d4568052d2d2f36af6ca16f94edc9a8322924ec7bff27430bf381e9e6c",
+  "reasons": [],
+  "receipt_hash": "644c9d0679665fb8341d0b37090184d41baedbe4013f3fca84310cdb80084a95",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}
+ARCHIVE_EXIT=0

@@ -1,0 +1,18 @@
+# negatives for Mantle-built root 2026-11-21T20:43:05-05:00 (store-prefix /nix/store)
+## untrusted signer (verify with the WP8 key instead of the Mantle build key)
+0 checked, 0 mismatches
+UNTRUSTED_EXIT=0
+## tampered NAR (physical export differs from the recorded NAR)
+0 checked, 0 mismatches
+TAMPER_VERIFY_EXIT=0
+tampered_export_nar=sha256-CNBDVZ3dmkfFSQajr59oSz/K9MoY1RrzCYHKu42oPQQ=
+recorded_nar=sha256-zUn6DMJIENyxoINDZMGptW0FLphtmE0ydx9mfM1ft1o=
+## tampered NAR: bridge refuses the tampered owner output
+verification bridge: trailing characters at line 102 column 1
+TAMPER_BRIDGE_EXIT=1
+## untrusted signer: a cache member signed only by another key is refused
+{"error":"hydrating preflighted foreign cache closure: store: http-closure-untrusted-narinfo: q2014afk6bp02x3hfz2c94ai251mwzjj-stdenv-linux","code":3,"kind":"internal"}
+BAD_SIGNER_EXIT=3
+## cache offers the root: the route refuses before any mutation
+{"error":"cache-inputs build route refuses a root offered by the cache: 5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job","code":3,"kind":"internal"}
+ROOT_OFFERED_EXIT=3
