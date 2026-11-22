@@ -1,0 +1,59 @@
+{
+  "backend": "snix",
+  "backend_capabilities": {
+    "atomic_batch_import": true,
+    "core": [
+      "output-admission",
+      "lookup",
+      "fresh-process-reopen",
+      "closure-resolution",
+      "export",
+      "store-archive-export",
+      "store-archive-import",
+      "gc-plan",
+      "plan-bound-gc",
+      "action-result-pathinfo-output-reuse",
+      "store-sign",
+      "store-repair-final-nar"
+    ],
+    "max_root_changes": null,
+    "overlay_composition": true,
+    "rust_unit_cache": true,
+    "unsigned_admission": true
+  },
+  "overlay": null,
+  "paths": [
+    {
+      "ca": null,
+      "deriver": "clnjhb7wy6fgrakdrjdz23ki8ahzap8c-trellis-bounds-verus-job",
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_sha256": "cd49fa0cc24810dcb1a0834364c1a9b56d052e986d984d32771f667ccd5fb75a",
+      "nar_size": 9867968,
+      "node": "Directory { digest: blake3-4ihdodTdPQlpLwv/4B+cE8ew6KU/L+Oqwd906KZIP5U=, size: 888 }",
+      "references": [
+        "5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+        "p72j1v14s37w7v91gfi03svh54d6ccwi-terrane-verus-0.2026.10.18.7d82994"
+      ],
+      "retention_interests": {
+        "interests": [
+          {
+            "owner": "legacy-unmanaged",
+            "reason": "legacy-root-registered",
+            "record_id": "9ed9c9347826edb8dd72042b51e44167752f3c0f14dc486b5c2dcea680f48509"
+          }
+        ],
+        "legacy_unmanaged": false,
+        "logical_path": "/nix/store/5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+        "record_count": 1
+      },
+      "shadows": [],
+      "signatures": [
+        "crunch-britton-desktop-1:mriiquJGxdP8GpIrzNkFfwlm6kk8V/4HU4FwnHryCkfooIjOXqkAMmX18Sinxhjd0ePmAQKdJJZWB0bo8b5vDQ=="
+      ],
+      "store_path": "5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job"
+    }
+  ],
+  "schema": "mantle-store-info-v3"
+}
