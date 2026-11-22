@@ -1,0 +1,9 @@
+# 10-negative-signer-mismatch
+# started 2026-11-22T12:05:48-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2
+# command: /usr/bin/env PATH=/var/empty SNIX_BUILD_BWRAP=/nix/store/mvj6y8k3xs35cj7kq937xi44q4hl3r93-bubblewrap-0.12.0/bin/bwrap /nix/store/5z292f6b7rgb3wr2a9sczkrzaz8x1bii-mantle-0.1.0/bin/mantle --json --state-dir /datapool/mantle-store/build-or-reuse-20261122/wp8-v2/state --store /datapool/mantle-store/build-or-reuse-20261122/wp8-v2/store --store-prefix /nix/store --remote-binding-config /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2/binding/remote-endpoint-binding.json foreign-import realize --plan /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2/graph/plan.json --import-receipt /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2/graph/import-receipt.json --source-bundle /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2/graph/source-bundle.json --source-bundle-blake3 8ed1103b5de3054ee13ea391af805e276e3cc3b6ceaa50b2149193adb1ff1777 --execution-profile /datapool/mantle-store/build-or-reuse-20261122/mantle-src-6594e7fd1/config/foreign-execution-profiles/generated/nix.json --cache-closure-policy /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2/cache-closure-policy.json --signing-key /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2/negative/wp8-v2-negative-1.sec --receipt-out /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2/receipts/negative-signer-mismatch.json --substitute 
+--- stdout ---
+--- stderr ---
+{"error":"refusing to reuse present foreign root 5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job: present root cannot be reused: signer-mismatch","code":3,"kind":"internal"}
+--- EXIT=3
+--- wall: 70.31s

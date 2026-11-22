@@ -1,0 +1,26 @@
+{
+  "schema_version": "cairn.convergence-case.v1",
+  "registry": "requirement-registry.json",
+  "targets": "targets.json",
+  "generated_sources": "generated.json",
+  "trusted_signers": [
+    "crunch-britton-desktop-1"
+  ],
+  "contracts": [
+    {
+      "contract_id": "trellis.bounds.verus",
+      "contract": "contract.json",
+      "decision": "decision.json",
+      "evidence": "evidence.json",
+      "handoff": "handoff",
+      "producer_output": "producer-output/5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+      "producer_output_locator": "/datapool/mantle-store/wp8-20261121/realize-evidence-store/5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+      "realization_receipt": "realization-receipt.json",
+      "store_info": "store-info.json",
+      "original_realization_receipt": "original-realization-receipt.json"
+    }
+  ],
+  "trusted_builder_keys": [
+    "3da127ef3efcf4a6a90314496976fc3a4d3972ad7e0f8f67e819e593495e2ccd"
+  ]
+}

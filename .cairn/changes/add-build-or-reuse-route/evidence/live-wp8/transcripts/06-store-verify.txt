@@ -1,0 +1,10 @@
+# 06-store-verify
+# started 2026-11-22T12:05:26-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2
+# command: /nix/store/5z292f6b7rgb3wr2a9sczkrzaz8x1bii-mantle-0.1.0/bin/mantle --json --state-dir /datapool/mantle-store/build-or-reuse-20261122/wp8-v2/state --store /datapool/mantle-store/build-or-reuse-20261122/wp8-v2/store --store-prefix /nix/store store verify 5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job --trusted-public-keys crunch-britton-desktop-1:FlA62qnSo8C7U6HsFdOrOGUZU0mVVvkR37lzfJYazfg= 
+--- stdout ---
+OK 5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job  trusted_signatures=1/1
+--- stderr ---
+1 checked, 0 mismatches
+--- EXIT=0
+--- wall: 0.32s

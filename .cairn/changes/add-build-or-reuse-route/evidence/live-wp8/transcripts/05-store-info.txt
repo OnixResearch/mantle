@@ -1,0 +1,67 @@
+# 05-store-info
+# started 2026-11-22T12:05:25-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2
+# command: /nix/store/5z292f6b7rgb3wr2a9sczkrzaz8x1bii-mantle-0.1.0/bin/mantle --json --state-dir /datapool/mantle-store/build-or-reuse-20261122/wp8-v2/state --store /datapool/mantle-store/build-or-reuse-20261122/wp8-v2/store --store-prefix /nix/store store info 5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job 
+--- stdout ---
+{
+  "backend": "snix",
+  "backend_capabilities": {
+    "atomic_batch_import": true,
+    "core": [
+      "output-admission",
+      "lookup",
+      "fresh-process-reopen",
+      "closure-resolution",
+      "export",
+      "store-archive-export",
+      "store-archive-import",
+      "gc-plan",
+      "plan-bound-gc",
+      "action-result-pathinfo-output-reuse",
+      "store-sign",
+      "store-repair-final-nar"
+    ],
+    "max_root_changes": null,
+    "overlay_composition": true,
+    "rust_unit_cache": true,
+    "unsigned_admission": true
+  },
+  "overlay": null,
+  "paths": [
+    {
+      "ca": null,
+      "deriver": "clnjhb7wy6fgrakdrjdz23ki8ahzap8c-trellis-bounds-verus-job",
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_sha256": "cd49fa0cc24810dcb1a0834364c1a9b56d052e986d984d32771f667ccd5fb75a",
+      "nar_size": 9867968,
+      "node": "Directory { digest: blake3-4ihdodTdPQlpLwv/4B+cE8ew6KU/L+Oqwd906KZIP5U=, size: 888 }",
+      "references": [
+        "5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+        "p72j1v14s37w7v91gfi03svh54d6ccwi-terrane-verus-0.2026.10.18.7d82994"
+      ],
+      "retention_interests": {
+        "interests": [
+          {
+            "owner": "legacy-unmanaged",
+            "reason": "root-reclassified",
+            "record_id": "30dad21d58ef21ba5e6d358fe72164e30cceaf892471609a257e2fdcdad7ba3a"
+          }
+        ],
+        "legacy_unmanaged": false,
+        "logical_path": "/nix/store/5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job",
+        "record_count": 1
+      },
+      "shadows": [],
+      "signatures": [
+        "crunch-britton-desktop-1:p+x7T4rJClNGh4gLT6nhHrtfFdXM+l54U3EEmay29iJSUY2VaUUUM9byzHKu8xTCzhbWIrhOUlB/v7LsurRUCg=="
+      ],
+      "store_path": "5hqkrl54nhfa44nmmaf80phvyi5kvjz1-trellis-bounds-verus-job"
+    }
+  ],
+  "schema": "mantle-store-info-v3"
+}
+--- stderr ---
+--- EXIT=0
+--- wall: 0.50s

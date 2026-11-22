@@ -1,0 +1,9 @@
+# 02-prepare-sources
+# started 2026-11-22T11:24:33-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2
+# command: /nix/store/5z292f6b7rgb3wr2a9sczkrzaz8x1bii-mantle-0.1.0/bin/mantle --json foreign-import prepare-sources --plan graph/plan.json --out graph/source-bundle.json --state-dir /datapool/mantle-store/build-or-reuse-20261122/wp8-v2/plan-state 
+--- stdout ---
+{"format":"mantle-source-bundle-v1","version":1,"store_prefix":"/nix/store","roots":[],"records":[],"manifest_blake3":"8ed1103b5de3054ee13ea391af805e276e3cc3b6ceaa50b2149193adb1ff1777","non_claim":"source bundle evidence proves declared source/input availability and identity only"}
+--- stderr ---
+--- EXIT=0
+--- wall: 29.50s

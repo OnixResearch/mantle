@@ -1,0 +1,10 @@
+# 07-negative-key
+# started 2026-11-22T11:26:41-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/wp8-v2
+# command: sh -c umask\ 077\;\ nix\ key\ generate-secret\ --key-name\ wp8-v2-negative-1\ \>\ negative/wp8-v2-negative-1.sec\;\ wc\ -c\ negative/wp8-v2-negative-1.sec\;\ head\ -c\ 40\ negative/wp8-v2-negative-1.sec\;\ echo 
+--- stdout ---
+106 negative/wp8-v2-negative-1.sec
+wp8-v2-negative-1:J7sTzmHeuhcnzhH9rBShdS
+--- stderr ---
+--- EXIT=0
+--- wall: 0.86s
