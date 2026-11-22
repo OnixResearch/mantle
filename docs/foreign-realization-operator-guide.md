@@ -222,9 +222,21 @@ mantle --json --state-dir ./state --store ./output --store-prefix /nix/store \
   --cache-closure-policy cache-closure-policy.json \
   --signing-key ./state/signing-key \
   --trusted-builder-public-key <retired-name:base64> \
+  --build-cores 4 \
   --substitute \
   --receipt-out realization-receipt.json
 ```
+
+`--build-cores <N>` (`1..=64`, default `1`) sets `NIX_BUILD_CORES=N` for every
+build this realization runs when `N` is above the default. At the default the
+build environment is unchanged: sandbox profiles export `1` and Nix-protocol
+profiles leave the variable unset. It is a capacity knob, not part of derivation
+or action identity: a derivation-declared `NIX_BUILD_CORES` still wins. Only
+route `cache-inputs-build-roots-v2` records an explicit value (in
+`roots[].built.build_cores`, omitted at the default), so a non-default value is
+refused on every other route before any store mutation. Reuse ignores the value:
+a root built with any core count is reusable, and receipts written before the
+field existed still parse.
 
 A present root is reused only when all of these hold:
 
@@ -238,6 +250,10 @@ A present root is reused only when all of these hold:
 - a PathInfo signature verifies over the Nix fingerprint with a builder-role key
   whose public-key fingerprint equals the entry's signer fingerprint, and that
   key is trusted now.
+
+The index is written only for a `complete` receipt and only for roots this run
+built; a failed or reuse-only realization writes no index entry, so it cannot
+block a later successful build of the same derivation.
 
 Mantle takes one exclusive lock per selected root derivation under
 `<state-dir>/foreign-realization/locks/` and holds it until the receipt is

@@ -1502,6 +1502,7 @@
     "aliases": [],
     "flags": [
       "--base-store",
+      "--build-cores",
       "--cache-closure-policy",
       "--execution-profile",
       "--help",

@@ -105,6 +105,9 @@ const PRODUCE_BACKEND_COMMAND: &str = "produce-backend";
 const ACCEPTED_VERDICT: &str = "accepted";
 const REJECTED_VERDICT: &str = "rejected";
 const FAILURE_EXIT_CODE: u8 = 1;
+const FOREIGN_BUILD_CORES_MIN: u32 = 1;
+const FOREIGN_BUILD_CORES_MAX: u32 = 64;
+pub(crate) const DEFAULT_FOREIGN_BUILD_CORES: u32 = FOREIGN_BUILD_CORES_MIN;
 const JSON_SERIALIZATION_CONTEXT: &str = "serializing foreign import CLI report";
 const JSON_ARTIFACT_SERIALIZATION_CONTEXT: &str = "serializing foreign import producer artifact";
 const DEFAULT_PACKAGE_NAME: &str = "hello";
@@ -254,6 +257,16 @@ pub(crate) enum ForeignImportAction {
         /// Maximum concurrent jobs
         #[arg(short = 'j', long = "jobs")]
         jobs: Option<u32>,
+
+        /// `NIX_BUILD_CORES` for every build this realize runs (1..=64). Only accepted on
+        /// route `cache-inputs-build-roots-v2`
+        #[arg(
+            long = "build-cores",
+            default_value_t = DEFAULT_FOREIGN_BUILD_CORES,
+            value_parser = clap::value_parser!(u32)
+                .range(i64::from(FOREIGN_BUILD_CORES_MIN)..=i64::from(FOREIGN_BUILD_CORES_MAX)),
+        )]
+        build_cores: u32,
 
         /// Permit only cache URLs already bound into the executable plan
         #[arg(long = "substitute", conflicts_with = "no_substitute")]
@@ -600,6 +613,7 @@ struct ForeignRealizeCommandRequest<'a> {
     selected_roots: &'a [String],
     receipt_out: &'a Path,
     jobs: Option<u32>,
+    build_cores: u32,
     substitute: bool,
     no_substitute: bool,
     offline: bool,
@@ -1195,6 +1209,7 @@ pub(crate) fn cmd_foreign_import_with_observation(
             roots,
             receipt_out,
             jobs,
+            build_cores,
             substitute,
             no_substitute,
             offline,
@@ -1212,6 +1227,7 @@ pub(crate) fn cmd_foreign_import_with_observation(
                 selected_roots: &roots,
                 receipt_out: &receipt_out,
                 jobs,
+                build_cores,
                 substitute,
                 no_substitute,
                 offline,
@@ -1896,6 +1912,31 @@ fn run_audit(
     }
 }
 
+// Compile-time: the build core bound is positive and well formed.
+const _: () = assert!(FOREIGN_BUILD_CORES_MIN > 0);
+const _: () = assert!(FOREIGN_BUILD_CORES_MAX >= FOREIGN_BUILD_CORES_MIN);
+
+/// A caller-chosen core count is only meaningful on the route whose receipt records it.
+fn validate_foreign_build_cores(build_cores: u32, plan: &ForeignExecutablePlan) -> Result<(), RunError> {
+    if !(FOREIGN_BUILD_CORES_MIN..=FOREIGN_BUILD_CORES_MAX).contains(&build_cores) {
+        return Err(RunError::Internal(format!(
+            "foreign realization build cores {build_cores} are outside \
+             {FOREIGN_BUILD_CORES_MIN}..={FOREIGN_BUILD_CORES_MAX}"
+        )));
+    }
+    if build_cores != DEFAULT_FOREIGN_BUILD_CORES
+        && plan.realization_route.as_deref() != Some(crate::foreign_executable_plan::CACHE_INPUTS_BUILD_OR_REUSE_ROUTE)
+    {
+        let route = plan.realization_route.as_deref().unwrap_or("ordinary");
+        return Err(RunError::Internal(format!(
+            "foreign realization route {route} has no field for --build-cores {build_cores}; \
+             a non-default core count requires route {}",
+            crate::foreign_executable_plan::CACHE_INPUTS_BUILD_OR_REUSE_ROUTE
+        )));
+    }
+    Ok(())
+}
+
 fn run_realize(
     request: ForeignRealizeCommandRequest<'_>,
     context: &ForeignImportContext<'_>,
@@ -1979,6 +2020,7 @@ fn run_realize(
     let cache_only = is_cache_only_foreign_plan(&plan);
     let cache_inputs_build_roots = crate::foreign_realization::is_cache_inputs_build_roots_plan(&plan);
     let cache_inputs_build_or_reuse = crate::foreign_realization::is_cache_inputs_build_or_reuse_plan(&plan);
+    validate_foreign_build_cores(request.build_cores, &plan)?;
     let cache_hydrated = cache_only || cache_inputs_build_roots || cache_inputs_build_or_reuse;
     if cache_hydrated && (!request.substitute || request.offline) {
         return Err(RunError::Internal("cache-hydrated foreign realization requires online substitution".to_string()));
@@ -2059,6 +2101,7 @@ fn run_realize(
         verbose: context.verbose,
         cache_keys: &cache_keys,
         trusted_builder_public_keys: &trusted_builder_public_keys,
+        build_cores: request.build_cores,
     })?;
     let receipt = &outcome.receipt;
     port.publish(request.receipt_out, receipt, "foreign realization receipt")?;
@@ -3410,6 +3453,7 @@ mod tests {
                 roots: Vec::new(),
                 receipt_out: realization_receipt_path.clone(),
                 jobs: Some(2),
+                build_cores: 1,
                 substitute: false,
                 no_substitute: true,
                 offline: true,
@@ -3474,6 +3518,7 @@ mod tests {
             roots: vec!["nix:parent".to_string()],
             receipt_out: receipt_out.clone(),
             jobs: None,
+            build_cores: 1,
             substitute: true,
             no_substitute: false,
             offline: false,
@@ -3681,6 +3726,27 @@ mod tests {
         assert!(report.receipt.is_some());
         assert!(plan.forbidden_process_invocations.is_empty());
         assert!(plan.non_claims.contains(&"not-build-success".to_string()));
+    }
+
+    #[test]
+    fn validate_foreign_build_cores_bounds_and_route() {
+        let (graph, index) = crate::foreign_derivation_import::guix_like_hello_fixture();
+        let mut plan = plan_inputs(graph, index, DEFAULT_PACKAGE_NAME, fixture_policy(), DEFAULT_SYSTEM, None)
+            .plan
+            .unwrap();
+
+        assert!(validate_foreign_build_cores(1, &plan).is_ok());
+        assert!(validate_foreign_build_cores(0, &plan).is_err());
+        assert!(validate_foreign_build_cores(65, &plan).is_err());
+        assert!(validate_foreign_build_cores(4, &plan).is_err());
+
+        plan.realization_route = Some(crate::foreign_executable_plan::CACHE_INPUTS_BUILD_ROOTS_ROUTE.to_string());
+        assert!(validate_foreign_build_cores(4, &plan).is_err());
+
+        plan.realization_route = Some(crate::foreign_executable_plan::CACHE_INPUTS_BUILD_OR_REUSE_ROUTE.to_string());
+        assert!(validate_foreign_build_cores(4, &plan).is_ok());
+        assert!(validate_foreign_build_cores(FOREIGN_BUILD_CORES_MAX, &plan).is_ok());
+        assert!(validate_foreign_build_cores(FOREIGN_BUILD_CORES_MAX.saturating_add(1), &plan).is_err());
     }
 
     fn fixture_policy() -> TranslationPolicy {

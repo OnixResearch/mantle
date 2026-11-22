@@ -913,6 +913,7 @@ mod tests {
             scheduling_policy: crunch_build::SchedulingPolicy::default(),
             substituter_urls: Vec::new(),
             hermeticity_mode: crunch_build::HermeticityMode::Practical,
+            build_cores: 1,
             base_state_dirs: Vec::new(),
             source_admission: None,
             trusted_keys: crunch_build::build_trusted_keys(&keypair, None),

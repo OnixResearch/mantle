@@ -64,6 +64,7 @@ fn build_config(file: PathBuf, output_dir: &Path, state_dir: &Path) -> BuildConf
         scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
         substituter_urls: Vec::new(),
         hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+        build_cores: 1,
         keypair,
         trusted_keys,
         trust_unsigned: false,

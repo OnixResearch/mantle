@@ -68,6 +68,10 @@ const PASS_AS_FILE_PATH_SUFFIX: &str = "Path";
 const PASS_AS_FILE_DIRECTORY: &str = "build";
 const PASS_AS_FILE_NAME_PREFIX: &str = ".attr-";
 const NIX_BUILD_DIRECTORY: &str = "/build";
+const NIX_BUILD_CORES_VARIABLE: &str = "NIX_BUILD_CORES";
+/// The core count every build gets unless an operator requests more; sandbox profiles
+/// already export it, and Nix-protocol profiles leave `NIX_BUILD_CORES` unset at this value.
+pub const DEFAULT_BUILD_CORES: u32 = 1;
 const NIX_LOG_FILE_DESCRIPTOR: &str = "2";
 const NIX_STRUCTURED_ATTRS_ENV: &str = "__json";
 const NIX_ATTRS_SH_ENV: &str = "NIX_ATTRS_SH_FILE";
@@ -204,13 +208,16 @@ pub fn derivation_to_build_request(
     store_dir: &str,
     execution_profile: &ExecutionProfile,
     hermeticity_mode: HermeticityMode,
+    build_cores: u32,
 ) -> Result<BuildRequestEnvelope, crate::Error> {
     debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
     debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
+    assert!(build_cores > 0, "build cores must be at least one");
     validate_execution_profile(execution_profile).map_err(execution_profile_error)?;
     verify_execution_profile_binding(derivation, execution_profile).map_err(execution_profile_error)?;
-    let normalized = normalized_environment_for_profile(derivation, store_dir, execution_profile, hermeticity_mode)?;
+    let normalized =
+        normalized_environment_for_profile(derivation, store_dir, execution_profile, hermeticity_mode, build_cores)?;
     let compatibility_network_policy = match execution_profile.network_mode {
         ExecutionNetworkMode::Deny => CompatibilityNetworkPolicy::DenyAll,
         ExecutionNetworkMode::AllowDeclared => CompatibilityNetworkPolicy::AllowDeclared,
@@ -239,9 +246,10 @@ fn normalized_environment_for_profile(
     store_dir: &str,
     execution_profile: &ExecutionProfile,
     hermeticity_mode: HermeticityMode,
+    build_cores: u32,
 ) -> Result<NormalizedBuildEnvironment, crate::Error> {
     if execution_profile.environment_mode == ExecutionEnvironmentMode::MantleCompatibility {
-        return normalize_build_environment(derivation, store_dir, hermeticity_mode);
+        return normalize_build_environment(derivation, store_dir, hermeticity_mode, build_cores);
     }
     let declared_environment =
         declared_profile_environment(derivation, execution_profile).map_err(execution_profile_error)?;
@@ -252,6 +260,15 @@ fn normalized_environment_for_profile(
     };
     environment_vars.remove(PLAN_OUTPUT_BINDINGS_ENV_KEY);
     environment_vars.remove(finish_gates::POLICY_ENV);
+    // A declared-only profile has no sandbox defaults. Leave `NIX_BUILD_CORES` unset at the
+    // default so existing Nix-protocol builds see exactly the environment they saw before;
+    // set it only when an operator requests more cores. A derivation- or profile-declared
+    // value still wins, as on the sandbox path.
+    if build_cores != DEFAULT_BUILD_CORES {
+        environment_vars
+            .entry(NIX_BUILD_CORES_VARIABLE.to_string())
+            .or_insert_with(|| build_cores.to_string().into_bytes());
+    }
     let action_name = environment_policy::action_name_from_environment(&derivation.environment);
     let report = environment_policy::success_report(action_name, &environment_vars);
     Ok(NormalizedBuildEnvironment {
@@ -399,13 +416,15 @@ pub fn normalize_build_environment(
     derivation: &Derivation,
     store_dir: &str,
     hermeticity_mode: HermeticityMode,
+    build_cores: u32,
 ) -> Result<NormalizedBuildEnvironment, crate::Error> {
     debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
     debug_assert!(!derivation.outputs.is_empty(), "must have at least one output");
     debug_assert!(!store_dir.is_empty(), "store_dir must not be empty");
     debug_assert!(store_dir.starts_with('/'), "store_dir must be absolute path");
+    assert!(build_cores > 0, "build cores must be at least one");
 
-    let mut environment_vars = default_sandbox_environment(store_dir);
+    let mut environment_vars = default_sandbox_environment(store_dir, build_cores);
     let audit_events = overlay_derivation_environment(derivation, store_dir, hermeticity_mode, &mut environment_vars)?;
     debug_assert!(!environment_vars.is_empty(), "environment must include sandbox vars");
 
@@ -878,14 +897,17 @@ fn build_command_args(derivation: &Derivation, store_dir: &str) -> Vec<String> {
     command_args
 }
 
-fn default_sandbox_environment(store_dir: &str) -> BTreeMap<String, Vec<u8>> {
+fn default_sandbox_environment(store_dir: &str, build_cores: u32) -> BTreeMap<String, Vec<u8>> {
     const MAX_SANDBOX_VARS: usize = 32;
     assert!(SANDBOX_ENV_VARS.len() <= MAX_SANDBOX_VARS, "SANDBOX_ENV_VARS exceeds bound");
+    assert!(build_cores > 0, "build cores must be at least one");
     SANDBOX_ENV_VARS
         .iter()
         .map(|(key, value)| {
             let val = if *key == "NIX_STORE" {
                 store_dir.as_bytes().to_vec()
+            } else if *key == NIX_BUILD_CORES_VARIABLE {
+                build_cores.to_string().into_bytes()
             } else {
                 value.as_bytes().to_vec()
             };
@@ -1382,6 +1404,7 @@ mod tests {
             store_dir,
             &ExecutionProfile::native_compatibility(),
             hermeticity_mode,
+            1,
         )
     }
 
@@ -1470,7 +1493,7 @@ mod tests {
         for (key, value) in overrides {
             drv.environment.insert((*key).to_string(), (*value).into());
         }
-        normalize_build_environment(&drv, "/nix/store", hermeticity_mode)
+        normalize_build_environment(&drv, "/nix/store", hermeticity_mode, 1)
     }
 
     #[test]
@@ -1580,6 +1603,7 @@ mod tests {
             MANTLE_STORE_DIR,
             &profile,
             HermeticityMode::Strict,
+            1,
         )
         .unwrap()
         .build_request;
@@ -1774,6 +1798,7 @@ mod tests {
             "/mantle/store",
             &profile,
             HermeticityMode::Strict,
+            1,
         )
         .unwrap()
         .build_request;
@@ -1804,6 +1829,7 @@ mod tests {
             ACTIVE_STORE_DIR,
             &profile,
             HermeticityMode::Strict,
+            1,
         )
         .unwrap()
         .build_request;
@@ -1836,6 +1862,7 @@ mod tests {
             ACTIVE_STORE_DIR,
             &profile,
             HermeticityMode::Strict,
+            1,
         )
         .unwrap()
         .build_request;
@@ -1865,6 +1892,7 @@ mod tests {
             "/mantle/store",
             &profile,
             HermeticityMode::Strict,
+            1,
         )
         .unwrap_err();
 
@@ -1881,9 +1909,15 @@ mod tests {
         drv.environment.insert("builder".to_string(), drv.builder.clone().into());
         crate::bind_execution_profile(&mut drv, &guix).unwrap();
 
-        let error =
-            super::derivation_to_build_request(&drv, &BTreeMap::new(), "/mantle/store", &nix, HermeticityMode::Strict)
-                .unwrap_err();
+        let error = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            "/mantle/store",
+            &nix,
+            HermeticityMode::Strict,
+            1,
+        )
+        .unwrap_err();
 
         assert!(error.to_string().contains("binding digest does not match"));
     }
@@ -1935,6 +1969,83 @@ mod tests {
 
         assert_eq!(nix_build_cores.as_slice(), OVERRIDE_CORE_COUNT.as_bytes());
         assert!(normalized.audit_events.is_empty());
+    }
+
+    #[test]
+    fn build_request_defaults_to_one_core_without_an_override() {
+        let drv = test_derivation();
+        let request = derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical)
+            .unwrap()
+            .build_request;
+        let cores = request
+            .environment_vars
+            .iter()
+            .find(|entry| entry.key == NIX_BUILD_CORES_VARIABLE)
+            .expect("sandbox cores variable");
+
+        assert_eq!(cores.value.as_ref(), b"1");
+    }
+
+    #[test]
+    fn build_request_applies_the_requested_core_count_to_native_and_foreign_profiles() {
+        let drv = test_derivation();
+        let native = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            "/nix/store",
+            &ExecutionProfile::native_compatibility(),
+            HermeticityMode::Practical,
+            7,
+        )
+        .unwrap()
+        .build_request;
+        let native_cores = native
+            .environment_vars
+            .iter()
+            .find(|entry| entry.key == NIX_BUILD_CORES_VARIABLE)
+            .expect("native sandbox cores variable");
+        assert_eq!(native_cores.value.as_ref(), b"7");
+
+        // The foreign Nix profile declares no NIX_BUILD_CORES: at the default it stays unset, exactly
+        // as before the option existed, and a requested count above the default supplies it.
+        let profile = ExecutionProfile::foreign_nix();
+        let mut foreign_drv = test_derivation();
+        foreign_drv.builder = format!("{MANTLE_STORE_DIR}/00000000000000000000000000000000-builder");
+        foreign_drv.arguments = vec!["--build".to_string()];
+        foreign_drv.environment.insert("builder".to_string(), foreign_drv.builder.clone().into());
+        crate::bind_execution_profile(&mut foreign_drv, &profile).unwrap();
+
+        let one_core = super::derivation_to_build_request(
+            &foreign_drv,
+            &BTreeMap::new(),
+            MANTLE_STORE_DIR,
+            &profile,
+            HermeticityMode::Strict,
+            1,
+        )
+        .unwrap()
+        .build_request;
+        assert!(
+            one_core.environment_vars.iter().all(|entry| entry.key != NIX_BUILD_CORES_VARIABLE),
+            "the default must leave the Nix-protocol environment without NIX_BUILD_CORES"
+        );
+
+        let foreign = super::derivation_to_build_request(
+            &foreign_drv,
+            &BTreeMap::new(),
+            MANTLE_STORE_DIR,
+            &profile,
+            HermeticityMode::Strict,
+            4,
+        )
+        .unwrap()
+        .build_request;
+        let foreign_cores = foreign
+            .environment_vars
+            .iter()
+            .find(|entry| entry.key == NIX_BUILD_CORES_VARIABLE)
+            .expect("foreign sandbox cores variable");
+        assert_eq!(foreign_cores.value.as_ref(), b"4");
     }
 
     #[test]

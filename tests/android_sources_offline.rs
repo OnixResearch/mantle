@@ -140,6 +140,7 @@ fn pipeline_config(
         scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
         substituter_urls: Vec::new(),
         hermeticity_mode: crunch_pipeline::HermeticityMode::Practical,
+        build_cores: 1,
         keypair,
         trusted_keys,
         trust_unsigned: false,

@@ -67,6 +67,7 @@ use crate::foreign_realization_receipt::ReusedRootEntryInput;
 use crate::foreign_realization_receipt::build_foreign_realization_receipt;
 use crate::foreign_realization_receipt::build_foreign_realization_receipt_v2;
 use crate::foreign_realization_receipt::built_root_entry;
+use crate::foreign_realization_receipt::built_root_index_derivations;
 use crate::foreign_realization_receipt::foreign_realization_receipt_any_bytes;
 use crate::foreign_realization_receipt::foreign_realization_receipt_v2_digest;
 use crate::foreign_realization_receipt::mark_reused_units_already_present;
@@ -117,6 +118,9 @@ pub(crate) struct ForeignRealizationRequest<'a> {
     pub(crate) cache_keys: &'a [nix_compat::narinfo::VerifyingKey],
     /// Extra builder keys accepted for reuse only (verify-only, e.g. a retired key).
     pub(crate) trusted_builder_public_keys: &'a [nix_compat::narinfo::VerifyingKey],
+    /// `NIX_BUILD_CORES` for every build this realization runs. Only route v2 records it; every
+    /// other route is refused before store mutation unless it is the default 1.
+    pub(crate) build_cores: u32,
     pub(crate) max_jobs: u32,
     pub(crate) substitution_enabled: bool,
     pub(crate) offline: bool,
@@ -359,6 +363,7 @@ pub(crate) async fn realize_foreign_plan(
         },
         substituter_urls: if cache_hydrated { Vec::new() } else { cache_urls.clone() },
         hermeticity_mode: HermeticityMode::Strict,
+        build_cores: request.build_cores,
         base_state_dirs: request.base_state_dirs.to_vec(),
         source_admission: request.source_admission.cloned(),
         keypair: request.keypair.clone(),
@@ -421,14 +426,16 @@ pub(crate) async fn realize_foreign_plan(
         builder,
         &trust_policy_blake3,
         &input_closure_blake3,
+        request.build_cores,
     )?;
     let mut receipt = build_foreign_realization_receipt_v2(ForeignReceiptV2Input { base, roots })?;
     mark_reused_units_already_present(&mut receipt.units, &reuse.reused_node_ids());
     receipt.receipt_blake3 = foreign_realization_receipt_v2_digest(&receipt)?;
+    let index_derivations = built_root_index_derivations(&receipt);
     let any = ForeignRealizationReceiptAny::V2(receipt);
     let bytes = foreign_realization_receipt_any_bytes(&any)?;
     let mut built_root_index = Vec::new();
-    for derivation in reuse.built_root_derivations() {
+    for derivation in index_derivations {
         built_root_index.push((built_root_index_path(request.state_dir, &derivation)?, bytes.clone()));
     }
     Ok(ForeignRealizationOutcome {
@@ -671,18 +678,6 @@ impl ReusePlan {
             .flat_map(|decision| decision.group.outputs.iter().map(|output| output.path.clone()))
             .collect()
     }
-
-    fn built_root_derivations(&self) -> Vec<String> {
-        let mut derivations = self
-            .groups
-            .iter()
-            .filter(|decision| decision.output_facts.is_none())
-            .map(|decision| decision.group.target_derivation.clone())
-            .collect::<Vec<_>>();
-        derivations.sort();
-        derivations.dedup();
-        derivations
-    }
 }
 
 fn selected_root_groups(
@@ -907,7 +902,12 @@ fn build_v2_root_entries(
     builder: &BuilderKey,
     trust_policy_blake3: &str,
     input_closure_blake3: &str,
+    build_cores: u32,
 ) -> Result<Vec<ForeignRealizationRoot>, RunError> {
+    assert!(build_cores > 0, "build cores must be at least one");
+    if build_result.failed_roots.is_empty() {
+        debug_assert!(!reuse.groups.is_empty(), "a successful build route has selected root groups");
+    }
     let store_dir = plan.target_store_prefix.as_str();
     let built_signer = ForeignRealizationSigner {
         key_name: builder.name.clone(),
@@ -980,6 +980,9 @@ fn build_v2_root_entries(
                     mantle_version: env!("CARGO_PKG_VERSION").to_string(),
                     execution_profile_digest_blake3: unit.execution_profile_digest_blake3.clone(),
                     input_closure_blake3: input_closure_blake3.to_string(),
+                    // Recorded only for an explicit override, so default receipts stay unchanged.
+                    build_cores: (build_cores != crate::foreign_import_cmd::DEFAULT_FOREIGN_BUILD_CORES)
+                        .then_some(build_cores),
                 },
             }));
         }

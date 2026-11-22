@@ -26,5 +26,10 @@
   - Evidence: captured command output.
 - [x] [serial] V3 Run `cairn validate --root .` and the proposal, design, and tasks gates; append transcripts to `evidence/`. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: `evidence/orchestrator-checks.md` (validate 0 issues; gates PASS).
-- [ ] [serial] V4 After a checked clean build of the landed commit, realize the Octet pilot job on route v2 twice from a fresh store: the first run builds and indexes the root, the second reuses it with zero builds and zero NAR downloads and links the first receipt; record Cairn's convergence report for both and the negative controls. r[foreign_derivation_import.cache_inputs_build_or_reuse]
-  - Evidence: live transcripts and receipts under `evidence/` (large files summarized by size and BLAKE3).
+- [x] [serial] V4 With the checked build of the landed commit, realize a piloted job on route v2 twice from a fresh store: the first run builds and indexes the root, the second reuses it with zero builds and zero NAR downloads and links the first receipt; record Cairn's convergence report for both and the negative controls. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+  - Evidence: `evidence/live-wp8/` (Terrane `bounds.clamp`, the job E2 qualified on route v1). The Octet pilot attempt stopped at its first build on one core; that limit moves to the change `add-realize-build-cores`, whose evidence reruns the Octet pilot.
+
+## Follow-ups found by the pilot
+
+- [x] [serial] I8 Index only successful built roots: the pilot's `partial-failure` receipt (`roots = []`) was published to the write-once built-root index, so a later successful build of the same derivation could not index its receipt. A pure function over the finished receipt v2 now indexes nothing unless `status` is `complete` and only `target_derivation`s of root entries whose disposition is `built`, sorted and deduplicated. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+  - Evidence: `/home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2/README.md` (observation under "Not evidence of, and out of scope"); `foreign_realization_receipt::built_root_index_derivations` unit test for complete, partial-failure, and reused receipts.

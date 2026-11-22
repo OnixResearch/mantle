@@ -1353,6 +1353,7 @@ mod tests {
                 mantle_version: "0.0.0".to_string(),
                 execution_profile_digest_blake3: "0".repeat(64),
                 input_closure_blake3: "0".repeat(64),
+                build_cores: Some(1),
             }),
             reused: None,
         }

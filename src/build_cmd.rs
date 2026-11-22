@@ -372,6 +372,7 @@ pub(crate) fn prepare_local_build_config(
             },
             substituter_urls: substituter_urls.to_vec(),
             hermeticity_mode,
+            build_cores: 1,
             keypair,
             trusted_keys,
             trust_unsigned,

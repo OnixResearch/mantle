@@ -2674,6 +2674,7 @@ fn self_build_pipeline_config(
         scheduling_policy: self_build_scheduling_policy(),
         substituter_urls: Vec::new(),
         hermeticity_mode: pipeline.hermeticity_mode,
+        build_cores: 1,
         keypair: pipeline.keypair.clone(),
         trusted_keys: pipeline.trusted_keys.to_vec(),
         trust_unsigned: pipeline.trust_unsigned,

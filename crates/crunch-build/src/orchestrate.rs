@@ -424,6 +424,8 @@ pub struct Builder<BServ> {
     trust_unsigned: bool,
     verbose: bool,
     hermeticity_mode: HermeticityMode,
+    /// `NIX_BUILD_CORES` written into every sandbox build request.
+    build_cores: u32,
     hermeticity_audit_events: Vec<HermeticityAuditEvent>,
     build_environment_reports: Vec<crate::BuildEnvironmentReport>,
     network_policy_reports: Vec<BuildNetworkPolicyReport>,
@@ -557,6 +559,7 @@ where BServ: BuildService + 'static
             trust_unsigned,
             verbose,
             hermeticity_mode: HermeticityMode::Practical,
+            build_cores: 1,
             hermeticity_audit_events: Vec::new(),
             build_environment_reports: Vec::new(),
             network_policy_reports: Vec::new(),
@@ -631,6 +634,11 @@ where BServ: BuildService + 'static
 
     pub fn set_hermeticity_mode(&mut self, hermeticity_mode: HermeticityMode) {
         self.hermeticity_mode = hermeticity_mode;
+    }
+
+    pub fn set_build_cores(&mut self, build_cores: u32) {
+        assert!(build_cores > 0, "build cores must be at least one");
+        self.build_cores = build_cores;
     }
 
     pub fn set_forbid_host_store_fallback(&mut self, forbid_host_store_fallback: bool) {
@@ -1094,6 +1102,7 @@ where BServ: BuildService + 'static
             self.store.store_dir(),
             &execution_profile,
             self.hermeticity_mode,
+            self.build_cores,
         ) {
             Ok(envelope) => envelope,
             Err(error) => {

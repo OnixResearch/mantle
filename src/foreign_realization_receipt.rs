@@ -175,6 +175,10 @@ pub(crate) struct ForeignRootBuilt {
     pub(crate) mantle_version: String,
     pub(crate) execution_profile_digest_blake3: String,
     pub(crate) input_closure_blake3: String,
+    /// `NIX_BUILD_CORES` the root was built with. Absent in receipts written before the
+    /// field existed; serializing `None` keeps those receipts' digests unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) build_cores: Option<u32>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -258,6 +262,27 @@ pub(crate) fn validate_receipt_v2_root_dispositions(receipt: &ForeignRealization
         }
     }
     Ok(())
+}
+
+/// Derivations the write-once built-root index may hold for a finished receipt.
+///
+/// A failed realization publishes no index entry (the receipt has `roots = []` anyway), and a
+/// reused root is never re-indexed: only roots this run built are. Sorted and deduplicated so the
+/// shell can map them to index paths deterministically.
+pub(crate) fn built_root_index_derivations(receipt: &ForeignRealizationReceiptV2) -> Vec<String> {
+    assert_eq!(receipt.schema, FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA, "receipt v2 schema must match");
+    if receipt.status != FOREIGN_REALIZATION_COMPLETE_STATUS {
+        return Vec::new();
+    }
+    let mut derivations = receipt
+        .roots
+        .iter()
+        .filter(|root| root.disposition == ROOT_DISPOSITION_BUILT)
+        .map(|root| root.target_derivation.clone())
+        .collect::<Vec<_>>();
+    derivations.sort();
+    derivations.dedup();
+    derivations
 }
 
 /// Serialize a receipt exactly as `--receipt-out` publishes it, so the built-root index holds the
@@ -858,6 +883,25 @@ mod tests {
             "failure": null,
             "non_claims": []
         })
+    }
+
+    #[test]
+    fn built_root_index_derivations_excludes_failed_and_reused_receipts() {
+        let bytes = serde_json::to_vec(&fixture_receipt_v2_json()).unwrap();
+        let receipt = super::parse_foreign_realization_receipt_v2(&bytes).unwrap();
+        assert_eq!(super::built_root_index_derivations(&receipt), vec![
+            "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-parent.drv".to_string()
+        ]);
+
+        let mut failed = receipt.clone();
+        failed.status = PARTIAL_FAILURE_STATUS.to_string();
+        failed.strongest_state = PARTIAL_REALIZATION_STRONGEST_STATE.to_string();
+        failed.roots.clear();
+        assert!(super::built_root_index_derivations(&failed).is_empty());
+
+        let mut reused = receipt.clone();
+        reused.roots[0].disposition = ROOT_DISPOSITION_REUSED.to_string();
+        assert!(super::built_root_index_derivations(&reused).is_empty());
     }
 
     #[test]

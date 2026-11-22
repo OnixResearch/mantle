@@ -206,6 +206,9 @@ pub struct BuildConfig {
     /// Ordered list of substituter URLs. Empty = no remote substitution.
     pub substituter_urls: Vec<String>,
     pub hermeticity_mode: HermeticityMode,
+    /// `NIX_BUILD_CORES` for every sandbox build in this pipeline run. Nix defaults to one core,
+    /// so one is the conservative default for every caller.
+    pub build_cores: u32,
     /// Ordered list of read-only base store state directories for overlay
     /// composition.  Empty = no overlay composition (default single-store).
     pub base_state_dirs: Vec<PathBuf>,
@@ -1131,6 +1134,7 @@ where
         config.verbose,
     );
     builder.set_hermeticity_mode(config.hermeticity_mode);
+    builder.set_build_cores(config.build_cores);
     builder.set_rust_wait_units(config.rust_wait_runtime.as_ref().and_then(|runtime| runtime.native_units.clone()));
     let has_managed_registration = config.root_registration.is_some();
     builder.set_root_retention_source(if has_managed_registration {

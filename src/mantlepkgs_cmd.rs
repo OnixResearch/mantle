@@ -3063,6 +3063,7 @@ fn run_build_with_observation(
             roots: Vec::new(),
             receipt_out: request.receipt_out.to_path_buf(),
             jobs: request.jobs,
+            build_cores: 1,
             substitute: false,
             no_substitute: true,
             offline: request.offline,

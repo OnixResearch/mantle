@@ -921,3 +921,248 @@ fn cache_inputs_build_roots_v1_still_refuses_a_present_root_and_keeps_receipt_v1
     assert!(!temp.path().join("second-receipt.json").exists());
     assert_eq!(path_signatures(&temp, PARENT_OUTPUT), signatures_before, "refusal must not mint a signature");
 }
+
+fn realize_with_build_cores(
+    temp: &TempDir,
+    fixture: &Fixture,
+    binding: &Path,
+    receipt_name: &str,
+    build_cores: Option<u32>,
+) -> std::process::Output {
+    let mut command = realize_command(temp, fixture, binding, receipt_name, None, &[]);
+    if let Some(cores) = build_cores {
+        command.args(["--build-cores", &cores.to_string()]);
+    }
+    command.output().expect("run realize with build cores")
+}
+
+fn prepare_build_cores_route_v2(temp: &TempDir, cache: &TestCache) -> Fixture {
+    let mut fixture = write_fixture(temp, &cache.url_with_key, false);
+    let mut graph = json_file(&fixture.graph);
+    graph["nodes"][1]["args"] = serde_json::json!(["parent-cores"]);
+    fs::write(&fixture.graph, serde_json::to_vec(&graph).expect("cores graph json")).expect("write cores graph");
+    let plan = plan_route(&fixture, Some("cache-inputs-build-roots-v2"));
+    assert!(plan.status.success(), "cores plan must accept route v2: {}", String::from_utf8_lossy(&plan.stderr));
+    prepare_empty_sources(&fixture);
+    let bundle = json_file(&fixture.source_bundle);
+    fixture.source_bundle_blake3 = bundle["manifest_blake3"].as_str().expect("manifest digest").to_string();
+    fixture
+}
+
+fn root_output_file(temp: &TempDir) -> String {
+    fs::read_to_string(temp.path().join("output").join("22222222222222222222222222222222-parent"))
+        .expect("built root output")
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_sets_and_records_build_cores() {
+    let cache = positive_cache();
+
+    let explicit_dir = TempDir::new().expect("tempdir");
+    let fixture = prepare_build_cores_route_v2(&explicit_dir, &cache);
+    let binding = write_binding(&explicit_dir, &cache.base_url, &cache.url_with_key);
+    let explicit = realize_with_build_cores(&explicit_dir, &fixture, &binding, "cores-four.json", Some(4));
+    assert!(explicit.status.success(), "cores realize failed: {}", String::from_utf8_lossy(&explicit.stderr));
+    let receipt = json_file(&explicit_dir.path().join("cores-four.json"));
+    assert_eq!(receipt["roots"][0]["disposition"], "built");
+    assert_eq!(receipt["roots"][0]["built"]["build_cores"], 4);
+    assert_eq!(root_output_file(&explicit_dir), "4\n");
+
+    // A fresh store, so the default run builds the root instead of reusing the one built above.
+    let default_dir = TempDir::new().expect("tempdir");
+    let fixture = prepare_build_cores_route_v2(&default_dir, &cache);
+    let binding = write_binding(&default_dir, &cache.base_url, &cache.url_with_key);
+    let default = realize_with_build_cores(&default_dir, &fixture, &binding, "cores-default.json", None);
+    assert!(
+        default.status.success(),
+        "default cores realize failed: {}",
+        String::from_utf8_lossy(&default.stderr)
+    );
+    let receipt = json_file(&default_dir.path().join("cores-default.json"));
+    assert_eq!(receipt["roots"][0]["disposition"], "built");
+    // The default leaves the build environment and the receipt exactly as before the option existed.
+    assert!(receipt["roots"][0]["built"].get("build_cores").is_none());
+    assert_eq!(root_output_file(&default_dir), "unset\n");
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_refuses_build_cores_on_route_v1() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+
+    let refused = realize_with_build_cores(&temp, &fixture, &binding, "cores-v1.json", Some(4));
+    assert!(!refused.status.success());
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("no field for --build-cores 4"), "unexpected stderr: {stderr}");
+    assert!(!temp.path().join("cores-v1.json").exists());
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_rejects_out_of_range_build_cores() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+
+    for cores in [0u32, 65u32] {
+        let refused = realize_with_build_cores(&temp, &fixture, &binding, "cores-range.json", Some(cores));
+        assert!(!refused.status.success(), "{cores} cores must be refused");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(stderr.contains("build-cores"), "unexpected stderr: {stderr}");
+        assert!(!temp.path().join("cores-range.json").exists());
+    }
+}
+
+/// A receipt v2 written before `built.build_cores` existed; the digest is recomputed without the
+/// field so the index parser accepts it.
+#[derive(serde::Serialize)]
+struct LegacySigner {
+    key_name: String,
+    public_key_blake3: String,
+    role: String,
+}
+
+#[derive(serde::Serialize)]
+struct LegacyBuilt {
+    mantle_version: String,
+    execution_profile_digest_blake3: String,
+    input_closure_blake3: String,
+}
+
+#[derive(serde::Serialize)]
+struct LegacyRoot {
+    node_id: String,
+    target_derivation: String,
+    output_name: String,
+    path: String,
+    nar_sha256: String,
+    nar_size: u64,
+    references: Vec<String>,
+    disposition: String,
+    signer: LegacySigner,
+    trust_policy_blake3: String,
+    built: LegacyBuilt,
+    reused: Option<serde_json::Value>,
+}
+
+#[derive(serde::Serialize)]
+struct LegacyCachePolicy {
+    substitution_enabled: bool,
+    offline: bool,
+    ordered_cache_urls: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    realization_route: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+struct LegacyReceiptV2 {
+    schema: String,
+    status: String,
+    strongest_state: String,
+    receipt_blake3: String,
+    plan_blake3: String,
+    import_receipt_blake3: String,
+    source_bundle_manifest_blake3: String,
+    build_report_blake3: String,
+    selected_root_node_ids: Vec<String>,
+    selected_root_paths: Vec<String>,
+    execution_profiles: Vec<serde_json::Value>,
+    cache_policy: LegacyCachePolicy,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_closure_policy_blake3: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    cache_closure: Vec<serde_json::Value>,
+    sources: Vec<serde_json::Value>,
+    units: Vec<serde_json::Value>,
+    roots: Vec<LegacyRoot>,
+    failure: Option<serde_json::Value>,
+    non_claims: Vec<String>,
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_reuses_an_index_receipt_without_build_cores() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+    let first = realize_with_receipt(&temp, &fixture, &binding, "first-receipt.json");
+    assert!(first.status.success(), "first realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let built = json_file(&temp.path().join("first-receipt.json"));
+    let root = &built["roots"][0];
+    let mut legacy = LegacyReceiptV2 {
+        schema: built["schema"].as_str().expect("schema").to_string(),
+        status: "complete".to_string(),
+        strongest_state: "realized".to_string(),
+        receipt_blake3: String::new(),
+        plan_blake3: built["plan_blake3"].as_str().expect("plan digest").to_string(),
+        import_receipt_blake3: built["import_receipt_blake3"].as_str().expect("import digest").to_string(),
+        source_bundle_manifest_blake3: built["source_bundle_manifest_blake3"]
+            .as_str()
+            .expect("source bundle digest")
+            .to_string(),
+        build_report_blake3: built["build_report_blake3"].as_str().expect("build report digest").to_string(),
+        selected_root_node_ids: vec![root["node_id"].as_str().expect("node id").to_string()],
+        selected_root_paths: vec![root["path"].as_str().expect("root path").to_string()],
+        execution_profiles: Vec::new(),
+        cache_policy: LegacyCachePolicy {
+            substitution_enabled: true,
+            offline: false,
+            ordered_cache_urls: Vec::new(),
+            realization_route: Some("cache-inputs-build-roots-v2".to_string()),
+        },
+        cache_closure_policy_blake3: None,
+        cache_closure: Vec::new(),
+        sources: Vec::new(),
+        units: Vec::new(),
+        roots: vec![LegacyRoot {
+            node_id: root["node_id"].as_str().expect("node id").to_string(),
+            target_derivation: root["target_derivation"].as_str().expect("derivation").to_string(),
+            output_name: root["output_name"].as_str().expect("output name").to_string(),
+            path: root["path"].as_str().expect("path").to_string(),
+            nar_sha256: root["nar_sha256"].as_str().expect("nar sha").to_string(),
+            nar_size: root["nar_size"].as_u64().expect("nar size"),
+            references: Vec::new(),
+            disposition: "built".to_string(),
+            signer: LegacySigner {
+                key_name: root["signer"]["key_name"].as_str().expect("key name").to_string(),
+                public_key_blake3: root["signer"]["public_key_blake3"]
+                    .as_str()
+                    .expect("public key fingerprint")
+                    .to_string(),
+                role: "builder".to_string(),
+            },
+            trust_policy_blake3: root["trust_policy_blake3"].as_str().expect("trust policy").to_string(),
+            built: LegacyBuilt {
+                mantle_version: root["built"]["mantle_version"].as_str().expect("mantle version").to_string(),
+                execution_profile_digest_blake3: root["built"]["execution_profile_digest_blake3"]
+                    .as_str()
+                    .expect("profile digest")
+                    .to_string(),
+                input_closure_blake3: root["built"]["input_closure_blake3"]
+                    .as_str()
+                    .expect("closure digest")
+                    .to_string(),
+            },
+            reused: None,
+        }],
+        failure: None,
+        non_claims: Vec::new(),
+    };
+    let canonical = serde_json::to_vec(&legacy).expect("legacy receipt bytes");
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"mantle-foreign-realization-receipt-v2\0");
+    hasher.update(&canonical);
+    let digest = hasher.finalize().to_hex().to_string();
+    legacy.receipt_blake3 = digest.clone();
+    let index_path = built_root_index_path_from_receipt(&temp, &built);
+    fs::write(&index_path, serde_json::to_vec_pretty(&legacy).expect("legacy index bytes"))
+        .expect("write legacy index");
+
+    let reused = realize_with_receipt(&temp, &fixture, &binding, "reused-receipt.json");
+    assert!(reused.status.success(), "reuse failed: {}", String::from_utf8_lossy(&reused.stderr));
+    let receipt = json_file(&temp.path().join("reused-receipt.json"));
+    assert_eq!(receipt["roots"][0]["disposition"], "reused");
+    assert_eq!(receipt["roots"][0]["reused"]["original_receipt_blake3"], digest);
+}
