@@ -1,0 +1,9 @@
+# 13-cairn-built
+# started 2026-11-22T16:48:34-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4
+# command: bash -c /nix/store/32ldglhzd6dfm1xahd743m3br4faid2n-cairn-0.2.1/bin/cairn\ convergence\ inspect\ --case\ /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/cairn/case-built/case.json\ --root\ /home/brittonr/wt/pilot-v2/octet-rev\ \|\ tee\ /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/cairn/inspect-built.json 
+--- stdout ---
+{"issues":[{"code":"convergence.proof_deck_outside_output","field_path":"/home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/cairn/case-built/producer-output/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1","message":"proof deck locator is outside the producer output directory: /datapool/mantle-store/convergence-pilot-20261119/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/proof-cards.json"}],"schema_version":"cairn.convergence.v1","status":"rejected"}
+--- stderr ---
+--- EXIT=0
+--- wall: 0.09s

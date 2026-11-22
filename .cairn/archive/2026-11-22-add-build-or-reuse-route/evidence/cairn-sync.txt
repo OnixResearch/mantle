@@ -1,0 +1,110 @@
+$ /nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn sync add-build-or-reuse-route --root . --execute
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "merge delta spec into main specs: ./.cairn/changes/add-build-or-reuse-route/specs/foreign-derivation-import/spec.md",
+      "kind": "sync_delta_spec",
+      "path": "./.cairn/changes/add-build-or-reuse-route/specs/foreign-derivation-import/spec.md"
+    }
+  ],
+  "blocked": false,
+  "change": "add-build-or-reuse-route",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "delta_specs": [
+    "./.cairn/changes/add-build-or-reuse-route/specs/foreign-derivation-import/spec.md"
+  ],
+  "dry_run": false,
+  "input_hash": "720994e24f355d50f0050c5bfb30d0d80f6d83e8a22717302ced0fe7ece7be8f",
+  "layout": "cairn",
+  "merge_preflight": {
+    "documents": [
+      {
+        "accepted_before_exists": true,
+        "accepted_before_hash": "bc3888c1b76b7a251fb7d86222f661d98f718bc90878cf8079587c5e23d018ed",
+        "blocked": false,
+        "changed": true,
+        "delta_hash": "616751a68a2c9959dd8fc11cbce96ecc9e673de81efa459b28d27c036b64c3e4",
+        "destination": ".cairn/specs/foreign-derivation-import/spec.md",
+        "diagnostics": [],
+        "expected_after_hash": "e67434b231d3cbd62ff18debf8b47eff5f54c2aaeac8395948468c55a5aad635",
+        "operations": [
+          {
+            "block_hash": "723ceef93c9d59697c5aef57b5fb023628bd4fe7d74c4beaa099b15d0c0d0930",
+            "heading": "### Requirement: Cache-inputs build or reuse roots",
+            "kind": "added",
+            "requirement_id": "foreign_derivation_import.cache_inputs_build_or_reuse"
+          }
+        ],
+        "outcomes": [
+          {
+            "kind": "added",
+            "requirement_id": "foreign_derivation_import.cache_inputs_build_or_reuse",
+            "state": "applied"
+          }
+        ],
+        "source": ".cairn/changes/add-build-or-reuse-route/specs/foreign-derivation-import/spec.md"
+      }
+    ]
+  },
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "e67434b231d3cbd62ff18debf8b47eff5f54c2aaeac8395948468c55a5aad635",
+          "exists": true,
+          "path": "./.cairn/specs/foreign-derivation-import/spec.md"
+        }
+      ],
+      "manifest_hash": "18e07bae75a654c1456a2a0d82a0a6f70a17330eaa4f327905f378eb3a93a9dd"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "bc3888c1b76b7a251fb7d86222f661d98f718bc90878cf8079587c5e23d018ed",
+          "exists": true,
+          "path": "./.cairn/specs/foreign-derivation-import/spec.md"
+        }
+      ],
+      "manifest_hash": "b022168b750983d6f164a2f3536b21330874c048db0e1a5799c26c4489d93ae5"
+    },
+    "kind": "sync",
+    "manifest_hash": "9702778e96ed6dd73d365585a954f67410e933d3fcf6a789857f25dec0faa86a"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "8ea4b6003d26695e9c08e38084fdc783f09436ad4b1af29f521f880604af5fd5",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "3516bfd06bb606304dc5cc5e60eb084cd134e6693acb1b186fbc121d46bf21e3",
+  "reasons": [],
+  "receipt_hash": "378a4a206175bfe34085ac631913e94f2b37961a215652460628d5148f970bbb",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

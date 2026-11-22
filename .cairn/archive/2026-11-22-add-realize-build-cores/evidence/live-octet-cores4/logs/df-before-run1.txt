@@ -1,0 +1,6 @@
+# recorded 2026-11-22T15:31:58-05:00
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme1n1p3  1.8T  1.6T  157G  91% /
+datapool	3.73T	72.2G
+Filesystem      Size  Used Avail Use% Mounted on
+datapool        1.1T  1.1T   73G  94% /datapool

@@ -1,0 +1,9 @@
+# 04-realize-run1
+# started 2026-11-22T15:12:31-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4
+# command: /usr/bin/env PATH=/var/empty SNIX_BUILD_BWRAP=/nix/store/mvj6y8k3xs35cj7kq937xi44q4hl3r93-bubblewrap-0.12.0/bin/bwrap /nix/store/0j2489gc0g3nihxfix9864xrki53g19h-mantle-0.1.0/bin/mantle --json --state-dir /datapool/mantle-store/build-or-reuse-20261122/pilot-v2-cores4/state --store /datapool/mantle-store/build-or-reuse-20261122/pilot-v2-cores4/store --store-prefix /nix/store --remote-binding-config /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/binding/remote-endpoint-binding.json foreign-import realize --plan /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/graph/plan.json --import-receipt /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/graph/import-receipt.json --source-bundle /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/graph/source-bundle.json --source-bundle-blake3 8ed1103b5de3054ee13ea391af805e276e3cc3b6ceaa50b2149193adb1ff1777 --execution-profile /datapool/mantle-store/build-or-reuse-20261122/mantle-src-8ae03535b/config/foreign-execution-profiles/generated/nix.json --cache-closure-policy /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/cache-closure-policy.json --receipt-out /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/receipts/realization-receipt-run1.json --substitute --build-cores 4 
+--- stdout ---
+--- stderr ---
+{"error":"hydrating preflighted foreign cache closure: store: http-closure-content-admission-failed: plshvwcnlnjddl772blynnnq1j8vrp6m-rust-docs-1.96.0-nightly-2026-03-21-x86_64-unknown-linux-gnu","code":3,"kind":"internal"}
+--- EXIT=3
+--- wall: 714.47s

@@ -1,0 +1,9 @@
+# 08-store-verify
+# started 2026-11-22T16:47:45-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4
+# command: bash -c $'\nRUN=/home/brittonr/wt/pilot-v2-cores4-run\nM=/nix/store/0j2489gc0g3nihxfix9864xrki53g19h-mantle-0.1.0/bin/mantle\n/usr/bin/env TMPDIR=$RUN/tmp $M --json --log-level warn --state-dir $RUN/state --store $RUN/store --store-prefix /nix/store store verify zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1 --trusted-public-keys "crunch-britton-desktop-1:3RRR72o8Vv16X1SWB9oWX8utJGjgvkGDYq2heQysw0v/PPVT94LjB8NjDpcTTwtqPGRQA85XFAPEV6d3tUmLBg=="\n' 
+--- stdout ---
+--- stderr ---
+{"error":"invalid trusted public key 'crunch-britton-desktop-1:3RRR72o8Vv16X1SWB9oWX8utJGjgvkGDYq2heQysw0v/PPVT94LjB8NjDpcTTwtqPGRQA85XFAPEV6d3tUmLBg==': Invalid pubkey len: 88","code":3,"kind":"internal"}
+--- EXIT=3
+--- wall: 0.03s

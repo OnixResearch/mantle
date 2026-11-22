@@ -1,0 +1,17 @@
+{
+  "schema_version": "octet-requirement-evidence/v1",
+  "contract_id": "octet.cairn-pilot.aeneas-consumer",
+  "contract_blake3": "56d7f459cc59ddfcdc31d42b86d6c0cef9ae3c03d8a9673ba6d6fb0a66e8eb3e",
+  "proof_decks": [
+    {
+      "evidence_id": "aeneas.consumer.increment-matches-model",
+      "deck": "/home/brittonr/wt/pilot-v2-cores4-run/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/proof-cards.json",
+      "artifact_root": "/home/brittonr/wt/pilot-v2-cores4-run/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1"
+    }
+  ],
+  "non_claims": [
+    "the deck is the producer job's own proof-card record, read in place from the preserved output; Octet evaluates it and does not authenticate the producer",
+    "deck and artifact paths are absolute inside the realized output, not repository paths at the reviewed revision",
+    "the pilot's realization preserved a prebuilt closure signed with the pilot key; this evidence file makes no claim about Mantle's proof acceptance"
+  ]
+}

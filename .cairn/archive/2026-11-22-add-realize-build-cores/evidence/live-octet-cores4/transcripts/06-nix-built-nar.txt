@@ -1,0 +1,12 @@
+# 06-nix-built-nar
+# started 2026-11-22T15:24:27-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4
+# command: bash -c $'\nset -e\nnix-store --dump /nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1 > compare/nix-built-root.nar\nwc -c < compare/nix-built-root.nar\nsha256sum compare/nix-built-root.nar\nb3sum compare/nix-built-root.nar\nnix-store -q --hash /nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1\n' 
+--- stdout ---
+580056
+2a12b198623393a6887de8051200fa034c3535e842c8ed7e15250ac0bba284be  compare/nix-built-root.nar
+eca2a9106906a91a36bb2dc79e3d5fef48beadcb55a9ed9a9c2110fec7f90f54  compare/nix-built-root.nar
+sha256:1gl4laxw02i52mzfvj22x0skak03z80141g8gn4ad4rkcacb24ia
+--- stderr ---
+--- EXIT=0
+--- wall: 1.52s

@@ -1,0 +1,23 @@
+diff -r handoff/built/mantle-observation.json /home/brittonr/wt/convergence-evidence/realization/handoff/mantle-observation.json
+12c12
+<   "association_identity": "b3:fa46849eb671fdcc131c71c762e965d57b46d7e95d2d11922c95a2c7c65037b1",
+---
+>   "association_identity": "b3:9290b4ea5319a7255026877505613eefe70e575406fd858d5c805228efd5873f",
+43c43
+<   "external_report_identity": "b3:39206064a5b629002b69cde5848957ba41ae66142a4c46c3231e5eaa4ecb82f8",
+---
+>   "external_report_identity": "b3:bfc3e95c55fae9aad7099183d2a2325319b26c37998c7267d158b86b545ab444",
+diff -r handoff/built/producer-artifact-verification.json /home/brittonr/wt/convergence-evidence/realization/handoff/producer-artifact-verification.json
+191c191
+<       "blake3": "584c99361e891d8581cfc714e78da194f9e5bda461ad2cf228cd4c5cbac9da8e",
+---
+>       "blake3": "1fa303ca5ecc02778baeb097a9d34e66e3c2c04fe9ea69ecb56be1d3eb39064b",
+diff -r handoff/built/summary.txt /home/brittonr/wt/convergence-evidence/realization/handoff/summary.txt
+7c7
+< evidence_log artifact=proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stdout blake3=043ed50882313e97c0aa24b3fbbeb9d09a35f13ce868c3eb1cfb4f08daa7ae74 bytes=92638 checked_scope=formal-proof:external-consumer:octet.aeneas_consumer_contract.external-fixture#rail-0 capture_source=octet.prove.stdout retention=content_addressed_raw claim_boundary=scoped proof rail output only; not whole-program correctness, certification, semantic equivalence, or full safety
+---
+> evidence_log artifact=proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stdout blake3=20fe247f23727146eb84dd18b4e3923958c3d2197c96e0687f77c165beca9589 bytes=93788 checked_scope=formal-proof:external-consumer:octet.aeneas_consumer_contract.external-fixture#rail-0 capture_source=octet.prove.stdout retention=content_addressed_raw claim_boundary=scoped proof rail output only; not whole-program correctness, certification, semantic equivalence, or full safety
+9c9
+< evidence_log artifact=proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stderr blake3=4fced4e526a467ea70adf5f0a428b0f879fdc12027e6f7df30444ccb1abeefcb bytes=222 checked_scope=formal-proof:external-consumer:octet.aeneas_consumer_contract.external-fixture#rail-0 capture_source=octet.prove.stderr retention=content_addressed_raw claim_boundary=scoped proof rail output only; not whole-program correctness, certification, semantic equivalence, or full safety
+---
+> evidence_log artifact=proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stderr blake3=97b164c4d081697a35abf5b2b1e7ace0b3fb8950625c9d4351344fc16ec6f707 bytes=222 checked_scope=formal-proof:external-consumer:octet.aeneas_consumer_contract.external-fixture#rail-0 capture_source=octet.prove.stderr retention=content_addressed_raw claim_boundary=scoped proof rail output only; not whole-program correctness, certification, semantic equivalence, or full safety

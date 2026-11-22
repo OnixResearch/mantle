@@ -1,0 +1,39 @@
+operator command contract: PASS (commands=215)
+contract_check=0
+fmt=0
+error: could not compile `mantle` (bin "crunch" test) due to 2 previous errors
+error: could not compile `mantle` (bin "crunch") due to 2 previous errors
+error: could not compile `mantle` (bin "mantle" test) due to 2 previous errors
+error: could not compile `mantle` (bin "mantle") due to 2 previous errors
+src/foreign_import_cmd.rs:1917:5: error: this assertion has a constant value
+src/foreign_import_cmd.rs:1918:5: error: this assertion has a constant value
+clippy=101
+test cache_inputs_build_or_reuse_route_sets_and_records_build_cores ... FAILED
+thread 'cache_inputs_build_or_reuse_route_sets_and_records_build_cores' (2707646) panicked at tests/cache_inputs_build_route.rs:978:5:
+test result: FAILED. 17 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.30s
+cache_inputs_build_route=101
+test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.53s
+foreign_import_cli=0
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.97s
+operator_diagnostics=0
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.29s
+android_sources_offline=0
+test result: ok. 120 passed; 0 failed; 1 ignored; 0 measured; 2907 filtered out; finished in 71.15s
+unit_foreign=0
+test build_request::tests::build_request_applies_the_requested_core_count_to_native_and_foreign_profiles ... FAILED
+test worker::tests::native_dynamic_plan_registers_all_units_but_wants_only_roots ... FAILED
+test finish_gates::tests::real_glibc_audit_distinguishes_missing_and_opened_sonames ... FAILED
+test worker::tests::watch_preflight_transitive_goal_limit_keeps_the_admitted_root ... FAILED
+test result: FAILED. 814 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.41s
+crunch_build_lib=101
+test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 42.45s
+test result: ok. 19 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 8.23s
+crunch_pipeline=0
+{"valid":false,"issues":23,"findings":23}
+add-build-or-reuse-route proposal: "verdict":"PASS",
+add-build-or-reuse-route design: "verdict":"PASS",
+add-build-or-reuse-route tasks: "verdict":"FAIL",
+add-realize-build-cores proposal: "verdict":"PASS",
+add-realize-build-cores design: "verdict":"FAIL",
+add-realize-build-cores tasks: "verdict":"FAIL",
+diff_check=0

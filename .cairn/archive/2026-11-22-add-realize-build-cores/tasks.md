@@ -7,9 +7,9 @@
 - [x] [serial] B3 Add CLI tests: `--build-cores 4` reaches the builder and is recorded; the default leaves the builder's `NIX_BUILD_CORES` unset and records nothing; route v1 refused; `0` and `65` refused; an index receipt without `build_cores` reuses. r[foreign_derivation_import.realize_build_cores]
   - Evidence: `tests/cache_inputs_build_route.rs`.
 - [x] [serial] B4 Regenerate the operator command contract, update the operator guide, and run the touched checks. r[foreign_derivation_import.realize_build_cores]
-  - Evidence: command transcripts in this change's `evidence/`.
+  - Evidence: `evidence/checks.md`, which indexes `checks-battery-1.log`, `checks-battery-2.log` and `checked-build-8ae03535b.log`.
 
 ## Phase 2: Live evidence
 
-- [ ] [serial] B5 With a checked build of the landed commit, realize the Octet pilot job on route v2 with `--build-cores 4` from a fresh store, then again unchanged; record that the first run builds within Octet's Lean budget and the second reuses it, with Cairn's convergence report for both. r[foreign_derivation_import.realize_build_cores]
-  - Evidence: live transcripts and receipts under `evidence/` (large files summarized by size and BLAKE3).
+- [x] [serial] B5 With a checked build of the landed commit, realize the Octet pilot job on route v2 with `--build-cores 4` from a fresh store, then again unchanged; record that the first run builds within Octet's Lean budget and the second reuses it, with Cairn's convergence report for both. r[foreign_derivation_import.realize_build_cores]
+  - Evidence: `evidence/live-octet-cores4/` (checked 8ae03535b binary; Octet job built in 4,178 s with `built.build_cores = 4` and its Lean stage finished in about 34 of 45 minutes; the unchanged rerun reused it in 238 s with zero builds and downloads; Cairn reports both `current`, with the reuse-link and untrusted-signer negatives). Attempt 1 failed during hydration because the shared ZFS pool was full; the README records it.

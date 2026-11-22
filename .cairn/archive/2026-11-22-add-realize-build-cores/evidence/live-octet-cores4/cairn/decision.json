@@ -1,0 +1,52 @@
+{
+  "schema_version": "octet-requirement-decision/v1",
+  "contract_id": "octet.cairn-pilot.aeneas-consumer",
+  "contract_blake3": "56d7f459cc59ddfcdc31d42b86d6c0cef9ae3c03d8a9673ba6d6fb0a66e8eb3e",
+  "evidence_blake3": "5c620f8cd64cd5872bdad7e5af7f82cef8e6f81426c46852c20d6440eb2d5293",
+  "source_snapshot_blake3": "84c2dbde41baca71e4889b30300bb146f905bf9874c44ab2bdbe755d27e36dd4",
+  "reviewed_specification": {
+    "path": ".cairn/specs/aeneas-consumer-contract/spec.md",
+    "blake3": "7b6bbfdae779ada85f40f563c5d4db8c9afec9c00581f07794b4d907ec6f15c9"
+  },
+  "aggregate_result": "passed",
+  "clauses": [
+    {
+      "clause_id": "octet.aeneas_consumer_contract.compatibility",
+      "required": true,
+      "disposition": "formal_proof",
+      "status": "passed",
+      "evidence_ids": [
+        "aeneas.consumer.increment-matches-model"
+      ],
+      "source_bindings": [
+        {
+          "locator": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/Cargo.toml",
+          "blake3": "28826659c5095a872ca9b17c747b96be1bc3afc147f2f383a7df5a527ab04370"
+        },
+        {
+          "locator": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/src/lib.rs",
+          "blake3": "691e8de8b8f92665dd00b938b48b398b451c71a06c99dae10b38b38184d4dddd"
+        },
+        {
+          "locator": "standards/proof-rails/aeneas-lean/fixtures/external-consumer/Theorem.lean",
+          "blake3": "776e9f85261080fbcfd75cb481c4f563cff50ffefaf8bdaae3d5fad010d8c77f"
+        }
+      ],
+      "diagnostics": []
+    }
+  ],
+  "assumptions": [],
+  "exclusions": [],
+  "limitations": [],
+  "diagnostics": [],
+  "non_claims": [
+    "does not establish release eligibility",
+    "does not prove Aeneas or Charon translation soundness",
+    "does not prove Lean or verifier soundness",
+    "does not prove rustc compiler correctness",
+    "does not prove semantic equivalence",
+    "evaluates supplied reviewed contracts and evidence only; does not authenticate reviewers or producers, prove verifier soundness, or establish whole-program correctness",
+    "phase-1 pilot non-claim: the evidence is a fixture theorem over a fixture rail; it is not a production theorem, not whole-program correctness, and not release eligibility"
+  ],
+  "decision_blake3": "906cc950af8318c420b9c8188f325aede254fe2c54360b4881c5c87f2d4f9a45"
+}

@@ -1,0 +1,61 @@
+# 06-compare
+# started 2026-11-22T16:44:58-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4
+# command: bash -c $'\nset -u\nRUN=/home/brittonr/wt/pilot-v2-cores4-run\nMROOT=$RUN/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1\nNROOT=/nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1\nnix-store --dump "$MROOT" > compare/mantle-built-root.nar; echo "dump-mantle-exit=$?"\nnix-store --dump "$NROOT" > compare/nix-built-root.nar; echo "dump-nix-exit=$?"\nwc -c compare/mantle-built-root.nar compare/nix-built-root.nar\nsha256sum compare/mantle-built-root.nar compare/nix-built-root.nar\nb3sum compare/mantle-built-root.nar compare/nix-built-root.nar\ncmp compare/mantle-built-root.nar compare/nix-built-root.nar; echo "cmp-exit=$?"\ndiff -r "$NROOT" "$MROOT" > compare/diff.txt; echo "diff-exit=$?"\nwc -c compare/diff.txt\nhead -40 compare/diff.txt\n' 
+--- stdout ---
+dump-mantle-exit=0
+dump-nix-exit=0
+ 577752 compare/mantle-built-root.nar
+ 580056 compare/nix-built-root.nar
+1157808 total
+922b7ec9cb2a4837125dff0346441e76432ff77def80ebd036320fe558fc2946  compare/mantle-built-root.nar
+2a12b198623393a6887de8051200fa034c3535e842c8ed7e15250ac0bba284be  compare/nix-built-root.nar
+6d0e3aac49cefb635382383c0b9368f24c433690db5fad80db4cb4e1b02579a2  compare/mantle-built-root.nar
+eca2a9106906a91a36bb2dc79e3d5fef48beadcb55a9ed9a9c2110fec7f90f54  compare/nix-built-root.nar
+compare/mantle-built-root.nar compare/nix-built-root.nar differ: byte 1118, line 7
+cmp-exit=1
+diff-exit=1
+394378 compare/diff.txt
+diff -r /nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/evidence-log-manifest.json /home/brittonr/wt/pilot-v2-cores4-run/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/evidence-log-manifest.json
+6,7c6,7
+<       "blake3": "20fe247f23727146eb84dd18b4e3923958c3d2197c96e0687f77c165beca9589",
+<       "bytes": 93788,
+---
+>       "blake3": "043ed50882313e97c0aa24b3fbbeb9d09a35f13ce868c3eb1cfb4f08daa7ae74",
+>       "bytes": 92638,
+15c15
+<       "blake3": "97b164c4d081697a35abf5b2b1e7ace0b3fb8950625c9d4351344fc16ec6f707",
+---
+>       "blake3": "4fced4e526a467ea70adf5f0a428b0f879fdc12027e6f7df30444ccb1abeefcb",
+diff -r /nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stderr /home/brittonr/wt/pilot-v2-cores4-run/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stderr
+3c3
+<     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.54s
+---
+>     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.95s
+diff -r /nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stdout /home/brittonr/wt/pilot-v2-cores4-run/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1/artifacts/proofs/octet.aeneas_consumer_contract.external-fixture-rail-0.stdout
+6c6
+< [[92mInfo[39m ] Total execution time: 0.263448 seconds
+---
+> [[92mInfo[39m ] Total execution time: 0.360763 seconds
+8c8
+< ⚠ [2/54] Ran aeneas:extraDep
+---
+> ⚠ [2/39] Ran aeneas:extraDep
+10,1597c10,1587
+< ✔ [7/187] Built ImportGraph.Imports.ImportGraph (1.1s)
+< ✔ [8/187] Built Batteries.Lean.MonadBacktrack (910ms)
+< ✔ [9/187] Built ImportGraph.Graph.TransitiveClosure (1.5s)
+< ✔ [10/187] Built Batteries.Lean.Syntax (1.6s)
+< ✔ [11/207] Built Batteries.Lean.Meta.Inaccessible (1.7s)
+< ✔ [12/207] Built Aesop.Script.Tactic (1.6s)
+< ✔ [13/207] Built Aesop.Forward.PremiseIndex (1.3s)
+< ✔ [14/214] Built Batteries.Lean.NameMapAttribute (2.1s)
+< ✔ [15/214] Built Aesop.Index.DiscrTreeConfig (1.9s)
+< ✔ [16/223] Built ImportGraph.Lean.Environment (2.4s)
+< ✔ [17/223] Built Aesop.Nanos (2.1s)
+< ✔ [18/234] Built ImportGraph.Tools.ImportDiff (1.6s)
+< ✔ [19/234] Built Batteries.Control.Lemmas (2.5s)
+< ✔ [20/234] Built Batteries.Tactic.PermuteGoals (2.5s)
+--- stderr ---
+--- EXIT=0
+--- wall: 0.36s

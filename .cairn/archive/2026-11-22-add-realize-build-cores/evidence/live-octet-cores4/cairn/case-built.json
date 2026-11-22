@@ -1,0 +1,25 @@
+{
+  "schema_version": "cairn.convergence-case.v1",
+  "registry": "requirement-registry.json",
+  "targets": "targets.json",
+  "generated_sources": "generated.json",
+  "trusted_signers": [
+    "crunch-britton-desktop-1"
+  ],
+  "contracts": [
+    {
+      "contract_id": "octet.cairn-pilot.aeneas-consumer",
+      "contract": "contract.json",
+      "decision": "decision.json",
+      "evidence": "evidence.json",
+      "handoff": "handoff",
+      "producer_output": "producer-output/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1",
+      "producer_output_locator": "/home/brittonr/wt/pilot-v2-cores4-run/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1",
+      "realization_receipt": "realization-receipt.json",
+      "store_info": "store-info.json"
+    }
+  ],
+  "trusted_builder_keys": [
+    "35e4d2ac280150a776e615c85d23c8c4cea964a054afb59f3554334b197b43ee"
+  ]
+}

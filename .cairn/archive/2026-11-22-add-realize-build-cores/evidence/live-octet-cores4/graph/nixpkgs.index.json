@@ -1,0 +1,14 @@
+{
+  "schema": "foreign-package-index-v1",
+  "entries": [
+    {
+      "name": "octet-mantle-aeneas-consumer-job",
+      "system": "x86_64-linux",
+      "root_derivation_id": "nix:vl7bqxyz2f86x0vlvxipcvryavckb9wj-octet-mantle-aeneas-consumer-job-v1.drv",
+      "aliases": [],
+      "provenance_ref": "octet@d5b34c2d64b1227417a46df8ed8427f2d10ed3c8",
+      "metadata_digest": "17fc53033b72a0c7f1208a0fdc331047d4e868fc687d2b1f4513613821fd3215",
+      "unsupported_metadata_classes": []
+    }
+  ]
+}

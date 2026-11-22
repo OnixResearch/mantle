@@ -1,0 +1,442 @@
+$ CAIRN_ARCHIVE_DATE=2026-11-22 /nix/store/1z6bhr2cl43z4kpsvjkxy9b47nqr9pkg-cairn-0.1.0/bin/cairn archive add-build-or-reuse-route --root . --execute
+{
+  "acceptance_ids": [],
+  "actions": [
+    {
+      "description": "move active change to archive: add-build-or-reuse-route",
+      "kind": "archive_change",
+      "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route"
+    }
+  ],
+  "blocked": false,
+  "change": "add-build-or-reuse-route",
+  "cross_repo_dependencies": {
+    "blocked_count": 0,
+    "dependency_count": 0,
+    "input_hash": "f21f4eaa3329e82b19274d2be16caa3ca84bdbb2c0b7e841a963c56ed6c9bfd3",
+    "non_claims": [
+      "dependency satisfaction proves presented receipt linkage only",
+      "dependency satisfaction does not prove upstream correctness or remote trust",
+      "dependency satisfaction does not prove downstream integration correctness or release eligibility"
+    ],
+    "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+    "receipt_hash": "132031deca491569258b65d57267b6b6809127ab0b785b5b90312d02db26dbfa",
+    "rows": [],
+    "satisfied_count": 0,
+    "schema": "cairn.cross-repo-dependency-receipt.v1",
+    "valid": true,
+    "verdict": "PASS"
+  },
+  "cross_repo_evidence_issues": [],
+  "dry_run": false,
+  "input_hash": "9548f90a596da4f582384b034d68db476f805227cb1b17469e9af93b3e9b2584",
+  "layout": "cairn",
+  "mutated": true,
+  "mutation_manifest": {
+    "after": {
+      "entries": [
+        {
+          "content_hash": "18f1546b12a3f896f115abacc0c1ffd7c37b4f9709f99ad1ffcbab37340e78a9",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/design.md"
+        },
+        {
+          "content_hash": "fae2679b87eadadc089752f13285f0892266288d081c5e9d0d6b70ecdddb696d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/cairn-sync.txt"
+        },
+        {
+          "content_hash": "ee7e82647569d0b77f5fe0131cef21c9ed0305f77f408c271a5260090760984b",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/README.md"
+        },
+        {
+          "content_hash": "75403fe6f21434296d05cf60d9f976ba4d0d2753f386f93bdd1a25334b4acee1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/case-built.json"
+        },
+        {
+          "content_hash": "3e0328fc12cb4497c689964254fad52c2f1031787cdd807bd76c1540427cca6a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/case-reused.json"
+        },
+        {
+          "content_hash": "90987e9b76f6a381b497cdb7ec76a77c470a6f07358f8c5155c07e5961af634a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/inspect-built.json"
+        },
+        {
+          "content_hash": "b22c55b7832590ce1859847656c497da6607307b9d668f161e84211db8482363",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/inspect-reused.json"
+        },
+        {
+          "content_hash": "b7950a96cce4e74fa5f5e4453e52b3334004724cf1f723075a2079cefaa137d2",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/built-untrusted-builder.json"
+        },
+        {
+          "content_hash": "d270322054646f4f2b7e1fbd8c5300fd4c0e2292f18839ba8fc42d995939fd88",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/reused-failed-decision.json"
+        },
+        {
+          "content_hash": "70d4c47a2e84d2c6e53e41e9a7e36df114e1df0fe7eea7d8ec934f340561593d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/reused-tampered-original.json"
+        },
+        {
+          "content_hash": "a28139984ccbcbee64876ac7603d3481088c960ed6c1e437f8ae325b544a635d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/reused-untrusted-builder.json"
+        },
+        {
+          "content_hash": "84325909eadde0f4454fe27ae6f8a7818ae6f5090464847b37b8e1ff118696d6",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/cairn/store-info.json"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/diff.txt"
+        },
+        {
+          "content_hash": "c10b7e820bac978d586a34f9e453ba238b76f36df60ddba53c0611104d9bdd40",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/logs/server-03-realize-run1.log"
+        },
+        {
+          "content_hash": "45239b2f6047230eaedb3f3f9befe2beb93eb3a9258e3c4640e3a3f064599794",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/logs/server-04-realize-run2.log"
+        },
+        {
+          "content_hash": "45239b2f6047230eaedb3f3f9befe2beb93eb3a9258e3c4640e3a3f064599794",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/logs/server-10-negative-signer-mismatch.log"
+        },
+        {
+          "content_hash": "45239b2f6047230eaedb3f3f9befe2beb93eb3a9258e3c4640e3a3f064599794",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/logs/server-11-negative-retired-key-trusted.log"
+        },
+        {
+          "content_hash": "feadeb0800bf75a5b04852c54da1b8bc2d76e22080f87d0a5ddc2a86c7381159",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/plan-diff-vs-e2.txt"
+        },
+        {
+          "content_hash": "61c41b884f1c8e7da67f3ffbd1ec078b23c4a56b32c11d58713a393f5ada0731",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/receipts/negative-retired-key-trusted.json"
+        },
+        {
+          "content_hash": "810200235386b0ab4536a01738864b8b9270b0c47024248f47b27c9aa55654e1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/receipts/realization-receipt-run1.json"
+        },
+        {
+          "content_hash": "54060102c5bca5c63ba81ccea8d358d6b212a6d4c6af681789572dbc4429690f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/receipts/realization-receipt-run2.json"
+        },
+        {
+          "content_hash": "2e1eca3072a7b4e920baba9852ded49d70b342c89f385856028772e4626f1e1d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/02-prepare-sources.txt"
+        },
+        {
+          "content_hash": "52f87a12b77816b65f408ff0d336b008470b969efb7adc00570106dd77fa2237",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/03-realize-run1.txt"
+        },
+        {
+          "content_hash": "e75de1a119198ead6cc5d6936bdcd223b9b613f83b75c347d02e338a92f11c31",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/04-realize-run2.txt"
+        },
+        {
+          "content_hash": "2f96bb1c0eea84fd2d2188248e65d434f1a9a380f34b26f88c033bbd70368c9f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/05-store-info.txt"
+        },
+        {
+          "content_hash": "7d1a9807be856cea569215fb9aa5eae81ffffa553a86d63399fe919f7e510bd4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/06-store-verify.txt"
+        },
+        {
+          "content_hash": "551e8eea500b014d23bfcf4dc15aa739c73c91c10cf32c6eb5fed89286f20046",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/07-negative-key.txt"
+        },
+        {
+          "content_hash": "601ab0994e2967a6576824c3211d470d5a8e8f9c0caf9846e7a025344c7ae2e1",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/08-bridge-trellis-job.txt"
+        },
+        {
+          "content_hash": "e8724279ce1601856b954f8d4c4e992f66333e4a8c3ff63f5cdcd84a8bdd360d",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/09-bridge-replay.txt"
+        },
+        {
+          "content_hash": "5fbe3269d4dbdf363f5538bd86c9da46332ee7c9ab9014af30864c36742f4826",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/10-negative-signer-mismatch.txt"
+        },
+        {
+          "content_hash": "95e77b5891ec2e4bc66b61803c97d418e10b178858695c655d60478b92e2860c",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/live-wp8/transcripts/11-negative-retired-key-trusted.txt"
+        },
+        {
+          "content_hash": "323e6534934b985d315df9849181eb6c11b324d49ffce2dbdf3392649bb4660f",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/orchestrator-checks.md"
+        },
+        {
+          "content_hash": "8714b15ca4b972d15a80d9316be9feed457108070e7a434b3d5433e9ff27ec2a",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/evidence/slice2b-checks.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/metadata.json"
+        },
+        {
+          "content_hash": "8573060eb35f53a646d245680d9c73e338a96a3774a4f4b73364aed128bdae08",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/proposal.md"
+        },
+        {
+          "content_hash": "616751a68a2c9959dd8fc11cbce96ecc9e673de81efa459b28d27c036b64c3e4",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "fb3638d3d5db9812a4946fb3caa98a8277c02b9f28182d06ac28c1b5397271ab",
+          "exists": true,
+          "path": "./.cairn/archive/2026-11-22-add-build-or-reuse-route/tasks.md"
+        },
+        {
+          "content_hash": null,
+          "exists": false,
+          "path": "./.cairn/changes/add-build-or-reuse-route"
+        }
+      ],
+      "manifest_hash": "20cf0b5a58a45c5f4ced240292616395f0a92f15615a836f13b7610bff2a1779"
+    },
+    "before": {
+      "entries": [
+        {
+          "content_hash": "18f1546b12a3f896f115abacc0c1ffd7c37b4f9709f99ad1ffcbab37340e78a9",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/design.md"
+        },
+        {
+          "content_hash": "fae2679b87eadadc089752f13285f0892266288d081c5e9d0d6b70ecdddb696d",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/cairn-sync.txt"
+        },
+        {
+          "content_hash": "ee7e82647569d0b77f5fe0131cef21c9ed0305f77f408c271a5260090760984b",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/README.md"
+        },
+        {
+          "content_hash": "75403fe6f21434296d05cf60d9f976ba4d0d2753f386f93bdd1a25334b4acee1",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/case-built.json"
+        },
+        {
+          "content_hash": "3e0328fc12cb4497c689964254fad52c2f1031787cdd807bd76c1540427cca6a",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/case-reused.json"
+        },
+        {
+          "content_hash": "90987e9b76f6a381b497cdb7ec76a77c470a6f07358f8c5155c07e5961af634a",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/inspect-built.json"
+        },
+        {
+          "content_hash": "b22c55b7832590ce1859847656c497da6607307b9d668f161e84211db8482363",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/inspect-reused.json"
+        },
+        {
+          "content_hash": "b7950a96cce4e74fa5f5e4453e52b3334004724cf1f723075a2079cefaa137d2",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/built-untrusted-builder.json"
+        },
+        {
+          "content_hash": "d270322054646f4f2b7e1fbd8c5300fd4c0e2292f18839ba8fc42d995939fd88",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/reused-failed-decision.json"
+        },
+        {
+          "content_hash": "70d4c47a2e84d2c6e53e41e9a7e36df114e1df0fe7eea7d8ec934f340561593d",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/reused-tampered-original.json"
+        },
+        {
+          "content_hash": "a28139984ccbcbee64876ac7603d3481088c960ed6c1e437f8ae325b544a635d",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/negatives/reused-untrusted-builder.json"
+        },
+        {
+          "content_hash": "84325909eadde0f4454fe27ae6f8a7818ae6f5090464847b37b8e1ff118696d6",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/cairn/store-info.json"
+        },
+        {
+          "content_hash": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/diff.txt"
+        },
+        {
+          "content_hash": "c10b7e820bac978d586a34f9e453ba238b76f36df60ddba53c0611104d9bdd40",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/logs/server-03-realize-run1.log"
+        },
+        {
+          "content_hash": "45239b2f6047230eaedb3f3f9befe2beb93eb3a9258e3c4640e3a3f064599794",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/logs/server-04-realize-run2.log"
+        },
+        {
+          "content_hash": "45239b2f6047230eaedb3f3f9befe2beb93eb3a9258e3c4640e3a3f064599794",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/logs/server-10-negative-signer-mismatch.log"
+        },
+        {
+          "content_hash": "45239b2f6047230eaedb3f3f9befe2beb93eb3a9258e3c4640e3a3f064599794",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/logs/server-11-negative-retired-key-trusted.log"
+        },
+        {
+          "content_hash": "feadeb0800bf75a5b04852c54da1b8bc2d76e22080f87d0a5ddc2a86c7381159",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/plan-diff-vs-e2.txt"
+        },
+        {
+          "content_hash": "61c41b884f1c8e7da67f3ffbd1ec078b23c4a56b32c11d58713a393f5ada0731",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/receipts/negative-retired-key-trusted.json"
+        },
+        {
+          "content_hash": "810200235386b0ab4536a01738864b8b9270b0c47024248f47b27c9aa55654e1",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/receipts/realization-receipt-run1.json"
+        },
+        {
+          "content_hash": "54060102c5bca5c63ba81ccea8d358d6b212a6d4c6af681789572dbc4429690f",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/receipts/realization-receipt-run2.json"
+        },
+        {
+          "content_hash": "2e1eca3072a7b4e920baba9852ded49d70b342c89f385856028772e4626f1e1d",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/02-prepare-sources.txt"
+        },
+        {
+          "content_hash": "52f87a12b77816b65f408ff0d336b008470b969efb7adc00570106dd77fa2237",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/03-realize-run1.txt"
+        },
+        {
+          "content_hash": "e75de1a119198ead6cc5d6936bdcd223b9b613f83b75c347d02e338a92f11c31",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/04-realize-run2.txt"
+        },
+        {
+          "content_hash": "2f96bb1c0eea84fd2d2188248e65d434f1a9a380f34b26f88c033bbd70368c9f",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/05-store-info.txt"
+        },
+        {
+          "content_hash": "7d1a9807be856cea569215fb9aa5eae81ffffa553a86d63399fe919f7e510bd4",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/06-store-verify.txt"
+        },
+        {
+          "content_hash": "551e8eea500b014d23bfcf4dc15aa739c73c91c10cf32c6eb5fed89286f20046",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/07-negative-key.txt"
+        },
+        {
+          "content_hash": "601ab0994e2967a6576824c3211d470d5a8e8f9c0caf9846e7a025344c7ae2e1",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/08-bridge-trellis-job.txt"
+        },
+        {
+          "content_hash": "e8724279ce1601856b954f8d4c4e992f66333e4a8c3ff63f5cdcd84a8bdd360d",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/09-bridge-replay.txt"
+        },
+        {
+          "content_hash": "5fbe3269d4dbdf363f5538bd86c9da46332ee7c9ab9014af30864c36742f4826",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/10-negative-signer-mismatch.txt"
+        },
+        {
+          "content_hash": "95e77b5891ec2e4bc66b61803c97d418e10b178858695c655d60478b92e2860c",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/live-wp8/transcripts/11-negative-retired-key-trusted.txt"
+        },
+        {
+          "content_hash": "323e6534934b985d315df9849181eb6c11b324d49ffce2dbdf3392649bb4660f",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/orchestrator-checks.md"
+        },
+        {
+          "content_hash": "8714b15ca4b972d15a80d9316be9feed457108070e7a434b3d5433e9ff27ec2a",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/evidence/slice2b-checks.md"
+        },
+        {
+          "content_hash": "df8b71bae570eb5accd702e7370a816b8ea9f2e4521254c5d75ea82a9cfcf4db",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/metadata.json"
+        },
+        {
+          "content_hash": "8573060eb35f53a646d245680d9c73e338a96a3774a4f4b73364aed128bdae08",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/proposal.md"
+        },
+        {
+          "content_hash": "616751a68a2c9959dd8fc11cbce96ecc9e673de81efa459b28d27c036b64c3e4",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/specs/foreign-derivation-import/spec.md"
+        },
+        {
+          "content_hash": "fb3638d3d5db9812a4946fb3caa98a8277c02b9f28182d06ac28c1b5397271ab",
+          "exists": true,
+          "path": "./.cairn/changes/add-build-or-reuse-route/tasks.md"
+        }
+      ],
+      "manifest_hash": "99dbfe871c015085eb6fb781ce4338069d7be9ad5416ab8a4fefb7f2013ffb1b"
+    },
+    "kind": "archive",
+    "manifest_hash": "314dc5abf61a352616403f575f5c9c6176cd145f50f26ac0b083c9f0af23ef19"
+  },
+  "non_claims": [
+    "workflow state proves only the selected policy graph and observed structural artifact facts",
+    "workflow instructions do not prove artifact truth, review quality, or implementation correctness",
+    "workflow state does not satisfy proposal, design, tasks, sync, archive, evidence, or release gates",
+    "workflow commands are read-only and do not create, edit, delete, or approve lifecycle artifacts"
+  ],
+  "plan_hash": "7ef2da0a0a453e4cd10a35a4920d6acf08f43d48b57cb9b530ed7686273aa3cb",
+  "policy": "mantle-default",
+  "policy_hash": "10455600e4ec15e5afa2b7759c70856ed9a1dc4ed1e18b635b32ee3d33cc6b4b",
+  "profile_identity_hash": "3516bfd06bb606304dc5cc5e60eb084cd134e6693acb1b186fbc121d46bf21e3",
+  "reasons": [],
+  "receipt_hash": "8ddff463eaa9450c8fcb47711783848379dd0966a261e3d91b8f99b8c4d3e933",
+  "review_receipt_hashes": [],
+  "spec_effect": "delta",
+  "workflow_profile": "spec-driven",
+  "workflow_profile_compatibility_fallback": false,
+  "workflow_profile_source": "change_create",
+  "workflow_profile_version": 1
+}

@@ -1,0 +1,24 @@
+fmt=0
+clippy=0
+operator command contract: PASS (commands=215)
+contract_check=0
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.42s
+cache_inputs_build_route=0
+test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.95s
+foreign_import_cli=0
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.98s
+operator_diagnostics=0
+test result: ok. 120 passed; 0 failed; 1 ignored; 0 measured; 2907 filtered out; finished in 63.07s
+unit_foreign=0
+test finish_gates::tests::real_glibc_audit_distinguishes_missing_and_opened_sonames ... FAILED
+test worker::tests::watch_preflight_transitive_goal_limit_keeps_the_admitted_root ... FAILED
+test result: FAILED. 816 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.99s
+crunch_build_lib=101
+{"valid":true,"issues":0,"findings":0}
+add-build-or-reuse-route proposal: "verdict":"PASS",
+add-build-or-reuse-route design: "verdict":"PASS",
+add-build-or-reuse-route tasks: "verdict":"PASS",
+add-realize-build-cores proposal: "verdict":"PASS",
+add-realize-build-cores design: "verdict":"PASS",
+add-realize-build-cores tasks: "verdict":"PASS",
+diff_check=0

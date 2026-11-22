@@ -1,0 +1,69 @@
+# 07-store-info
+# started 2026-11-22T16:47:41-05:00
+# cwd: /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4
+# command: bash -c $'\nN=/home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4\nRUN=/home/brittonr/wt/pilot-v2-cores4-run\nM=/nix/store/0j2489gc0g3nihxfix9864xrki53g19h-mantle-0.1.0/bin/mantle\n/usr/bin/env TMPDIR=$RUN/tmp $M --json --log-level warn --state-dir $RUN/state --store $RUN/store --store-prefix /nix/store store info zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1 | tee $N/cairn/store-info.json\n' 
+--- stdout ---
+{
+  "backend": "snix",
+  "backend_capabilities": {
+    "atomic_batch_import": true,
+    "core": [
+      "output-admission",
+      "lookup",
+      "fresh-process-reopen",
+      "closure-resolution",
+      "export",
+      "store-archive-export",
+      "store-archive-import",
+      "gc-plan",
+      "plan-bound-gc",
+      "action-result-pathinfo-output-reuse",
+      "store-sign",
+      "store-repair-final-nar"
+    ],
+    "max_root_changes": null,
+    "overlay_composition": true,
+    "rust_unit_cache": true,
+    "unsigned_admission": true
+  },
+  "overlay": null,
+  "paths": [
+    {
+      "ca": null,
+      "deriver": "szzqg5vg6g34zm65m9qxybmkx5wxcbgy-octet-mantle-aeneas-consumer-job-v1",
+      "layer": {
+        "kind": "overlay"
+      },
+      "nar_sha256": "922b7ec9cb2a4837125dff0346441e76432ff77def80ebd036320fe558fc2946",
+      "nar_size": 577752,
+      "node": "Directory { digest: blake3-+1np3+2dc1rKIKwZlb43oZLVnQRXogaLQ69iMO8xJoQ=, size: 80 }",
+      "references": [
+        "zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1",
+        "3lh4savplcckg4zzg0kpx9747md8g53w-octet-aeneas-lean-provider-closure-x86_64-linux",
+        "3r2zm018vz9z2c8y2312n5wxifxc1mai-octet-aeneas-mathlib-lake-dependencies-4.31.0",
+        "5rm1x1c5h6f7l4s2jp45b6s1d3793r9f-cargo-octet-0.1.1-rc.1"
+      ],
+      "retention_interests": {
+        "interests": [
+          {
+            "owner": "legacy-unmanaged",
+            "reason": "root-reclassified",
+            "record_id": "ebf00e3e4c0ef1110ec94493da9b33109253a6dd178a19ac79eb348602e5497e"
+          }
+        ],
+        "legacy_unmanaged": false,
+        "logical_path": "/nix/store/zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1",
+        "record_count": 1
+      },
+      "shadows": [],
+      "signatures": [
+        "crunch-britton-desktop-1:3RRR72o8Vv16X1SWB9oWX8utJGjgvkGDYq2heQysw0v/PPVT94LjB8NjDpcTTwtqPGRQA85XFAPEV6d3tUmLBg=="
+      ],
+      "store_path": "zjq6whhf2c641vkz89kgwwpbajjq5cbq-octet-mantle-aeneas-consumer-job-v1"
+    }
+  ],
+  "schema": "mantle-store-info-v3"
+}
+--- stderr ---
+--- EXIT=0
+--- wall: 0.05s

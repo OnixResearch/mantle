@@ -1,0 +1,29 @@
+# 01-produce-nix
+# started 2026-11-22T15:09:06-05:00
+# cwd: /home/brittonr/git/OnixResearch/kiln
+# command: /nix/store/0j2489gc0g3nihxfix9864xrki53g19h-mantle-0.1.0/bin/mantle --json foreign-import produce-nix --derivation-json /home/brittonr/wt/convergence-evidence/realization/producer-export/tool-closure.derivation-json.json --root-derivation /nix/store/vl7bqxyz2f86x0vlvxipcvryavckb9wj-octet-mantle-aeneas-consumer-job-v1.drv --producer-identity octet@d5b34c2d64b1227417a46df8ed8427f2d10ed3c8 --producer-revision d5b34c2d64b1227417a46df8ed8427f2d10ed3c8 --package octet-mantle-aeneas-consumer-job --system x86_64-linux --cache-url http://127.0.0.1:18571\?trusted_public_keys\[0\]=convergence-pilot-20261119-1:sRZV4nbjXTCkhRjkEIVe5Pg4G2ajYaCobLqS0JJVu2A%3D --out-dir /home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/graph --state-dir /datapool/mantle-store/build-or-reuse-20261122/pilot-v2-cores4/plan-state 
+--- stdout ---
+{
+  "schema": "mantle-foreign-import-cli-v1",
+  "command": "produce-nix",
+  "verdict": "accepted",
+  "accepted": true,
+  "diagnostics": [],
+  "receipt": null,
+  "plan": null,
+  "producer_artifacts": {
+    "graph_path": "/home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/graph/nixpkgs.graph.json",
+    "package_index_path": "/home/brittonr/wt/convergence-evidence/build-or-reuse/pilot-v2-cores4/graph/nixpkgs.index.json"
+  },
+  "non_claims": [
+    "not-build-success",
+    "not-package-correctness",
+    "not-bootstrap-parity",
+    "not-output-trust",
+    "not-reproducibility",
+    "not-foreign-frontend-availability"
+  ]
+}
+--- stderr ---
+--- EXIT=0
+--- wall: 1.48s
