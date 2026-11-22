@@ -29,7 +29,9 @@ host-store-fallback denial.
 **Choice:** `cache_inputs_closure` walks nothing transitively in the derivation
 graph. It starts from each selected root unit and takes exactly:
 
-1. the outputs named by that root's own `input_derivations` edges;
+1. **all** outputs of each direct input derivation named by that root's own
+   `input_derivations` edges (Mantle realizes a derivation only when every
+   output is present, so the output named by the edge is not sufficient);
 2. that root's own `input_sources`;
 3. the runtime reference closure of (1) ∪ (2), discovered by the signed cache's
    narinfo `References` and admitted only inside the plan's exact path map.

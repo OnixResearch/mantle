@@ -16,10 +16,11 @@ cache-closure policy, and MUST use the same narinfo discovery, signature
 verification, bounded closure limits, exact-path-map admission and
 post-import PathInfo re-verification as the cache-only route.
 
-The hydrated seed set MUST contain exactly the outputs that the selected
-roots' direct input-derivation edges request, the selected roots' own input
-sources, and the runtime reference closure of those paths as declared by the
-signed cache; Mantle MUST NOT walk the transitive derivation closure to collect
+The hydrated seed set MUST contain every output of each direct input
+derivation named by the selected roots' input-derivation edges, the selected
+roots' own input sources, and the runtime reference closure of those paths as
+declared by the signed cache; a missing output MUST fail closed before any
+store mutation or builder execution; Mantle MUST NOT walk the transitive derivation closure to collect
 build-only dependency outputs. Every hydrated path MUST be inside the plan's
 exact output/source path map, and a missing, unsigned, wrongly signed,
 hash-mismatched, reference-incomplete or out-of-map input MUST fail closed

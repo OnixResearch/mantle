@@ -291,20 +291,23 @@ pub(crate) fn cache_inputs_closure(
         let unit = units_by_node
             .get(root_id)
             .ok_or_else(|| ForeignRealizationAdmissionError::UnknownSelectedRoot((*root_id).to_string()))?;
-        for (input_derivation, output_names) in &unit.input_derivations {
+        for input_derivation in unit.input_derivations.keys() {
             let input_unit = units_by_target.get(input_derivation.as_str()).ok_or_else(|| {
                 ForeignRealizationAdmissionError::InvalidNativeUnit {
                     node_id: unit.node_id.clone(),
                     reason: format!("input derivation is absent from the plan: {input_derivation}"),
                 }
             })?;
-            for output_name in output_names {
-                let target = input_unit.outputs.get(output_name.as_str()).ok_or_else(|| {
-                    ForeignRealizationAdmissionError::InvalidNativeUnit {
-                        node_id: input_unit.node_id.clone(),
-                        reason: format!("requested output is absent from the plan: {output_name}"),
-                    }
-                })?;
+            // Mantle realizes a derivation only when every output is present,
+            // so a direct input must hydrate all of its outputs, not just the
+            // output named by this edge.
+            if input_unit.outputs.is_empty() {
+                return Err(ForeignRealizationAdmissionError::InvalidNativeUnit {
+                    node_id: input_unit.node_id.clone(),
+                    reason: "direct input derivation has no outputs".to_string(),
+                });
+            }
+            for target in input_unit.outputs.values() {
                 seed_paths.insert(target.clone());
             }
         }
@@ -857,6 +860,39 @@ mod tests {
             cache_inputs_closure(&plan, &["absent-node".to_string()]),
             Err(ForeignRealizationAdmissionError::UnknownSelectedRoot(_))
         ));
+    }
+
+    #[test]
+    fn cache_inputs_seeds_every_output_of_a_multi_output_direct_input() {
+        let graph: ForeignDerivationGraph =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.graph.json"))
+                .expect("graph fixture");
+        let index: PackageIndex =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.index.json"))
+                .expect("index fixture");
+        let policy: TranslationPolicy =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-policy.json"))
+                .expect("policy fixture");
+        let (mut plan, _) = compile_foreign_executable_plan(&graph, &index, &policy, "two-node", "x86_64-linux")
+            .expect("two-node plan");
+        const DEV_PATH: &str = "/mantle/store/99999999999999999999999999999999-child-dev";
+        let child_target = plan
+            .native_units
+            .iter()
+            .find(|unit| unit.input_derivations.is_empty())
+            .expect("child unit")
+            .target_derivation
+            .clone();
+        for unit in &mut plan.native_units {
+            if unit.target_derivation == child_target {
+                unit.outputs.insert("dev".to_string(), DEV_PATH.to_string());
+            }
+        }
+        plan.exact_path_maps.outputs.insert("/gnu/store/child-dev".to_string(), DEV_PATH.to_string());
+        let roots = vec![plan.selected_roots[0].node_id.clone()];
+        let closure = cache_inputs_closure(&plan, &roots).expect("closure");
+        assert!(closure.contains(&DEV_PATH.to_string()), "every output of a direct input must be seeded");
+        assert!(closure.iter().any(|path| path.ends_with("-child")));
     }
 
     #[test]

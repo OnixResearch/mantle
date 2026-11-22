@@ -1,0 +1,152 @@
+$ cargo test -p mantle --test cache_inputs_build_route
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 56s
+     Running tests/cache_inputs_build_route.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/cache_inputs_build_route-4a1094ad7faa3587)
+
+running 6 tests
+test cache_inputs_route_builds_the_root_from_hydrated_inputs ... ok
+test cache_inputs_route_is_refused_on_a_recompute_plan ... ok
+test cache_inputs_route_refuses_a_missing_input ... ok
+test cache_inputs_route_refuses_a_root_offered_by_the_cache ... ok
+test cache_inputs_route_refuses_an_untrusted_signer ... ok
+test cache_inputs_route_rejects_a_nonempty_source_bundle ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.68s
+
+EXIT=0
+$ cargo test -p mantle --bin mantle foreign_
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-build-route)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 10s
+     Running unittests src/main.rs (/datapool/mantle-store/cache-inputs-target/debug/deps/mantle-7696ded92822839c)
+
+running 112 tests
+test foreign_derivation_import::tests::cache_and_sandbox_policy_fail_closed_without_trust_or_capability_allowance ... ok
+test foreign_derivation_import::tests::canonical_fetch_candidate_validation_rejects_conflicts_and_private_injection ... ok
+test foreign_derivation_import::tests::canonical_fetch_graph_model_preserves_legacy_decode_and_rejects_invalid_lists ... ok
+test foreign_derivation_import::tests::canonical_fetch_graph_model_rejects_stale_legacy_mirrors ... ok
+test foreign_derivation_import::tests::embedded_source_payload_rewrite_requires_explicit_permission ... ok
+test foreign_derivation_import::tests::fixed_output_hash_mode_preserves_modern_and_legacy_recursive_facts ... ok
+test foreign_derivation_import::tests::fixed_output_hash_mode_rejects_unknown_and_conflicting_facts ... ok
+test foreign_derivation_import::tests::foreign_graph_admits_the_field_byte_bound_and_rejects_one_byte_more ... ok
+test foreign_derivation_import::tests::foreign_graph_admits_the_producer_source_payload_bound ... ok
+test foreign_derivation_import::tests::foreign_graph_rejects_one_source_payload_past_the_producer_bound ... ok
+test foreign_derivation_import::tests::foreign_nix_export_admits_four_thousand_ninety_six_derivations_through_lowering_and_planning ... ok
+test foreign_derivation_import::tests::foreign_nix_export_admits_the_per_node_input_edge_bound ... ok
+test foreign_derivation_import::tests::foreign_nix_export_admits_the_producer_tool_graph_derivation_bound ... ignored, max-size producer graph (exceeded 15 min in release on 2026-11-19); run with --release -- --ignored
+test foreign_derivation_import::tests::foreign_nix_export_rejects_one_derivation_past_the_producer_tool_graph_bound ... ok
+test foreign_derivation_import::tests::foreign_nix_export_rejects_one_input_edge_past_the_per_node_bound ... ok
+test foreign_derivation_import::tests::graph_node_bound_matches_the_producer_tool_derivation_contract_value ... ok
+test foreign_derivation_import::tests::mantle_adapter_consumes_translated_hello_without_foreign_frontend_invocations ... ok
+test foreign_derivation_import::tests::nix_aterm_derivation_closure_lowering_preserves_graph_facts ... ok
+test foreign_derivation_import::tests::nix_closure_selection_filters_unreachable_and_requires_inputs ... ok
+test foreign_derivation_import::tests::nix_environment_normalization_distinguishes_store_basenames_from_sri_hashes ... ok
+test foreign_derivation_import::tests::nix_fetch_candidates_normalize_direct_unstructured_and_structured_forms ... ok
+test foreign_derivation_import::tests::nix_fetch_candidates_reject_invalid_ambiguous_and_private_forms ... ok
+test foreign_derivation_import::tests::nix_lowering_emits_canonical_candidates_and_keeps_arbitrary_fixed_outputs_non_downloads ... ok
+test foreign_derivation_import::tests::nixpkgs_derivation_json_lowering_preserves_identities_and_substitution_policy ... ok
+test foreign_derivation_import::tests::nixpkgs_hash_domain_and_frontend_metadata_fail_closed ... ok
+test foreign_derivation_import::tests::prefix_aware_aterm_bundle_parses_nix_and_guix_paths ... ok
+test foreign_derivation_import::tests::prefix_aware_aterm_bundle_rejects_malformed_and_mixed_inputs ... ok
+test foreign_derivation_import::tests::prefix_aware_aterm_bundle_rejects_missing_duplicate_non_utf8_and_limits ... ok
+test foreign_derivation_import::tests::prefix_aware_aterm_lowering_emits_guix_graph_facts ... ok
+test foreign_derivation_import::tests::reviewed_nix_adapter_matches_legacy_projection_for_accepted_fixture ... ok
+test foreign_derivation_import::tests::reviewed_nix_adapter_rejects_unrepresentable_forms_before_graph_publication ... ok
+test foreign_derivation_import::tests::structured_and_unstructured_nix_candidates_lower_to_equal_node_facts ... ok
+test foreign_derivation_import::tests::translates_guix_and_nix_hello_fixtures_deterministically ... ok
+test foreign_derivation_import::tests::translation_rejects_unsupported_builtins_references_stale_receipts_indexes_and_features ... ok
+test foreign_derivation_import::tests::versioned_nix_derivation_export_normalizes_relative_paths_and_fod_env_outputs ... ok
+test foreign_derivation_import::tests::versioned_nix_derivation_export_preserves_structured_attributes_as_protocol_json ... ok
+test foreign_derivation_import::tests::versioned_nix_derivation_export_rejects_missing_output_path_without_env_fallback ... ok
+test foreign_derivation_import::tests::versioned_nix_derivation_export_rejects_non_object_structured_attributes ... ok
+test foreign_derivation_import::tests::versioned_nix_export_accepts_sha512_flat_fixed_output ... ok
+test foreign_derivation_import::tests::versioned_nix_export_rejects_method_and_env_mode_conflict ... ok
+test foreign_derivation_import::tests::versioned_nix_export_rejects_sri_and_hash_algo_conflict ... ok
+test foreign_derivation_import::tests::versioned_nix_export_rejects_unknown_fixed_output_method ... ok
+test foreign_derivation_import::tests::versioned_nix_export_takes_recursion_from_the_nar_method_without_env_mode ... ok
+test foreign_executable_plan::tests::cache_inputs_build_roots_plan_binds_the_route_and_refuses_fod_roots ... ok
+test foreign_executable_plan::tests::cache_only_plan_binds_route_and_rejects_path_or_route_tampering ... ok
+test foreign_executable_plan::tests::executable_plan_compilation_rejects_a_failed_sibling_root_without_partial_success ... ok
+test foreign_executable_plan::tests::executable_plan_is_deterministic_receipt_bound_and_self_validating ... ok
+test foreign_executable_plan::tests::executable_plan_preserves_bare_source_store_literals_during_aterm_validation ... ok
+test foreign_executable_plan::tests::executable_plan_validator_rejects_identity_domain_root_and_reference_tampering ... ok
+test foreign_executable_plan::tests::plan_reference_validation_accepts_bare_store_mentions_and_rejects_malformed_runs ... ok
+test foreign_graph_compiler::tests::bare_store_directory_mentions_translate_in_env_and_arguments ... ok
+test foreign_graph_compiler::tests::base32_run_that_is_not_a_store_object_is_a_malformed_reference ... ok
+test foreign_graph_compiler::tests::cache_only_compiler_preserves_exact_paths_and_rejects_prefix_drift ... ok
+test foreign_graph_compiler::tests::compiler_binds_canonical_nix_candidates_and_order_into_recipe_identity ... ok
+test foreign_graph_compiler::tests::compiler_lowers_git_revision_and_export_policy_to_mantle_fetch_facts ... ok
+test foreign_graph_compiler::tests::compiler_lowers_ordered_executable_download_to_mantle_fetch_facts ... ok
+test foreign_graph_compiler::tests::compiler_maps_source_descriptors_and_rewrites_suffixes ... ok
+test foreign_graph_compiler::tests::compiler_rejects_duplicate_maps_output_drift_and_unknown_embedded_paths ... ok
+test foreign_graph_compiler::tests::compiler_rewrites_store_paths_inside_structured_attribute_json ... ok
+test foreign_graph_compiler::tests::compiler_translates_non_path_store_placeholders_and_rejects_valid_unknown_paths ... ok
+test foreign_graph_compiler::tests::conflicting_cross_class_path_mapping_is_rejected ... ok
+test foreign_graph_compiler::tests::dependency_compiler_is_exact_deterministic_and_prefix_sensitive ... ok
+test foreign_graph_compiler::tests::dependency_order_rejects_cycles_duplicate_edges_unknown_outputs_and_partial_coverage ... ok
+test foreign_graph_compiler::tests::exact_path_map_reuses_identical_entries_and_rejects_conflicts ... ok
+test foreign_graph_compiler::tests::exact_store_mapping_accepts_prefix_map_boundary_but_rejects_name_extension ... ok
+test foreign_graph_compiler::tests::execution_profile_changes_target_identity_and_reserved_collision_fails ... ok
+test foreign_graph_compiler::tests::fixed_output_metadata_accepts_sha512_sri_and_rejects_algorithm_mismatch ... ok
+test foreign_graph_compiler::tests::fixed_output_seed_admits_the_recomputed_output_path ... ok
+test foreign_graph_compiler::tests::fixed_output_seed_outside_the_selected_root_is_not_required ... ok
+test foreign_graph_compiler::tests::fixed_output_seed_without_a_producer_binding_is_rejected ... ok
+test foreign_graph_compiler::tests::foreign_builtin_lowering_rejects_malformed_hash_empty_candidates_and_digest_domain_substitution ... ok
+test foreign_graph_compiler::tests::foreign_fetch_builtin_without_fixed_output_still_fails_shape_validation ... ok
+test foreign_graph_compiler::tests::known_store_dir_placeholders_use_the_active_store_prefix ... ok
+test foreign_graph_compiler::tests::mapped_store_object_followed_by_sentence_punctuation_keeps_the_punctuation ... ok
+test foreign_graph_compiler::tests::native_fixed_output_derivation_keeps_builder_and_content_identity ... ok
+test foreign_graph_compiler::tests::unrelated_or_non_token_store_text_is_not_rewritten ... ok
+test foreign_import_cmd::tests::a_rejected_producer_report_is_consistent_only_when_nothing_was_published ... ok
+test foreign_import_cmd::tests::an_accepted_producer_report_requires_both_artifacts_to_read_back ... ok
+test foreign_import_cmd::tests::bounded_json_reader_accepts_an_artifact_at_the_limit ... ok
+test foreign_import_cmd::tests::bounded_json_reader_rejects_an_artifact_above_the_limit ... ok
+test foreign_import_cmd::tests::cache_only_plan_trust_keys_are_loaded_from_bound_cache_urls ... ok
+test foreign_import_cmd::tests::foreign_file_port_denies_a_second_read_before_opening_it ... ok
+test foreign_import_cmd::tests::foreign_published_artifact_must_read_back_as_the_written_value ... ok
+test foreign_import_cmd::tests::human_report_preserves_diagnostics_and_non_claims ... ok
+test foreign_import_cmd::tests::malformed_report_is_rejected ... ok
+test foreign_import_cmd::tests::nario_source_request_core_rejects_archive_key_and_route_limits ... ok
+test foreign_import_cmd::tests::plan_inputs_returns_receipt_and_plan_without_process_invocations ... ok
+test foreign_import_cmd::tests::realization_callback_observes_committed_complete_and_partial_receipts_before_reporting ... ok
+test foreign_provenance_audit::tests::audit_admission_rejects_stale_receipt_and_unknown_root ... ok
+test foreign_provenance_audit::tests::audit_receipt_digest_is_deterministic_and_tamper_evident ... ok
+test foreign_provenance_audit::tests::cache_only_audit_uses_the_receipt_runtime_closure_and_rejects_incompleteness ... ok
+test foreign_provenance_audit::tests::failed_audit_preserves_realized_state_and_non_claims ... ok
+test foreign_provenance_audit::tests::negative_audit_receipt_matrix_is_typed_and_self_digest_valid ... ok
+test foreign_realization::tests::admission_rejects_remote_execution_before_unit_admission ... ok
+test foreign_realization::tests::admission_rejects_stale_receipt_missing_profile_and_unknown_root ... ok
+test foreign_realization::tests::admission_validates_receipt_roots_profiles_and_native_units ... ok
+test foreign_realization::tests::cache_inputs_closure_excludes_roots_and_admits_only_mapped_paths ... ok
+test foreign_realization::tests::cache_inputs_refuses_a_fixed_output_root_and_a_seeded_root_output ... ok
+test foreign_realization::tests::cache_inputs_root_refusals_report_the_first_path ... ok
+test foreign_realization::tests::cache_inputs_seeds_every_output_of_a_multi_output_direct_input ... ok
+test foreign_realization::tests::cache_only_policy_and_empty_source_bundle_fail_closed ... ok
+test foreign_realization::tests::source_admission_binds_payloads_to_manifest_records ... ok
+test foreign_realization::tests::source_admission_rejects_missing_incomplete_and_stale_bindings ... ok
+test foreign_realization_receipt::tests::failure_origin_index_does_not_mark_an_unrelated_derivation ... ok
+test foreign_realization_receipt::tests::failure_origin_index_exposes_the_causal_derivation ... ok
+test foreign_realization_shell::tests::cache_only_observer_removes_every_builder_dependency_and_argument ... ok
+test foreign_realization_shell::tests::prepared_cache_closure_accepts_only_exact_mapped_members_and_references ... ok
+test mantlepkgs_adapter::tests::supported_foreign_graph_produces_buildable_observation ... ok
+test remote_build::live_state::daemon::tests::remote_operation_subscription_never_forwards_foreign_schema ... ok
+test source_built_fixed_point_action_trust::tests::rejects_foreign_root_even_with_recomputed_action_plan_digest ... ok
+test source_built_fixed_point_shell::cold::tests::cold_selector_rejects_old_schema_and_foreign_or_unqualified_mantle_recipes ... ok
+test source_bundle::tests::foreign_source_bundle_preserves_directory_links_and_modes_and_rejects_mode_tamper ... ok
+
+test result: ok. 111 passed; 0 failed; 1 ignored; 0 measured; 2907 filtered out; finished in 65.58s
+
+EXIT=0
+$ cargo clippy touched crates
+warning: /home/brittonr/wt/mantle-build-route/Cargo.toml: file `/home/brittonr/wt/mantle-build-route/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.33s
+EXIT=0
+$ cargo fmt --check -p mantle
+EXIT=0

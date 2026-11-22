@@ -28,6 +28,7 @@ use sha2::Sha256;
 use tempfile::TempDir;
 
 const CHILD_OUTPUT: &str = "/nix/store/11111111111111111111111111111111-child";
+const CHILD_DEV_OUTPUT: &str = "/nix/store/88888888888888888888888888888888-child-dev";
 const PARENT_OUTPUT: &str = "/nix/store/22222222222222222222222222222222-parent";
 const BUILDER_SOURCE: &str = "/nix/store/33333333333333333333333333333333-foreign-builder";
 const CHILD_CONTENT: &[u8] = b"child\n";
@@ -217,6 +218,12 @@ struct Fixture {
 fn write_fixture(temp: &TempDir, cache_url_with_key: &str, recompute: bool) -> Fixture {
     let fixture_dir = manifest_root().join("tests/fixtures/foreign-import");
     let mut graph: Value = json_file(&fixture_dir.join("realize-two-node.graph.json"));
+    graph["nodes"][0]["outputs"]["dev"] = serde_json::json!({ "path": CHILD_DEV_OUTPUT, "hash": null });
+    graph["nodes"][0]["env"]["dev"] = serde_json::json!(CHILD_DEV_OUTPUT);
+    graph["nodes"][0]["declared_references"]
+        .as_array_mut()
+        .expect("declared references")
+        .push(serde_json::json!(CHILD_DEV_OUTPUT));
     graph["nodes"][0]["cache_hints"] = serde_json::json!([{
         "cache_url": cache_url_with_key,
         "trust_scope": TRUST_SCOPE,
@@ -402,6 +409,7 @@ fn prepare_route(temp: &TempDir, cache: &TestCache) -> Fixture {
 fn positive_cache() -> TestCache {
     TestCache::start(&[
         (CHILD_OUTPUT, CHILD_CONTENT.to_vec(), false),
+        (CHILD_DEV_OUTPUT, b"child-dev\n".to_vec(), false),
         (BUILDER_SOURCE, builder_script(), true),
     ])
 }
@@ -423,7 +431,16 @@ fn cache_inputs_route_builds_the_root_from_hydrated_inputs() {
     let child = units.iter().find(|unit| unit["node_id"] == "nix:child").expect("child unit");
     assert_eq!(parent["execution_class"], "built");
     assert!(matches!(child["execution_class"].as_str(), Some("substituted" | "already-present")));
-    assert!(!receipt["cache_closure"].as_array().expect("closure facts").is_empty());
+    let closure_paths = receipt["cache_closure"]
+        .as_array()
+        .expect("closure facts")
+        .iter()
+        .map(|fact| fact["logical_path"].as_str().expect("logical path"))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(!closure_paths.is_empty());
+    assert!(closure_paths.contains(CHILD_OUTPUT));
+    assert!(closure_paths.contains(CHILD_DEV_OUTPUT));
+    assert!(child["outputs"].as_array().expect("child outputs").len() >= 2);
     let grandchild = units.iter().find(|unit| unit["node_id"] == "nix:grandchild").expect("grandchild unit");
     assert_eq!(grandchild["execution_class"], "not-required-cache-only");
     let output = temp.path().join("output").join("22222222222222222222222222222222-parent");
