@@ -252,6 +252,10 @@ pub(crate) enum ForeignImportAction {
         /// Optional Nix-format signing key path
         #[arg(long = "signing-key")]
         signing_key: Option<PathBuf>,
+
+        /// Additional builder public key accepted for reuse only (nix-name:base64). Repeatable
+        #[arg(long = "trusted-builder-public-key")]
+        trusted_builder_public_keys: Vec<String>,
     },
 
     /// Audit one realized foreign closure from signed PathInfo and castore facts
@@ -579,6 +583,7 @@ struct ForeignRealizeCommandRequest<'a> {
     offline: bool,
     remote: bool,
     signing_key_path: Option<&'a Path>,
+    trusted_builder_public_keys: &'a [String],
 }
 
 fn foreign_read_limit(action: &ForeignImportAction) -> Result<Option<u32>, RunError> {
@@ -867,7 +872,7 @@ trait ForeignEffectPort {
     fn realize(
         &self,
         request: ForeignRealizationRequest<'_>,
-    ) -> Result<crate::foreign_realization_receipt::ForeignRealizationReceipt, RunError>;
+    ) -> Result<crate::foreign_realization_shell::ForeignRealizationOutcome, RunError>;
     fn audit(&self, request: ForeignProvenanceAuditRequest<'_>) -> Result<ForeignProvenanceAuditReceipt, RunError>;
 }
 
@@ -1017,7 +1022,7 @@ impl ForeignEffectPort for ForeignHostPort {
     fn realize(
         &self,
         request: ForeignRealizationRequest<'_>,
-    ) -> Result<crate::foreign_realization_receipt::ForeignRealizationReceipt, RunError> {
+    ) -> Result<crate::foreign_realization_shell::ForeignRealizationOutcome, RunError> {
         let runtime = tokio::runtime::Runtime::new()
             .map_err(|error| RunError::Internal(format!("creating foreign realization runtime: {error}")))?;
         runtime.block_on(realize_foreign_plan(request))
@@ -1041,7 +1046,7 @@ pub(crate) fn cmd_foreign_import(
 pub(crate) fn cmd_foreign_import_with_observation(
     action: ForeignImportAction,
     context: ForeignImportContext<'_>,
-    on_realize: impl FnOnce(&crate::foreign_realization_receipt::ForeignRealizationReceipt) -> Result<(), RunError>,
+    on_realize: impl FnOnce(&crate::foreign_realization_receipt::ForeignRealizationReceiptAny) -> Result<(), RunError>,
 ) -> Result<(), RunError> {
     let json = context.json;
     let effect_plan = foreign_effect_plan(&action, &context)?;
@@ -1138,6 +1143,7 @@ pub(crate) fn cmd_foreign_import_with_observation(
             offline,
             remote,
             signing_key,
+            trusted_builder_public_keys,
         } => run_realize(
             ForeignRealizeCommandRequest {
                 plan_path: &plan,
@@ -1154,6 +1160,7 @@ pub(crate) fn cmd_foreign_import_with_observation(
                 offline,
                 remote,
                 signing_key_path: signing_key.as_deref(),
+                trusted_builder_public_keys: &trusted_builder_public_keys,
             },
             &context,
             effect_plan.as_ref().expect("foreign realize effect plan"),
@@ -1837,7 +1844,7 @@ fn run_realize(
     context: &ForeignImportContext<'_>,
     effect_plan: &mantle_application_contract::EffectPlan,
     port: &impl ForeignEffectPort,
-    on_realize: impl FnOnce(&crate::foreign_realization_receipt::ForeignRealizationReceipt) -> Result<(), RunError>,
+    on_realize: impl FnOnce(&crate::foreign_realization_receipt::ForeignRealizationReceiptAny) -> Result<(), RunError>,
 ) -> Result<(), RunError> {
     assert!(!REALIZE_COMMAND.is_empty(), "foreign realize command identity must not be empty");
     if port.output_exists(request.receipt_out)? {
@@ -1914,7 +1921,8 @@ fn run_realize(
     }
     let cache_only = is_cache_only_foreign_plan(&plan);
     let cache_inputs_build_roots = crate::foreign_realization::is_cache_inputs_build_roots_plan(&plan);
-    let cache_hydrated = cache_only || cache_inputs_build_roots;
+    let cache_inputs_build_or_reuse = crate::foreign_realization::is_cache_inputs_build_or_reuse_plan(&plan);
+    let cache_hydrated = cache_only || cache_inputs_build_roots || cache_inputs_build_or_reuse;
     if cache_hydrated && (!request.substitute || request.offline) {
         return Err(RunError::Internal("cache-hydrated foreign realization requires online substitution".to_string()));
     }
@@ -1957,8 +1965,22 @@ fn run_realize(
     )?;
     let keypair = port.load_or_generate_key(request.signing_key_path, context.state_dir, !context.json)?;
     let cache_keys = trusted_cache_keys_from_plan(&plan)?;
-    let trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
-    let receipt = port.realize(ForeignRealizationRequest {
+    let mut trusted_keys = crunch_build::build_trusted_keys(&keypair, Some(&cache_keys));
+    let mut trusted_builder_public_keys = Vec::with_capacity(request.trusted_builder_public_keys.len());
+    for raw in request.trusted_builder_public_keys {
+        let key = nix_compat::narinfo::VerifyingKey::parse(raw)
+            .map_err(|error| RunError::Internal(format!("parsing --trusted-builder-public-key {raw}: {error}")))?;
+        if !trusted_keys.iter().any(|existing| existing.public_key_bytes() == key.public_key_bytes()) {
+            trusted_keys.push(key.clone());
+        }
+        if !trusted_builder_public_keys
+            .iter()
+            .any(|existing: &nix_compat::narinfo::VerifyingKey| existing.public_key_bytes() == key.public_key_bytes())
+        {
+            trusted_builder_public_keys.push(key);
+        }
+    }
+    let outcome = port.realize(ForeignRealizationRequest {
         plan: &plan,
         import_receipt: &import_receipt,
         source_bundle: &source_bundle,
@@ -1978,44 +2000,98 @@ fn run_realize(
         offline: request.offline,
         remote_execution_requested: request.remote,
         verbose: context.verbose,
+        cache_keys: &cache_keys,
+        trusted_builder_public_keys: &trusted_builder_public_keys,
     })?;
-    port.publish(request.receipt_out, &receipt, "foreign realization receipt")?;
-    port.verify_written(request.receipt_out, &receipt, "realization receipt", REALIZE_COMMAND)?;
+    let receipt = &outcome.receipt;
+    port.publish(request.receipt_out, receipt, "foreign realization receipt")?;
+    for (path, bytes) in &outcome.built_root_index {
+        publish_built_root_index(path, bytes)?;
+    }
+    port.verify_written(request.receipt_out, receipt, "realization receipt", REALIZE_COMMAND)?;
+    let failed = receipt.failure().is_some();
     foreign_finish_effects(
         effect_plan,
         true,
         port.read_calls(),
         Some((
             Some(context.state_dir),
-            receipt.failure.is_none()
-                && receipt.status == crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS,
+            !failed && receipt.status() == crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS,
         )),
         &[("foreign-realization-receipt", request.receipt_out)],
-        receipt.failure.is_some(),
+        failed,
     )?;
-    on_realize(&receipt)?;
+    on_realize(receipt)?;
     if context.json {
         println!(
             "{}",
-            serde_json::to_string(&receipt)
+            serde_json::to_string(receipt)
                 .map_err(|error| RunError::Internal(format!("serializing foreign realization receipt: {error}")))?
         );
     } else {
         println!(
             "status={} receipt_blake3={} roots={} units={} sources={} path={}",
-            receipt.status,
-            receipt.receipt_blake3,
-            receipt.selected_root_node_ids.len(),
-            receipt.units.len(),
-            receipt.sources.len(),
+            receipt.status(),
+            receipt.receipt_blake3(),
+            receipt.selected_root_node_ids().len(),
+            receipt.units().len(),
+            receipt.sources().len(),
             request.receipt_out.display()
         );
     }
-    if receipt.failure.is_some() {
+    drop(outcome);
+    if failed {
         Err(RunError::Reported(FAILURE_EXIT_CODE))
     } else {
         Ok(())
     }
+}
+
+/// Publish one built-root index entry without replacing different bytes.
+fn publish_built_root_index(path: &Path, bytes: &[u8]) -> Result<(), RunError> {
+    use std::io::Write as _;
+
+    assert!(!bytes.is_empty(), "built-root index bytes must not be empty");
+    match std::fs::read(path) {
+        Ok(existing) => {
+            if existing == bytes {
+                return Ok(());
+            }
+            return Err(RunError::Internal(format!(
+                "built-root index already holds different bytes: {}",
+                path.display()
+            )));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(RunError::Internal(format!("reading built-root index {}: {error}", path.display())));
+        }
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| RunError::Internal(format!("creating {}: {error}", parent.display())))?;
+    }
+    let mut file = match std::fs::OpenOptions::new().write(true).create_new(true).open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let existing = std::fs::read(path)
+                .map_err(|error| RunError::Internal(format!("reading built-root index {}: {error}", path.display())))?;
+            if existing == bytes {
+                return Ok(());
+            }
+            return Err(RunError::Internal(format!(
+                "built-root index already holds different bytes: {}",
+                path.display()
+            )));
+        }
+        Err(error) => {
+            return Err(RunError::Internal(format!("creating built-root index {}: {error}", path.display())));
+        }
+    };
+    file.write_all(bytes)
+        .map_err(|error| RunError::Internal(format!("writing built-root index {}: {error}", path.display())))?;
+    file.sync_data()
+        .map_err(|error| RunError::Internal(format!("syncing built-root index {}: {error}", path.display())))
 }
 
 fn trusted_cache_keys_from_plan(
@@ -3266,14 +3342,15 @@ mod tests {
                 offline: true,
                 remote: false,
                 signing_key: None,
+                trusted_builder_public_keys: Vec::new(),
             },
             context(),
             |receipt| {
                 called.set(true);
-                let written: crate::foreign_realization_receipt::ForeignRealizationReceipt =
+                let written: crate::foreign_realization_receipt::ForeignRealizationReceiptAny =
                     serde_json::from_slice(&fs::read(&realization_receipt_path).unwrap()).unwrap();
                 assert_eq!(&written, receipt, "callback must see the committed, classified receipt");
-                assert_eq!(receipt.failure.is_some(), case == "partial");
+                assert_eq!(receipt.failure().is_some(), case == "partial");
                 if case == "denied" {
                     Err(RunError::Internal("foreign callback denied report".to_string()))
                 } else {

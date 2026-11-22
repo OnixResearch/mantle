@@ -26,6 +26,8 @@ const REALIZATION_INPUT_CLOSURE_DIGEST_DOMAIN: &[u8] = b"mantle-realization-inpu
 pub(crate) const ROOT_DISPOSITION_BUILT: &str = "built";
 pub(crate) const ROOT_DISPOSITION_REUSED: &str = "reused";
 pub(crate) const BUILDER_SIGNER_ROLE: &str = "builder";
+pub(crate) const REUSED_ROOT_SOURCE_LOCAL: &str = "local";
+pub(crate) const EXECUTION_CLASS_ALREADY_PRESENT: &str = "already-present";
 pub(crate) const FOREIGN_REALIZATION_COMPLETE_STATUS: &str = "complete";
 const PARTIAL_FAILURE_STATUS: &str = "partial-failure";
 pub(crate) const FOREIGN_REALIZATION_REALIZED_STATE: &str = "realized";
@@ -218,9 +220,7 @@ pub(crate) fn build_foreign_realization_receipt_v2(
     Ok(receipt)
 }
 
-pub(crate) fn foreign_realization_receipt_v2_digest(
-    receipt: &ForeignRealizationReceiptV2,
-) -> Result<String, RunError> {
+pub(crate) fn foreign_realization_receipt_v2_digest(receipt: &ForeignRealizationReceiptV2) -> Result<String, RunError> {
     let mut material = receipt.clone();
     material.receipt_blake3.clear();
     let canonical = serde_json::to_vec(&material)
@@ -231,10 +231,189 @@ pub(crate) fn foreign_realization_receipt_v2_digest(
     Ok(hasher.finalize().to_hex().to_string())
 }
 
+/// Parse one route-v2 receipt, rejecting unknown fields and inconsistent root dispositions.
+pub(crate) fn parse_foreign_realization_receipt_v2(bytes: &[u8]) -> Result<ForeignRealizationReceiptV2, RunError> {
+    let receipt: ForeignRealizationReceiptV2 = serde_json::from_slice(bytes)
+        .map_err(|error| RunError::Internal(format!("parsing foreign realization receipt v2: {error}")))?;
+    if receipt.schema != FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA {
+        return Err(RunError::Internal(format!("unsupported foreign realization receipt schema: {}", receipt.schema)));
+    }
+    validate_receipt_v2_root_dispositions(&receipt)?;
+    Ok(receipt)
+}
+
+/// Enforce that every root entry records exactly one of `built`/`reused`, matching its disposition.
+pub(crate) fn validate_receipt_v2_root_dispositions(receipt: &ForeignRealizationReceiptV2) -> Result<(), RunError> {
+    for root in &receipt.roots {
+        let consistent = match root.disposition.as_str() {
+            ROOT_DISPOSITION_BUILT => root.built.is_some() && root.reused.is_none(),
+            ROOT_DISPOSITION_REUSED => root.built.is_none() && root.reused.is_some(),
+            _ => false,
+        };
+        if !consistent {
+            return Err(RunError::Internal(format!(
+                "foreign realization receipt v2 root {}:{} has an inconsistent disposition {}",
+                root.target_derivation, root.output_name, root.disposition
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Serialize a receipt exactly as `--receipt-out` publishes it, so the built-root index holds the
+/// same bytes.
+pub(crate) fn foreign_realization_receipt_any_bytes(
+    receipt: &ForeignRealizationReceiptAny,
+) -> Result<Vec<u8>, RunError> {
+    let mut bytes = serde_json::to_vec_pretty(receipt)
+        .map_err(|error| RunError::Internal(format!("serializing foreign realization receipt: {error}")))?;
+    bytes.push(b'\n');
+    Ok(bytes)
+}
+
+/// Either receipt generation a realization can publish.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
+pub(crate) enum ForeignRealizationReceiptAny {
+    V1(ForeignRealizationReceipt),
+    V2(ForeignRealizationReceiptV2),
+}
+
+impl ForeignRealizationReceiptAny {
+    pub(crate) fn status(&self) -> &str {
+        match self {
+            Self::V1(receipt) => &receipt.status,
+            Self::V2(receipt) => &receipt.status,
+        }
+    }
+
+    pub(crate) fn failure(&self) -> Option<&ForeignRealizationFailure> {
+        match self {
+            Self::V1(receipt) => receipt.failure.as_ref(),
+            Self::V2(receipt) => receipt.failure.as_ref(),
+        }
+    }
+
+    pub(crate) fn as_v1(&self) -> Option<&ForeignRealizationReceipt> {
+        match self {
+            Self::V1(receipt) => Some(receipt),
+            Self::V2(_) => None,
+        }
+    }
+
+    pub(crate) fn receipt_blake3(&self) -> &str {
+        match self {
+            Self::V1(receipt) => &receipt.receipt_blake3,
+            Self::V2(receipt) => &receipt.receipt_blake3,
+        }
+    }
+
+    pub(crate) fn selected_root_node_ids(&self) -> &[String] {
+        match self {
+            Self::V1(receipt) => &receipt.selected_root_node_ids,
+            Self::V2(receipt) => &receipt.selected_root_node_ids,
+        }
+    }
+
+    pub(crate) fn units(&self) -> &[ForeignRealizedUnit] {
+        match self {
+            Self::V1(receipt) => &receipt.units,
+            Self::V2(receipt) => &receipt.units,
+        }
+    }
+
+    pub(crate) fn sources(&self) -> &[ForeignSourceStoreFact] {
+        match self {
+            Self::V1(receipt) => &receipt.sources,
+            Self::V2(receipt) => &receipt.sources,
+        }
+    }
+}
+
+pub(crate) struct BuiltRootEntryInput<'a> {
+    pub(crate) node_id: &'a str,
+    pub(crate) target_derivation: &'a str,
+    pub(crate) output_name: &'a str,
+    pub(crate) path: &'a str,
+    pub(crate) nar_sha256: &'a str,
+    pub(crate) nar_size: u64,
+    pub(crate) references: &'a [String],
+    pub(crate) signer: ForeignRealizationSigner,
+    pub(crate) trust_policy_blake3: &'a str,
+    pub(crate) built: ForeignRootBuilt,
+}
+
+pub(crate) fn built_root_entry(input: BuiltRootEntryInput<'_>) -> ForeignRealizationRoot {
+    assert!(!input.path.is_empty(), "built root path must not be empty");
+    let mut references = input.references.to_vec();
+    references.sort();
+    references.dedup();
+    ForeignRealizationRoot {
+        node_id: input.node_id.to_string(),
+        target_derivation: input.target_derivation.to_string(),
+        output_name: input.output_name.to_string(),
+        path: input.path.to_string(),
+        nar_sha256: input.nar_sha256.to_string(),
+        nar_size: input.nar_size,
+        references,
+        disposition: ROOT_DISPOSITION_BUILT.to_string(),
+        signer: input.signer,
+        trust_policy_blake3: input.trust_policy_blake3.to_string(),
+        built: Some(input.built),
+        reused: None,
+    }
+}
+
+pub(crate) struct ReusedRootEntryInput<'a> {
+    pub(crate) node_id: &'a str,
+    pub(crate) target_derivation: &'a str,
+    pub(crate) output_name: &'a str,
+    pub(crate) path: &'a str,
+    pub(crate) nar_sha256: &'a str,
+    pub(crate) nar_size: u64,
+    pub(crate) references: &'a [String],
+    pub(crate) signer: ForeignRealizationSigner,
+    pub(crate) trust_policy_blake3: &'a str,
+    pub(crate) original_receipt_blake3: &'a str,
+}
+
+pub(crate) fn reused_root_entry(input: ReusedRootEntryInput<'_>) -> ForeignRealizationRoot {
+    assert!(!input.original_receipt_blake3.is_empty(), "reused root link must not be empty");
+    let mut references = input.references.to_vec();
+    references.sort();
+    references.dedup();
+    ForeignRealizationRoot {
+        node_id: input.node_id.to_string(),
+        target_derivation: input.target_derivation.to_string(),
+        output_name: input.output_name.to_string(),
+        path: input.path.to_string(),
+        nar_sha256: input.nar_sha256.to_string(),
+        nar_size: input.nar_size,
+        references,
+        disposition: ROOT_DISPOSITION_REUSED.to_string(),
+        signer: input.signer,
+        trust_policy_blake3: input.trust_policy_blake3.to_string(),
+        built: None,
+        reused: Some(ForeignRootReused {
+            original_receipt_blake3: input.original_receipt_blake3.to_string(),
+            source: REUSED_ROOT_SOURCE_LOCAL.to_string(),
+            builds: 0,
+            downloads: 0,
+        }),
+    }
+}
+
+/// A reused root's unit is observed as already present, never re-executed.
+pub(crate) fn mark_reused_units_already_present(units: &mut [ForeignRealizedUnit], reused_node_ids: &BTreeSet<String>) {
+    for unit in units.iter_mut() {
+        if reused_node_ids.contains(unit.node_id.as_str()) {
+            unit.execution_class = EXECUTION_CLASS_ALREADY_PRESENT.to_string();
+        }
+    }
+}
+
 /// Digest of the admitted input closure a built root was realized from.
-pub(crate) fn realization_input_closure_blake3(
-    facts: &[ForeignCacheClosureFact],
-) -> Result<String, RunError> {
+pub(crate) fn realization_input_closure_blake3(facts: &[ForeignCacheClosureFact]) -> Result<String, RunError> {
     #[derive(Serialize)]
     struct InputMaterial<'a> {
         path: &'a str,
@@ -630,5 +809,107 @@ mod tests {
 
         assert!(!by_origin.contains_key(ROOT_DRV));
         assert_eq!(by_origin.len(), 1);
+    }
+
+    fn fixture_receipt_v2_json() -> serde_json::Value {
+        serde_json::json!({
+            "schema": super::FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA,
+            "status": "complete",
+            "strongest_state": "realized",
+            "receipt_blake3": "",
+            "plan_blake3": "0".repeat(64),
+            "import_receipt_blake3": "0".repeat(64),
+            "source_bundle_manifest_blake3": "0".repeat(64),
+            "build_report_blake3": "0".repeat(64),
+            "selected_root_node_ids": ["nix:parent"],
+            "selected_root_paths": ["/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-parent"],
+            "execution_profiles": [],
+            "cache_policy": {
+                "substitution_enabled": true,
+                "offline": false,
+                "ordered_cache_urls": [],
+                "realization_route": "cache-inputs-build-roots-v2"
+            },
+            "cache_closure": [],
+            "sources": [],
+            "units": [],
+            "roots": [{
+                "node_id": "nix:parent",
+                "target_derivation": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-parent.drv",
+                "output_name": "out",
+                "path": "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-parent",
+                "nar_sha256": "0".repeat(64),
+                "nar_size": 3,
+                "references": [],
+                "disposition": "built",
+                "signer": {
+                    "key_name": "crunch-host-1",
+                    "public_key_blake3": "0".repeat(64),
+                    "role": "builder"
+                },
+                "trust_policy_blake3": "0".repeat(64),
+                "built": {
+                    "mantle_version": "0.0.0",
+                    "execution_profile_digest_blake3": "0".repeat(64),
+                    "input_closure_blake3": "0".repeat(64)
+                },
+                "reused": null
+            }],
+            "failure": null,
+            "non_claims": []
+        })
+    }
+
+    #[test]
+    fn receipt_v2_digest_ignores_its_own_field_and_parse_is_closed_world() {
+        let value = fixture_receipt_v2_json();
+        let mut receipt: super::ForeignRealizationReceiptV2 = serde_json::from_value(value.clone()).unwrap();
+        let digest = super::foreign_realization_receipt_v2_digest(&receipt).unwrap();
+        assert_eq!(digest.len(), 64);
+        assert!(digest.chars().all(|character| character.is_ascii_hexdigit() && !character.is_ascii_uppercase()));
+
+        receipt.receipt_blake3 = digest.clone();
+        assert_eq!(super::foreign_realization_receipt_v2_digest(&receipt).unwrap(), digest);
+        receipt.receipt_blake3 = "f".repeat(64);
+        assert_eq!(super::foreign_realization_receipt_v2_digest(&receipt).unwrap(), digest);
+
+        let mut unknown = value.clone();
+        unknown["unexpected"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<super::ForeignRealizationReceiptV2>(unknown).is_err());
+
+        let mut missing_roots = value;
+        missing_roots.as_object_mut().unwrap().remove("roots");
+        assert!(serde_json::from_value::<super::ForeignRealizationReceiptV2>(missing_roots).is_err());
+
+        let mut unknown_root = fixture_receipt_v2_json();
+        unknown_root["roots"][0]["unexpected"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<super::ForeignRealizationReceiptV2>(unknown_root).is_err());
+
+        // The route-v2 parser is closed-world and rejects inconsistent dispositions.
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert!(super::parse_foreign_realization_receipt_v2(&bytes).is_ok());
+
+        let mut both = fixture_receipt_v2_json();
+        both["roots"][0]["reused"] = serde_json::json!({
+            "original_receipt_blake3": "0".repeat(64),
+            "source": "local",
+            "builds": 0,
+            "downloads": 0
+        });
+        assert!(super::parse_foreign_realization_receipt_v2(&serde_json::to_vec(&both).unwrap()).is_err());
+
+        let mut neither = fixture_receipt_v2_json();
+        neither["roots"][0]["built"] = serde_json::Value::Null;
+        assert!(super::parse_foreign_realization_receipt_v2(&serde_json::to_vec(&neither).unwrap()).is_err());
+
+        let mut reused_disposition = fixture_receipt_v2_json();
+        reused_disposition["roots"][0]["disposition"] = serde_json::json!("reused");
+        assert!(
+            super::parse_foreign_realization_receipt_v2(&serde_json::to_vec(&reused_disposition).unwrap()).is_err()
+        );
+
+        let mut wrong_schema = fixture_receipt_v2_json();
+        wrong_schema["schema"] = serde_json::json!("mantle-foreign-realization-receipt-v1");
+        assert!(super::parse_foreign_realization_receipt_v2(&serde_json::to_vec(&wrong_schema).unwrap()).is_err());
     }
 }

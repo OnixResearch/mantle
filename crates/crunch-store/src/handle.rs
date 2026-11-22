@@ -1976,10 +1976,7 @@ impl StoreHandle {
     ///
     /// The NAR is rendered from the castore's present bytes; the recorded
     /// PathInfo digest is never trusted for this measurement.
-    pub async fn recompute_nar_sha256(
-        &self,
-        node: &Node,
-    ) -> Result<([u8; NAR_SHA256_BYTES], u64), Error> {
+    pub async fn recompute_nar_sha256(&self, node: &Node) -> Result<([u8; NAR_SHA256_BYTES], u64), Error> {
         assert!(
             !matches!(node, Node::Directory { size, .. } if *size == u64::MAX),
             "directory size must not be sentinel value"

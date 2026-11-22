@@ -343,6 +343,10 @@ fn prepare_empty_sources(fixture: &Fixture) {
 }
 
 fn realize(temp: &TempDir, fixture: &Fixture, binding: &Path) -> std::process::Output {
+    realize_with_receipt(temp, fixture, binding, "realization-receipt.json")
+}
+
+fn realize_with_receipt(temp: &TempDir, fixture: &Fixture, binding: &Path, receipt_name: &str) -> std::process::Output {
     let state_dir = temp.path().join("state");
     let output_dir = temp.path().join("output");
     fs::create_dir_all(&output_dir).expect("output dir");
@@ -373,7 +377,7 @@ fn realize(temp: &TempDir, fixture: &Fixture, binding: &Path) -> std::process::O
             path_str(&write_policy(temp)),
             "--substitute",
             "--receipt-out",
-            path_str(&temp.path().join("realization-receipt.json")),
+            path_str(&temp.path().join(receipt_name)),
         ])
         .output()
         .expect("run realize")
@@ -534,4 +538,71 @@ fn cache_inputs_route_rejects_a_nonempty_source_bundle() {
     assert!(!result.status.success());
     assert!(!temp.path().join("realization-receipt.json").exists());
     assert!(cache.directory.join("nar").is_dir());
+}
+
+fn prepare_route_v2(temp: &TempDir, cache: &TestCache) -> Fixture {
+    let mut fixture = write_fixture(temp, &cache.url_with_key, false);
+    let plan = plan_route(&fixture, Some("cache-inputs-build-roots-v2"));
+    assert!(plan.status.success(), "plan must accept the route: {}", String::from_utf8_lossy(&plan.stderr));
+    prepare_empty_sources(&fixture);
+    let bundle = json_file(&fixture.source_bundle);
+    fixture.source_bundle_blake3 = bundle["manifest_blake3"].as_str().expect("manifest digest").to_string();
+    fixture
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_reuses_an_unchanged_root() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+
+    let first = realize_with_receipt(&temp, &fixture, &binding, "first-receipt.json");
+    assert!(first.status.success(), "first realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let built = json_file(&temp.path().join("first-receipt.json"));
+    assert_eq!(built["schema"], "mantle-foreign-realization-receipt-v2");
+    assert_eq!(built["cache_policy"]["realization_route"], "cache-inputs-build-roots-v2");
+    let roots = built["roots"].as_array().expect("roots");
+    assert_eq!(roots.len(), 1, "one selected root output: {roots:?}");
+    assert_eq!(roots[0]["disposition"], "built");
+    assert!(roots[0]["built"].is_object());
+    assert!(roots[0]["reused"].is_null());
+    assert_eq!(roots[0]["signer"]["role"], "builder");
+
+    let derivation = roots[0]["target_derivation"].as_str().expect("root derivation");
+    let basename = derivation.rsplit('/').next().expect("root derivation basename");
+    let index_path = temp
+        .path()
+        .join("state")
+        .join("foreign-realization")
+        .join("built-roots")
+        .join(format!("{basename}.json"));
+    assert!(index_path.is_file(), "built-root index must be written at {}", index_path.display());
+    let indexed = json_file(&index_path);
+    assert_eq!(indexed["receipt_blake3"], built["receipt_blake3"]);
+
+    let requests_before = cache.requests.lock().expect("requests").len();
+    let second = realize_with_receipt(&temp, &fixture, &binding, "second-receipt.json");
+    assert!(second.status.success(), "second realize failed: {}", String::from_utf8_lossy(&second.stderr));
+    let reused = json_file(&temp.path().join("second-receipt.json"));
+    let roots = reused["roots"].as_array().expect("roots");
+    assert_eq!(roots.len(), 1);
+    assert_eq!(roots[0]["disposition"], "reused");
+    assert!(roots[0]["built"].is_null());
+    assert_eq!(roots[0]["reused"]["source"], "local");
+    assert_eq!(roots[0]["reused"]["builds"], 0);
+    assert_eq!(roots[0]["reused"]["downloads"], 0);
+    assert_eq!(roots[0]["reused"]["original_receipt_blake3"], built["receipt_blake3"]);
+    assert_ne!(reused["receipt_blake3"], built["receipt_blake3"]);
+    let parent = reused["units"]
+        .as_array()
+        .expect("units")
+        .iter()
+        .find(|unit| unit["node_id"] == "nix:parent")
+        .expect("parent unit");
+    assert_eq!(parent["execution_class"], "already-present");
+
+    let requests = cache.requests.lock().expect("requests");
+    assert_eq!(requests.len(), requests_before, "reuse must not consult the cache: {requests:?}");
+    assert!(!requests[requests_before..].iter().any(|path| path.starts_with("/nar/")));
 }

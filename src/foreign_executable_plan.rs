@@ -528,10 +528,7 @@ fn executable_plan_non_claims(realization_route: Option<&str>) -> Vec<String> {
             "not-cache-future-availability".to_string(),
         ]);
     }
-    if matches!(
-        realization_route,
-        Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE | CACHE_INPUTS_BUILD_OR_REUSE_ROUTE)
-    ) {
+    if matches!(realization_route, Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE | CACHE_INPUTS_BUILD_OR_REUSE_ROUTE)) {
         non_claims.push("not-input-cache-completeness".to_string());
     }
     if realization_route == Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE) {

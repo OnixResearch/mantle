@@ -163,7 +163,7 @@ use crate::foreign_graph_compiler::compile_foreign_graph_with_profile_and_output
 use crate::foreign_import_cmd::ForeignImportAction;
 use crate::foreign_import_cmd::ForeignImportContext;
 use crate::foreign_import_cmd::cmd_foreign_import_with_observation;
-use crate::foreign_realization_receipt::ForeignRealizationReceipt;
+use crate::foreign_realization_receipt::ForeignRealizationReceiptAny;
 use crate::linux_rename::rename_path_no_replace;
 use crate::mantlepkgs_adapter::MergedForeignArtifacts;
 use crate::mantlepkgs_adapter::ProducedPackageFacts;
@@ -1494,7 +1494,8 @@ fn run_validation_build(request: ValidationBuildRequest<'_>, context: &Mantlepkg
         context,
         |realization| {
             effects.call(&FsMantlepkgsPort, "validation-build", EffectKind::RunProcess, |_| Ok(()))?;
-            let failed = realization.status != crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS;
+            let failed =
+                realization.status() != crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS;
             if failed {
                 effects.record_response_failure("validation-build-incomplete");
             }
@@ -2704,7 +2705,7 @@ fn observed_corpus_catalog_packages(role: &str, bytes: &[u8]) -> Result<Vec<Stri
 
 fn validation_observation(
     plan: &ValidationRootPlan,
-    realization: &ForeignRealizationReceipt,
+    realization: &ForeignRealizationReceiptAny,
     elapsed_milliseconds: u64,
 ) -> Result<ValidationObservation, RunError> {
     let timeout_milliseconds = plan
@@ -2713,12 +2714,12 @@ fn validation_observation(
         .ok_or_else(|| RunError::Internal("validation timeout milliseconds overflow".into()))?;
     let outcome = if elapsed_milliseconds > timeout_milliseconds {
         mantlepkgs_core::OBSERVED_VALIDATION_TIMEOUT
-    } else if realization.failure.is_some() {
+    } else if realization.failure().is_some() {
         mantlepkgs_core::OBSERVED_VALIDATION_FAIL
     } else {
         mantlepkgs_core::OBSERVED_VALIDATION_PASS
     };
-    let observed_output_bytes = realization.units.iter().try_fold(0u64, |total, unit| {
+    let observed_output_bytes = realization.units().iter().try_fold(0u64, |total, unit| {
         unit.outputs.iter().try_fold(total, |unit_total, output| {
             unit_total
                 .checked_add(output.nar_size)
@@ -2732,8 +2733,7 @@ fn validation_observation(
         )));
     }
     let diagnostic_digest_blake3 = realization
-        .failure
-        .as_ref()
+        .failure()
         .map(|failure| {
             serde_json::to_vec(failure)
                 .map(|bytes| blake3_hex(&bytes))
@@ -2744,7 +2744,7 @@ fn validation_observation(
         schema: VALIDATION_OBSERVATION_SCHEMA.into(),
         validation_root_identity_blake3: plan.validation_root_identity_blake3.clone(),
         outcome: outcome.into(),
-        realization_receipt_blake3: realization.receipt_blake3.clone(),
+        realization_receipt_blake3: realization.receipt_blake3().to_string(),
         observed_output_bytes,
         elapsed_milliseconds,
         diagnostic_digest_blake3,
@@ -3013,7 +3013,7 @@ fn run_build(request: BuildRequest<'_>, context: &MantlepkgsContext<'_>) -> Resu
 fn run_build_with_observation(
     request: BuildRequest<'_>,
     context: &MantlepkgsContext<'_>,
-    on_realize: impl FnOnce(&ForeignRealizationReceipt) -> Result<(), RunError>,
+    on_realize: impl FnOnce(&ForeignRealizationReceiptAny) -> Result<(), RunError>,
 ) -> Result<(), RunError> {
     reject_distinct_build_outputs(&request)?;
     let plan_identity = request.plan_out.display().to_string();
@@ -3068,6 +3068,7 @@ fn run_build_with_observation(
             offline: request.offline,
             remote: false,
             signing_key: request.signing_key.map(Path::to_path_buf),
+            trusted_builder_public_keys: Vec::new(),
         },
         ForeignImportContext {
             output_dir: context.output_dir,
@@ -3082,7 +3083,7 @@ fn run_build_with_observation(
         |receipt| {
             observed = true;
             effects.call(&FsMantlepkgsPort, "build-realize", EffectKind::RunProcess, |_| Ok(()))?;
-            if receipt.status != crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS {
+            if receipt.status() != crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS {
                 effects.record_response_failure("foreign-realization-incomplete");
             }
             effects.readback(
@@ -3092,7 +3093,8 @@ fn run_build_with_observation(
                 receipt,
                 DOMAIN_ARTIFACT_BYTES_MAX,
             )?;
-            let status = if receipt.status == crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS {
+            let status = if receipt.status() == crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS
+            {
                 ObservationStatus::Success
             } else {
                 ObservationStatus::Failed

@@ -18,9 +18,9 @@ use nix_compat::derivation::Derivation;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::narinfo::fingerprint_with_store_dir;
 use nix_compat::store_path::StorePath;
-use snix_store::path_info::PathInfo;
 use serde::Deserialize;
 use serde::Serialize;
+use snix_store::path_info::PathInfo;
 
 use crate::RunError;
 use crate::foreign_derivation_import::ImportReceipt;
@@ -367,10 +367,10 @@ impl fmt::Display for PresentRootRefusal {
 }
 
 /// The indexed original receipt state for one present root.
-pub(crate) enum IndexedBuiltReceipt<'a> {
+pub(crate) enum IndexedBuiltReceipt {
     Absent,
     Unparsable,
-    Present(&'a ForeignRealizationReceiptV2),
+    Present(ForeignRealizationReceiptV2),
 }
 
 /// Reuse evidence for one present root output.
@@ -392,16 +392,14 @@ pub(crate) struct PresentRootInput<'a> {
     pub(crate) path_info: &'a PathInfo,
     pub(crate) recomputed_nar_sha256: [u8; 32],
     pub(crate) builder_keys: &'a [BuilderKey],
-    pub(crate) indexed: IndexedBuiltReceipt<'a>,
+    pub(crate) indexed: IndexedBuiltReceipt,
 }
 
 /// Decide whether a present root is an earlier Mantle build.
-pub(crate) fn classify_present_root(
-    input: PresentRootInput<'_>,
-) -> Result<ReusedRootFacts, PresentRootRefusal> {
+pub(crate) fn classify_present_root(input: PresentRootInput<'_>) -> Result<ReusedRootFacts, PresentRootRefusal> {
     assert!(!input.store_dir.is_empty(), "store directory must not be empty");
     assert!(!input.path.is_empty(), "root path must not be empty");
-    let receipt = match input.indexed {
+    let receipt = match &input.indexed {
         IndexedBuiltReceipt::Absent => return Err(PresentRootRefusal::NoBuiltReceipt),
         IndexedBuiltReceipt::Unparsable => return Err(PresentRootRefusal::ReceiptInvalid),
         IndexedBuiltReceipt::Present(receipt) => receipt,
@@ -444,16 +442,18 @@ pub(crate) fn classify_present_root(
         return Err(PresentRootRefusal::BuilderKeyNotTrusted);
     }
     let original_fingerprint = entry.signer.public_key_blake3.as_str();
-    let trusted = input.builder_keys.iter().any(|key| key.public_key_blake3 == original_fingerprint);
+    if !input.builder_keys.iter().any(|key| key.public_key_blake3 == original_fingerprint) {
+        // The original signing key is no longer trusted (rotation or removal).
+        return Err(PresentRootRefusal::SignerMismatch);
+    }
     let fingerprint = root_fingerprint(input.path_info, input.store_dir);
-    let mut valid = input
-        .builder_keys
-        .iter()
-        .filter(|key| input.path_info.signatures.iter().any(|sig| key.verifying_key.verify(&fingerprint, &sig.as_ref())));
+    let mut valid = input.builder_keys.iter().filter(|key| {
+        input.path_info.signatures.iter().any(|sig| key.verifying_key.verify(&fingerprint, &sig.as_ref()))
+    });
     if valid.clone().next().is_none() {
         return Err(PresentRootRefusal::NoValidBuilderSignature);
     }
-    if !trusted || !valid.any(|key| key.public_key_blake3 == original_fingerprint) {
+    if !valid.any(|key| key.public_key_blake3 == original_fingerprint) {
         return Err(PresentRootRefusal::SignerMismatch);
     }
     let mut references = input
@@ -488,7 +488,7 @@ fn root_fingerprint(path_info: &PathInfo, store_dir: &str) -> String {
 
 /// A reused root must come back from the scheduler as a cache hit, never a build.
 pub(crate) fn reused_root_outcome_is_cache_hit(
-    outcomes: &[crunch_pipeline::BuildOutcome],
+    outcomes: &[crunch_build::BuildOutcome],
     target_derivation: &str,
     store_dir: &str,
 ) -> bool {
@@ -1276,5 +1276,265 @@ mod tests {
                 digest_source_record_content(&record.kind, &record.metadata, &record.files).unwrap();
         }
         manifest.manifest_blake3 = digest_manifest_without_digest(manifest).unwrap();
+    }
+
+    use nix_compat::narinfo::SigningKey;
+    use snix_castore::Node;
+    use snix_castore::SymlinkTarget;
+
+    use crate::foreign_realization_receipt::FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA;
+    use crate::foreign_realization_receipt::ForeignRealizationReceiptV2;
+    use crate::foreign_realization_receipt::ForeignRealizationRoot;
+    use crate::foreign_realization_receipt::ForeignRealizationSigner;
+    use crate::foreign_realization_receipt::ForeignRootBuilt;
+    use crate::foreign_realization_receipt::ForeignRootReused;
+    use crate::foreign_realization_receipt::ROOT_DISPOSITION_REUSED;
+    use crate::foreign_realization_receipt::RealizedCachePolicy;
+    use crate::foreign_realization_receipt::foreign_realization_receipt_v2_digest;
+
+    const ROOT_PATH: &str = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-parent";
+    const ROOT_DRV: &str = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-parent.drv";
+    const OTHER_DRV: &str = "/nix/store/cccccccccccccccccccccccccccccccc-other.drv";
+    const NAR_SHA256: [u8; 32] = [3u8; 32];
+    const OTHER_NAR_SHA256: [u8; 32] = [4u8; 32];
+    const STORE_DIR: &str = "/nix/store";
+
+    type TestSigningKey = SigningKey<ed25519_dalek::SigningKey>;
+
+    fn builder_key(seed: u8, name: &str) -> (TestSigningKey, BuilderKey) {
+        let dalek = ed25519_dalek::SigningKey::from_bytes(&[seed; 32]);
+        let verifying = VerifyingKey::new(name.to_string(), dalek.verifying_key());
+        (SigningKey::new(name.to_string(), dalek), BuilderKey::new(verifying))
+    }
+
+    fn signed_path_info(signer: &TestSigningKey, nar_sha256: [u8; 32]) -> PathInfo {
+        let mut path_info = PathInfo {
+            store_path: StorePath::from_absolute_path_with_prefix(ROOT_PATH.as_bytes(), STORE_DIR).unwrap(),
+            node: Node::Symlink {
+                target: SymlinkTarget::try_from("target").unwrap(),
+            },
+            references: Vec::new(),
+            nar_size: 3,
+            nar_sha256,
+            signatures: Vec::new(),
+            deriver: None,
+            ca: None,
+        };
+        let store_path = path_info.store_path.as_ref();
+        let references = path_info.references.iter().map(|reference| reference.as_ref()).collect::<Vec<_>>();
+        let fingerprint = fingerprint_with_store_dir(
+            &store_path,
+            &path_info.nar_sha256,
+            path_info.nar_size,
+            references.iter(),
+            STORE_DIR,
+        );
+        path_info.signatures.push(signer.sign(fingerprint.as_bytes()).to_owned());
+        path_info
+    }
+
+    fn built_root(derivation: &str, signer: &BuilderKey, nar_sha256: [u8; 32]) -> ForeignRealizationRoot {
+        ForeignRealizationRoot {
+            node_id: "nix:parent".to_string(),
+            target_derivation: derivation.to_string(),
+            output_name: "out".to_string(),
+            path: ROOT_PATH.to_string(),
+            nar_sha256: HEXLOWER.encode(&nar_sha256),
+            nar_size: 3,
+            references: Vec::new(),
+            disposition: ROOT_DISPOSITION_BUILT.to_string(),
+            signer: ForeignRealizationSigner {
+                key_name: signer.name.clone(),
+                public_key_blake3: signer.public_key_blake3.clone(),
+                role: BUILDER_SIGNER_ROLE.to_string(),
+            },
+            trust_policy_blake3: "0".repeat(64),
+            built: Some(ForeignRootBuilt {
+                mantle_version: "0.0.0".to_string(),
+                execution_profile_digest_blake3: "0".repeat(64),
+                input_closure_blake3: "0".repeat(64),
+            }),
+            reused: None,
+        }
+    }
+
+    fn receipt_with_root(root: ForeignRealizationRoot, route: &str) -> ForeignRealizationReceiptV2 {
+        let mut receipt = ForeignRealizationReceiptV2 {
+            schema: FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA.to_string(),
+            status: "complete".to_string(),
+            strongest_state: "realized".to_string(),
+            receipt_blake3: String::new(),
+            plan_blake3: "0".repeat(64),
+            import_receipt_blake3: "0".repeat(64),
+            source_bundle_manifest_blake3: "0".repeat(64),
+            build_report_blake3: "0".repeat(64),
+            selected_root_node_ids: vec![root.node_id.clone()],
+            selected_root_paths: vec![root.path.clone()],
+            execution_profiles: Vec::new(),
+            cache_policy: RealizedCachePolicy {
+                substitution_enabled: true,
+                offline: false,
+                ordered_cache_urls: Vec::new(),
+                realization_route: Some(route.to_string()),
+            },
+            cache_closure_policy_blake3: None,
+            cache_closure: Vec::new(),
+            sources: Vec::new(),
+            units: Vec::new(),
+            roots: vec![root],
+            failure: None,
+            non_claims: Vec::new(),
+        };
+        receipt.receipt_blake3 = foreign_realization_receipt_v2_digest(&receipt).unwrap();
+        receipt
+    }
+
+    fn classify(
+        path_info: &PathInfo,
+        recomputed_nar_sha256: [u8; 32],
+        keys: &[BuilderKey],
+        indexed: IndexedBuiltReceipt,
+    ) -> Result<ReusedRootFacts, PresentRootRefusal> {
+        classify_present_root(PresentRootInput {
+            target_derivation: ROOT_DRV,
+            output_name: "out",
+            path: ROOT_PATH,
+            store_dir: STORE_DIR,
+            path_info,
+            recomputed_nar_sha256,
+            builder_keys: keys,
+            indexed,
+        })
+    }
+
+    #[test]
+    fn present_root_reuses_only_a_valid_indexed_builder_signature() {
+        let (signing, builder) = builder_key(7, "crunch-host-1");
+        let path_info = signed_path_info(&signing, NAR_SHA256);
+        let receipt = receipt_with_root(built_root(ROOT_DRV, &builder, NAR_SHA256), CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
+
+        let facts =
+            classify(&path_info, NAR_SHA256, &[builder], IndexedBuiltReceipt::Present(receipt.clone())).unwrap();
+
+        assert_eq!(facts.original_receipt_blake3, receipt.receipt_blake3);
+        assert_eq!(facts.signer_public_key_blake3, receipt.roots[0].signer.public_key_blake3);
+        assert_eq!(facts.nar_sha256, HEXLOWER.encode(&NAR_SHA256));
+        assert_eq!(facts.nar_size, 3);
+        assert!(facts.references.is_empty());
+    }
+
+    #[test]
+    fn present_root_refusals_name_each_reason() {
+        let (signing, builder) = builder_key(7, "crunch-host-1");
+        let (rotated_signing, rotated_builder) = builder_key(8, "crunch-host-1");
+        let path_info = signed_path_info(&signing, NAR_SHA256);
+        let receipt = receipt_with_root(built_root(ROOT_DRV, &builder, NAR_SHA256), CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
+
+        assert_eq!(
+            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Absent).unwrap_err(),
+            PresentRootRefusal::NoBuiltReceipt
+        );
+        assert_eq!(
+            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Unparsable).unwrap_err(),
+            PresentRootRefusal::ReceiptInvalid
+        );
+
+        let mut tampered = receipt.clone();
+        tampered.receipt_blake3 = "f".repeat(64);
+        assert_eq!(
+            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(tampered.clone()))
+                .unwrap_err(),
+            PresentRootRefusal::ReceiptInvalid
+        );
+
+        let wrong_route = receipt_with_root(built_root(ROOT_DRV, &builder, NAR_SHA256), "cache-only-preserve-v1");
+        assert_eq!(
+            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(wrong_route.clone()))
+                .unwrap_err(),
+            PresentRootRefusal::RouteMismatch
+        );
+
+        let mut reused_entry = built_root(ROOT_DRV, &builder, NAR_SHA256);
+        reused_entry.disposition = ROOT_DISPOSITION_REUSED.to_string();
+        reused_entry.built = None;
+        reused_entry.reused = Some(ForeignRootReused {
+            original_receipt_blake3: "0".repeat(64),
+            source: "local".to_string(),
+            builds: 0,
+            downloads: 0,
+        });
+        let reused_receipt = receipt_with_root(reused_entry, CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
+        assert_eq!(
+            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(reused_receipt.clone()))
+                .unwrap_err(),
+            PresentRootRefusal::NotBuilt
+        );
+
+        let other = receipt_with_root(built_root(OTHER_DRV, &builder, NAR_SHA256), CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
+        assert_eq!(
+            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(other.clone()))
+                .unwrap_err(),
+            PresentRootRefusal::DerivationMismatch
+        );
+
+        assert_eq!(
+            classify(&path_info, OTHER_NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(receipt.clone()))
+                .unwrap_err(),
+            PresentRootRefusal::NarHashMismatch
+        );
+
+        let mut unsigned = path_info.clone();
+        unsigned.signatures.clear();
+        assert_eq!(
+            classify(&unsigned, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(receipt.clone()))
+                .unwrap_err(),
+            PresentRootRefusal::NoValidBuilderSignature
+        );
+
+        let rotated_path_info = signed_path_info(&rotated_signing, NAR_SHA256);
+        assert_eq!(
+            classify(&rotated_path_info, NAR_SHA256, &[rotated_builder], IndexedBuiltReceipt::Present(receipt.clone()))
+                .unwrap_err(),
+            PresentRootRefusal::SignerMismatch
+        );
+
+        assert_eq!(
+            classify(&path_info, NAR_SHA256, &[], IndexedBuiltReceipt::Present(receipt.clone())).unwrap_err(),
+            PresentRootRefusal::BuilderKeyNotTrusted
+        );
+    }
+
+    #[test]
+    fn key_fingerprints_and_trust_policy_have_fixed_vectors() {
+        // Independent ed25519 + BLAKE3 vectors: the fingerprint binds the domain and the raw public key,
+        // never the (untrusted) key name.
+        let (first_signing, first) = builder_key(7, "crunch-host-1");
+        let (_second_signing, second) = builder_key(8, "crunch-host-1");
+        let (cache_signing, cache_builder) = builder_key(9, "cache-inputs-test-1");
+        let _ = (first_signing, cache_signing);
+        assert_eq!(
+            HEXLOWER.encode(&first.verifying_key.public_key_bytes()),
+            "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+        );
+        assert_eq!(first.public_key_blake3, "c04937007bffc39024272c4a89add18c4912118edca164b08b5903d01933dedd");
+        assert_eq!(second.public_key_blake3, "ccf84389c7f22207627c08baa19b534a8836c712626cafe0283cd927b7de628d");
+        assert_eq!(cache_builder.public_key_blake3, "71e4dac18ac5cf28599e555f99723bea2f25ada496c9a420d6d2a1594a2804b5");
+        assert_ne!(first.public_key_blake3, second.public_key_blake3);
+
+        // A key's name does not change its fingerprint.
+        let (_renamed_signing, renamed) = builder_key(7, "retired-host-2");
+        assert_eq!(renamed.public_key_blake3, first.public_key_blake3);
+
+        let cache_key = cache_builder.verifying_key.clone();
+        let forward = realization_trust_policy_blake3(&[first.clone(), second.clone()], &[cache_key.clone()]).unwrap();
+        let reverse = realization_trust_policy_blake3(&[second, first], &[cache_key]).unwrap();
+        assert_eq!(forward, "f14bf1107042c94e9fcbc3ec9ef51f08158ce5bbe607ad877eea43ed62eaf2f2");
+        assert_eq!(forward, reverse);
+
+        // Duplicate key material never changes the policy digest.
+        let (_duplicate_signing, duplicate) = builder_key(7, "crunch-host-1");
+        let duplicated = realization_trust_policy_blake3(&[duplicate, builder_key(7, "crunch-host-1").1], &[]).unwrap();
+        let single = realization_trust_policy_blake3(&[builder_key(7, "crunch-host-1").1], &[]).unwrap();
+        assert_eq!(duplicated, single);
     }
 }
