@@ -1525,6 +1525,7 @@
       "--store-backend",
       "--store-prefix",
       "--substitute",
+      "--trusted-builder-public-key",
       "--verbose",
       "-h",
       "-j",

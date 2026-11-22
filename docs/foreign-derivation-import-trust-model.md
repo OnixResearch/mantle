@@ -204,16 +204,66 @@ introduce a session or replace signed PathInfo/content verification. The
 names the establishing declaration and the checked fixtures for each boundary.
 
 `preserve-cache-paths-v1` permits exact path identity only with one unchanged store prefix.
-It selects the distinct `cache-only-preserve-v1` route by default, or the
-`cache-inputs-build-roots-v1` route when the plan explicitly requests it.
+It selects the distinct `cache-only-preserve-v1` route by default, the
+`cache-inputs-build-roots-v1` route when the plan explicitly requests it, or the
+build-or-reuse route `cache-inputs-build-roots-v2`.
 The cache-only route requires online substitution, an empty source bundle, and
 one selected output root; it executes no builder.
-The cache-inputs build route requires the same online substitution, empty
-source bundle and signed-cache admission, hydrates only the selected roots'
+The cache-inputs build routes require the same online substitution, empty
+source bundle and signed-cache admission, and hydrate only the selected roots'
 direct input outputs, their input sources and those paths' runtime reference
-closure, and then executes the root derivations. It refuses a root the cache
-offers or the store already holds, refuses fixed-output roots, and never falls
-back to the host logical store for a missing source.
+closure. Route v1 then executes the root derivations and refuses a root the
+cache offers or the store already holds. Neither route falls back to the host
+logical store for a missing source, and both refuse fixed-output roots.
+
+### Build-or-reuse trust rule
+
+Route `cache-inputs-build-roots-v2` may reuse a present root only when Mantle
+itself built it earlier and signed it with a builder key. Path presence and Nix
+cache-key signatures never qualify a root for reuse. The builder identity is a
+fingerprint, not a Nix key name: lowercase hex BLAKE3 of
+`b"mantle-builder-public-key-v1\0"` concatenated with the 32-byte ed25519 public
+key. The local realize signing key has role `builder`; each repeatable
+`realize --trusted-builder-public-key <nix-name:base64>` adds a verify-only
+builder key with the same role, used only to keep a retired key accepted. Cache
+keys bound into the plan never get role `builder`.
+
+A present root is reused only when all of these hold:
+
+1. `<state-dir>/foreign-realization/built-roots/<root derivation basename>.json`
+   holds a closed-world `mantle-foreign-realization-receipt-v2` whose recomputed
+   digest equals its `receipt_blake3`, whose route is
+   `cache-inputs-build-roots-v2`, and whose root entry for the same derivation,
+   output name and path has disposition `built`.
+2. The NAR SHA-256 recomputed from the present bytes equals the entry's NAR
+   SHA-256 and the recorded PathInfo's.
+3. A PathInfo signature verifies over the Nix fingerprint (path, NAR hash, size,
+   references) with a builder-role key trusted now whose fingerprint equals the
+   entry's signer fingerprint.
+
+Otherwise realization fails closed with one typed refusal (`no-built-receipt`,
+`receipt-invalid`, `route-mismatch`, `not-built`, `derivation-mismatch`,
+`nar-hash-mismatch`, `no-valid-builder-signature`, `signer-mismatch`, or
+`builder-key-not-trusted`) before rebuilding, deleting store content, hydrating,
+or minting a signature. A cache-offered absent root is refused as on route v1.
+Per-root exclusive locks at `<state-dir>/foreign-realization/locks/` serialize
+concurrent realizations of one job, and the index is published write-once after
+the receipt.
+
+Receipt v2 keeps every receipt-v1 field and adds a required `roots` array with
+`node_id`, `target_derivation`, `output_name`, `path`, `nar_sha256`, `nar_size`,
+sorted `references`, `disposition` (`built` or `reused`), the signer key name,
+fingerprint and role, `trust_policy_blake3`, and the `built` or `reused` record.
+The reuse record links the original `built` receipt digest directly and records
+`source: "local"` with zero builds and downloads. Every route other than this
+one keeps emitting receipt v1 byte-for-byte.
+
+Reuse is not fresh proof work. A `reused` disposition proves only that an
+earlier Mantle build signed these bytes; it does not prove package correctness,
+reproducibility, evaluator equivalence, or that the builder ran again. Cairn
+compares the recorded fields, fingerprints, and reuse link; it does not verify
+signature bytes itself. Reuse from a cache, key rotation by
+rebuild-compare-co-sign, and a Kiln Verify force-rebuild remain follow-ups.
 
 The plan binds trusted cache keys in its cache URLs.
 Mantle validates bounded NARInfo metadata before it imports NAR content.

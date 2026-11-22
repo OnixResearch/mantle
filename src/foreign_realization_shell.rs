@@ -284,7 +284,8 @@ pub(crate) async fn realize_foreign_plan(
             // A reuse run hydrates nothing, so a present input closure is satisfied by presence
             // alone; this mirrors what the v1 hydration facts supply (and keeps an unneeded
             // dependency of a present input from being scheduled).
-            satisfied_paths.extend(locally_present_input_paths(&mut store, request.plan, request.selected_root_node_ids).await?);
+            satisfied_paths
+                .extend(locally_present_input_paths(&mut store, request.plan, request.selected_root_node_ids).await?);
         }
         satisfied_input_derivations(request.plan, request.selected_root_node_ids, &satisfied_paths)
     } else {
@@ -730,6 +731,16 @@ fn root_derivation_basename(derivation: &str) -> Result<&str, RunError> {
         .ok_or_else(|| RunError::Internal(format!("foreign root derivation has no basename: {derivation}")))
 }
 
+/// Directory holding the per-root realization locks.
+pub(crate) fn root_lock_dir(state_dir: &Path) -> std::path::PathBuf {
+    state_dir.join(FOREIGN_REALIZATION_STATE_SUBDIR).join(ROOT_LOCK_SUBDIR)
+}
+
+/// Directory holding the write-once built-root index entries.
+pub(crate) fn built_root_index_dir(state_dir: &Path) -> std::path::PathBuf {
+    state_dir.join(FOREIGN_REALIZATION_STATE_SUBDIR).join(BUILT_ROOT_INDEX_SUBDIR)
+}
+
 fn acquisition_paths(
     state_dir: &Path,
     subdir: &str,
@@ -749,7 +760,7 @@ fn acquisition_paths(
 }
 
 fn built_root_index_path(state_dir: &Path, derivation: &str) -> Result<std::path::PathBuf, RunError> {
-    let dir = state_dir.join(FOREIGN_REALIZATION_STATE_SUBDIR).join(BUILT_ROOT_INDEX_SUBDIR);
+    let dir = built_root_index_dir(state_dir);
     Ok(dir.join(format!("{}{BUILT_ROOT_INDEX_SUFFIX}", root_derivation_basename(derivation)?)))
 }
 

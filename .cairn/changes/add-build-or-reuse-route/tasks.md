@@ -1,21 +1,21 @@
 ## Phase 1: Contract and pure decisions
 
-- [ ] [serial] I1 Add route `cache-inputs-build-roots-v2` as a plan constant, accepted only with `preserve-cache-paths-v1`, with v1 structural invariants, a route non-claim, and admission treating both cache-input routes as build routes. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] I1 Add route `cache-inputs-build-roots-v2` as a plan constant, accepted only with `preserve-cache-paths-v1`, with v1 structural invariants, a route non-claim, and admission treating both cache-input routes as build routes. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: plan unit tests for accepted/rejected selection and FOD refusal.
-- [ ] [serial] I2 Add builder fingerprint, trust-policy digest, builder-key set construction, and the pure `classify_present_root` with every typed refusal and reuse fact. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] I2 Add builder fingerprint, trust-policy digest, builder-key set construction, and the pure `classify_present_root` with every typed refusal and reuse fact. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: unit tests for each refusal plus the reuse path, and digest stability.
-- [ ] [serial] I3 Add receipt v2 types, digest, closed-world parse, the v2 builder, and `input_closure_blake3`; keep v1 byte-identical. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] I3 Add receipt v2 types, digest, closed-world parse, the v2 builder, and `input_closure_blake3`; keep v1 byte-identical. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: unit tests for v2 digest and parse rejection of unknown/missing fields; v1 digest test unchanged.
 
 ## Phase 2: Shell and CLI
 
-- [ ] [serial] I4 Add `realize --trusted-builder-public-key` (repeatable, verify-only), add those keys to the trusted set, and thread the builder-key set and trust-policy digest into realization. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] I4 Add `realize --trusted-builder-public-key` (repeatable, verify-only), add those keys to the trusted set, and thread the builder-key set and trust-policy digest into realization. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: CLI parse test or command-level rejection test for an invalid key; route v2 acceptance in `tests/cache_inputs_build_route.rs`.
-- [ ] [serial] I5 On route v2, take per-root locks under `<state-dir>/foreign-realization/locks/`, check presence before hydration, classify present roots, skip hydration/build for reused roots, follow the v1 path for absent roots, publish the write-once built-root index, and reject any rebuilt reused root. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] I5 On route v2, take per-root locks under `<state-dir>/foreign-realization/locks/`, check presence before hydration, classify present roots, skip hydration/build for reused roots, follow the v1 path for absent roots, publish the write-once built-root index, and reject any rebuilt reused root. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: `tests/cache_inputs_build_route.rs` reuse, changed-input, refusal, rotation, concurrency, and v1-regression tests.
-- [ ] [serial] I6 Add `crunch-store` NAR re-measurement and the `nix-compat` public-key accessor. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] I6 Add `crunch-store` NAR re-measurement and the `nix-compat` public-key accessor. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: `cargo test -p crunch-store --lib` focused NAR test.
-- [ ] [serial] I7 Update `docs/foreign-import-operator-guide.md` and `docs/foreign-import-trust-model.md` for route v2, builder keys, the index, refusals, and non-claims. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] I7 Update `docs/foreign-realization-operator-guide.md` and `docs/foreign-derivation-import-trust-model.md` for route v2, builder keys, the index, refusals, and non-claims. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: docs diff in this change.
 
 ## Phase 3: Verification

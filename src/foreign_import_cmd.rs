@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use clap::Subcommand;
 use crunch_build::ExecutionProfile;
+use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -79,6 +80,26 @@ const PRODUCE_NIX_COMMAND: &str = "produce-nix";
 /// The one planned write of every producer: both artifacts published into the selected output
 /// directory.
 const PRODUCER_ARTIFACTS_EFFECT: &str = "foreign-producer-artifacts";
+/// Route-v2 realize writes one exclusive lock file per selected root derivation.
+const REALIZATION_LOCKS_EFFECT: &str = "foreign-realization-locks";
+/// Route-v2 realize publishes the receipt write-once into this built-root index.
+const REALIZATION_BUILT_ROOT_INDEX_EFFECT: &str = "foreign-realization-built-root-index";
+
+/// The effect-relevant fields of an executable plan, read before the effect plan is sized.
+#[derive(Deserialize)]
+struct RealizationEffectPlanHint {
+    #[serde(default)]
+    realization_route: Option<String>,
+    #[serde(default)]
+    roots: Vec<RealizationEffectPlanRootHint>,
+}
+
+#[derive(Deserialize)]
+struct RealizationEffectPlanRootHint {
+    #[serde(default)]
+    #[allow(dead_code)]
+    target_derivation: String,
+}
 const PRODUCE_ATERM_COMMAND: &str = "produce-aterm";
 const PRODUCE_BACKEND_COMMAND: &str = "produce-backend";
 const ACCEPTED_VERDICT: &str = "accepted";
@@ -151,7 +172,8 @@ pub(crate) enum ForeignImportAction {
         #[arg(long = "execution-profile")]
         execution_profile: Option<PathBuf>,
 
-        /// Optional realization route override: `cache-inputs-build-roots-v1` or `cache-inputs-build-roots-v2`
+        /// Optional realization route override: `cache-inputs-build-roots-v1` or
+        /// `cache-inputs-build-roots-v2`
         #[arg(long = "realization-route")]
         realization_route: Option<String>,
 
@@ -616,7 +638,10 @@ fn foreign_read_limit(action: &ForeignImportAction) -> Result<Option<u32>, RunEr
     Ok(Some(read_limit))
 }
 
-fn foreign_effect_outputs(action: &ForeignImportAction) -> Option<(Vec<(&'static str, &Path)>, bool)> {
+fn foreign_effect_outputs(
+    action: &ForeignImportAction,
+    context: &ForeignImportContext<'_>,
+) -> Option<(Vec<(&'static str, PathBuf, u32)>, bool)> {
     let outputs = match action {
         ForeignImportAction::Validate { .. } => (Vec::new(), false),
         ForeignImportAction::Plan {
@@ -624,9 +649,9 @@ fn foreign_effect_outputs(action: &ForeignImportAction) -> Option<(Vec<(&'static
         } => (
             plan_out
                 .as_deref()
-                .map(|path| ("foreign-executable-plan", path))
+                .map(|path| ("foreign-executable-plan", path.to_path_buf(), 1))
                 .into_iter()
-                .chain(receipt_out.as_deref().map(|path| ("foreign-import-receipt", path)))
+                .chain(receipt_out.as_deref().map(|path| ("foreign-import-receipt", path.to_path_buf(), 1)))
                 .collect(),
             false,
         ),
@@ -638,23 +663,51 @@ fn foreign_effect_outputs(action: &ForeignImportAction) -> Option<(Vec<(&'static
         } => (
             nario_evidence_out
                 .as_deref()
-                .map(|path| ("foreign-nario-evidence", path))
+                .map(|path| ("foreign-nario-evidence", path.to_path_buf(), 1))
                 .into_iter()
-                .chain(std::iter::once(("foreign-source-bundle", out.as_path())))
+                .chain(std::iter::once(("foreign-source-bundle", out.clone(), 1)))
                 .collect(),
             !nario_v2.is_empty(),
         ),
-        ForeignImportAction::Realize { receipt_out, .. } => {
-            (vec![("foreign-realization-receipt", receipt_out.as_path())], true)
+        ForeignImportAction::Realize { receipt_out, plan, .. } => {
+            let mut writes = vec![("foreign-realization-receipt", receipt_out.clone(), 1)];
+            // The route lives in the plan JSON, so size the v2-only state writes from that
+            // command input before the effect plan is declared. The read is already covered
+            // by `foreign-input-read`; a plan that cannot be read adds no effect and fails
+            // later with the real diagnostic.
+            if let Some(bound) = realization_effect_bounds(plan) {
+                writes.push((
+                    REALIZATION_LOCKS_EFFECT,
+                    crate::foreign_realization_shell::root_lock_dir(context.state_dir),
+                    bound,
+                ));
+                writes.push((
+                    REALIZATION_BUILT_ROOT_INDEX_EFFECT,
+                    crate::foreign_realization_shell::built_root_index_dir(context.state_dir),
+                    bound,
+                ));
+            }
+            (writes, true)
         }
-        ForeignImportAction::Audit { out, .. } => (vec![("foreign-audit-receipt", out.as_path())], true),
+        ForeignImportAction::Audit { out, .. } => (vec![("foreign-audit-receipt", out.clone(), 1)], true),
         ForeignImportAction::ProduceAterm { out_dir, .. }
         | ForeignImportAction::ProduceBackend { out_dir, .. }
         | ForeignImportAction::ProduceNix { out_dir, .. } => {
-            (vec![(PRODUCER_ARTIFACTS_EFFECT, out_dir.as_path())], false)
+            (vec![(PRODUCER_ARTIFACTS_EFFECT, out_dir.clone(), 1)], false)
         }
     };
     Some(outputs)
+}
+
+/// Bound the v2-only realize state writes by the plan's selected root count.
+fn realization_effect_bounds(plan_path: &Path) -> Option<u32> {
+    let bytes = fs::read(plan_path).ok()?;
+    let hint: RealizationEffectPlanHint = serde_json::from_slice(&bytes).ok()?;
+    if hint.realization_route.as_deref() != Some(crate::foreign_executable_plan::CACHE_INPUTS_BUILD_OR_REUSE_ROUTE) {
+        return None;
+    }
+    let root_count = u32::try_from(hint.roots.len()).ok()?;
+    Some(root_count.max(1))
 }
 
 // r[impl application_architecture.effect_observation_boundary]
@@ -670,10 +723,10 @@ fn foreign_effect_plan(
     let Some(read_limit) = foreign_read_limit(action)? else {
         return Ok(None);
     };
-    let Some((writes, store)) = foreign_effect_outputs(action) else {
+    let Some((writes, store)) = foreign_effect_outputs(action, context) else {
         return Ok(None);
     };
-    let paths = writes.iter().map(|(_, path)| path.display().to_string()).collect::<Vec<_>>();
+    let paths = writes.iter().map(|(_, path, _)| path.display().to_string()).collect::<Vec<_>>();
     let store_identity = (store && !matches!(action, ForeignImportAction::PrepareSources { .. }))
         .then(|| context.state_dir.display().to_string());
     let mut specs = vec![EffectSpec {
@@ -690,11 +743,11 @@ fn foreign_effect_plan(
             expected_output: store_identity.as_deref().map_or(ExpectedOutput::None, ExpectedOutput::Identity),
         });
     }
-    for ((id, _), path) in writes.iter().zip(&paths) {
+    for ((id, _, calls), path) in writes.iter().zip(&paths) {
         specs.push(EffectSpec {
             effect_id: id,
             kind: EffectKind::WriteFiles,
-            limit: EffectMeasure::Calls(1),
+            limit: EffectMeasure::Calls(*calls),
             expected_output: ExpectedOutput::Identity(path),
         });
     }
@@ -2009,6 +2062,22 @@ fn run_realize(
         publish_built_root_index(path, bytes)?;
     }
     port.verify_written(request.receipt_out, receipt, "realization receipt", REALIZE_COMMAND)?;
+    let locks_dir = crate::foreign_realization_shell::root_lock_dir(context.state_dir);
+    let index_dir = crate::foreign_realization_shell::built_root_index_dir(context.state_dir);
+    let declares = |id: &str| effect_plan.effects.iter().any(|effect| effect.effect_id.0 == id);
+    let mut written = vec![("foreign-realization-receipt", request.receipt_out)];
+    if declares(REALIZATION_LOCKS_EFFECT) {
+        // Locks are acquired before the store opens; the directory exists on every v2 run.
+        fs::create_dir_all(&locks_dir)
+            .map_err(|error| RunError::Internal(format!("creating {}: {error}", locks_dir.display())))?;
+        written.push((REALIZATION_LOCKS_EFFECT, locks_dir.as_path()));
+    }
+    if declares(REALIZATION_BUILT_ROOT_INDEX_EFFECT) {
+        // A reuse-only run writes no entry but still ensures the index directory exists.
+        fs::create_dir_all(&index_dir)
+            .map_err(|error| RunError::Internal(format!("creating {}: {error}", index_dir.display())))?;
+        written.push((REALIZATION_BUILT_ROOT_INDEX_EFFECT, index_dir.as_path()));
+    }
     let failed = receipt.failure().is_some();
     foreign_finish_effects(
         effect_plan,
@@ -2018,7 +2087,7 @@ fn run_realize(
             Some(context.state_dir),
             !failed && receipt.status() == crate::foreign_realization_receipt::FOREIGN_REALIZATION_COMPLETE_STATUS,
         )),
-        &[("foreign-realization-receipt", request.receipt_out)],
+        &written,
         failed,
     )?;
     on_realize(receipt)?;
@@ -3367,6 +3436,103 @@ mod tests {
             ),
             _ => panic!("unknown foreign callback scenario: {case}"),
         }
+    }
+
+    // r[verify application_architecture.effect_observation_boundary]
+    #[test]
+    fn realize_effect_plan_declares_route_v2_state_writes_only_when_the_route_requests_them() {
+        use mantle_application_contract::EffectKind;
+        use mantle_application_contract::EffectMeasure;
+
+        let root = tempfile::tempdir().unwrap();
+        let state_dir = root.path().join("state");
+        let output_dir = root.path().join("output");
+        fs::create_dir_all(&output_dir).unwrap();
+        let context = ForeignImportContext {
+            output_dir: &output_dir,
+            state_dir: &state_dir,
+            backend: crunch_store::StoreBackend::Snix,
+            base_state_dirs: &[],
+            source_admission: None,
+            source_bundle_bytes_max: DEFAULT_FOREIGN_JSON_ARTIFACT_BYTES_MAX,
+            verbose: false,
+            json: true,
+        };
+        let plan_path = root.path().join("plan.json");
+        let receipt_out = root.path().join("realization-receipt.json");
+        let realize = |plan: &Path| ForeignImportAction::Realize {
+            plan: plan.to_path_buf(),
+            import_receipt: root.path().join("import-receipt.json"),
+            source_bundle: root.path().join("source-bundle.json"),
+            source_bundle_blake3: "a".repeat(64),
+            execution_profiles: Vec::new(),
+            cache_closure_policy: None,
+            roots: vec!["nix:parent".to_string()],
+            receipt_out: receipt_out.clone(),
+            jobs: None,
+            substitute: true,
+            no_substitute: false,
+            offline: false,
+            remote: false,
+            signing_key: None,
+            trusted_builder_public_keys: Vec::new(),
+        };
+
+        for (route, expected_v2) in [
+            ("cache-inputs-build-roots-v2", true),
+            ("cache-inputs-build-roots-v1", false),
+        ] {
+            fs::write(
+                &plan_path,
+                serde_json::to_vec(&serde_json::json!({
+                    "realization_route": route,
+                    "roots": [
+                        { "node_id": "nix:parent", "target_derivation": "/nix/store/aa-parent.drv" },
+                        { "node_id": "nix:other", "target_derivation": "/nix/store/bb-other.drv" }
+                    ]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            let plan = foreign_effect_plan(&realize(&plan_path), &context).unwrap().unwrap();
+            let effect = |id: &str| plan.effects.iter().find(|effect| effect.effect_id.0 == id);
+            let receipt = effect("foreign-realization-receipt").expect("receipt write declared");
+            assert_eq!(
+                receipt.expected_output,
+                mantle_application_contract::EffectOutput::Identity(receipt_out.display().to_string())
+            );
+            let locks = effect(REALIZATION_LOCKS_EFFECT);
+            let index = effect(REALIZATION_BUILT_ROOT_INDEX_EFFECT);
+            if expected_v2 {
+                let locks = locks.expect("route v2 declares the root locks");
+                assert_eq!(locks.kind, EffectKind::WriteFiles);
+                assert_eq!(locks.limit, EffectMeasure::Calls(2));
+                assert_eq!(
+                    locks.expected_output,
+                    mantle_application_contract::EffectOutput::Identity(
+                        crate::foreign_realization_shell::root_lock_dir(&state_dir).display().to_string()
+                    )
+                );
+                let index = index.expect("route v2 declares the built-root index");
+                assert_eq!(index.kind, EffectKind::WriteFiles);
+                assert_eq!(index.limit, EffectMeasure::Calls(2));
+                assert_eq!(
+                    index.expected_output,
+                    mantle_application_contract::EffectOutput::Identity(
+                        crate::foreign_realization_shell::built_root_index_dir(&state_dir).display().to_string()
+                    )
+                );
+            } else {
+                assert!(locks.is_none(), "route v1 declares no root locks");
+                assert!(index.is_none(), "route v1 declares no built-root index");
+            }
+        }
+
+        // An unreadable plan adds no v2 state effects; the command reports the real read error.
+        let missing = root.path().join("missing-plan.json");
+        let plan = foreign_effect_plan(&realize(&missing), &context).unwrap().unwrap();
+        assert!(plan.effects.iter().all(|effect| effect.effect_id.0 != REALIZATION_LOCKS_EFFECT));
+        assert!(plan.effects.iter().all(|effect| effect.effect_id.0 != REALIZATION_BUILT_ROOT_INDEX_EFFECT));
     }
 
     fn producer_plan(out_dir: &Path) -> mantle_application_contract::EffectPlan {

@@ -8,6 +8,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
 use std::net::TcpListener;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -30,6 +31,7 @@ use tempfile::TempDir;
 const CHILD_OUTPUT: &str = "/nix/store/11111111111111111111111111111111-child";
 const CHILD_DEV_OUTPUT: &str = "/nix/store/88888888888888888888888888888888-child-dev";
 const PARENT_OUTPUT: &str = "/nix/store/22222222222222222222222222222222-parent";
+const CHANGED_PARENT_OUTPUT: &str = "/nix/store/99999999999999999999999999999999-parent";
 const BUILDER_SOURCE: &str = "/nix/store/33333333333333333333333333333333-foreign-builder";
 const CHILD_CONTENT: &[u8] = b"child\n";
 const NIX_PROFILE: &str = "config/foreign-execution-profiles/generated/nix.json";
@@ -347,10 +349,110 @@ fn realize(temp: &TempDir, fixture: &Fixture, binding: &Path) -> std::process::O
 }
 
 fn realize_with_receipt(temp: &TempDir, fixture: &Fixture, binding: &Path, receipt_name: &str) -> std::process::Output {
+    realize_with_options(temp, fixture, binding, receipt_name, None, &[])
+}
+
+fn realize_with_options(
+    temp: &TempDir,
+    fixture: &Fixture,
+    binding: &Path,
+    receipt_name: &str,
+    signing_key: Option<&Path>,
+    trusted_builder_public_keys: &[String],
+) -> std::process::Output {
+    realize_command(temp, fixture, binding, receipt_name, signing_key, trusted_builder_public_keys)
+        .output()
+        .expect("run realize")
+}
+
+fn realize_command(
+    temp: &TempDir,
+    fixture: &Fixture,
+    binding: &Path,
+    receipt_name: &str,
+    signing_key: Option<&Path>,
+    trusted_builder_public_keys: &[String],
+) -> Command {
+    let mut command = mantle_cmd();
+    command.args(realize_arguments(temp, fixture, binding, receipt_name, signing_key, trusted_builder_public_keys));
+    command
+}
+
+fn mantle_binary() -> PathBuf {
+    if let Ok(path) = std::env::var("MANTLE_TEST_BIN") {
+        return PathBuf::from(path);
+    }
+    assert_cmd::cargo::cargo_bin("mantle")
+}
+
+fn realize_arguments(
+    temp: &TempDir,
+    fixture: &Fixture,
+    binding: &Path,
+    receipt_name: &str,
+    signing_key: Option<&Path>,
+    trusted_builder_public_keys: &[String],
+) -> Vec<String> {
     let state_dir = temp.path().join("state");
     let output_dir = temp.path().join("output");
+    let policy = write_policy(temp);
     fs::create_dir_all(&output_dir).expect("output dir");
-    mantle_cmd()
+    let mut arguments = vec![
+        "--json".to_string(),
+        "--state-dir".to_string(),
+        state_dir.display().to_string(),
+        "--store".to_string(),
+        output_dir.display().to_string(),
+        "--store-prefix".to_string(),
+        "/nix/store".to_string(),
+        "--remote-binding-config".to_string(),
+        binding.display().to_string(),
+        "foreign-import".to_string(),
+        "realize".to_string(),
+        "--plan".to_string(),
+        fixture.plan.display().to_string(),
+        "--import-receipt".to_string(),
+        fixture.receipt.display().to_string(),
+        "--source-bundle".to_string(),
+        fixture.source_bundle.display().to_string(),
+        "--source-bundle-blake3".to_string(),
+        fixture.source_bundle_blake3.clone(),
+        "--execution-profile".to_string(),
+        manifest_root().join(NIX_PROFILE).display().to_string(),
+        "--cache-closure-policy".to_string(),
+        policy.display().to_string(),
+        "--substitute".to_string(),
+        "--receipt-out".to_string(),
+        temp.path().join(receipt_name).display().to_string(),
+    ];
+    if let Some(signing_key) = signing_key {
+        arguments.push("--signing-key".to_string());
+        arguments.push(signing_key.display().to_string());
+    }
+    for key in trusted_builder_public_keys {
+        arguments.push("--trusted-builder-public-key".to_string());
+        arguments.push(key.clone());
+    }
+    arguments
+}
+
+fn write_nix_signing_key(path: &Path, secret: [u8; 32]) -> String {
+    let dalek = ed25519_dalek::SigningKey::from_bytes(&secret);
+    let mut combined = Vec::with_capacity(64);
+    combined.extend_from_slice(&secret);
+    combined.extend_from_slice(dalek.verifying_key().as_bytes());
+    let line = format!("{KEY_NAME}:{}", data_encoding::BASE64.encode(&combined));
+    fs::write(path, format!("{line}\n")).expect("write signing key");
+    let mut permissions = fs::metadata(path).expect("signing key metadata").permissions();
+    permissions.set_mode(0o600);
+    fs::set_permissions(path, permissions).expect("signing key mode");
+    VerifyingKey::new(KEY_NAME.to_string(), dalek.verifying_key()).to_string()
+}
+
+fn path_signatures(temp: &TempDir, path: &str) -> Vec<String> {
+    let state_dir = temp.path().join("state");
+    let output_dir = temp.path().join("output");
+    let output = mantle_cmd()
         .args([
             "--json",
             "--state-dir",
@@ -359,28 +461,20 @@ fn realize_with_receipt(temp: &TempDir, fixture: &Fixture, binding: &Path, recei
             path_str(&output_dir),
             "--store-prefix",
             "/nix/store",
-            "--remote-binding-config",
-            path_str(binding),
-            "foreign-import",
-            "realize",
-            "--plan",
-            path_str(&fixture.plan),
-            "--import-receipt",
-            path_str(&fixture.receipt),
-            "--source-bundle",
-            path_str(&fixture.source_bundle),
-            "--source-bundle-blake3",
-            &fixture.source_bundle_blake3,
-            "--execution-profile",
-            path_str(&manifest_root().join(NIX_PROFILE)),
-            "--cache-closure-policy",
-            path_str(&write_policy(temp)),
-            "--substitute",
-            "--receipt-out",
-            path_str(&temp.path().join(receipt_name)),
+            "store",
+            "info",
+            path.trim_start_matches("/nix/store/"),
         ])
         .output()
-        .expect("run realize")
+        .expect("run store info");
+    assert!(output.status.success(), "store info failed: {}", String::from_utf8_lossy(&output.stderr));
+    let value: Value = serde_json::from_slice(&output.stdout).expect("parse store info");
+    value["paths"][0]["signatures"]
+        .as_array()
+        .expect("store info signatures")
+        .iter()
+        .map(|signature| signature.as_str().expect("signature").to_string())
+        .collect()
 }
 
 fn write_policy(temp: &TempDir) -> PathBuf {
@@ -550,6 +644,36 @@ fn prepare_route_v2(temp: &TempDir, cache: &TestCache) -> Fixture {
     fixture
 }
 
+fn built_root_index_path_from_receipt(temp: &TempDir, receipt: &Value) -> PathBuf {
+    let derivation = receipt["roots"][0]["target_derivation"].as_str().expect("root derivation");
+    let basename = derivation.rsplit('/').next().expect("root derivation basename");
+    temp.path()
+        .join("state")
+        .join("foreign-realization")
+        .join("built-roots")
+        .join(format!("{basename}.json"))
+}
+
+fn prepare_changed_route_v2(temp: &TempDir, cache: &TestCache) -> Fixture {
+    let mut fixture = write_fixture(temp, &cache.url_with_key, false);
+    let mut graph = json_file(&fixture.graph);
+    let parent = &mut graph["nodes"][1];
+    parent["env"]["out"] = serde_json::json!(CHANGED_PARENT_OUTPUT);
+    parent["env"]["variant"] = serde_json::json!("changed-input");
+    parent["outputs"]["out"]["path"] = serde_json::json!(CHANGED_PARENT_OUTPUT);
+    fs::write(&fixture.graph, serde_json::to_vec(&graph).expect("changed graph json")).expect("write changed graph");
+    let plan = plan_route(&fixture, Some("cache-inputs-build-roots-v2"));
+    assert!(
+        plan.status.success(),
+        "changed plan must accept route v2: {}",
+        String::from_utf8_lossy(&plan.stderr)
+    );
+    prepare_empty_sources(&fixture);
+    let bundle = json_file(&fixture.source_bundle);
+    fixture.source_bundle_blake3 = bundle["manifest_blake3"].as_str().expect("manifest digest").to_string();
+    fixture
+}
+
 #[test]
 fn cache_inputs_build_or_reuse_route_reuses_an_unchanged_root() {
     let temp = TempDir::new().expect("tempdir");
@@ -605,4 +729,195 @@ fn cache_inputs_build_or_reuse_route_reuses_an_unchanged_root() {
     let requests = cache.requests.lock().expect("requests");
     assert_eq!(requests.len(), requests_before, "reuse must not consult the cache: {requests:?}");
     assert!(!requests[requests_before..].iter().any(|path| path.starts_with("/nar/")));
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_builds_a_changed_root_derivation() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+
+    let first = realize_with_receipt(&temp, &fixture, &binding, "first-receipt.json");
+    assert!(first.status.success(), "first realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let built = json_file(&temp.path().join("first-receipt.json"));
+    assert_eq!(built["roots"][0]["disposition"], "built");
+    assert_eq!(built["roots"][0]["path"], PARENT_OUTPUT.trim_start_matches("/nix/store/"));
+
+    let changed = prepare_changed_route_v2(&temp, &cache);
+    let result = realize_with_receipt(&temp, &changed, &binding, "changed-receipt.json");
+    assert!(result.status.success(), "changed realize failed: {}", String::from_utf8_lossy(&result.stderr));
+    let receipt = json_file(&temp.path().join("changed-receipt.json"));
+    assert_eq!(receipt["schema"], "mantle-foreign-realization-receipt-v2");
+    assert_eq!(receipt["roots"][0]["disposition"], "built");
+    assert_eq!(receipt["roots"][0]["path"], CHANGED_PARENT_OUTPUT.trim_start_matches("/nix/store/"));
+    assert!(receipt["roots"][0]["built"].is_object());
+    assert!(receipt["roots"][0]["reused"].is_null());
+    assert_ne!(receipt["roots"][0]["target_derivation"], built["roots"][0]["target_derivation"]);
+    let index = built_root_index_path_from_receipt(&temp, &receipt);
+    assert!(index.is_file(), "changed root must be indexed at {}", index.display());
+    assert_eq!(json_file(&index)["receipt_blake3"], receipt["receipt_blake3"]);
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_refuses_a_present_root_without_a_built_receipt() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let v1 = prepare_route(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+    let first = realize(&temp, &v1, &binding);
+    assert!(first.status.success(), "v1 realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let v1_receipt = json_file(&temp.path().join("realization-receipt.json"));
+    assert_eq!(v1_receipt["schema"], "mantle-foreign-realization-receipt-v1");
+    let signatures_before = path_signatures(&temp, PARENT_OUTPUT);
+
+    // The same derivation is now present locally, built by route v1, so the v2 index has no entry.
+    let fixture = prepare_route_v2(&temp, &cache);
+    let result = realize_with_receipt(&temp, &fixture, &binding, "refused-receipt.json");
+    assert!(!result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("refusing to reuse present foreign root"), "unexpected stderr: {stderr}");
+    assert!(stderr.contains("no-built-receipt"), "unexpected stderr: {stderr}");
+    assert!(!temp.path().join("refused-receipt.json").exists());
+    assert_eq!(path_signatures(&temp, PARENT_OUTPUT), signatures_before, "refusal must not mint a signature");
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_refuses_a_tampered_index_entry() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+    let first = realize_with_receipt(&temp, &fixture, &binding, "first-receipt.json");
+    assert!(first.status.success(), "first realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let built = json_file(&temp.path().join("first-receipt.json"));
+    let index = built_root_index_path_from_receipt(&temp, &built);
+    let mut entry = json_file(&index);
+    entry["trust_policy_blake3"] = serde_json::json!("0".repeat(64));
+    fs::write(&index, serde_json::to_vec(&entry).expect("tampered index json")).expect("write tampered index");
+    let signatures_before = path_signatures(&temp, PARENT_OUTPUT);
+
+    let result = realize_with_receipt(&temp, &fixture, &binding, "refused-receipt.json");
+    assert!(!result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("receipt-invalid"), "unexpected stderr: {stderr}");
+    assert!(!temp.path().join("refused-receipt.json").exists());
+    assert_eq!(path_signatures(&temp, PARENT_OUTPUT), signatures_before, "refusal must not mint a signature");
+    assert_eq!(json_file(&index)["trust_policy_blake3"], "0".repeat(64), "refusal must not rewrite the index");
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_rotated_signing_key_requires_the_retired_public_key() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+    let old_key_path = temp.path().join("old-signing-key");
+    let mut old_secret = [0u8; 32];
+    old_secret[0] = 11;
+    old_secret[31] = 13;
+    let old_public = write_nix_signing_key(&old_key_path, old_secret);
+    let new_key_path = temp.path().join("new-signing-key");
+    let mut new_secret = [0u8; 32];
+    new_secret[0] = 17;
+    new_secret[31] = 19;
+    write_nix_signing_key(&new_key_path, new_secret);
+
+    let first = realize_with_options(&temp, &fixture, &binding, "first-receipt.json", Some(&old_key_path), &[]);
+    assert!(first.status.success(), "first realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let built = json_file(&temp.path().join("first-receipt.json"));
+    assert_eq!(built["roots"][0]["disposition"], "built");
+
+    let refused = realize_with_options(&temp, &fixture, &binding, "refused-receipt.json", Some(&new_key_path), &[]);
+    assert!(!refused.status.success());
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("signer-mismatch"), "unexpected stderr: {stderr}");
+    assert!(!temp.path().join("refused-receipt.json").exists());
+
+    let reused = realize_with_options(
+        &temp,
+        &fixture,
+        &binding,
+        "reused-receipt.json",
+        Some(&new_key_path),
+        std::slice::from_ref(&old_public),
+    );
+    assert!(reused.status.success(), "retired-key reuse failed: {}", String::from_utf8_lossy(&reused.stderr));
+    let receipt = json_file(&temp.path().join("reused-receipt.json"));
+    assert_eq!(receipt["roots"][0]["disposition"], "reused");
+    assert_eq!(receipt["roots"][0]["reused"]["original_receipt_blake3"], built["receipt_blake3"]);
+    assert_eq!(receipt["roots"][0]["signer"]["role"], "builder");
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_concurrent_realizations_build_once() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+
+    let spawn = |receipt_name: &str| {
+        let mut command = std::process::Command::new(mantle_binary());
+        command.args(realize_arguments(&temp, &fixture, &binding, receipt_name, None, &[]));
+        command.spawn().expect("spawn realize")
+    };
+    let mut first = spawn("concurrent-a.json");
+    let mut second = spawn("concurrent-b.json");
+    let first_status = first.wait().expect("wait first realize");
+    let second_status = second.wait().expect("wait second realize");
+    assert!(first_status.success(), "first concurrent realize failed");
+    assert!(second_status.success(), "second concurrent realize failed");
+
+    let left = json_file(&temp.path().join("concurrent-a.json"));
+    let right = json_file(&temp.path().join("concurrent-b.json"));
+    let mut dispositions = vec![
+        left["roots"][0]["disposition"].as_str().expect("left disposition"),
+        right["roots"][0]["disposition"].as_str().expect("right disposition"),
+    ];
+    dispositions.sort();
+    assert_eq!(dispositions, ["built", "reused"], "one run must build and one must reuse");
+    let (built, reused) = if left["roots"][0]["disposition"] == "built" {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    assert_eq!(reused["roots"][0]["reused"]["original_receipt_blake3"], built["receipt_blake3"]);
+    assert_eq!(reused["roots"][0]["reused"]["builds"], 0);
+    assert_eq!(reused["roots"][0]["reused"]["downloads"], 0);
+}
+
+#[test]
+fn cache_inputs_build_or_reuse_route_refuses_a_root_offered_by_the_cache() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    cache.score_with_key(&[(PARENT_OUTPUT, b"cached\n".to_vec(), false)], &cache.signer_secret);
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+    let result = realize_with_receipt(&temp, &fixture, &binding, "refused-receipt.json");
+    assert!(!result.status.success());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("refuses a root offered by the cache"), "unexpected stderr: {stderr}");
+    assert!(!temp.path().join("refused-receipt.json").exists());
+    assert!(!cache.requests.lock().expect("requests").iter().any(|path| path.starts_with("/nar/")));
+}
+
+#[test]
+fn cache_inputs_build_roots_v1_still_refuses_a_present_root_and_keeps_receipt_v1() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+    let first = realize(&temp, &fixture, &binding);
+    assert!(first.status.success(), "first v1 realize failed: {}", String::from_utf8_lossy(&first.stderr));
+    let built = json_file(&temp.path().join("realization-receipt.json"));
+    assert_eq!(built["schema"], "mantle-foreign-realization-receipt-v1");
+    assert!(built.get("roots").is_none(), "a v1 receipt has no roots array");
+    let signatures_before = path_signatures(&temp, PARENT_OUTPUT);
+
+    let second = realize_with_receipt(&temp, &fixture, &binding, "second-receipt.json");
+    assert!(!second.status.success());
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert!(stderr.contains("refuses a root already present in the store"), "unexpected stderr: {stderr}");
+    assert!(!temp.path().join("second-receipt.json").exists());
+    assert_eq!(path_signatures(&temp, PARENT_OUTPUT), signatures_before, "refusal must not mint a signature");
 }

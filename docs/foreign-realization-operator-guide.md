@@ -190,6 +190,88 @@ hydrated inputs report `substituted` or `already-present`, and the strongest
 state remains `realized`. `foreign-import audit` remains cache-only; a built
 root is not provenance-audited by this route.
 
+## Reuse a previously built preserved root
+
+`cache-inputs-build-roots-v2` is the build-or-reuse route. It accepts the same
+preserve policy, flags, and cache admission as route v1, then reuses a selected
+root only when Mantle itself built and signed it earlier:
+
+```text
+mantle --json --store-prefix /nix/store foreign-import plan \
+  --graph graph.json \
+  --package-index index.json \
+  --policy config/foreign-cache-closure/generated/preserve-nix.json \
+  --execution-profile config/foreign-execution-profiles/generated/nix.json \
+  --realization-route cache-inputs-build-roots-v2 \
+  --plan-out plan.json \
+  --receipt-out import-receipt.json
+```
+
+Realization takes the same flags as v1. Pass `--signing-key` to select the
+builder key explicitly and repeat `--trusted-builder-public-key
+<nix-name:base64>` to keep a retired builder key verify-only:
+
+```text
+mantle --json --state-dir ./state --store ./output --store-prefix /nix/store \
+  foreign-import realize \
+  --plan plan.json \
+  --import-receipt import-receipt.json \
+  --source-bundle source-bundle.json \
+  --source-bundle-blake3 <manifest-blake3> \
+  --execution-profile config/foreign-execution-profiles/generated/nix.json \
+  --cache-closure-policy cache-closure-policy.json \
+  --signing-key ./state/signing-key \
+  --trusted-builder-public-key <retired-name:base64> \
+  --substitute \
+  --receipt-out realization-receipt.json
+```
+
+A present root is reused only when all of these hold:
+
+- the write-once index at
+  `<state-dir>/foreign-realization/built-roots/<root derivation basename>.json`
+  holds a valid `mantle-foreign-realization-receipt-v2` whose recomputed digest
+  matches its `receipt_blake3`, on route `cache-inputs-build-roots-v2`, with a
+  `built` entry for the same derivation, output name and path;
+- the NAR SHA-256 recomputed from the present bytes equals the entry's and the
+  PathInfo's;
+- a PathInfo signature verifies over the Nix fingerprint with a builder-role key
+  whose public-key fingerprint equals the entry's signer fingerprint, and that
+  key is trusted now.
+
+Mantle takes one exclusive lock per selected root derivation under
+`<state-dir>/foreign-realization/locks/` and holds it until the receipt is
+published, so two concurrent realizations of one job produce exactly one
+`built` and one `reused` receipt. A reuse run performs no hydration, download,
+build, or signing.
+
+A present root that fails a condition is refused before any store mutation with
+one typed reason: `no-built-receipt`, `receipt-invalid`, `route-mismatch`,
+`not-built`, `derivation-mismatch`, `nar-hash-mismatch`,
+`no-valid-builder-signature`, `signer-mismatch`, or
+`builder-key-not-trusted`. Mantle does not rebuild, delete, or re-sign a refused
+root. Rotating the local signing key makes earlier roots refuse with
+`signer-mismatch` until the retired public key is passed as
+`--trusted-builder-public-key`. An absent root follows the v1 path; a root
+offered by the cache is still refused. A different `--state-dir` has no
+built-root history and therefore builds.
+
+The v2 receipt keeps every v1 field and adds a required `roots` array, one entry
+per selected root output: `node_id`, `target_derivation`, `output_name`,
+`path`, `nar_sha256`, `nar_size`, sorted `references`, `disposition`
+(`built` or `reused`), `signer {key_name, public_key_blake3, role}`,
+`trust_policy_blake3`, `built`, and `reused`. Exactly one of `built` and
+`reused` is non-null. A `reused` entry links the original `built` receipt's
+`receipt_blake3` and records `source: "local"` with zero `builds` and
+`downloads`; its root unit reports `already-present`.
+
+A `reused` disposition proves only that an earlier Mantle build signed these
+bytes. It is not fresh execution, reproducibility, or independent verification,
+and a consumer such as Cairn compares the recorded fields and link rather than
+verifying signature bytes itself. Routes other than
+`cache-inputs-build-roots-v2` keep emitting receipt v1 unchanged, and route v1
+still refuses every present root.
+
 ## Export a translated GuixPkgs package
 
 GuixPkgs is a producer boundary. Pin its flake before export. Record the flake
@@ -248,7 +330,9 @@ These checks occur before store mutation.
 
 ## Read the receipt
 
-A successful run writes `mantle-foreign-realization-receipt-v1`.
+A successful run writes `mantle-foreign-realization-receipt-v1`, except on
+`cache-inputs-build-roots-v2`, which writes
+`mantle-foreign-realization-receipt-v2` with the `roots` array described above.
 The receipt binds these facts:
 
 - executable-plan, import-receipt, source-bundle, and build-report BLAKE3 values;
