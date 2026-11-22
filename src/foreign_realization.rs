@@ -291,13 +291,21 @@ pub(crate) fn cache_inputs_closure(
         let unit = units_by_node
             .get(root_id)
             .ok_or_else(|| ForeignRealizationAdmissionError::UnknownSelectedRoot((*root_id).to_string()))?;
-        for input_derivation in unit.input_derivations.keys() {
+        for (input_derivation, output_names) in &unit.input_derivations {
             let input_unit = units_by_target.get(input_derivation.as_str()).ok_or_else(|| {
                 ForeignRealizationAdmissionError::InvalidNativeUnit {
                     node_id: unit.node_id.clone(),
                     reason: format!("input derivation is absent from the plan: {input_derivation}"),
                 }
             })?;
+            for output_name in output_names {
+                if !input_unit.outputs.contains_key(output_name.as_str()) {
+                    return Err(ForeignRealizationAdmissionError::InvalidNativeUnit {
+                        node_id: input_unit.node_id.clone(),
+                        reason: format!("requested output is absent from the plan: {output_name}"),
+                    });
+                }
+            }
             // Mantle realizes a derivation only when every output is present,
             // so a direct input must hydrate all of its outputs, not just the
             // output named by this edge.
@@ -893,6 +901,28 @@ mod tests {
         let closure = cache_inputs_closure(&plan, &roots).expect("closure");
         assert!(closure.contains(&DEV_PATH.to_string()), "every output of a direct input must be seeded");
         assert!(closure.iter().any(|path| path.ends_with("-child")));
+    }
+
+    #[test]
+    fn cache_inputs_refuses_an_edge_naming_an_undeclared_output() {
+        let graph: ForeignDerivationGraph =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.graph.json"))
+                .expect("graph fixture");
+        let index: PackageIndex =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.index.json"))
+                .expect("index fixture");
+        let policy: TranslationPolicy =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-policy.json"))
+                .expect("policy fixture");
+        let (mut plan, _) = compile_foreign_executable_plan(&graph, &index, &policy, "two-node", "x86_64-linux")
+            .expect("two-node plan");
+        let root_id = plan.selected_roots[0].node_id.clone();
+        let root = plan.native_units.iter_mut().find(|unit| unit.node_id == root_id).expect("root unit");
+        let edge = root.input_derivations.values_mut().next().expect("root has an input derivation");
+        edge.push("undeclared".to_string());
+
+        let error = cache_inputs_closure(&plan, &[root_id]).expect_err("undeclared edge output must be refused");
+        assert!(error.to_string().contains("requested output is absent from the plan: undeclared"), "{error}");
     }
 
     #[test]
