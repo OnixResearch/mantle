@@ -15,11 +15,16 @@ use crunch_build::validate_execution_profile;
 use crunch_build::verify_execution_profile_binding;
 use data_encoding::HEXLOWER;
 use nix_compat::derivation::Derivation;
+use nix_compat::narinfo::VerifyingKey;
+use nix_compat::narinfo::fingerprint_with_store_dir;
 use nix_compat::store_path::StorePath;
+use snix_store::path_info::PathInfo;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::RunError;
 use crate::foreign_derivation_import::ImportReceipt;
+use crate::foreign_executable_plan::CACHE_INPUTS_BUILD_OR_REUSE_ROUTE;
 use crate::foreign_executable_plan::CACHE_INPUTS_BUILD_ROOTS_ROUTE;
 use crate::foreign_executable_plan::CACHE_ONLY_PRESERVE_ROUTE;
 use crate::foreign_executable_plan::ExecutableNativeUnit;
@@ -28,6 +33,11 @@ use crate::foreign_executable_plan::import_receipt_digest;
 use crate::foreign_executable_plan::validate_foreign_executable_plan;
 use crate::foreign_executable_plan::validate_unit_aterm_projection;
 use crate::foreign_graph_compiler::CompiledSourceRequirement;
+use crate::foreign_realization_receipt::BUILDER_SIGNER_ROLE;
+use crate::foreign_realization_receipt::FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA;
+use crate::foreign_realization_receipt::ForeignRealizationReceiptV2;
+use crate::foreign_realization_receipt::ROOT_DISPOSITION_BUILT;
+use crate::foreign_realization_receipt::foreign_realization_receipt_v2_digest;
 use crate::source_bundle::FOREIGN_SOURCE_DESCRIPTOR_DIGEST_METADATA as SOURCE_DESCRIPTOR_DIGEST_METADATA;
 use crate::source_bundle::FOREIGN_SOURCE_FOREIGN_PATH_METADATA as SOURCE_FOREIGN_PATH_METADATA;
 use crate::source_bundle::FOREIGN_SOURCE_PAYLOAD_ID_METADATA as SOURCE_PAYLOAD_ID_METADATA;
@@ -228,7 +238,7 @@ pub(crate) fn validate_foreign_realization_admission(
         .map_err(|diagnostic| ForeignRealizationAdmissionError::InvalidPlan(diagnostic.class))?;
     validate_import_receipt_link(admission.plan, admission.import_receipt)?;
     let selected_root_paths = validate_selected_roots(admission.plan, admission.selected_root_node_ids)?;
-    if is_cache_inputs_build_roots_plan(admission.plan) {
+    if is_cache_inputs_build_route_plan(admission.plan) {
         reject_fixed_output_roots(admission.plan, admission.selected_root_node_ids)?;
     }
     validate_profile_set(admission.execution_profiles)?;
@@ -252,6 +262,243 @@ pub(crate) fn is_cache_only_foreign_plan(plan: &ForeignExecutablePlan) -> bool {
 
 pub(crate) fn is_cache_inputs_build_roots_plan(plan: &ForeignExecutablePlan) -> bool {
     plan.realization_route.as_deref() == Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE)
+}
+
+pub(crate) fn is_cache_inputs_build_or_reuse_plan(plan: &ForeignExecutablePlan) -> bool {
+    plan.realization_route.as_deref() == Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE)
+}
+
+/// Both cache-inputs build routes share the cache-hydrated admission shape.
+pub(crate) fn is_cache_inputs_build_route_plan(plan: &ForeignExecutablePlan) -> bool {
+    is_cache_inputs_build_roots_plan(plan) || is_cache_inputs_build_or_reuse_plan(plan)
+}
+
+pub(crate) const BUILDER_PUBLIC_KEY_DIGEST_DOMAIN: &[u8] = b"mantle-builder-public-key-v1\0";
+const REALIZATION_TRUST_POLICY_DIGEST_DOMAIN: &[u8] = b"mantle-realization-trust-policy-v1\0";
+
+/// One key allowed to attest a Mantle-built root.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct BuilderKey {
+    pub(crate) name: String,
+    pub(crate) public_key_blake3: String,
+    pub(crate) verifying_key: VerifyingKey,
+}
+
+impl BuilderKey {
+    pub(crate) fn new(verifying_key: VerifyingKey) -> Self {
+        let public_key_blake3 = realization_public_key_blake3(&verifying_key);
+        Self {
+            name: verifying_key.name().to_string(),
+            public_key_blake3,
+            verifying_key,
+        }
+    }
+}
+
+/// Lowercase hex BLAKE3 of the key domain plus the 32-byte ed25519 public key.
+pub(crate) fn realization_public_key_blake3(verifying_key: &VerifyingKey) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(BUILDER_PUBLIC_KEY_DIGEST_DOMAIN);
+    hasher.update(&verifying_key.public_key_bytes());
+    hasher.finalize().to_hex().to_string()
+}
+
+/// Digest of the builder and cache key material this realization trusts.
+pub(crate) fn realization_trust_policy_blake3(
+    builder_keys: &[BuilderKey],
+    cache_keys: &[VerifyingKey],
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct TrustPolicyMaterial {
+        builder_keys: Vec<String>,
+        cache_keys: Vec<String>,
+    }
+    let mut builder = builder_keys.iter().map(|key| key.public_key_blake3.clone()).collect::<Vec<_>>();
+    builder.sort();
+    builder.dedup();
+    let mut cache = cache_keys.iter().map(realization_public_key_blake3).collect::<Vec<_>>();
+    cache.sort();
+    cache.dedup();
+    let canonical = serde_json::to_vec(&TrustPolicyMaterial {
+        builder_keys: builder,
+        cache_keys: cache,
+    })
+    .map_err(|error| RunError::Internal(format!("serializing realization trust policy: {error}")))?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(REALIZATION_TRUST_POLICY_DIGEST_DOMAIN);
+    hasher.update(&canonical);
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+/// Why a present root output cannot be reused.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PresentRootRefusal {
+    NoBuiltReceipt,
+    ReceiptInvalid,
+    RouteMismatch,
+    NotBuilt,
+    DerivationMismatch,
+    NarHashMismatch,
+    NoValidBuilderSignature,
+    SignerMismatch,
+    BuilderKeyNotTrusted,
+}
+
+impl PresentRootRefusal {
+    pub(crate) fn reason(self) -> &'static str {
+        match self {
+            Self::NoBuiltReceipt => "no-built-receipt",
+            Self::ReceiptInvalid => "receipt-invalid",
+            Self::RouteMismatch => "route-mismatch",
+            Self::NotBuilt => "not-built",
+            Self::DerivationMismatch => "derivation-mismatch",
+            Self::NarHashMismatch => "nar-hash-mismatch",
+            Self::NoValidBuilderSignature => "no-valid-builder-signature",
+            Self::SignerMismatch => "signer-mismatch",
+            Self::BuilderKeyNotTrusted => "builder-key-not-trusted",
+        }
+    }
+}
+
+impl fmt::Display for PresentRootRefusal {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "present root cannot be reused: {}", self.reason())
+    }
+}
+
+/// The indexed original receipt state for one present root.
+pub(crate) enum IndexedBuiltReceipt<'a> {
+    Absent,
+    Unparsable,
+    Present(&'a ForeignRealizationReceiptV2),
+}
+
+/// Reuse evidence for one present root output.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ReusedRootFacts {
+    pub(crate) original_receipt_blake3: String,
+    pub(crate) signer_key_name: String,
+    pub(crate) signer_public_key_blake3: String,
+    pub(crate) nar_sha256: String,
+    pub(crate) nar_size: u64,
+    pub(crate) references: Vec<String>,
+}
+
+pub(crate) struct PresentRootInput<'a> {
+    pub(crate) target_derivation: &'a str,
+    pub(crate) output_name: &'a str,
+    pub(crate) path: &'a str,
+    pub(crate) store_dir: &'a str,
+    pub(crate) path_info: &'a PathInfo,
+    pub(crate) recomputed_nar_sha256: [u8; 32],
+    pub(crate) builder_keys: &'a [BuilderKey],
+    pub(crate) indexed: IndexedBuiltReceipt<'a>,
+}
+
+/// Decide whether a present root is an earlier Mantle build.
+pub(crate) fn classify_present_root(
+    input: PresentRootInput<'_>,
+) -> Result<ReusedRootFacts, PresentRootRefusal> {
+    assert!(!input.store_dir.is_empty(), "store directory must not be empty");
+    assert!(!input.path.is_empty(), "root path must not be empty");
+    let receipt = match input.indexed {
+        IndexedBuiltReceipt::Absent => return Err(PresentRootRefusal::NoBuiltReceipt),
+        IndexedBuiltReceipt::Unparsable => return Err(PresentRootRefusal::ReceiptInvalid),
+        IndexedBuiltReceipt::Present(receipt) => receipt,
+    };
+    if receipt.schema != FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA {
+        return Err(PresentRootRefusal::ReceiptInvalid);
+    }
+    if foreign_realization_receipt_v2_digest(receipt).map_err(|_| PresentRootRefusal::ReceiptInvalid)?
+        != receipt.receipt_blake3
+    {
+        return Err(PresentRootRefusal::ReceiptInvalid);
+    }
+    if receipt.cache_policy.realization_route.as_deref() != Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE) {
+        return Err(PresentRootRefusal::RouteMismatch);
+    }
+    let entry = receipt.roots.iter().find(|root| {
+        root.target_derivation == input.target_derivation
+            && root.output_name == input.output_name
+            && root.path == input.path
+    });
+    let Some(entry) = entry else {
+        return Err(PresentRootRefusal::DerivationMismatch);
+    };
+    if entry.disposition != ROOT_DISPOSITION_BUILT
+        || entry.built.is_none()
+        || entry.reused.is_some()
+        || entry.signer.role != BUILDER_SIGNER_ROLE
+    {
+        return Err(PresentRootRefusal::NotBuilt);
+    }
+    let recorded_nar_sha256 = HEXLOWER.encode(&input.path_info.nar_sha256);
+    let recomputed_nar_sha256 = HEXLOWER.encode(&input.recomputed_nar_sha256);
+    if entry.nar_sha256 != recorded_nar_sha256
+        || entry.nar_sha256 != recomputed_nar_sha256
+        || entry.nar_size != input.path_info.nar_size
+    {
+        return Err(PresentRootRefusal::NarHashMismatch);
+    }
+    if input.builder_keys.is_empty() {
+        return Err(PresentRootRefusal::BuilderKeyNotTrusted);
+    }
+    let original_fingerprint = entry.signer.public_key_blake3.as_str();
+    let trusted = input.builder_keys.iter().any(|key| key.public_key_blake3 == original_fingerprint);
+    let fingerprint = root_fingerprint(input.path_info, input.store_dir);
+    let mut valid = input
+        .builder_keys
+        .iter()
+        .filter(|key| input.path_info.signatures.iter().any(|sig| key.verifying_key.verify(&fingerprint, &sig.as_ref())));
+    if valid.clone().next().is_none() {
+        return Err(PresentRootRefusal::NoValidBuilderSignature);
+    }
+    if !trusted || !valid.any(|key| key.public_key_blake3 == original_fingerprint) {
+        return Err(PresentRootRefusal::SignerMismatch);
+    }
+    let mut references = input
+        .path_info
+        .references
+        .iter()
+        .map(|reference| reference.to_absolute_path_with_prefix(input.store_dir))
+        .collect::<Vec<_>>();
+    references.sort();
+    references.dedup();
+    let mut recorded_references = entry.references.clone();
+    recorded_references.sort();
+    recorded_references.dedup();
+    if references != recorded_references {
+        return Err(PresentRootRefusal::DerivationMismatch);
+    }
+    Ok(ReusedRootFacts {
+        original_receipt_blake3: receipt.receipt_blake3.clone(),
+        signer_key_name: entry.signer.key_name.clone(),
+        signer_public_key_blake3: entry.signer.public_key_blake3.clone(),
+        nar_sha256: entry.nar_sha256.clone(),
+        nar_size: entry.nar_size,
+        references,
+    })
+}
+
+fn root_fingerprint(path_info: &PathInfo, store_dir: &str) -> String {
+    let store_path = path_info.store_path.as_ref();
+    let references = path_info.references.iter().map(|reference| reference.as_ref()).collect::<Vec<_>>();
+    fingerprint_with_store_dir(&store_path, &path_info.nar_sha256, path_info.nar_size, references.iter(), store_dir)
+}
+
+/// A reused root must come back from the scheduler as a cache hit, never a build.
+pub(crate) fn reused_root_outcome_is_cache_hit(
+    outcomes: &[crunch_pipeline::BuildOutcome],
+    target_derivation: &str,
+    store_dir: &str,
+) -> bool {
+    assert!(!target_derivation.is_empty(), "target derivation must not be empty");
+    assert!(!store_dir.is_empty(), "store directory must not be empty");
+    outcomes.iter().any(|outcome| {
+        outcome.drv_path.to_absolute_path_with_prefix(store_dir) == target_derivation
+            && outcome.cached
+            && outcome.substitutions.is_empty()
+    })
 }
 
 /// Compute the exact set of non-root paths the selected roots need at build time.

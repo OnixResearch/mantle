@@ -20,6 +20,12 @@ use crate::foreign_realization_shell::ForeignSourceStoreFact;
 
 pub(crate) const FOREIGN_REALIZATION_RECEIPT_SCHEMA: &str = "mantle-foreign-realization-receipt-v1";
 const FOREIGN_REALIZATION_RECEIPT_DIGEST_DOMAIN: &[u8] = b"mantle-foreign-realization-receipt-v1\0";
+pub(crate) const FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA: &str = "mantle-foreign-realization-receipt-v2";
+const FOREIGN_REALIZATION_RECEIPT_V2_DIGEST_DOMAIN: &[u8] = b"mantle-foreign-realization-receipt-v2\0";
+const REALIZATION_INPUT_CLOSURE_DIGEST_DOMAIN: &[u8] = b"mantle-realization-input-closure-v1\0";
+pub(crate) const ROOT_DISPOSITION_BUILT: &str = "built";
+pub(crate) const ROOT_DISPOSITION_REUSED: &str = "reused";
+pub(crate) const BUILDER_SIGNER_ROLE: &str = "builder";
 pub(crate) const FOREIGN_REALIZATION_COMPLETE_STATUS: &str = "complete";
 const PARTIAL_FAILURE_STATUS: &str = "partial-failure";
 pub(crate) const FOREIGN_REALIZATION_REALIZED_STATE: &str = "realized";
@@ -108,6 +114,148 @@ pub(crate) struct ForeignRealizationFailure {
     pub(crate) message: String,
     pub(crate) affected_roots: Vec<String>,
     pub(crate) completed_unit_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ForeignRealizationReceiptV2 {
+    pub(crate) schema: String,
+    pub(crate) status: String,
+    pub(crate) strongest_state: String,
+    pub(crate) receipt_blake3: String,
+    pub(crate) plan_blake3: String,
+    pub(crate) import_receipt_blake3: String,
+    pub(crate) source_bundle_manifest_blake3: String,
+    pub(crate) build_report_blake3: String,
+    pub(crate) selected_root_node_ids: Vec<String>,
+    pub(crate) selected_root_paths: Vec<String>,
+    pub(crate) execution_profiles: Vec<RealizedExecutionProfile>,
+    pub(crate) cache_policy: RealizedCachePolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) cache_closure_policy_blake3: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) cache_closure: Vec<ForeignCacheClosureFact>,
+    pub(crate) sources: Vec<ForeignSourceStoreFact>,
+    pub(crate) units: Vec<ForeignRealizedUnit>,
+    pub(crate) roots: Vec<ForeignRealizationRoot>,
+    pub(crate) failure: Option<ForeignRealizationFailure>,
+    pub(crate) non_claims: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ForeignRealizationRoot {
+    pub(crate) node_id: String,
+    pub(crate) target_derivation: String,
+    pub(crate) output_name: String,
+    pub(crate) path: String,
+    pub(crate) nar_sha256: String,
+    pub(crate) nar_size: u64,
+    pub(crate) references: Vec<String>,
+    pub(crate) disposition: String,
+    pub(crate) signer: ForeignRealizationSigner,
+    pub(crate) trust_policy_blake3: String,
+    pub(crate) built: Option<ForeignRootBuilt>,
+    pub(crate) reused: Option<ForeignRootReused>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ForeignRealizationSigner {
+    pub(crate) key_name: String,
+    pub(crate) public_key_blake3: String,
+    pub(crate) role: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ForeignRootBuilt {
+    pub(crate) mantle_version: String,
+    pub(crate) execution_profile_digest_blake3: String,
+    pub(crate) input_closure_blake3: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ForeignRootReused {
+    pub(crate) original_receipt_blake3: String,
+    pub(crate) source: String,
+    pub(crate) builds: u64,
+    pub(crate) downloads: u64,
+}
+
+pub(crate) struct ForeignReceiptV2Input<'a> {
+    pub(crate) base: ForeignReceiptInput<'a>,
+    pub(crate) roots: Vec<ForeignRealizationRoot>,
+}
+
+pub(crate) fn build_foreign_realization_receipt_v2(
+    input: ForeignReceiptV2Input<'_>,
+) -> Result<ForeignRealizationReceiptV2, RunError> {
+    let base = build_foreign_realization_receipt(input.base)?;
+    let mut receipt = ForeignRealizationReceiptV2 {
+        schema: FOREIGN_REALIZATION_RECEIPT_V2_SCHEMA.to_string(),
+        status: base.status,
+        strongest_state: base.strongest_state,
+        receipt_blake3: String::new(),
+        plan_blake3: base.plan_blake3,
+        import_receipt_blake3: base.import_receipt_blake3,
+        source_bundle_manifest_blake3: base.source_bundle_manifest_blake3,
+        build_report_blake3: base.build_report_blake3,
+        selected_root_node_ids: base.selected_root_node_ids,
+        selected_root_paths: base.selected_root_paths,
+        execution_profiles: base.execution_profiles,
+        cache_policy: base.cache_policy,
+        cache_closure_policy_blake3: base.cache_closure_policy_blake3,
+        cache_closure: base.cache_closure,
+        sources: base.sources,
+        units: base.units,
+        roots: input.roots,
+        failure: base.failure,
+        non_claims: base.non_claims,
+    };
+    receipt.receipt_blake3 = foreign_realization_receipt_v2_digest(&receipt)?;
+    Ok(receipt)
+}
+
+pub(crate) fn foreign_realization_receipt_v2_digest(
+    receipt: &ForeignRealizationReceiptV2,
+) -> Result<String, RunError> {
+    let mut material = receipt.clone();
+    material.receipt_blake3.clear();
+    let canonical = serde_json::to_vec(&material)
+        .map_err(|error| RunError::Internal(format!("serializing foreign realization receipt v2: {error}")))?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(FOREIGN_REALIZATION_RECEIPT_V2_DIGEST_DOMAIN);
+    hasher.update(&canonical);
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+/// Digest of the admitted input closure a built root was realized from.
+pub(crate) fn realization_input_closure_blake3(
+    facts: &[ForeignCacheClosureFact],
+) -> Result<String, RunError> {
+    #[derive(Serialize)]
+    struct InputMaterial<'a> {
+        path: &'a str,
+        nar_sha256: &'a str,
+        nar_size: u64,
+    }
+    let mut inputs = facts
+        .iter()
+        .map(|fact| InputMaterial {
+            path: &fact.logical_path,
+            nar_sha256: &fact.nar_sha256,
+            nar_size: fact.nar_size,
+        })
+        .collect::<Vec<_>>();
+    inputs.sort_by(|left, right| left.path.cmp(right.path));
+    let canonical = serde_json::to_vec(&inputs)
+        .map_err(|error| RunError::Internal(format!("serializing realization input closure: {error}")))?;
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(REALIZATION_INPUT_CLOSURE_DIGEST_DOMAIN);
+    hasher.update(&canonical);
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 pub(crate) struct ForeignReceiptInput<'a> {

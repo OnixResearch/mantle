@@ -683,6 +683,52 @@ impl SourceNarObserver {
     }
 }
 
+struct NarDigestObserver {
+    sha256: Sha256,
+    size: u64,
+}
+
+impl NarDigestObserver {
+    fn new() -> Self {
+        Self {
+            sha256: Sha256::new(),
+            size: 0,
+        }
+    }
+
+    fn finish(self) -> (u64, [u8; NAR_SHA256_BYTES]) {
+        (self.size, self.sha256.finalize().into())
+    }
+}
+
+impl tokio::io::AsyncWrite for NarDigestObserver {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        bytes: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let added = u64::try_from(bytes.len()).map_err(std::io::Error::other)?;
+        let next = self.size.checked_add(added).ok_or_else(|| std::io::Error::other("nar-size-overflow"))?;
+        self.sha256.update(bytes);
+        self.size = next;
+        std::task::Poll::Ready(Ok(bytes.len()))
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+}
+
 impl tokio::io::AsyncWrite for SourceNarObserver {
     fn poll_write(
         mut self: std::pin::Pin<&mut Self>,
@@ -1924,6 +1970,25 @@ impl StoreHandle {
             .map_err(|e| Error::Export(format!("rendering NAR: {e}")))?;
 
         Ok(())
+    }
+
+    /// Recompute the NAR size and SHA-256 of one stored node from its content.
+    ///
+    /// The NAR is rendered from the castore's present bytes; the recorded
+    /// PathInfo digest is never trusted for this measurement.
+    pub async fn recompute_nar_sha256(
+        &self,
+        node: &Node,
+    ) -> Result<([u8; NAR_SHA256_BYTES], u64), Error> {
+        assert!(
+            !matches!(node, Node::Directory { size, .. } if *size == u64::MAX),
+            "directory size must not be sentinel value"
+        );
+        let mut observer = NarDigestObserver::new();
+        self.render_nar(node, &mut observer).await?;
+        let (size, sha256) = observer.finish();
+        debug_assert_eq!(sha256.len(), NAR_SHA256_BYTES);
+        Ok((sha256, size))
     }
 
     /// Observe one already-stored source subtree without granting publication authority.
@@ -8498,5 +8563,31 @@ mod tests {
         let error = handle.garbage_collect(None).await.unwrap_err();
         assert!(error.to_string().contains("BaseToOverlayReference"));
         assert!(handle.overlay_pathinfo.get(*overlay_path.digest()).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn recompute_nar_sha256_matches_the_rendered_nar_stream() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let handle = test_handle(state_dir.path());
+        let contents = b"recomputed-nar-bytes\n";
+        let digest = snix_castore::B3Digest::from(blake3::hash(contents).as_bytes());
+        let mut writer = handle.blob_service().open_write().await;
+        writer.write_all(contents).await.unwrap();
+        assert_eq!(writer.close().await.unwrap(), digest);
+        let node = Node::File {
+            digest,
+            size: u64::try_from(contents.len()).unwrap(),
+            executable: false,
+        };
+
+        let (sha256, size) = handle.recompute_nar_sha256(&node).await.unwrap();
+
+        let mut expected = Vec::new();
+        write_nar(&mut expected, &node, handle.blob_service(), handle.directory_service()).await.unwrap();
+        let mut hasher = Sha256::new();
+        hasher.update(&expected);
+        assert_eq!(size, u64::try_from(expected.len()).unwrap());
+        assert_eq!(sha256, <[u8; NAR_SHA256_BYTES]>::from(hasher.finalize()));
+        assert!(sha256 != [0u8; NAR_SHA256_BYTES]);
     }
 }

@@ -56,6 +56,14 @@ impl VerifyingKey {
         &self.name
     }
 
+    /// The 32-byte ed25519 public key material.
+    ///
+    /// Mantle uses this to derive a key fingerprint that does not depend on the
+    /// unsigned key name.
+    pub fn public_key_bytes(&self) -> [u8; PUBLIC_KEY_LENGTH] {
+        self.verifying_key.to_bytes()
+    }
+
     /// Verify the passed in signature is a correct signature for the passed in fingerprint and is
     /// signed by the key material referred to by [Self],
     /// which means the name in the signature has to match,

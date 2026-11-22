@@ -61,6 +61,8 @@ const NIX_STORE_PREFIX: &str = "/nix/store";
 const SOURCE_STORE_LITERAL_SENTINEL: &str = "__MANTLE_SOURCE_STORE_LITERAL_V1__";
 pub(crate) const CACHE_ONLY_PRESERVE_ROUTE: &str = "cache-only-preserve-v1";
 pub(crate) const CACHE_INPUTS_BUILD_ROOTS_ROUTE: &str = "cache-inputs-build-roots-v1";
+pub(crate) const CACHE_INPUTS_BUILD_OR_REUSE_ROUTE: &str = "cache-inputs-build-roots-v2";
+pub(crate) const REUSE_NON_CLAIM: &str = "a reused root is not re-executed; reuse preserves an earlier Mantle build";
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct ForeignExecutablePlan {
@@ -526,8 +528,14 @@ fn executable_plan_non_claims(realization_route: Option<&str>) -> Vec<String> {
             "not-cache-future-availability".to_string(),
         ]);
     }
-    if realization_route == Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE) {
-        non_claims.extend(["not-input-cache-completeness".to_string()]);
+    if matches!(
+        realization_route,
+        Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE | CACHE_INPUTS_BUILD_OR_REUSE_ROUTE)
+    ) {
+        non_claims.push("not-input-cache-completeness".to_string());
+    }
+    if realization_route == Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE) {
+        non_claims.push(REUSE_NON_CLAIM.to_string());
     }
     non_claims.sort();
     non_claims.dedup();
@@ -542,7 +550,7 @@ fn resolve_realization_route(
     let Some(route) = requested_route else {
         return Ok(preserve.then(|| CACHE_ONLY_PRESERVE_ROUTE.to_string()));
     };
-    if route != CACHE_INPUTS_BUILD_ROOTS_ROUTE {
+    if route != CACHE_INPUTS_BUILD_ROOTS_ROUTE && route != CACHE_INPUTS_BUILD_OR_REUSE_ROUTE {
         return Err(plan_diagnostic(
             "foreign-plan-route-unsupported",
             None,
@@ -642,7 +650,10 @@ fn validate_plan_route(plan: &ForeignExecutablePlan) -> Result<(), ImportDiagnos
     let Some(route) = plan.realization_route.as_deref() else {
         return Ok(());
     };
-    if route != CACHE_ONLY_PRESERVE_ROUTE && route != CACHE_INPUTS_BUILD_ROOTS_ROUTE {
+    if route != CACHE_ONLY_PRESERVE_ROUTE
+        && route != CACHE_INPUTS_BUILD_ROOTS_ROUTE
+        && route != CACHE_INPUTS_BUILD_OR_REUSE_ROUTE
+    {
         return Err(plan_diagnostic(
             "foreign-plan-route-unsupported",
             None,
@@ -665,7 +676,7 @@ fn validate_plan_route(plan: &ForeignExecutablePlan) -> Result<(), ImportDiagnos
             "preserved cache route contains a rewritten output or source path",
         ));
     }
-    if route == CACHE_INPUTS_BUILD_ROOTS_ROUTE {
+    if route == CACHE_INPUTS_BUILD_ROOTS_ROUTE || route == CACHE_INPUTS_BUILD_OR_REUSE_ROUTE {
         let selected = plan.selected_roots.iter().map(|root| root.node_id.as_str()).collect::<BTreeSet<_>>();
         for unit in &plan.native_units {
             if !selected.contains(unit.node_id.as_str()) {
@@ -1176,11 +1187,18 @@ fn validate_plan_claim_boundary(plan: &ForeignExecutablePlan) -> Result<(), Impo
         ]
         .iter()
         .any(|claim| !plan.non_claims.iter().any(|actual| actual == claim));
-    let cache_inputs_claim_missing = plan.realization_route.as_deref() == Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE)
-        && !plan.non_claims.iter().any(|claim| claim == "not-input-cache-completeness");
+    let build_route = matches!(
+        plan.realization_route.as_deref(),
+        Some(CACHE_INPUTS_BUILD_ROOTS_ROUTE | CACHE_INPUTS_BUILD_OR_REUSE_ROUTE)
+    );
+    let cache_inputs_claim_missing =
+        build_route && !plan.non_claims.iter().any(|claim| claim == "not-input-cache-completeness");
+    let build_or_reuse_claim_missing = plan.realization_route.as_deref() == Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE)
+        && !plan.non_claims.iter().any(|claim| claim == REUSE_NON_CLAIM);
     if !plan.forbidden_process_invocations.is_empty()
         || cache_only_claim_missing
         || cache_inputs_claim_missing
+        || build_or_reuse_claim_missing
         || required.iter().any(|claim| !plan.non_claims.iter().any(|actual| actual == claim))
     {
         return Err(plan_diagnostic(
@@ -1474,6 +1492,72 @@ mod tests {
         );
 
         let mut fod = plan.clone();
+        let root_id = fod.selected_roots[0].node_id.clone();
+        for unit in &mut fod.native_units {
+            if unit.node_id == root_id {
+                unit.builtin = CompiledForeignBuiltin::FixedOutput;
+            }
+        }
+        refresh_plan_identity(&mut fod);
+        assert_class(validate_foreign_executable_plan(&fod), "foreign-plan-cache-inputs-fod-root");
+    }
+
+    #[test]
+    fn build_or_reuse_plan_requires_preserve_and_records_the_reuse_non_claim() {
+        let mut graph: ForeignDerivationGraph =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.graph.json"))
+                .expect("graph fixture");
+        let index: PackageIndex =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-two-node.index.json"))
+                .expect("index fixture");
+        let mut policy: TranslationPolicy =
+            serde_json::from_str(include_str!("../tests/fixtures/foreign-import/realize-policy.json"))
+                .expect("policy fixture");
+        graph.nodes[0].cache_hints.push(crate::foreign_derivation_import::CacheHint {
+            cache_url: "https://cache.nixos.org".to_string(),
+            trust_scope: "trusted-binary-cache".to_string(),
+        });
+        policy.trusted_cache_scopes.insert("trusted-binary-cache".to_string());
+        policy.source_prefixes = vec![NIX_STORE_PREFIX.to_string()];
+        policy.target_prefix = NIX_STORE_PREFIX.to_string();
+        policy.output_path_recompute_mode = PRESERVE_CACHE_PATHS_MODE.to_string();
+        let profile = crunch_build::foreign_profile_for_producer("nix");
+        let (plan, _) = compile_foreign_executable_plan_with_profile_and_route(
+            &graph,
+            &index,
+            &policy,
+            "two-node",
+            "x86_64-linux",
+            &profile,
+            Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE),
+        )
+        .expect("build-or-reuse plan must compile");
+        assert_eq!(plan.realization_route.as_deref(), Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE));
+        assert!(plan.non_claims.iter().any(|claim| claim == REUSE_NON_CLAIM));
+        assert!(plan.non_claims.iter().any(|claim| claim == "not-input-cache-completeness"));
+        validate_foreign_executable_plan(&plan).unwrap();
+
+        let mut stripped = plan.clone();
+        stripped.non_claims.retain(|claim| claim != REUSE_NON_CLAIM);
+        refresh_plan_identity(&mut stripped);
+        assert_class(validate_foreign_executable_plan(&stripped), "foreign-plan-claim-boundary-invalid");
+
+        let mut recompute = policy.clone();
+        recompute.output_path_recompute_mode = "recompute-blake3-v1".to_string();
+        assert_class(
+            compile_foreign_executable_plan_with_profile_and_route(
+                &graph,
+                &index,
+                &recompute,
+                "two-node",
+                "x86_64-linux",
+                &profile,
+                Some(CACHE_INPUTS_BUILD_OR_REUSE_ROUTE),
+            ),
+            "foreign-plan-cache-inputs-requires-preserve",
+        );
+
+        let mut fod = plan;
         let root_id = fod.selected_roots[0].node_id.clone();
         for unit in &mut fod.native_units {
             if unit.node_id == root_id {
