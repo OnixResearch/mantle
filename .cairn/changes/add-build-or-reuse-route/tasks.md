@@ -20,9 +20,9 @@
 
 ## Phase 3: Verification
 
-- [ ] [serial] V1 Run focused `cargo test -p mantle --test cache_inputs_build_route --test foreign_import_cli`, the touched `--bin mantle` unit modules, and focused `-p crunch-build`/`-p crunch-store` lib tests. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] V1 Run focused `cargo test -p mantle --test cache_inputs_build_route --test foreign_import_cli`, the touched `--bin mantle` unit modules, and focused `-p crunch-build`/`-p crunch-store` lib tests. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: captured test transcripts under `evidence/`.
-- [ ] [serial] V2 Run `cargo fmt --check` and strict Clippy for the touched crates, plus `git diff --check`. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+- [x] [serial] V2 Run `cargo fmt --check` and strict Clippy for the touched crates, plus `git diff --check`. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: captured command output.
 - [ ] [serial] V3 Run `cairn validate --root .` and the proposal, design, and tasks gates; append transcripts to `evidence/`. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: gate transcripts with `verdict=PASS`.

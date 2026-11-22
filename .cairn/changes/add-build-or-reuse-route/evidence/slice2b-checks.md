@@ -13,3 +13,7 @@ bubblewrap and clang-wrapper on `PATH`).
 | `mantle __operator-contract --mode catalog/reference/workflow` regenerated | exit 0 |
 | `mantle __operator-contract --mode check` | exit 0: `PASS (commands=215)` |
 | `cargo test -p mantle --test cache_inputs_build_route` | exit 0: 14 passed; 0 failed |
+| `cargo test -p mantle --bin mantle -- foreign_import_cmd::tests::realize_effect_plan` | exit 0: 1 passed |
+| `cargo test -p mantle --bin mantle -- foreign_realization foreign_executable_plan` | exit 0: 27 passed |
+| `cargo fmt --check -p mantle` | exit 0 (plain workspace `cargo fmt --check` also reports pre-existing vendored/nix-compat diffs) |
+| `cargo clippy -p mantle --all-targets --no-deps -- -D warnings` | exit 101: 11 `cloned_ref_to_slice_refs` errors in `src/foreign_realization.rs` unit tests (pre-existing on this branch) |
