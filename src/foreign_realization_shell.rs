@@ -611,7 +611,7 @@ async fn locally_present_input_paths(
             )
             .map_err(|error| RunError::Internal(format!("parsing foreign unit output {path}: {error}")))?;
             if store
-                .export_cached_path_info(&store_path)
+                .cached_path_info(&store_path)
                 .await
                 .map_err(|error| RunError::Internal(format!("checking foreign unit output {path}: {error}")))?
                 .is_none()
@@ -1183,7 +1183,7 @@ async fn hydrate_signed_cache_closure(
             RunError::Internal(format!("parsing hydrated foreign cache closure member {}: {error}", member.store_path))
         })?;
         let path_info = store
-            .export_cached_path_info(&path)
+            .cached_path_info(&path)
             .await
             .map_err(|error| {
                 RunError::Internal(format!("checking hydrated foreign cache closure path {path}: {error}"))

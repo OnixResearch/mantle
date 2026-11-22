@@ -2187,9 +2187,15 @@ impl StoreHandle {
         Ok(Some(layered_node))
     }
 
-    /// Return and physically export one complete local PathInfo.
-    pub async fn export_cached_path_info(&mut self, path: &StorePath<String>) -> Result<Option<PathInfo>, Error> {
+    /// Return one complete local PathInfo without exporting it to the physical store.
+    ///
+    /// This is the lookup half of [`Self::export_cached_path_info`]: it applies the same castore
+    /// completeness and PathInfo identity checks and neither materializes the path nor records a
+    /// built output.
+    // r[impl foreign_derivation_import.hydrated_input_verification_once]
+    pub async fn cached_path_info(&mut self, path: &StorePath<String>) -> Result<Option<PathInfo>, Error> {
         assert!(!path.name().is_empty(), "store path name must not be empty");
+        assert!(path.to_string().contains('-'), "logical store path must carry a name separator");
         let Some(node) = self.cached_node_for_path(path).await? else {
             return Ok(None);
         };
@@ -2197,12 +2203,23 @@ impl StoreHandle {
             .pathinfo_service
             .get(*path.digest())
             .await
-            .map_err(|error| Error::Store(format!("PathInfo export lookup for {path}: {error}")))?
+            .map_err(|error| Error::Store(format!("PathInfo lookup for {path}: {error}")))?
             .ok_or_else(|| Error::Store(format!("cached node has no PathInfo: {path}")))?;
         if path_info.store_path != *path || path_info.node != node {
-            return Err(Error::Store(format!("cached PathInfo changed during export: {path}")));
+            return Err(Error::Store(format!("cached PathInfo changed during lookup: {path}")));
         }
-        self.export_output_if_needed(path, &node, true).await?;
+        debug_assert_eq!(path_info.store_path, *path);
+        debug_assert_eq!(path_info.node, node);
+        Ok(Some(path_info))
+    }
+
+    /// Return and physically export one complete local PathInfo.
+    pub async fn export_cached_path_info(&mut self, path: &StorePath<String>) -> Result<Option<PathInfo>, Error> {
+        assert!(!path.name().is_empty(), "store path name must not be empty");
+        let Some(path_info) = self.cached_path_info(path).await? else {
+            return Ok(None);
+        };
+        self.export_output_if_needed(path, &path_info.node, true).await?;
         self.built_outputs
             .insert(path.to_absolute_path_with_prefix(&self.output_dir_str), path_info.clone());
         Ok(Some(path_info))
@@ -4783,6 +4800,39 @@ mod tests {
         reader.read_to_end(&mut nar_bytes).await.unwrap();
         write_task.await.unwrap().unwrap();
         nar_bytes
+    }
+
+    #[tokio::test]
+    async fn cached_path_info_returns_a_complete_local_path_without_exporting() {
+        const CONTENT: &[u8] = b"cached path info";
+        const UNKNOWN_SEED: u8 = 4;
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        std::fs::create_dir_all(&state).unwrap();
+        let mut handle = test_handle(&state);
+        let digest = store_local_blob(&handle, CONTENT).await;
+        let node = Node::File {
+            digest,
+            size: u64::try_from(CONTENT.len()).unwrap(),
+            executable: false,
+        };
+        let renderer = SimpleRenderer::new(handle.blob_service(), handle.directory_service());
+        let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
+        let store_path = StorePath::<String>::from_name_and_digest_fixed("cached-path-info", [3u8; 20]).unwrap();
+        let path_info =
+            signed_pathinfo_with_signing_key(store_path.clone(), node, nar_size, nar_sha256, &test_signing_key());
+        handle.pathinfo_service.put(path_info.clone()).await.unwrap();
+        let export_path = store_path.to_absolute_path_with_prefix(&handle.output_dir_str);
+        assert!(!Path::new(&export_path).exists());
+
+        let found = handle.cached_path_info(&store_path).await.unwrap().unwrap();
+
+        assert_eq!(found, path_info);
+        assert!(!Path::new(&export_path).exists(), "lookup must not materialize the physical export");
+        assert!(!handle.built_outputs.contains_key(&export_path), "lookup must not record a built output");
+        let unknown =
+            StorePath::<String>::from_name_and_digest_fixed("unknown-cached-path", [UNKNOWN_SEED; 20]).unwrap();
+        assert!(handle.cached_path_info(&unknown).await.unwrap().is_none());
     }
 
     fn narinfo_body_for(
