@@ -24,5 +24,7 @@
   - Evidence: captured test transcripts under `evidence/`.
 - [x] [serial] V2 Run `cargo fmt --check` and strict Clippy for the touched crates, plus `git diff --check`. r[foreign_derivation_import.cache_inputs_build_or_reuse]
   - Evidence: captured command output.
-- [ ] [serial] V3 Run `cairn validate --root .` and the proposal, design, and tasks gates; append transcripts to `evidence/`. r[foreign_derivation_import.cache_inputs_build_or_reuse]
-  - Evidence: gate transcripts with `verdict=PASS`.
+- [x] [serial] V3 Run `cairn validate --root .` and the proposal, design, and tasks gates; append transcripts to `evidence/`. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+  - Evidence: `evidence/orchestrator-checks.md` (validate 0 issues; gates PASS).
+- [ ] [serial] V4 After a checked clean build of the landed commit, realize the Octet pilot job on route v2 twice from a fresh store: the first run builds and indexes the root, the second reuses it with zero builds and zero NAR downloads and links the first receipt; record Cairn's convergence report for both and the negative controls. r[foreign_derivation_import.cache_inputs_build_or_reuse]
+  - Evidence: live transcripts and receipts under `evidence/` (large files summarized by size and BLAKE3).

@@ -638,10 +638,14 @@ fn foreign_read_limit(action: &ForeignImportAction) -> Result<Option<u32>, RunEr
     Ok(Some(read_limit))
 }
 
+/// Declared foreign-import file writes as (effect name, path, file bound), and whether the store is
+/// written.
+type ForeignEffectOutputs = (Vec<(&'static str, PathBuf, u32)>, bool);
+
 fn foreign_effect_outputs(
     action: &ForeignImportAction,
     context: &ForeignImportContext<'_>,
-) -> Option<(Vec<(&'static str, PathBuf, u32)>, bool)> {
+) -> Option<ForeignEffectOutputs> {
     let outputs = match action {
         ForeignImportAction::Validate { .. } => (Vec::new(), false),
         ForeignImportAction::Plan {

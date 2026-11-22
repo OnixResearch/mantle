@@ -795,7 +795,7 @@ fn read_indexed_built_receipt(state_dir: &Path, derivation: &str) -> Result<Inde
     let path = built_root_index_path(state_dir, derivation)?;
     match std::fs::read(&path) {
         Ok(bytes) => Ok(match parse_foreign_realization_receipt_v2(&bytes) {
-            Ok(receipt) => IndexedBuiltReceipt::Present(receipt),
+            Ok(receipt) => IndexedBuiltReceipt::Present(Box::new(receipt)),
             Err(_) => IndexedBuiltReceipt::Unparsable,
         }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(IndexedBuiltReceipt::Absent),

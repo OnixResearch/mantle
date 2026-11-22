@@ -370,7 +370,7 @@ impl fmt::Display for PresentRootRefusal {
 pub(crate) enum IndexedBuiltReceipt {
     Absent,
     Unparsable,
-    Present(ForeignRealizationReceiptV2),
+    Present(Box<ForeignRealizationReceiptV2>),
 }
 
 /// Reuse evidence for one present root output.
@@ -1414,7 +1414,8 @@ mod tests {
         let receipt = receipt_with_root(built_root(ROOT_DRV, &builder, NAR_SHA256), CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
 
         let facts =
-            classify(&path_info, NAR_SHA256, &[builder], IndexedBuiltReceipt::Present(receipt.clone())).unwrap();
+            classify(&path_info, NAR_SHA256, &[builder], IndexedBuiltReceipt::Present(Box::new(receipt.clone())))
+                .unwrap();
 
         assert_eq!(facts.original_receipt_blake3, receipt.receipt_blake3);
         assert_eq!(facts.signer_public_key_blake3, receipt.roots[0].signer.public_key_blake3);
@@ -1431,26 +1432,37 @@ mod tests {
         let receipt = receipt_with_root(built_root(ROOT_DRV, &builder, NAR_SHA256), CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
 
         assert_eq!(
-            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Absent).unwrap_err(),
+            classify(&path_info, NAR_SHA256, std::slice::from_ref(&builder), IndexedBuiltReceipt::Absent).unwrap_err(),
             PresentRootRefusal::NoBuiltReceipt
         );
         assert_eq!(
-            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Unparsable).unwrap_err(),
+            classify(&path_info, NAR_SHA256, std::slice::from_ref(&builder), IndexedBuiltReceipt::Unparsable)
+                .unwrap_err(),
             PresentRootRefusal::ReceiptInvalid
         );
 
         let mut tampered = receipt.clone();
         tampered.receipt_blake3 = "f".repeat(64);
         assert_eq!(
-            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(tampered.clone()))
-                .unwrap_err(),
+            classify(
+                &path_info,
+                NAR_SHA256,
+                std::slice::from_ref(&builder),
+                IndexedBuiltReceipt::Present(Box::new(tampered.clone()))
+            )
+            .unwrap_err(),
             PresentRootRefusal::ReceiptInvalid
         );
 
         let wrong_route = receipt_with_root(built_root(ROOT_DRV, &builder, NAR_SHA256), "cache-only-preserve-v1");
         assert_eq!(
-            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(wrong_route.clone()))
-                .unwrap_err(),
+            classify(
+                &path_info,
+                NAR_SHA256,
+                std::slice::from_ref(&builder),
+                IndexedBuiltReceipt::Present(Box::new(wrong_route.clone()))
+            )
+            .unwrap_err(),
             PresentRootRefusal::RouteMismatch
         );
 
@@ -1465,41 +1477,66 @@ mod tests {
         });
         let reused_receipt = receipt_with_root(reused_entry, CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
         assert_eq!(
-            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(reused_receipt.clone()))
-                .unwrap_err(),
+            classify(
+                &path_info,
+                NAR_SHA256,
+                std::slice::from_ref(&builder),
+                IndexedBuiltReceipt::Present(Box::new(reused_receipt.clone()))
+            )
+            .unwrap_err(),
             PresentRootRefusal::NotBuilt
         );
 
         let other = receipt_with_root(built_root(OTHER_DRV, &builder, NAR_SHA256), CACHE_INPUTS_BUILD_OR_REUSE_ROUTE);
         assert_eq!(
-            classify(&path_info, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(other.clone()))
-                .unwrap_err(),
+            classify(
+                &path_info,
+                NAR_SHA256,
+                std::slice::from_ref(&builder),
+                IndexedBuiltReceipt::Present(Box::new(other.clone()))
+            )
+            .unwrap_err(),
             PresentRootRefusal::DerivationMismatch
         );
 
         assert_eq!(
-            classify(&path_info, OTHER_NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(receipt.clone()))
-                .unwrap_err(),
+            classify(
+                &path_info,
+                OTHER_NAR_SHA256,
+                std::slice::from_ref(&builder),
+                IndexedBuiltReceipt::Present(Box::new(receipt.clone()))
+            )
+            .unwrap_err(),
             PresentRootRefusal::NarHashMismatch
         );
 
         let mut unsigned = path_info.clone();
         unsigned.signatures.clear();
         assert_eq!(
-            classify(&unsigned, NAR_SHA256, &[builder.clone()], IndexedBuiltReceipt::Present(receipt.clone()))
-                .unwrap_err(),
+            classify(
+                &unsigned,
+                NAR_SHA256,
+                std::slice::from_ref(&builder),
+                IndexedBuiltReceipt::Present(Box::new(receipt.clone()))
+            )
+            .unwrap_err(),
             PresentRootRefusal::NoValidBuilderSignature
         );
 
         let rotated_path_info = signed_path_info(&rotated_signing, NAR_SHA256);
         assert_eq!(
-            classify(&rotated_path_info, NAR_SHA256, &[rotated_builder], IndexedBuiltReceipt::Present(receipt.clone()))
-                .unwrap_err(),
+            classify(
+                &rotated_path_info,
+                NAR_SHA256,
+                &[rotated_builder],
+                IndexedBuiltReceipt::Present(Box::new(receipt.clone()))
+            )
+            .unwrap_err(),
             PresentRootRefusal::SignerMismatch
         );
 
         assert_eq!(
-            classify(&path_info, NAR_SHA256, &[], IndexedBuiltReceipt::Present(receipt.clone())).unwrap_err(),
+            classify(&path_info, NAR_SHA256, &[], IndexedBuiltReceipt::Present(Box::new(receipt.clone()))).unwrap_err(),
             PresentRootRefusal::BuilderKeyNotTrusted
         );
     }
@@ -1526,7 +1563,9 @@ mod tests {
         assert_eq!(renamed.public_key_blake3, first.public_key_blake3);
 
         let cache_key = cache_builder.verifying_key.clone();
-        let forward = realization_trust_policy_blake3(&[first.clone(), second.clone()], &[cache_key.clone()]).unwrap();
+        let forward =
+            realization_trust_policy_blake3(&[first.clone(), second.clone()], std::slice::from_ref(&cache_key))
+                .unwrap();
         let reverse = realization_trust_policy_blake3(&[second, first], &[cache_key]).unwrap();
         assert_eq!(forward, "f14bf1107042c94e9fcbc3ec9ef51f08158ce5bbe607ad877eea43ed62eaf2f2");
         assert_eq!(forward, reverse);
