@@ -276,11 +276,17 @@ pub(crate) async fn realize_foreign_plan(
     };
 
     let satisfied_derivations = if build_route {
-        let hydrated_paths = cache_closure
+        let mut satisfied_paths = cache_closure
             .as_ref()
             .map(|hydration| hydration.facts.iter().map(|fact| fact.logical_path.clone()).collect::<BTreeSet<_>>())
             .unwrap_or_default();
-        satisfied_input_derivations(request.plan, request.selected_root_node_ids, &hydrated_paths)
+        if build_or_reuse {
+            // A reuse run hydrates nothing, so a present input closure is satisfied by presence
+            // alone; this mirrors what the v1 hydration facts supply (and keeps an unneeded
+            // dependency of a present input from being scheduled).
+            satisfied_paths.extend(locally_present_input_paths(&mut store, request.plan, request.selected_root_node_ids).await?);
+        }
+        satisfied_input_derivations(request.plan, request.selected_root_node_ids, &satisfied_paths)
     } else {
         BTreeSet::new()
     };
@@ -391,6 +397,7 @@ pub(crate) async fn realize_foreign_plan(
         offline: request.offline,
         ordered_cache_urls: &cache_urls,
         cache_closure: cache_closure.as_ref(),
+        allow_pruned_units: build_or_reuse,
     };
     if !build_or_reuse {
         return Ok(ForeignRealizationOutcome {
@@ -524,6 +531,41 @@ async fn refuse_any_present_selected_root(
     validate_cache_inputs_roots(&root_strings, &[], &present).map_err(|error| RunError::Internal(error.to_string()))
 }
 
+/// v2 reuse: every non-root unit whose outputs are all present locally is already realized.
+async fn locally_present_input_paths(
+    store: &mut StoreHandle,
+    plan: &ForeignExecutablePlan,
+    selected_root_node_ids: &[String],
+) -> Result<BTreeSet<String>, RunError> {
+    let mut present = BTreeSet::new();
+    for unit in &plan.native_units {
+        if selected_root_node_ids.binary_search(&unit.node_id).is_ok() || unit.outputs.is_empty() {
+            continue;
+        }
+        let mut all_present = true;
+        for path in unit.outputs.values() {
+            let store_path = nix_compat::store_path::StorePath::from_absolute_path_with_prefix(
+                path.as_bytes(),
+                &plan.target_store_prefix,
+            )
+            .map_err(|error| RunError::Internal(format!("parsing foreign unit output {path}: {error}")))?;
+            if store
+                .export_cached_path_info(&store_path)
+                .await
+                .map_err(|error| RunError::Internal(format!("checking foreign unit output {path}: {error}")))?
+                .is_none()
+            {
+                all_present = false;
+                break;
+            }
+        }
+        if all_present {
+            present.extend(unit.outputs.values().cloned());
+        }
+    }
+    Ok(present)
+}
+
 /// v2 route: hydrate only the inputs an absent selected root needs, then require it still absent.
 async fn hydration_for_absent_roots(
     mut store: StoreHandle,
@@ -538,6 +580,7 @@ async fn hydration_for_absent_roots(
     }
     let seed_strings = cache_inputs_closure(request.plan, request.selected_root_node_ids)
         .map_err(|error| RunError::Internal(error.to_string()))?;
+    drop(store);
     store = open_foreign_store(request, cache_urls.to_vec()).await?;
     let absent_strings = absent_roots.iter().map(ToString::to_string).collect::<Vec<_>>();
     let cache_url = cache_only_http_cache_url(request.plan)?;

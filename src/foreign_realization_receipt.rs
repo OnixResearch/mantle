@@ -294,13 +294,6 @@ impl ForeignRealizationReceiptAny {
         }
     }
 
-    pub(crate) fn as_v1(&self) -> Option<&ForeignRealizationReceipt> {
-        match self {
-            Self::V1(receipt) => Some(receipt),
-            Self::V2(_) => None,
-        }
-    }
-
     pub(crate) fn receipt_blake3(&self) -> &str {
         match self {
             Self::V1(receipt) => &receipt.receipt_blake3,
@@ -447,6 +440,8 @@ pub(crate) struct ForeignReceiptInput<'a> {
     pub(crate) offline: bool,
     pub(crate) ordered_cache_urls: &'a [String],
     pub(crate) cache_closure: Option<&'a CacheClosureHydration>,
+    /// A reuse route may leave present input units out of the scheduler entirely.
+    pub(crate) allow_pruned_units: bool,
 }
 
 pub(crate) fn build_foreign_realization_receipt(
@@ -544,7 +539,12 @@ pub(crate) fn build_foreign_realization_receipt(
         });
         let cache_only_not_required =
             input.cache_closure.is_some() && outcome.is_none() && effective_failure.is_none() && outputs.is_empty();
-        if outcome.is_none() && effective_failure.is_none() && outputs.is_empty() && !cache_only_not_required {
+        if outcome.is_none()
+            && effective_failure.is_none()
+            && outputs.is_empty()
+            && !cache_only_not_required
+            && !input.allow_pruned_units
+        {
             return Err(RunError::Internal(format!(
                 "foreign realization has no scheduler or store disposition for {}",
                 unit.node_id
@@ -877,7 +877,7 @@ mod tests {
         unknown["unexpected"] = serde_json::json!(true);
         assert!(serde_json::from_value::<super::ForeignRealizationReceiptV2>(unknown).is_err());
 
-        let mut missing_roots = value;
+        let mut missing_roots = value.clone();
         missing_roots.as_object_mut().unwrap().remove("roots");
         assert!(serde_json::from_value::<super::ForeignRealizationReceiptV2>(missing_roots).is_err());
 

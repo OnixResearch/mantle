@@ -151,7 +151,7 @@ pub(crate) enum ForeignImportAction {
         #[arg(long = "execution-profile")]
         execution_profile: Option<PathBuf>,
 
-        /// Optional realization route override: `cache-inputs-build-roots-v1`
+        /// Optional realization route override: `cache-inputs-build-roots-v1` or `cache-inputs-build-roots-v2`
         #[arg(long = "realization-route")]
         realization_route: Option<String>,
 
@@ -1502,7 +1502,7 @@ fn run_prepare_sources(
         Some(staging)
     };
     let cache_hydrated_plan =
-        is_cache_only_foreign_plan(&plan) || crate::foreign_realization::is_cache_inputs_build_roots_plan(&plan);
+        is_cache_only_foreign_plan(&plan) || crate::foreign_realization::is_cache_inputs_build_route_plan(&plan);
     let manifest = if cache_hydrated_plan {
         if !bindings.is_empty() {
             return Err(RunError::Internal(
@@ -1642,7 +1642,7 @@ fn validate_nario_source_request(
             crunch_store::NARIO_V2_TRUSTED_KEYS_MAX
         )));
     }
-    if is_cache_only_foreign_plan(plan) || crate::foreign_realization::is_cache_inputs_build_roots_plan(plan) {
+    if is_cache_only_foreign_plan(plan) || crate::foreign_realization::is_cache_inputs_build_route_plan(plan) {
         return Err(RunError::Internal("cache-hydrated plans reject Nario source projection".to_string()));
     }
     Ok(())
@@ -2111,7 +2111,7 @@ fn trusted_cache_keys_from_plan(
             keys_by_encoding.entry(key.to_string()).or_insert(key);
         }
     }
-    if (is_cache_only_foreign_plan(plan) || crate::foreign_realization::is_cache_inputs_build_roots_plan(plan))
+    if (is_cache_only_foreign_plan(plan) || crate::foreign_realization::is_cache_inputs_build_route_plan(plan))
         && keys_by_encoding.is_empty()
     {
         return Err(RunError::Internal(
