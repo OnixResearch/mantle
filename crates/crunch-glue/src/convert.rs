@@ -198,29 +198,36 @@ fn convert_with_depth(
         ));
     }
 
-    let identity = derivation_identity(drv);
+    let recipe_digest = structural_recipe_digest(drv, depth)?;
+    let visiting_key = visiting_identity(drv);
 
-    if let Some(converted) = known_paths.get_completed_identity(&identity) {
+    // Cycle detection uses the visiting-state key (name:builder:system) and
+    // runs before completed-recipe lookup so an active ancestor can never
+    // reuse an incomplete or semantically different entry.
+    if !known_paths.begin_conversion(&visiting_key) {
+        return Err(Error::CircularDependency(drv.name.clone()));
+    }
+
+    if let Some(converted) = known_paths.get_completed_recipe(&recipe_digest) {
         if converted.dynamic_plan_outputs != drv.dynamic_plan_outputs {
+            known_paths.end_conversion(&visiting_key);
             return Err(Error::InvalidDynamicPlanOutputs(format!(
                 "conflicting dynamic_plan_outputs for derivation identity '{}'",
                 drv.name
             )));
         }
-        return Ok((converted.drv_path, converted.derivation));
-    }
-
-    // Cycle detection
-    if !known_paths.begin_conversion(&identity) {
-        return Err(Error::CircularDependency(drv.name.clone()));
+        if !needs_provenance_update(drv, &converted.drv_path, known_paths) {
+            known_paths.end_conversion(&visiting_key);
+            return Ok((converted.drv_path, converted.derivation));
+        }
     }
 
     let result = convert_inner(drv, known_paths, depth);
 
-    known_paths.end_conversion(&identity);
+    known_paths.end_conversion(&visiting_key);
     if let Ok((drv_path, nix_drv)) = &result {
-        known_paths.insert_completed_identity(
-            identity,
+        known_paths.insert_completed_recipe(
+            recipe_digest,
             drv_path.clone(),
             nix_drv.clone(),
             drv.dynamic_plan_outputs.clone(),
@@ -486,7 +493,7 @@ fn finalize_and_register(
             known_paths.get_hdm_by_drv_path(&absolute).map(|hdm| (absolute, hdm))
         })
         .collect::<BTreeMap<_, _>>();
-    let registration = resolve_derivation_registration(ResolvedDerivationRequest {
+    let mut registration = resolve_derivation_registration(ResolvedDerivationRequest {
         name: &drv.name,
         derivation: nix_drv.clone(),
         input_hdms: &input_hdms,
@@ -495,13 +502,16 @@ fn finalize_and_register(
         dynamic_plan_outputs: drv.dynamic_plan_outputs.clone(),
         provenance_claims: drv.provenance.clone(),
     })?;
-    if let Some(existing) = known_paths.get_by_aterm_hash(&registration.aterm_hash)
-        && existing.dynamic_plan_outputs != drv.dynamic_plan_outputs
-    {
-        return Err(Error::InvalidDynamicPlanOutputs(format!(
-            "conflicting dynamic_plan_outputs for derivation '{}'",
-            drv.name
-        )));
+    if let Some(existing) = known_paths.get_by_aterm_hash(&registration.aterm_hash) {
+        if existing.dynamic_plan_outputs != drv.dynamic_plan_outputs {
+            return Err(Error::InvalidDynamicPlanOutputs(format!(
+                "conflicting dynamic_plan_outputs for derivation '{}'",
+                drv.name
+            )));
+        }
+        if registration.provenance_claims.is_none() && existing.provenance_claims.is_some() {
+            registration.provenance_claims = existing.provenance_claims.clone();
+        }
     }
 
     let drv_path = registration.drv_path.clone();
@@ -550,13 +560,144 @@ fn parse_fixed_output(fo: &FixedOutput) -> Result<CAHash, Error> {
     }
 }
 
-/// An opaque identity for cycle detection.
-/// Two CrunchDerivations with the same identity are considered the same
-/// derivation for cycle-detection purposes.
-fn derivation_identity(drv: &CrunchDerivation) -> String {
-    // Use name + builder + system as a simple identity.
-    // The ATerm hash is the true identity but isn't available before conversion.
+fn hash_length_prefixed(hasher: &mut blake3::Hasher, value: &str) {
+    hasher.update(&(value.len() as u64).to_le_bytes());
+    hasher.update(value.as_bytes());
+}
+
+fn hash_str_slice(hasher: &mut blake3::Hasher, values: &[String]) {
+    hasher.update(&(values.len() as u64).to_le_bytes());
+    for value in values {
+        hash_length_prefixed(hasher, value);
+    }
+}
+
+fn hash_input(hasher: &mut blake3::Hasher, input: &Input, depth: u32) -> Result<(), Error> {
+    assert!(depth < MAX_RECURSION_DEPTH, "input hashing depth must stay within limit");
+    let next_depth = depth.saturating_add(1);
+    assert!(next_depth > depth, "recursion depth must advance");
+    match input {
+        Input::Source(path) => {
+            hasher.update(&[1u8]);
+            hash_length_prefixed(hasher, path);
+        }
+        Input::DerivationFile(reference) => {
+            hasher.update(&[2u8]);
+            hash_length_prefixed(hasher, &reference.path);
+            match &reference.output {
+                Some(output) => {
+                    hasher.update(&[1u8]);
+                    hash_length_prefixed(hasher, output);
+                }
+                None => {
+                    hasher.update(&[0u8]);
+                }
+            }
+        }
+        Input::ResolvedDerivation(reference) => {
+            hasher.update(&[3u8]);
+            hash_length_prefixed(hasher, &reference.drv_path);
+            hash_str_slice(hasher, &reference.outputs);
+        }
+        Input::OutputSelection(output_ref) => {
+            hasher.update(&[4u8]);
+            hash_length_prefixed(hasher, &output_ref.output);
+            let child_digest = structural_recipe_digest(&output_ref.drv, next_depth)?;
+            hasher.update(&child_digest);
+        }
+        Input::PlanOutput(reference) => {
+            hasher.update(&[5u8]);
+            hash_length_prefixed(hasher, &reference.name);
+            hash_length_prefixed(hasher, &reference.plan_output);
+            hash_length_prefixed(hasher, &reference.root);
+            hash_length_prefixed(hasher, &reference.unit_output);
+            let producer_digest = structural_recipe_digest(&reference.producer, next_depth)?;
+            hasher.update(&producer_digest);
+        }
+        Input::Derivation(child) => {
+            hasher.update(&[6u8]);
+            let child_digest = structural_recipe_digest(child, next_depth)?;
+            hasher.update(&child_digest);
+        }
+    }
+    Ok(())
+}
+
+/// Canonical structural BLAKE3 digest over every build-relevant field of a
+/// `CrunchDerivation` and its recursive inputs.
+///
+/// Intentionally excludes `dynamic_plan_outputs` so that two identical recipes
+/// with conflicting dynamic-plan declarations still hit the conflict check,
+/// and excludes `provenance` so metadata attachment is handled explicitly.
+fn structural_recipe_digest(drv: &CrunchDerivation, depth: u32) -> Result<[u8; 32], Error> {
+    if depth >= MAX_RECURSION_DEPTH {
+        return Err(Error::CircularDependency(format!("{} (depth limit {} exceeded)", drv.name, MAX_RECURSION_DEPTH)));
+    }
+    assert!(!drv.name.is_empty(), "derivation name must not be empty");
+    assert!(!drv.outputs.is_empty(), "derivation must have at least one output");
+
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"mantle:crunch-glue:recipe-v1\0");
+    hash_length_prefixed(&mut hasher, &drv.name);
+    hash_length_prefixed(&mut hasher, &drv.builder);
+    hash_length_prefixed(&mut hasher, &drv.system);
+    hash_length_prefixed(&mut hasher, &drv.addressing_mode);
+    hash_str_slice(&mut hasher, &drv.args);
+    hash_str_slice(&mut hasher, &drv.outputs);
+
+    let sorted_env: BTreeMap<&str, &str> = drv.env.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    hasher.update(&(sorted_env.len() as u64).to_le_bytes());
+    for (key, value) in sorted_env {
+        hash_length_prefixed(&mut hasher, key);
+        hash_length_prefixed(&mut hasher, value);
+    }
+
+    match &drv.fixed_output {
+        Some(fo) => {
+            hasher.update(&[1u8]);
+            hash_length_prefixed(&mut hasher, &fo.algo);
+            hash_length_prefixed(&mut hasher, &fo.mode);
+            hash_length_prefixed(&mut hasher, &fo.hash);
+        }
+        None => {
+            hasher.update(&[0u8]);
+        }
+    }
+
+    hasher.update(&(drv.inputs.len() as u64).to_le_bytes());
+    for input in &drv.inputs {
+        hash_input(&mut hasher, input, depth)?;
+    }
+
+    let digest = *hasher.finalize().as_bytes();
+    debug_assert!(digest != [0u8; 32], "BLAKE3 recipe digest must not be all zeros");
+    Ok(digest)
+}
+
+/// Visiting-state identity for cycle detection (`name:builder:system`).
+///
+/// Intentionally distinct from `structural_recipe_digest`: visiting-state
+/// tracking prevents recursive self-nesting along the active conversion stack
+/// and is never used to memoize completed conversion results.
+fn visiting_identity(drv: &CrunchDerivation) -> String {
+    debug_assert!(!drv.name.is_empty(), "derivation name must not be empty");
+    debug_assert!(!drv.builder.is_empty(), "derivation builder must not be empty");
     format!("{}:{}:{}", drv.name, drv.builder, drv.system)
+}
+
+fn needs_provenance_update(
+    drv: &CrunchDerivation,
+    drv_path: &StorePath<String>,
+    known_paths: &ConversionCache,
+) -> bool {
+    debug_assert!(!drv.name.is_empty(), "derivation name must not be empty");
+    debug_assert!(known_paths.store_dir().starts_with('/'), "store_dir must be absolute");
+    let Some(incoming) = drv.provenance.as_ref() else {
+        return false;
+    };
+    let drv_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+    let existing = known_paths.get_by_drv_path(&drv_abs).and_then(|entry| entry.provenance_claims.as_ref());
+    existing != Some(incoming)
 }
 
 #[cfg(test)]
@@ -1124,9 +1265,17 @@ mod tests {
     }
 
     #[test]
-    fn derivation_identity_format() {
-        let drv = minimal_drv("foo", "/bin/sh");
-        assert_eq!(derivation_identity(&drv), "foo:/bin/sh:x86_64-linux");
+    fn visiting_identity_is_separate_from_structural_recipe_digest() {
+        let mut debug = minimal_drv("foo", "/bin/sh");
+        debug.args = vec!["-c".into(), "echo debug > $out".into()];
+        let mut release = debug.clone();
+        release.args[1] = "echo release > $out".into();
+
+        let debug_digest = structural_recipe_digest(&debug, 0).unwrap();
+        let release_digest = structural_recipe_digest(&release, 0).unwrap();
+        assert_eq!(visiting_identity(&debug), "foo:/bin/sh:x86_64-linux");
+        assert_eq!(visiting_identity(&release), "foo:/bin/sh:x86_64-linux");
+        assert_ne!(debug_digest, release_digest);
     }
 
     // ── store_dir threading tests ─────────────────────────────────────
@@ -1488,5 +1637,249 @@ mod tests {
         let (_, dep_outputs) = nix_drv.input_derivations.iter().next().unwrap();
         assert_eq!(dep_outputs.len(), 1);
         assert!(dep_outputs.contains("dev"));
+    }
+
+    // ── Structural recipe memoization (#38) ───────────────────────────
+
+    #[test]
+    fn same_name_different_args_do_not_collide_in_either_order() {
+        let mut debug = minimal_drv("hello", "/bin/sh");
+        debug.args = vec!["-c".into(), "echo debug > $out".into()];
+
+        let mut release = debug.clone();
+        release.args[1] = "echo release > $out".into();
+
+        let mut forward = ConversionCache::default();
+        let (debug_path_fwd, debug_drv_fwd) = convert(&debug, &mut forward).unwrap();
+        let (release_path_fwd, release_drv_fwd) = convert(&release, &mut forward).unwrap();
+        assert_ne!(debug_path_fwd, release_path_fwd);
+        assert_eq!(debug_drv_fwd.arguments, debug.args);
+        assert_eq!(release_drv_fwd.arguments, release.args);
+
+        let mut reverse = ConversionCache::default();
+        let (release_path_rev, release_drv_rev) = convert(&release, &mut reverse).unwrap();
+        let (debug_path_rev, debug_drv_rev) = convert(&debug, &mut reverse).unwrap();
+        assert_eq!(debug_path_fwd, debug_path_rev);
+        assert_eq!(release_path_fwd, release_path_rev);
+        assert_eq!(debug_drv_rev.arguments, debug.args);
+        assert_eq!(release_drv_rev.arguments, release.args);
+    }
+
+    #[test]
+    fn same_name_distinct_recipe_dimensions_produce_distinct_derivations() {
+        let base = minimal_drv("shared-name", "/bin/sh");
+        let source_a = "/nix/store/0000000000000000000000000000000a-src-a";
+        let source_b = "/nix/store/0000000000000000000000000000000b-src-b";
+        let dep_a = {
+            let mut d = minimal_drv("dep", "/bin/sh");
+            d.args = vec!["a".into()];
+            d
+        };
+        let dep_b = {
+            let mut d = minimal_drv("dep", "/bin/sh");
+            d.args = vec!["b".into()];
+            d
+        };
+
+        let cases: Vec<(&str, CrunchDerivation, CrunchDerivation)> = vec![
+            (
+                "args",
+                CrunchDerivation {
+                    args: vec!["-c".into(), "one".into()],
+                    ..base.clone()
+                },
+                CrunchDerivation {
+                    args: vec!["-c".into(), "two".into()],
+                    ..base.clone()
+                },
+            ),
+            (
+                "env",
+                CrunchDerivation {
+                    env: [("MODE".to_string(), "a".to_string())].into_iter().collect(),
+                    ..base.clone()
+                },
+                CrunchDerivation {
+                    env: [("MODE".to_string(), "b".to_string())].into_iter().collect(),
+                    ..base.clone()
+                },
+            ),
+            (
+                "source_inputs",
+                CrunchDerivation {
+                    inputs: vec![Input::Source(source_a.to_string())],
+                    ..base.clone()
+                },
+                CrunchDerivation {
+                    inputs: vec![Input::Source(source_b.to_string())],
+                    ..base.clone()
+                },
+            ),
+            (
+                "derivation_inputs",
+                CrunchDerivation {
+                    inputs: vec![Input::Derivation(Box::new(dep_a))],
+                    ..base.clone()
+                },
+                CrunchDerivation {
+                    inputs: vec![Input::Derivation(Box::new(dep_b))],
+                    ..base.clone()
+                },
+            ),
+            (
+                "outputs",
+                CrunchDerivation {
+                    outputs: vec!["out".into()],
+                    ..base.clone()
+                },
+                CrunchDerivation {
+                    outputs: vec!["out".into(), "dev".into()],
+                    ..base.clone()
+                },
+            ),
+            (
+                "fixed_output",
+                CrunchDerivation {
+                    fixed_output: Some(FixedOutput {
+                        hash: "0000000000000000000000000000000000000000000000000000000000000001".into(),
+                        algo: "sha256".into(),
+                        mode: "flat".into(),
+                    }),
+                    ..base.clone()
+                },
+                CrunchDerivation {
+                    fixed_output: Some(FixedOutput {
+                        hash: "0000000000000000000000000000000000000000000000000000000000000002".into(),
+                        algo: "sha256".into(),
+                        mode: "recursive".into(),
+                    }),
+                    ..base.clone()
+                },
+            ),
+            (
+                "addressing_mode",
+                CrunchDerivation {
+                    addressing_mode: "input-addressed".into(),
+                    ..base.clone()
+                },
+                CrunchDerivation {
+                    addressing_mode: "content-addressed".into(),
+                    ..base
+                },
+            ),
+        ];
+
+        for (label, left, right) in cases {
+            let mut forward = ConversionCache::default();
+            let (left_fwd, left_drv_fwd) = convert(&left, &mut forward).unwrap();
+            let (right_fwd, right_drv_fwd) = convert(&right, &mut forward).unwrap();
+            assert_ne!(
+                (left_fwd.clone(), left_drv_fwd.outputs.clone()),
+                (right_fwd.clone(), right_drv_fwd.outputs.clone()),
+                "case '{label}' must distinguish left and right recipes"
+            );
+
+            let mut reverse = ConversionCache::default();
+            let (right_rev, _) = convert(&right, &mut reverse).unwrap();
+            let (left_rev, _) = convert(&left, &mut reverse).unwrap();
+            assert_eq!(left_fwd, left_rev, "case '{label}' left path must be order-independent");
+            assert_eq!(right_fwd, right_rev, "case '{label}' right path must be order-independent");
+        }
+    }
+
+    #[test]
+    fn identical_diamond_dependencies_still_deduplicate_without_duplicate_pending_entries() {
+        let mut shared = minimal_drv("shared", "/bin/sh");
+        shared.args = vec!["-c".into(), "echo shared > $out".into()];
+
+        let mut left = minimal_drv("left", "/bin/sh");
+        left.inputs = vec![Input::Derivation(Box::new(shared.clone()))];
+
+        let mut right = minimal_drv("right", "/bin/sh");
+        right.inputs = vec![Input::Derivation(Box::new(shared))];
+
+        let mut root = minimal_drv("root", "/bin/sh");
+        root.inputs = vec![Input::Derivation(Box::new(left)), Input::Derivation(Box::new(right))];
+
+        let mut cache = ConversionCache::default();
+        let (_, root_drv) = convert(&root, &mut cache).unwrap();
+        let pending = cache.drain_pending();
+        // Exactly 4 unique derivations: shared (once), left, right, root.
+        assert_eq!(pending.len(), 4);
+        assert_eq!(root_drv.input_derivations.len(), 2);
+    }
+
+    #[test]
+    fn cycle_handling_does_not_reuse_completed_or_incomplete_different_recipe() {
+        // First complete one recipe for "loop".
+        let mut completed = minimal_drv("loop", "/bin/sh");
+        completed.args = vec!["-c".into(), "echo completed > $out".into()];
+
+        let mut cache = ConversionCache::default();
+        let (completed_path, _) = convert(&completed, &mut cache).unwrap();
+
+        // A cyclic nesting under the same visiting identity must still error
+        // rather than reusing the earlier completed conversion.
+        let inner = minimal_drv("loop", "/bin/sh");
+        let outer = CrunchDerivation {
+            inputs: vec![Input::Derivation(Box::new(inner))],
+            ..minimal_drv("loop", "/bin/sh")
+        };
+        let err = convert(&outer, &mut cache).unwrap_err();
+        assert!(matches!(err, Error::CircularDependency(_)));
+
+        // An active in-progress visiting entry must also reject re-entry even
+        // when a completed entry exists for that exact recipe.
+        let visiting = visiting_identity(&completed);
+        assert!(cache.begin_conversion(&visiting));
+        let err = convert(&completed, &mut cache).unwrap_err();
+        assert!(matches!(err, Error::CircularDependency(_)));
+        cache.end_conversion(&visiting);
+
+        // Once the visiting guard clears, the completed recipe is still intact.
+        let (reused_path, _) = convert(&completed, &mut cache).unwrap();
+        assert_eq!(reused_path, completed_path);
+    }
+
+    #[test]
+    fn dynamic_plan_conflict_and_provenance_preservation_hold_on_recipe_hits() {
+        let mut base = minimal_drv("hello", "/bin/sh");
+        base.outputs = vec!["out".into(), "plan".into()];
+        base.dynamic_plan_outputs = vec!["plan".into()];
+
+        let mut conflicting = base.clone();
+        conflicting.dynamic_plan_outputs = vec![];
+
+        let mut cache = ConversionCache::default();
+        convert(&base, &mut cache).unwrap();
+        let err = convert(&conflicting, &mut cache).unwrap_err();
+        assert!(matches!(err, Error::InvalidDynamicPlanOutputs(_)));
+
+        let mut plain = minimal_drv("prov", "/bin/sh");
+        plain.args = vec!["-c".into(), "echo ok > $out".into()];
+        let claims = Claims {
+            component_name: Some("prov".into()),
+            version_claim: Some("1.2.3".into()),
+            ..Claims::default()
+        };
+        let mut annotated = plain.clone();
+        annotated.provenance = Some(claims.clone());
+
+        // Order 1: annotated first, then plain — provenance is preserved.
+        let mut cache_a = ConversionCache::default();
+        let (path_a1, _) = convert(&annotated, &mut cache_a).unwrap();
+        let (path_a2, _) = convert(&plain, &mut cache_a).unwrap();
+        assert_eq!(path_a1, path_a2);
+        let abs_a = path_a1.to_absolute_path_with_prefix(cache_a.store_dir());
+        assert_eq!(cache_a.get_by_drv_path(&abs_a).unwrap().provenance_claims.as_ref(), Some(&claims));
+
+        // Order 2: plain first, then annotated — provenance is attached without changing path.
+        let mut cache_b = ConversionCache::default();
+        let (path_b1, _) = convert(&plain, &mut cache_b).unwrap();
+        let (path_b2, _) = convert(&annotated, &mut cache_b).unwrap();
+        assert_eq!(path_b1, path_b2);
+        assert_eq!(path_a1, path_b1);
+        let abs_b = path_b1.to_absolute_path_with_prefix(cache_b.store_dir());
+        assert_eq!(cache_b.get_by_drv_path(&abs_b).unwrap().provenance_claims.as_ref(), Some(&claims));
     }
 }

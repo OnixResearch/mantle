@@ -2160,4 +2160,75 @@ mod tests {
         assert_eq!(roots[ROOT_GAMMA_INDEX].terminal_state(), crunch_evaluation_stream_core::TerminalState::NotStarted);
         assert_eq!(result.summary.counts().total().unwrap(), THREE_ROOT_COUNT);
     }
+
+    #[tokio::test]
+    async fn same_name_multi_root_derivations_stay_distinct_and_order_independent() {
+        let (_directory, root_file) = resolver_fixture_file();
+        let source_forward = r#"{
+  debug = { name = "hello", builder = "/bin/sh", args = ["-c", "echo debug > $out"] },
+  release = { name = "hello", builder = "/bin/sh", args = ["-c", "echo release > $out"] },
+}"#;
+        let source_reverse = r#"{
+  release = { name = "hello", builder = "/bin/sh", args = ["-c", "echo release > $out"] },
+  debug = { name = "hello", builder = "/bin/sh", args = ["-c", "echo debug > $out"] },
+}"#;
+
+        let collect_map = |source: &str, pause_label: Option<&str>| {
+            let root_file = root_file.clone();
+            let source = source.to_string();
+            let pause_label = pause_label.map(str::to_string);
+            async move {
+                let session = crunch_eval::session::EvaluationSession::open_str(&source, &[]).unwrap();
+                let (tx, mut rx) = mpsc::channel::<EvalMessage>(EVAL_MESSAGE_CHANNEL_CAPACITY);
+                let mut request = eval_stream_request(&session, &root_file, RootForceExecutionPolicy::Inline, tx);
+                let control_task = if let Some(label) = pause_label {
+                    let reached = Arc::new(AtomicBool::new(false));
+                    let release = Arc::new(AtomicBool::new(false));
+                    request.worker_control =
+                        EvalWorkerControl::pause_after_evaluation(label, reached.clone(), release.clone());
+                    Some((reached, release))
+                } else {
+                    None
+                };
+
+                let stream = stream_roots_into_worker(request);
+                let result = if let Some((reached, release)) = control_task {
+                    let releaser = async {
+                        while !reached.load(Ordering::Acquire) {
+                            tokio::time::sleep(Duration::from_millis(CANCELLATION_POLL_INTERVAL_MS)).await;
+                        }
+                        tokio::time::sleep(Duration::from_millis(CANCELLATION_POLL_INTERVAL_MS * 2)).await;
+                        release.store(true, Ordering::Release);
+                    };
+                    let (res, ()) = tokio::join!(stream, releaser);
+                    res.unwrap()
+                } else {
+                    stream.await.unwrap()
+                };
+
+                let mut by_label = std::collections::BTreeMap::new();
+                while let Some(msg) = rx.recv().await {
+                    let drv_args = msg
+                        .new_entries
+                        .iter()
+                        .find(|(path, ..)| path == &msg.drv_path)
+                        .map(|(_, _, drv, ..)| drv.arguments.clone());
+                    by_label.insert(msg.label, (msg.drv_path, drv_args));
+                }
+                assert_eq!(result.summary.disposition(), crunch_evaluation_stream_core::RunDisposition::Success);
+                by_label
+            }
+        };
+
+        let forward = collect_map(source_forward, None).await;
+        let reverse = collect_map(source_reverse, None).await;
+        let delayed_debug = collect_map(source_forward, Some("debug")).await;
+
+        assert_eq!(forward.len(), 2);
+        assert_ne!(forward["debug"].0, forward["release"].0);
+        assert_eq!(forward["debug"].1.as_deref(), Some(&["-c".to_string(), "echo debug > $out".to_string()][..]));
+        assert_eq!(forward["release"].1.as_deref(), Some(&["-c".to_string(), "echo release > $out".to_string()][..]));
+        assert_eq!(forward, reverse);
+        assert_eq!(forward, delayed_debug);
+    }
 }

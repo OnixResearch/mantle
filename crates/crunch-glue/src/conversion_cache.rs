@@ -38,13 +38,16 @@ pub struct ConversionCache {
     /// drv store path string -> aterm hash (reverse index for O(1) lookup)
     drv_path_to_aterm: HashMap<String, [u8; 32]>,
     /// Track in-progress conversions for cycle detection.
-    /// Key is an opaque identity derived from CrunchDerivation name + builder + system.
+    /// Key is a visiting identity scoped to the active recursion stack and
+    /// intentionally separate from `completed_by_recipe`.
     in_progress: std::collections::HashSet<String>,
-    /// Track completed conversions by the same opaque identity used for cycle detection.
+    /// Track completed conversions by the canonical structural recipe digest.
     ///
-    /// This is intentionally separate from the ATerm-hash cache: recursive conversion
-    /// needs a cheap pre-order memoization key before the ATerm bytes are available.
-    completed_by_identity: HashMap<String, CompletedConversion>,
+    /// Separate from `in_progress` (cycle tracking) and `by_aterm_hash`
+    /// (post-conversion ATerm dedup): pre-order reuse is keyed on the full
+    /// build-relevant derivation definition so distinct recipes that share a
+    /// `name:builder:system` never collide.
+    completed_by_recipe: HashMap<[u8; 32], CompletedConversion>,
     /// Store directory prefix (e.g. "/nix/store" or "/opt/crunch").
     store_dir: String,
     /// Entries added since the last `drain_pending()`. Enables
@@ -78,7 +81,7 @@ impl ConversionCache {
             hdm_by_drv_path: HashMap::new(),
             drv_path_to_aterm: HashMap::new(),
             in_progress: std::collections::HashSet::new(),
-            completed_by_identity: HashMap::new(),
+            completed_by_recipe: HashMap::new(),
             store_dir: store_dir.to_string(),
             pending: Vec::new(),
         }
@@ -169,20 +172,24 @@ impl ConversionCache {
         self.in_progress.remove(identity);
     }
 
-    /// Look up a completed conversion by the pre-order identity key.
-    pub fn get_completed_identity(&self, identity: &str) -> Option<CompletedConversion> {
-        self.completed_by_identity.get(identity).cloned()
+    /// Look up a completed conversion by its canonical structural recipe digest.
+    pub fn get_completed_recipe(&self, recipe_digest: &[u8; 32]) -> Option<CompletedConversion> {
+        debug_assert!(*recipe_digest != [0u8; 32], "recipe digest must not be all zeros");
+        debug_assert!(!self.store_dir.is_empty(), "store_dir must not be empty");
+        self.completed_by_recipe.get(recipe_digest).cloned()
     }
 
-    /// Remember a completed conversion by the pre-order identity key.
-    pub fn insert_completed_identity(
+    /// Remember a completed conversion by its canonical structural recipe digest.
+    pub fn insert_completed_recipe(
         &mut self,
-        identity: String,
+        recipe_digest: [u8; 32],
         drv_path: StorePath<String>,
         derivation: Derivation,
         dynamic_plan_outputs: Vec<String>,
     ) {
-        self.completed_by_identity.insert(identity, CompletedConversion {
+        debug_assert!(recipe_digest != [0u8; 32], "recipe digest must not be all zeros");
+        debug_assert!(!derivation.outputs.is_empty(), "completed derivation must have outputs");
+        self.completed_by_recipe.insert(recipe_digest, CompletedConversion {
             drv_path,
             derivation,
             dynamic_plan_outputs,
