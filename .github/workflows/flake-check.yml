@@ -15,9 +15,9 @@ jobs:
       SLEEPINESS: '0'
     steps:
       - name: Check out Mantle
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v17
+        uses: DeterminateSystems/nix-installer-action@v23
       - name: Record Rust compiler cohort
         run: nix develop --command rustc -Vv
       - name: Verify operator catalogs and generated documentation

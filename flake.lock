@@ -92,12 +92,12 @@
         "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
         "revCount": 3,
         "type": "git",
-        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
+        "url": "https://github.com/OnixResearch/bounded-exec.git"
       },
       "original": {
         "rev": "29dac88ecded94457572db3fdfaaaab95fa91525",
         "type": "git",
-        "url": "https://git.onix.computer/z2CpqLFpdP36fZXYUK5ZNWxMibpCo.git"
+        "url": "https://github.com/OnixResearch/bounded-exec.git"
       }
     },
     "boundedTreeSource": {
@@ -131,17 +131,17 @@
         "octet": "octet"
       },
       "locked": {
-        "lastModified": 1790630710,
-        "narHash": "sha256-Kgx8JgsC/+26ETbL3lRaxXAYfzv2cmtG/i9OywPOz0c=",
+        "lastModified": 1795457393,
+        "narHash": "sha256-/j8IdjZOZqQHpdaTqXGvb/iFT9NZaTxoXz98mNaFSKY=",
         "owner": "OnixResearch",
         "repo": "cairn",
-        "rev": "007ba5193dd8fec9067a1c0e0f8ef487807af872",
+        "rev": "8f5df65624d1a06c3e483febbb877f8d8a8f425c",
         "type": "github"
       },
       "original": {
         "owner": "OnixResearch",
         "repo": "cairn",
-        "rev": "007ba5193dd8fec9067a1c0e0f8ef487807af872",
+        "rev": "8f5df65624d1a06c3e483febbb877f8d8a8f425c",
         "type": "github"
       }
     },
@@ -220,18 +220,18 @@
     "cap-root": {
       "flake": false,
       "locked": {
-        "lastModified": 1784443737,
+        "lastModified": 1794509738,
         "narHash": "sha256-2eiyxmhW8/qj30ALccgkt5hatRMk2OcazmU3SCI/Opo=",
         "ref": "refs/heads/main",
-        "rev": "8991e2572578c16e590c2f1c0915db6c46c5d9cb",
-        "revCount": 2,
+        "rev": "b1911e42295887c399e17cad29ce298c2847f59d",
+        "revCount": 1,
         "type": "git",
-        "url": "https://seed.radicle.garden/z3cWBCK7VPbEmbL5MAvKJWKjCE745.git"
+        "url": "https://github.com/OnixResearch/cap-root.git"
       },
       "original": {
-        "rev": "8991e2572578c16e590c2f1c0915db6c46c5d9cb",
+        "rev": "b1911e42295887c399e17cad29ce298c2847f59d",
         "type": "git",
-        "url": "https://seed.radicle.garden/z3cWBCK7VPbEmbL5MAvKJWKjCE745.git"
+        "url": "https://github.com/OnixResearch/cap-root.git"
       }
     },
     "casitaSource": {
@@ -426,18 +426,18 @@
     "durable-file-publication": {
       "flake": false,
       "locked": {
-        "lastModified": 1785189981,
+        "lastModified": 1794509743,
         "narHash": "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
         "ref": "refs/heads/main",
-        "rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
-        "revCount": 9,
+        "rev": "6d5510ddb33860bf47a49b63085105c7ff88f4d5",
+        "revCount": 1,
         "type": "git",
-        "url": "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+        "url": "https://github.com/OnixResearch/durable-file-publication.git"
       },
       "original": {
-        "rev": "951c27f59003cea9bfdb40ed4d89653d50fada1f",
+        "rev": "6d5510ddb33860bf47a49b63085105c7ff88f4d5",
         "type": "git",
-        "url": "https://seed.radicle.garden/z3tAR4For7qw8ZirkJzoDw1VNDDLM.git"
+        "url": "https://github.com/OnixResearch/durable-file-publication.git"
       }
     },
     "durablePublicationSource": {
@@ -915,12 +915,12 @@
         "rev": "5d99f4e9bb954743443e340baece31256b4c53f1",
         "revCount": 68,
         "type": "git",
-        "url": "https://seed.radicle.garden/z2wsvXm5S2sJGvuV1k5JHiwi1PbKE.git"
+        "url": "https://github.com/OnixResearch/kiln.git"
       },
       "original": {
         "rev": "5d99f4e9bb954743443e340baece31256b4c53f1",
         "type": "git",
-        "url": "https://seed.radicle.garden/z2wsvXm5S2sJGvuV1k5JHiwi1PbKE.git"
+        "url": "https://github.com/OnixResearch/kiln.git"
       }
     },
     "lean4-src": {

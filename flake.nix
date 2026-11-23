@@ -46,7 +46,7 @@
       flake = false;
     };
     octet.url = "github:OnixResearch/octet/f43a1d9e81a45b15b830930be9ec5c54bfd6db00";
-    cairn.url = "github:OnixResearch/cairn/007ba5193dd8fec9067a1c0e0f8ef487807af872";
+    cairn.url = "github:OnixResearch/cairn/8f5df65624d1a06c3e483febbb877f8d8a8f425c";
     # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
     # nickel.
