@@ -186,7 +186,7 @@ fn pool_goal_input_refs(
 
 /// Test seam: corrupt one streamed NAR byte before ingest so the executor's
 /// size/digest verification is exercised end to end.
-#[cfg(debug_assertions)]
+#[cfg(feature = "remote-pool-test-seams")]
 fn tamper_pool_output_nar_for_test(action: &crate::remote_build::RemoteOutputImportAction) {
     if std::env::var_os("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR").is_none() {
         return;
@@ -204,7 +204,11 @@ fn tamper_pool_output_nar_for_test(action: &crate::remote_build::RemoteOutputImp
     // the digest comparison is what rejects the artifact.
     let index = bytes.len() / 2;
     bytes[index] ^= 0xFF;
-    let _ = std::fs::write(path, bytes);
+    if std::fs::write(path, bytes).is_ok()
+        && let Some(signal_path) = std::env::var_os("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR_SIGNAL")
+    {
+        let _ = std::fs::write(signal_path, b"tampered\n");
+    }
 }
 
 /// Match the worker's admitted outputs to the goal's requested outputs.
@@ -284,7 +288,7 @@ fn ensure_pool_attempt_is_current(
 
 /// Test seam: reassign the admitted attempt to a successor fence between
 /// admission and completion so a stale completion path is exercised end to end.
-#[cfg(debug_assertions)]
+#[cfg(feature = "remote-pool-test-seams")]
 fn reassign_pool_attempt_for_test(
     endpoint: &PoolEndpointDispatch,
     attempt: &crate::remote_build::RemoteProductionAttemptBinding,
@@ -294,7 +298,7 @@ fn reassign_pool_attempt_for_test(
     }
     let retry_policy = crunch_remote_core::attempt::RemoteAttemptRetryPolicy::default();
     let now_unix_s = endpoint.options.now_unix_s.saturating_add(retry_policy.retry_delay_secs).saturating_add(1);
-    save_coordinator_with_retry(&endpoint.state_dir, |coordinator| {
+    let result = save_coordinator_with_retry(&endpoint.state_dir, |coordinator| {
         let decision = crate::remote_build::reassign_coordinator_attempt(
             coordinator,
             &attempt.job_id,
@@ -313,7 +317,13 @@ fn reassign_pool_attempt_for_test(
             _ => Err(pool_error("test-reassign-not-dispatched")),
         }
     })
-    .map(|_| ())
+    .map(|_| ());
+    if result.is_ok()
+        && let Some(signal_path) = std::env::var_os("MANTLE_TEST_REASSIGN_POOL_ATTEMPT_SIGNAL")
+    {
+        let _ = std::fs::write(signal_path, b"reassigned\n");
+    }
+    result
 }
 
 const MAX_COORDINATOR_SAVE_ATTEMPTS: u32 = 16;
@@ -467,7 +477,7 @@ impl RemotePoolGoalExecutor {
             &endpoint.state_dir,
         )
         .map_err(|error| pool_error(&error))?;
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "remote-pool-test-seams")]
         reassign_pool_attempt_for_test(endpoint, attempt)?;
         let transfer = endpoint.transfer.as_ref().ok_or_else(|| pool_error("transfer-capability-missing"))?;
         prepare_remote_production_input_transfer(
@@ -520,7 +530,7 @@ impl RemotePoolGoalExecutor {
         };
         let mut imported: Vec<(String, snix_castore::Node)> = Vec::with_capacity(actions.len());
         for action in &actions {
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "remote-pool-test-seams")]
             tamper_pool_output_nar_for_test(action);
             let payload = match (&action.nar_payload, &action.nar_path) {
                 (Some(payload), _) => payload.clone(),

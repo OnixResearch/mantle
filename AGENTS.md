@@ -109,8 +109,8 @@ target/debug/mantle doctor                 # workflow preflight, no state mutati
 ./scripts/check-first-party-tigerstyle.sh  # = nix run .#tigerstyle -- check
 nix flake check                            # full check set (fmt/clippy/nextest/tigerstyle)
 nix build .#checks.x86_64-linux.remote-pool-seams-debug -L
-                                           # debug-profile remote pool seam rails
-                                           # (release checks ignore those two tests)
+                                           # opt-in `--features remote-pool-test-seams` rails
+                                           # (excluded from default, release, and distributed builds)
 cargo deny check                           # reads deny.toml
 ```
 

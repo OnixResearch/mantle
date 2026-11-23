@@ -126,11 +126,22 @@ fn run_single_endpoint_pool_build(
 }
 
 fn run_single_endpoint_pool_build_with(
-    _guard: std::sync::MutexGuard<'static, ()>,
+    guard: std::sync::MutexGuard<'static, ()>,
     write_build: impl FnOnce(&Path),
     prepare: impl FnOnce(&Path),
     expect_success: bool,
     seam_env: Option<(&str, &str)>,
+) -> (std::process::Output, PathBuf, tempfile::TempDir) {
+    let envs: Vec<(&str, &str)> = seam_env.into_iter().collect();
+    run_single_endpoint_pool_build_with_envs(guard, write_build, prepare, expect_success, &envs)
+}
+
+fn run_single_endpoint_pool_build_with_envs(
+    _guard: std::sync::MutexGuard<'static, ()>,
+    write_build: impl FnOnce(&Path),
+    prepare: impl FnOnce(&Path),
+    expect_success: bool,
+    seam_envs: &[(&str, &str)],
 ) -> (std::process::Output, PathBuf, tempfile::TempDir) {
     let root = tempfile::tempdir().expect("pool transfer tempdir");
     let state_dir = root.path().join("state");
@@ -228,7 +239,7 @@ fn run_single_endpoint_pool_build_with(
     ]);
     command.arg("--remote-binding-config").arg(&binding_config);
     command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
-    if let Some((key, value)) = seam_env {
+    for &(key, value) in seam_envs {
         command.env(key, value);
     }
     configure_ticket_input_fd(&mut command, &state_dir);
@@ -674,17 +685,24 @@ fn production_pool_enforces_declared_resource_quantities() {
 /// completion must reject the stale completion before exporting its outputs.
 #[test]
 #[cfg_attr(
-    not(debug_assertions),
-    ignore = "needs the pool attempt-reassignment seam, which is compiled only with debug assertions"
+    not(feature = "remote-pool-test-seams"),
+    ignore = "needs the opt-in remote-pool-test-seams Cargo feature"
 )]
 fn production_pool_rejects_a_stale_completion_after_reassignment() {
-    let (output, _worker_store, root) = run_single_endpoint_pool_build_with(
+    let signal_dir = tempfile::tempdir().expect("seam signal dir");
+    let signal_path = signal_dir.path().join("reassign-fired");
+    let signal_text = signal_path.to_str().expect("UTF-8 signal path");
+    let (output, _worker_store, root) = run_single_endpoint_pool_build_with_envs(
         serial_transfer_guard(),
         write_replayable_derivation,
         |_| {},
         false,
-        Some(("MANTLE_TEST_REASSIGN_POOL_ATTEMPT", "1")),
+        &[
+            ("MANTLE_TEST_REASSIGN_POOL_ATTEMPT", "1"),
+            ("MANTLE_TEST_REASSIGN_POOL_ATTEMPT_SIGNAL", signal_text),
+        ],
     );
+    assert!(signal_path.is_file(), "reassignment seam must actually fire when remote-pool-test-seams is enabled");
     assert!(!output.status.success(), "a stale completion must fail the goal");
     let report: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
     let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
@@ -708,6 +726,33 @@ fn production_pool_rejects_a_stale_completion_after_reassignment() {
         .values()
         .any(|job| job["current_attempt"]["fence_generation"].as_u64().is_some_and(|fence| fence > 1));
     assert!(successor, "the reassigned attempt must own a newer fence: {state}");
+}
+
+/// Without the explicit `remote-pool-test-seams` feature, even debug builds
+/// with `debug_assertions` enabled must ignore both fault-injection env vars.
+#[test]
+#[cfg(not(feature = "remote-pool-test-seams"))]
+fn default_build_ignores_remote_pool_fault_injection_env_vars() {
+    let signal_dir = tempfile::tempdir().expect("seam signal dir");
+    let reassign_signal = signal_dir.path().join("reassign-fired");
+    let tamper_signal = signal_dir.path().join("tamper-fired");
+    let (output, _worker_store, _root) = run_single_endpoint_pool_build_with_envs(
+        serial_transfer_guard(),
+        write_replayable_derivation,
+        |_| {},
+        true,
+        &[
+            ("MANTLE_TEST_REASSIGN_POOL_ATTEMPT", "1"),
+            ("MANTLE_TEST_REASSIGN_POOL_ATTEMPT_SIGNAL", reassign_signal.to_str().expect("UTF-8")),
+            ("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR", "1"),
+            ("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR_SIGNAL", tamper_signal.to_str().expect("UTF-8")),
+        ],
+    );
+    assert!(output.status.success(), "default build must ignore remote pool fault-injection env vars");
+    assert!(!reassign_signal.exists(), "reassignment seam must not fire without remote-pool-test-seams");
+    assert!(!tamper_signal.exists(), "tamper seam must not fire without remote-pool-test-seams");
+    let report: Value = serde_json::from_slice(&output.stdout).expect("pool build JSON report");
+    assert_one_pool_outcome(&report);
 }
 
 /// A source input produced by an earlier local build lives only in the client
@@ -1156,8 +1201,8 @@ fn production_pool_dispatches_one_content_addressed_goal_through_the_worker() {
 /// concurrency slot is not leaked to the next goal.
 #[test]
 #[cfg_attr(
-    not(debug_assertions),
-    ignore = "needs the pool output-NAR tamper seam, which is compiled only with debug assertions"
+    not(feature = "remote-pool-test-seams"),
+    ignore = "needs the opt-in remote-pool-test-seams Cargo feature"
 )]
 fn production_pool_failures_release_attempt_capacity() {
     let _guard = serial_transfer_guard();
@@ -1296,8 +1341,11 @@ fn production_pool_failures_release_attempt_capacity() {
         ]);
         command.arg("--remote-binding-config").arg(&binding_config);
         command.env("CREDENTIALS_DIRECTORY", state_dir.join("credentials"));
+        let tamper_signal = root.path().join("tamper-fired");
         if tamper_output {
+            let _ = fs::remove_file(&tamper_signal);
             command.env("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR", "1");
+            command.env("MANTLE_TEST_TAMPER_POOL_OUTPUT_NAR_SIGNAL", &tamper_signal);
         }
         configure_ticket_input_fd(&mut command, &state_dir);
         let output = command.output().expect("run pool build");
@@ -1326,6 +1374,10 @@ fn production_pool_failures_release_attempt_capacity() {
     write_named_replay_derivation(&tampered_file, "production-remote-tampered");
     let published_before_tamper = fs::read_dir(&client_store).expect("client store entries").count();
     let (tampered_ok, tampered_report) = run(&pool_config, &tampered_file, true);
+    assert!(
+        root.path().join("tamper-fired").is_file(),
+        "output-NAR tamper seam must actually fire when remote-pool-test-seams is enabled"
+    );
     assert!(!tampered_ok, "a tampered output NAR must fail the goal: {tampered_report}");
     let tampered_failure = tampered_report.to_string();
     assert!(

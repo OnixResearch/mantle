@@ -1124,19 +1124,19 @@
           // crunchCheckEnv
         );
 
-        # The canonical `crunch` check above runs `cargo test --profile release`,
-        # where the debug-only pool seams are compiled out, so
-        # `production_pool_failures_release_attempt_capacity` and
-        # `production_pool_rejects_a_stale_completion_after_reassignment` are
-        # ignored. Run that integration target in the dev profile so the seams
-        # exist and both cases execute.
+        # Default dev, release, and distributed builds exclude the remote pool
+        # fault-injection seams (they require the opt-in `remote-pool-test-seams`
+        # Cargo feature), so `production_pool_failures_release_attempt_capacity`
+        # and `production_pool_rejects_a_stale_completion_after_reassignment` are
+        # ignored in default checks. Run that integration target explicitly with
+        # `--features remote-pool-test-seams` so both cases execute end to end.
         remotePoolSeamsDebug = craneLib.cargoTest (
           {
             pname = "mantle-remote-pool-seams-debug";
             inherit src cargoVendorDir nativeBuildInputs buildInputs;
             cargoArtifacts = cargoArtifactsDebug;
             CARGO_PROFILE = "dev";
-            cargoTestExtraArgs = "--test remote_transfer_production -- --test-threads 1";
+            cargoTestExtraArgs = "--features remote-pool-test-seams --test remote_transfer_production -- --test-threads 1";
             doInstallCargoArtifacts = false;
             nativeCheckInputs = crunchCheckInputs;
           }
