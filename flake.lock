@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "advisory-db": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1795449682,
+        "narHash": "sha256-N84OgNfnhs3ttOfL9/MPkRBjZO/Nlm4ysrbL7eKmIp8=",
+        "owner": "rustsec",
+        "repo": "advisory-db",
+        "rev": "52384ab5581a4487b62c549eef95cf7ba7e8bad5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rustsec",
+        "repo": "advisory-db",
+        "type": "github"
+      }
+    },
     "aeneas": {
       "inputs": {
         "charon": "charon",
@@ -1434,6 +1450,7 @@
     },
     "root": {
       "inputs": {
+        "advisory-db": "advisory-db",
         "artifactAuthSource": "artifactAuthSource",
         "boundedTreeSource": "boundedTreeSource",
         "cairn": "cairn",

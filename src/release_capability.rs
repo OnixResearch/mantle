@@ -415,6 +415,27 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
+    fn cap_std_root_rejects_trailing_slash_symlink_escape() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root_path = temp.path().join("root");
+        let outside_path = temp.path().join("outside");
+        std::fs::create_dir(&root_path).expect("root dir");
+        std::fs::create_dir(&outside_path).expect("outside dir");
+        std::fs::write(outside_path.join("secret.txt"), b"secret").expect("outside secret");
+        std::os::unix::fs::symlink("../outside", root_path.join("escape")).expect("symlink");
+        std::os::unix::fs::symlink("../outside/", root_path.join("escape-slash")).expect("trailing-slash symlink");
+        let root = ReleaseCapabilityRoot::open_ambient(ReleaseRootKind::ReleaseEvidence, &root_path).expect("cap root");
+
+        for probe in ["escape/", "escape-slash", "escape-slash/"] {
+            assert!(root.dir().open_dir(probe).is_err(), "open_dir({probe}) must reject symlink escape");
+            assert!(root.dir().read_dir(probe).is_err(), "read_dir({probe}) must reject symlink escape");
+            assert!(root.dir().open(probe).is_err(), "open({probe}) must reject symlink escape");
+            assert!(root.dir().canonicalize(probe).is_err(), "canonicalize({probe}) must reject symlink escape");
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
     fn nofollow_root_open_rejects_symlink_root_and_parent() {
         let temp = tempfile::tempdir().expect("tempdir");
         let real_root = temp.path().join("real-root");

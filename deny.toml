@@ -7,11 +7,43 @@ no-default-features = false
 feature-depth = 1
 
 [advisories]
+unsound = "all"
+yanked = "allow"
 ignore = [
+  # Pre-existing transitive ignores
   { id = "RUSTSEC-2024-0436", reason = "paste comes through crunch-eval -> nickel-lang-core 0.18.0; remove when Nickel releases a paste-free core or Mantle carries that upstream migration" },
   { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 comes through vendor/snix-build -> oci-spec 0.7.1 -> getset 0.1.6; latest checked oci-spec 0.10.0 still uses getset, so remove when oci-spec/getset no longer pulls proc-macro-error2" },
   { id = "RUSTSEC-2026-0194", reason = "quick-xml comes through vendor/snix-castore -> object_store 0.14.0 -> quick-xml 0.40.1; remove when object_store permits quick-xml >=0.41" },
   { id = "RUSTSEC-2026-0195", reason = "quick-xml comes through vendor/snix-castore -> object_store 0.14.0 -> quick-xml 0.40.1; remove when object_store permits quick-xml >=0.41" },
+
+  # Vulnerability advisories in transitive dependencies without semver-compatible fixes
+  { id = "RUSTSEC-2023-0071", reason = "rsa 0.9.10 comes through basalt -> jsonwebtoken 11.0.0 and secretspec 0.17.0 (Marvin attack affects RSA decryption; Mantle uses Ed25519/RS256 verification only); remove when jsonwebtoken and secretspec adopt rsa >=0.10.0" },
+  { id = "RUSTSEC-2026-0292", reason = "imbl-sized-chunks 0.1.3 comes through crunch-eval -> nickel-lang-vector 0.2.0; remove when Nickel upgrades nickel-lang-vector/imbl-sized-chunks to >=0.2.0" },
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5.5 comes through basalt -> ucan-nostr -> k256 0.13.4 -> elliptic-curve 0.13.8; remove when basalt/ucan-nostr cohort adopts k256 >=0.14 / crypto-bigint >=0.7.6" },
+
+  # Unsoundness advisories in transitive dependencies without semver-compatible fixes
+  { id = "RUSTSEC-2023-0056", reason = "vm-memory 0.10.0 comes through vendored vendor/fuse-backend-rs 0.12.0 (only affects custom VolatileMemory impls with undersized get_slice); remove when fuse-backend-rs is updated to vm-memory >=0.12.2" },
+  { id = "RUSTSEC-2024-0002", reason = "vmm-sys-util 0.11.2 comes through vendored vendor/fuse-backend-rs 0.12.0 (affects FamStructWrapper serde deserialization, unused by Mantle); remove when fuse-backend-rs is updated to vmm-sys-util >=0.12.0" },
+  { id = "RUSTSEC-2025-0167", reason = "bitmaps 3.2.1 comes through crunch-eval -> nickel-lang-vector 0.2.0 -> imbl-sized-chunks 0.1.3; remove when Nickel upgrades away from imbl-sized-chunks 0.1.3/bitmaps" },
+  { id = "RUSTSEC-2026-0253", reason = "lru 0.16.4 comes through vendored vendor/snix-store (only triggers if a stored key's Drop impl panics during pop()); remove when vendor/snix-store is upgraded to lru >=0.18.2" },
+  { id = "RUSTSEC-2026-0306", reason = "faster-hex 0.10.0 comes through crunch-build -> gix 0.81.0 -> gix-hash 0.23.0 (patched in faster-hex 2.0.0); remove when gix-hash adopts faster-hex >=0.10.1/2.0" },
+  { id = "RUSTSEC-2026-0574", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0575", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0576", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0577", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0578", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0579", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0580", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0581", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+  { id = "RUSTSEC-2026-0582", reason = "heapless 0.8.0 comes through gix -> gix-hash -> faster-hex 0.10.0; remove when faster-hex drops heapless 0.8 or upgrades to >=0.9.4" },
+
+  # Unmaintained advisories in transitive dependencies
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error 0.4.12 comes through bao-tree/turso -> genawaiter 0.99.1; remove when genawaiter/turso/bao-tree drop proc-macro-error" },
+  { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml 0.2.11 comes through crunch-eval -> nickel-lang-core 0.18.0 -> serde_yaml 0.9.34; remove when Nickel replaces serde_yaml" },
+  { id = "RUSTSEC-2026-0247", reason = "bitmaps 3.2.1 comes through crunch-eval -> nickel-lang-vector 0.2.0 -> imbl-sized-chunks 0.1.3; remove when Nickel replaces imbl-sized-chunks" },
+  { id = "RUSTSEC-2026-0440", reason = "astral-tokio-tar 0.6.4 comes through casita and vendor/snix-castore (tracked in #33 for tar-codec evaluation); remove when casita and snix-castore migrate off astral-tokio-tar" },
+  { id = "RUSTSEC-2026-0542", reason = "humantime 2.3.0 comes through casita and vendor/snix-castore -> object_store 0.14.0; remove when object_store replaces humantime" },
+  { id = "RUSTSEC-2026-0543", reason = "chrono 0.4.44 comes through casita/turso, object_store, and snix-castore; remove when upstream store/turso/object_store dependencies migrate off chrono" },
 ]
 
 [licenses]

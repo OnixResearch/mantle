@@ -55,6 +55,10 @@
       url = "github:cachix/casita/90404fcb1cfb3d83f2233715448dfefe913f5fd1";
       flake = false;
     };
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
   outputs =
@@ -76,6 +80,7 @@
       cairn,
       nickelCohort,
       casitaSource,
+      advisory-db,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -1625,6 +1630,38 @@
           casita-crunch-store-check = casitaCrunchStoreCheck;
           # Builds exactly the locked, clean-source Crane dependency closure.
           casita-vendor-closure = cargoVendorDir;
+          cargo-deny =
+            pkgs.runCommand "mantle-cargo-deny"
+              {
+                inherit src;
+                nativeBuildInputs = [
+                  pkgs.cargo-deny
+                  pkgs.git
+                  rustToolchain
+                ];
+              }
+              ''
+                set -eu
+                export HOME="$TMPDIR/home"
+                export CARGO_HOME="$TMPDIR/cargo-home"
+                mkdir -p "$HOME" "$CARGO_HOME"
+                cp "${cargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
+
+                db_dir="$CARGO_HOME/advisory-dbs/advisory-db-3157b0e258782691"
+                mkdir -p "$db_dir"
+                cp -R "${advisory-db}/." "$db_dir/"
+                chmod -R u+w "$db_dir"
+                git -C "$db_dir" init -q
+                git -C "$db_dir" config user.name "Mantle Nix Check"
+                git -C "$db_dir" config user.email "nix-check@mantle.local"
+                git -C "$db_dir" add -A
+                git -C "$db_dir" commit -q -m "pinned rustsec advisory-db"
+
+                cd "$src"
+                cargo-deny --offline --locked check -c "${./deny.toml}" --disable-fetch --hide-inclusion-graph \
+                  advisories licenses bans sources
+                touch "$out"
+              '';
           bounded-tree-source-admission =
             assert boundedTreeSourceAdmitted;
             pkgs.runCommand "mantle-bounded-tree-source-admission"

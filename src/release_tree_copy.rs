@@ -1320,4 +1320,28 @@ mod tests {
         let depth_result = prepare_tree_copy_with_limits(&depth_source, depth_limits);
         assert!(depth_result.unwrap_err().to_string().contains("path depth"));
     }
+
+    #[test]
+    #[cfg(unix)]
+    fn source_symlink_with_trailing_slash_fails_closed_in_release_tree_copy() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        let destination = temp.path().join("destination");
+        let external = temp.path().join("external");
+        std::fs::create_dir(&source).unwrap();
+        write_file(&external.join("secret.txt"), SENTINEL_BYTES);
+        symlink("../external/", source.join("escape-slash")).unwrap();
+
+        let source_root = ReleaseCapabilityRoot::open_ambient(ReleaseRootKind::BuildArtifact, &source).unwrap();
+        assert!(source_root.dir().open_dir("escape-slash/").is_err());
+        assert!(source_root.dir().open_dir("escape-slash").is_err());
+        assert!(source_root.dir().read_dir("escape-slash/").is_err());
+
+        let result = copy_directory_tree(&source, &destination);
+        assert!(result.is_err(), "release tree copy must reject escaping trailing-slash symlink");
+        assert!(!destination.join("escape-slash").join("secret.txt").exists());
+        assert_eq!(std::fs::read(external.join("secret.txt")).unwrap(), SENTINEL_BYTES);
+    }
 }
