@@ -46,7 +46,10 @@
       flake = false;
     };
     octet.url = "github:OnixResearch/octet/f43a1d9e81a45b15b830930be9ec5c54bfd6db00";
-    cairn.url = "github:OnixResearch/cairn/8f5df65624d1a06c3e483febbb877f8d8a8f425c";
+    cairn = {
+      url = "github:OnixResearch/cairn/8f5df65624d1a06c3e483febbb877f8d8a8f425c";
+      inputs.durable-file-publication.follows = "durablePublicationSource";
+    };
     # Pinned Nickel CLI cohort 1.17.0 (tag 1.17.0). Mantle validates sources
     # and runs CLI checks with this exact evaluator, never a floating nixpkgs
     # nickel.
@@ -1887,22 +1890,26 @@
                 expected_receipt_hash="$(tr -d '\n' < evidence/radicle/durable-file-publication-adoption-v1.blake3)"
                 test "$receipt_hash" = "$expected_receipt_hash"
 
-                for binding in \
-                  'cargo.manifest_blake3:Cargo.toml' \
-                  'cargo.lock_blake3:Cargo.lock' \
-                  'nix.flake_blake3:flake.nix' \
-                  'nix.lock_blake3:flake.lock'; do
-                  field="''${binding%%:*}"
-                  path="''${binding#*:}"
-                  expected="$(jq -r ".$field" evidence/radicle/durable-file-publication-adoption-v1.json)"
-                  actual="$(b3sum "$path" | cut -d ' ' -f 1)"
-                  test "$actual" = "$expected"
+                # The accepted adoption receipt retains its historical whole-file
+                # Cargo/Nix lock hashes. Current live source admission is validated
+                # below via scoped flake input, flake.lock, Cargo.toml, and Cargo.lock
+                # checks (matching artifact-auth-radicle-cutover).
+                for field in \
+                  'cargo.manifest_blake3' \
+                  'cargo.lock_blake3' \
+                  'nix.flake_blake3' \
+                  'nix.lock_blake3'; do
+                  jq -e ".$field | type == \"string\" and test(\"^[0-9a-f]{64}$\")" \
+                    evidence/radicle/durable-file-publication-adoption-v1.json >/dev/null
                 done
 
                 source_url='${durablePublicationRepository}'
                 source_rid='${durablePublicationRid}'
                 source_rev='${durablePublicationRevision}'
                 source_nar_hash='sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI='
+                rg -Fq "git = \"$source_url\", rev = \"$source_rev\"" Cargo.toml
+                rg -Fq "git+$source_url?rev=$source_rev#$source_rev" Cargo.lock
+                rg -Fq "url = \"git+$source_url?rev=$source_rev\";" flake.nix
                 jq -e \
                   --arg url "$source_url" \
                   --arg rid "$source_rid" \

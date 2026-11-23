@@ -138,7 +138,9 @@
         "artifact": "artifact",
         "bounded-exec": "bounded-exec",
         "cap-root": "cap-root",
-        "durable-file-publication": "durable-file-publication",
+        "durable-file-publication": [
+          "durablePublicationSource"
+        ],
         "kiln-core": "kiln-core",
         "mantle-build-contract": "mantle-build-contract",
         "nickel-1-17-0": "nickel-1-17-0",
@@ -437,23 +439,6 @@
         "owner": "ipetkov",
         "repo": "crane",
         "type": "github"
-      }
-    },
-    "durable-file-publication": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1794509743,
-        "narHash": "sha256-fKxZ+3rzWzVuawILnmpiYCCe8PT/z6usopFMbr2KFbI=",
-        "ref": "refs/heads/main",
-        "rev": "6d5510ddb33860bf47a49b63085105c7ff88f4d5",
-        "revCount": 1,
-        "type": "git",
-        "url": "https://github.com/OnixResearch/durable-file-publication.git"
-      },
-      "original": {
-        "rev": "6d5510ddb33860bf47a49b63085105c7ff88f4d5",
-        "type": "git",
-        "url": "https://github.com/OnixResearch/durable-file-publication.git"
       }
     },
     "durablePublicationSource": {
