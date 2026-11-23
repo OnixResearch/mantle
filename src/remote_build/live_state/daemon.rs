@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
 use std::io::{self};
@@ -31,6 +32,7 @@ use std::sync::mpsc::TrySendError;
 use std::sync::mpsc::{self};
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -53,6 +55,9 @@ const MAX_CONNECTIONS: usize = 128;
 const MAX_FILTER_ITEMS: usize = 64;
 const SUBSCRIBER_QUEUE: usize = 64;
 const IO_INTERVAL: Duration = Duration::from_millis(100);
+const SUBSCRIBE_FLUSH_DEADLINE_MS: u64 = 100;
+const SUBSCRIBE_OUTPUT_BUFFER_BYTES: usize = 64 * 1024;
+const SUBSCRIBE_READ_BUFFER_BYTES: usize = 64 * 1024;
 
 #[derive(Deserialize)]
 #[serde(tag = "op", rename_all = "kebab-case", deny_unknown_fields)]
@@ -480,7 +485,7 @@ pub fn subscribe(socket: &Path, filter: LiveFilter, output: &mut impl Write) -> 
     };
     serde_json::to_writer(&mut stream, &request).map_err(io::Error::other)?;
     stream.write_all(b"\n")?;
-    observe_subscription(BufReader::new(stream), output, &plan)
+    observe_subscription(BufReader::with_capacity(SUBSCRIBE_READ_BUFFER_BYTES, stream), output, &plan)
 }
 
 #[derive(Deserialize)]
@@ -494,23 +499,59 @@ struct SubscriptionFrame<'a> {
     fact: Option<IncomingFact>,
 }
 
+trait SubscriptionBufRead: BufRead {
+    fn has_buffered_bytes(&self) -> bool;
+}
+
+impl<R: Read> SubscriptionBufRead for BufReader<R> {
+    fn has_buffered_bytes(&self) -> bool {
+        !self.buffer().is_empty()
+    }
+}
+
+impl<T: AsRef<[u8]>> SubscriptionBufRead for io::Cursor<T> {
+    fn has_buffered_bytes(&self) -> bool {
+        self.position() < self.get_ref().as_ref().len() as u64
+    }
+}
+
 fn observe_subscription(
-    mut reader: impl BufRead,
+    reader: impl SubscriptionBufRead,
     output: &mut impl Write,
     plan: &super::super::operation::RemoteOperationPlan,
 ) -> io::Result<()> {
+    observe_subscription_with_clock(reader, output, plan, Instant::now)
+}
+
+fn observe_subscription_with_clock(
+    mut reader: impl SubscriptionBufRead,
+    output: &mut impl Write,
+    plan: &super::super::operation::RemoteOperationPlan,
+    mut now: impl FnMut() -> Instant,
+) -> io::Result<()> {
+    let mut buffered = BufWriter::with_capacity(SUBSCRIBE_OUTPUT_BUFFER_BYTES, output);
+    let mut oldest_unflushed: Option<Instant> = None;
     let mut frame = Vec::with_capacity(512);
     let mut snapshots = 0_u64;
     let mut snapshot_open = false;
+    let flush_deadline = Duration::from_millis(SUBSCRIBE_FLUSH_DEADLINE_MS);
+
     loop {
         frame.clear();
         loop {
-            let available = reader.fill_buf()?;
+            let available = match reader.fill_buf() {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    let _ = flush_if_pending(&mut buffered, &mut oldest_unflushed);
+                    return Err(error);
+                }
+            };
             if available.is_empty() {
                 break;
             }
             let count = available.iter().position(|byte| *byte == b'\n').map_or(available.len(), |index| index + 1);
             if frame.len().saturating_add(count) > MAX_FRAME_BYTES {
+                let _ = flush_if_pending(&mut buffered, &mut oldest_unflushed);
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "live subscription frame exceeds limit"));
             }
             frame.extend_from_slice(&available[..count]);
@@ -520,6 +561,7 @@ fn observe_subscription(
             }
         }
         if frame.is_empty() {
+            flush_if_pending(&mut buffered, &mut oldest_unflushed)?;
             return super::super::operation::classify(
                 plan,
                 super::super::operation::RemoteOperationFacts::Subscription {
@@ -530,38 +572,20 @@ fn observe_subscription(
             .map_err(|error| io::Error::other(error.to_string()));
         }
         if frame.last() != Some(&b'\n') {
+            let _ = flush_if_pending(&mut buffered, &mut oldest_unflushed);
             return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "truncated live subscription frame"));
         }
-        let event: SubscriptionFrame<'_> = serde_json::from_slice(&frame).map_err(io::Error::other)?;
-        let valid = event.schema == LIVE_PROTOCOL_SCHEMA
-            && match event.op {
-                "snapshot-start" if snapshots == 0 && !snapshot_open => {
-                    snapshot_open = true;
-                    event.owner_run_id.is_none() && event.fact_id.is_none() && event.fact.is_none()
-                }
-                "snapshot-end" if snapshot_open => {
-                    snapshot_open = false;
-                    snapshots += 1;
-                    event.owner_run_id.is_none() && event.fact_id.is_none() && event.fact.is_none()
-                }
-                "publish" if snapshot_open || snapshots > 0 => {
-                    match (event.owner_run_id, event.fact_id, event.fact.as_ref()) {
-                        (Some(owner), Some(id), Some(fact)) => {
-                            fact.schema == LIVE_BUILD_FACT_SCHEMA
-                                && valid_fact_value(owner, &fact.value)
-                                && fact_identity(owner, &fact.value).is_ok_and(|expected| expected == id)
-                        }
-                        _ => false,
-                    }
-                }
-                "retract" if !snapshot_open && snapshots > 0 => {
-                    event.fact.is_none()
-                        && event.owner_run_id.is_some_and(|id| admit_identity(id).is_ok())
-                        && event.fact_id.is_some_and(|id| admit_identity(id).is_ok())
-                }
-                _ => false,
-            };
+        let event: SubscriptionFrame<'_> = match serde_json::from_slice(&frame) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                let _ = flush_if_pending(&mut buffered, &mut oldest_unflushed);
+                return Err(io::Error::other(error));
+            }
+        };
+        let is_snapshot_end = event.op == "snapshot-end";
+        let valid = validate_subscription_frame(&event, &mut snapshots, &mut snapshot_open);
         if !valid {
+            let _ = flush_if_pending(&mut buffered, &mut oldest_unflushed);
             let _ =
                 super::super::operation::classify(plan, super::super::operation::RemoteOperationFacts::Subscription {
                     snapshots,
@@ -569,9 +593,59 @@ fn observe_subscription(
                 });
             return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid live subscription event"));
         }
-        output.write_all(&frame)?;
-        output.flush()?;
+        buffered.write_all(&frame)?;
+        let current_time = now();
+        let oldest = *oldest_unflushed.get_or_insert(current_time);
+        let should_flush = is_snapshot_end
+            || !reader.has_buffered_bytes()
+            || current_time.saturating_duration_since(oldest) >= flush_deadline;
+        if should_flush {
+            flush_if_pending(&mut buffered, &mut oldest_unflushed)?;
+        }
     }
+}
+
+fn validate_subscription_frame(event: &SubscriptionFrame<'_>, snapshots: &mut u64, snapshot_open: &mut bool) -> bool {
+    event.schema == LIVE_PROTOCOL_SCHEMA
+        && match event.op {
+            "snapshot-start" if *snapshots == 0 && !*snapshot_open => {
+                *snapshot_open = true;
+                event.owner_run_id.is_none() && event.fact_id.is_none() && event.fact.is_none()
+            }
+            "snapshot-end" if *snapshot_open => {
+                *snapshot_open = false;
+                *snapshots = snapshots.saturating_add(1);
+                event.owner_run_id.is_none() && event.fact_id.is_none() && event.fact.is_none()
+            }
+            "publish" if *snapshot_open || *snapshots > 0 => {
+                match (event.owner_run_id, event.fact_id, event.fact.as_ref()) {
+                    (Some(owner), Some(id), Some(fact)) => {
+                        fact.schema == LIVE_BUILD_FACT_SCHEMA
+                            && valid_fact_value(owner, &fact.value)
+                            && fact_identity(owner, &fact.value).is_ok_and(|expected| expected == id)
+                    }
+                    _ => false,
+                }
+            }
+            "retract" if !*snapshot_open && *snapshots > 0 => {
+                event.fact.is_none()
+                    && event.owner_run_id.is_some_and(|id| admit_identity(id).is_ok())
+                    && event.fact_id.is_some_and(|id| admit_identity(id).is_ok())
+            }
+            _ => false,
+        }
+}
+
+fn flush_if_pending(
+    buffered: &mut BufWriter<&mut impl Write>,
+    oldest_unflushed: &mut Option<Instant>,
+) -> io::Result<()> {
+    if oldest_unflushed.is_none() && buffered.buffer().is_empty() {
+        return Ok(());
+    }
+    buffered.flush()?;
+    *oldest_unflushed = None;
+    Ok(())
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -1448,6 +1522,201 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(output.is_empty());
+    }
+
+    struct CountingWriter {
+        bytes: Vec<u8>,
+        writes: usize,
+        flushes: usize,
+    }
+
+    impl CountingWriter {
+        fn new() -> Self {
+            Self {
+                bytes: Vec::new(),
+                writes: 0,
+                flushes: 0,
+            }
+        }
+    }
+
+    impl Write for CountingWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.writes += 1;
+            self.bytes.extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.flushes += 1;
+            Ok(())
+        }
+    }
+
+    fn encoded_publish_frame(owner: &str, index: u32) -> String {
+        let value = LiveBuildFactValue::WorkerPresence {
+            endpoint_id: format!("worker-{index}"),
+            generation: 1,
+        };
+        let id = fact_identity(owner, &value).unwrap();
+        let fact = LiveBuildFact {
+            schema: LIVE_BUILD_FACT_SCHEMA,
+            value,
+        };
+        serde_json::to_string(&serde_json::json!({
+            "schema": LIVE_PROTOCOL_SCHEMA,
+            "op": "publish",
+            "owner_run_id": owner,
+            "fact_id": id,
+            "fact": fact,
+        }))
+        .unwrap()
+            + "\n"
+    }
+
+    #[test]
+    fn observe_subscription_coalesces_4096_fact_snapshot_burst_into_constant_flushes() {
+        const FACT_COUNT: u32 = 4_096;
+        let plan = super::super::super::operation::plan(super::super::super::operation::RemoteOperation::LiveSubscribe)
+            .unwrap();
+        let mut wire = String::with_capacity(1024 * 1024);
+        wire.push_str(&format!("{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-start\"}}\n"));
+        for index in 0..FACT_COUNT {
+            wire.push_str(&encoded_publish_frame("run-burst", index));
+        }
+        wire.push_str(&format!("{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-end\"}}\n"));
+
+        let mut writer = CountingWriter::new();
+        let start = Instant::now();
+        observe_subscription_with_clock(std::io::Cursor::new(wire.as_bytes()), &mut writer, &plan, || start).unwrap();
+
+        assert_eq!(writer.bytes, wire.as_bytes());
+        assert_eq!(writer.flushes, 1, "4096-fact burst must flush once at snapshot-end");
+        assert!(writer.writes < 64, "buffered writes must be O(bytes/64KiB), got {} writes", writer.writes);
+    }
+
+    #[test]
+    fn observe_subscription_flushes_immediately_on_idle_after_single_publish() {
+        struct SharedWriter {
+            bytes: Arc<Mutex<Vec<u8>>>,
+            flushes: Arc<Mutex<usize>>,
+        }
+
+        impl Write for SharedWriter {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                self.bytes.lock().unwrap().extend_from_slice(buf);
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                *self.flushes.lock().unwrap() += 1;
+                Ok(())
+            }
+        }
+
+        let plan = super::super::super::operation::plan(super::super::super::operation::RemoteOperation::LiveSubscribe)
+            .unwrap();
+        let (mut sender, receiver) = UnixStream::pair().unwrap();
+        let bytes = Arc::new(Mutex::new(Vec::new()));
+        let flushes = Arc::new(Mutex::new(0_usize));
+        let writer_bytes = Arc::clone(&bytes);
+        let writer_flushes = Arc::clone(&flushes);
+
+        let observer = thread::spawn(move || {
+            let mut writer = SharedWriter {
+                bytes: writer_bytes,
+                flushes: writer_flushes,
+            };
+            observe_subscription(BufReader::with_capacity(SUBSCRIBE_READ_BUFFER_BYTES, receiver), &mut writer, &plan)
+        });
+
+        let snapshot = format!(
+            "{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-start\"}}\n{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-end\"}}\n"
+        );
+        sender.write_all(snapshot.as_bytes()).unwrap();
+        sender.flush().unwrap();
+
+        let single_publish = encoded_publish_frame("run-idle", 1);
+        sender.write_all(single_publish.as_bytes()).unwrap();
+        sender.flush().unwrap();
+
+        // Stream stays open and idle; the single publish must arrive promptly.
+        let expected_len = snapshot.len() + single_publish.len();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if bytes.lock().unwrap().len() >= expected_len {
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(bytes.lock().unwrap().as_slice(), format!("{snapshot}{single_publish}").as_bytes());
+        assert!(*flushes.lock().unwrap() >= 1);
+
+        drop(sender);
+        observer.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn observe_subscription_flushes_buffered_burst_when_deadline_elapses() {
+        let plan = super::super::super::operation::plan(super::super::super::operation::RemoteOperation::LiveSubscribe)
+            .unwrap();
+        let mut wire = format!("{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-start\"}}\n");
+        for index in 0..4 {
+            wire.push_str(&encoded_publish_frame("run-clock", index));
+        }
+        wire.push_str(&format!("{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-end\"}}\n"));
+
+        let mut writer = CountingWriter::new();
+        let base = Instant::now();
+        let mut step = 0_u64;
+        observe_subscription_with_clock(std::io::Cursor::new(wire.as_bytes()), &mut writer, &plan, || {
+            let tick = base + Duration::from_millis(step * 60);
+            step += 1;
+            tick
+        })
+        .unwrap();
+
+        assert_eq!(writer.bytes, wire.as_bytes());
+        // With 60 ms per frame and a 100 ms deadline, mid-burst deadline flushes occur before snapshot-end.
+        assert!(writer.flushes >= 2, "expected deadline flush before snapshot-end, got {}", writer.flushes);
+        assert!(writer.flushes < 6, "must still coalesce frames within the 100 ms window, got {}", writer.flushes);
+    }
+
+    #[test]
+    fn observe_subscription_flushes_prior_valid_frames_before_returning_error() {
+        let plan = super::super::super::operation::plan(super::super::super::operation::RemoteOperation::LiveSubscribe)
+            .unwrap();
+        let valid_prefix = format!(
+            "{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\",\"op\":\"snapshot-start\"}}\n{}",
+            encoded_publish_frame("run-err", 1)
+        );
+
+        let malformed_wire = format!("{valid_prefix}{{\"schema\":\"foreign\",\"op\":\"publish\"}}\n");
+        let mut malformed_out = CountingWriter::new();
+        let start = Instant::now();
+        let err = observe_subscription_with_clock(
+            std::io::Cursor::new(malformed_wire.as_bytes()),
+            &mut malformed_out,
+            &plan,
+            || start,
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(malformed_out.bytes, valid_prefix.as_bytes());
+        assert_eq!(malformed_out.flushes, 1);
+
+        let truncated_wire = format!("{valid_prefix}{{\"schema\":\"{LIVE_PROTOCOL_SCHEMA}\"");
+        let mut truncated_out = CountingWriter::new();
+        let err = observe_subscription_with_clock(
+            std::io::Cursor::new(truncated_wire.as_bytes()),
+            &mut truncated_out,
+            &plan,
+            || start,
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
+        assert_eq!(truncated_out.bytes, valid_prefix.as_bytes());
+        assert_eq!(truncated_out.flushes, 1);
     }
 
     struct Fixture {
