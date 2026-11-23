@@ -611,6 +611,7 @@ where
                 }
             })
             .allow_network(request.constraints.contains(&BuildConstraints::NetworkAccess))
+            .dns_config(request.dns_config.clone())
             .provide_proc_metadata(request.constraints.contains(&BuildConstraints::ProvideProcMetadata))
             .provide_random_devices(request.constraints.contains(&BuildConstraints::ProvideRandomDevices))
             .provide_shell(

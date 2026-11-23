@@ -156,11 +156,6 @@ hosts: files dns
 services: files
 ";
 
-const ETC_RESOLV_CONF: &[u8] = b"
-nameserver 127.0.0.1
-nameserver 8.8.8.8
-";
-
 const ETC_SERVICES: &[u8] = b"
 tcpmux          1/tcp
 echo            7/tcp
@@ -576,7 +571,16 @@ impl Bwrap {
             "/etc/group".into(),
         ]);
         if spec.allow_network() {
-            fs::write(etc.join("resolv.conf"), ETC_RESOLV_CONF)?;
+            let Some(dns_config) = spec.dns_config() else {
+                return Err(std::io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "network-enabled sandbox requires an explicit validated DNS resolver configuration",
+                ));
+            };
+            let rendered_resolv_conf = dns_config
+                .render_resolv_conf()
+                .map_err(|error| std::io::Error::new(ErrorKind::InvalidInput, error))?;
+            fs::write(etc.join("resolv.conf"), rendered_resolv_conf.as_bytes())?;
             fs::write(etc.join("services"), ETC_SERVICES)?;
             args.extend([
                 "--ro-bind".into(),
@@ -593,6 +597,12 @@ impl Bwrap {
                 "/etc/nsswitch.conf".into(),
             ]);
         } else {
+            if spec.dns_config().is_some() {
+                return Err(std::io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "DNS resolver configuration is forbidden when sandbox network access is denied",
+                ));
+            }
             // Use predefined /etc/hosts like nix does.
             // Among other things it is required for libuv getaddrinfo() tests to pass.
             args.extend(["--ro-bind".into(), etc.join("hosts").into(), "/etc/hosts".into()]);
@@ -826,29 +836,54 @@ mod tests {
     }
 
     #[test]
-    fn synthetic_etc_files_are_not_empty() {
-        assert!(!ETC_RESOLV_CONF.is_empty());
+    fn synthetic_etc_services_is_not_empty() {
         assert!(!ETC_SERVICES.is_empty());
-        assert!(ETC_RESOLV_CONF.windows("nameserver".len()).any(|w| w == b"nameserver"));
         assert!(ETC_SERVICES.windows("https".len()).any(|w| w == b"https"));
     }
 
     #[test]
-    fn network_sandbox_binds_synthetic_resolv_conf_and_services() {
+    fn network_sandbox_binds_explicit_private_resolver_without_public_dns_fallback() {
         let tempdir = tempfile::tempdir().expect("tempdir must be available");
-        let bwrap = Bwrap::initialize(minimal_spec(tempdir.path(), true)).expect("network sandbox should initialize");
+        let dns = crate::buildservice::SandboxDnsConfig::new(
+            vec!["10.53.0.2".parse().expect("valid ip")],
+            vec!["corp.internal".to_string()],
+        )
+        .expect("valid private dns config");
+        let spec = SandboxSpec::builder()
+            .host_workdir(tempdir.path())
+            .command(["/bin/sh", "-c", "true"])
+            .sandbox_workdir("build")
+            .scratches(["build"])
+            .allow_network(true)
+            .dns_config(Some(dns))
+            .build();
+        let bwrap = Bwrap::initialize(spec).expect("network sandbox with explicit resolver should initialize");
         let args = arg_strings(&bwrap);
 
         let resolv_source = bind_source_for(&args, "/etc/resolv.conf").expect("resolv.conf must be bound");
         let services_source = bind_source_for(&args, "/etc/services").expect("services must be bound");
         assert_ne!(resolv_source, "/etc/resolv.conf");
         assert_ne!(services_source, "/etc/services");
-        assert_eq!(fs::read(&resolv_source).expect("synthetic resolv.conf readable"), ETC_RESOLV_CONF);
+        let resolv_contents = fs::read_to_string(&resolv_source).expect("synthetic resolv.conf readable");
+        assert_eq!(resolv_contents, "nameserver 10.53.0.2\nsearch corp.internal\n");
+        assert!(!resolv_contents.contains("8.8.8.8"));
+        assert!(!resolv_contents.contains("127.0.0.1"));
         assert_eq!(fs::read(&services_source).expect("synthetic services readable"), ETC_SERVICES);
     }
 
     #[test]
-    fn non_network_sandbox_omits_resolv_conf_and_services() {
+    fn network_sandbox_without_explicit_dns_config_fails_closed() {
+        let tempdir = tempfile::tempdir().expect("tempdir must be available");
+        let error = match Bwrap::initialize(minimal_spec(tempdir.path(), true)) {
+            Ok(_) => panic!("network sandbox without DNS config must fail closed"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("DNS resolver configuration"));
+    }
+
+    #[test]
+    fn non_network_sandbox_omits_resolv_conf_and_services_and_rejects_dns_config() {
         let tempdir = tempfile::tempdir().expect("tempdir must be available");
         let bwrap =
             Bwrap::initialize(minimal_spec(tempdir.path(), false)).expect("non-network sandbox should initialize");
@@ -857,7 +892,54 @@ mod tests {
         assert!(args.iter().any(|arg| arg == "--unshare-net"));
         assert!(bind_source_for(&args, "/etc/resolv.conf").is_none());
         assert!(bind_source_for(&args, "/etc/services").is_none());
+        assert!(bind_source_for(&args, "/etc/nsswitch.conf").is_none());
         assert!(!tempdir.path().join("etc/resolv.conf").exists());
         assert!(!tempdir.path().join("etc/services").exists());
+
+        let tempdir2 = tempfile::tempdir().expect("tempdir must be available");
+        let dns = crate::buildservice::SandboxDnsConfig::new(
+            vec!["10.53.0.2".parse().expect("valid ip")],
+            Vec::new(),
+        )
+        .expect("valid dns");
+        let spec = SandboxSpec::builder()
+            .host_workdir(tempdir2.path())
+            .command(["/bin/sh", "-c", "true"])
+            .sandbox_workdir("build")
+            .scratches(["build"])
+            .allow_network(false)
+            .dns_config(Some(dns))
+            .build();
+        let error = match Bwrap::initialize(spec) {
+            Ok(_) => panic!("offline sandbox with DNS config must fail closed"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("forbidden"));
+    }
+
+    #[test]
+    fn sandbox_dns_config_rejects_malformed_and_unbounded_inputs() {
+        use crate::buildservice::{MAX_DNS_NAMESERVERS, MAX_DNS_RESOLV_CONF_BYTES, MAX_DNS_SEARCH_DOMAINS, SandboxDnsConfig};
+
+        assert!(SandboxDnsConfig::new(Vec::new(), Vec::new()).is_err());
+        let too_many_ns: Vec<std::net::IpAddr> =
+            (1..=(MAX_DNS_NAMESERVERS + 1)).map(|i| format!("10.0.0.{i}").parse().unwrap()).collect();
+        assert!(SandboxDnsConfig::new(too_many_ns, Vec::new()).is_err());
+
+        let too_many_search: Vec<String> = (0..=MAX_DNS_SEARCH_DOMAINS).map(|i| format!("d{i}.internal")).collect();
+        assert!(SandboxDnsConfig::new(vec!["10.0.0.1".parse().unwrap()], too_many_search).is_err());
+
+        assert!(SandboxDnsConfig::new(vec!["10.0.0.1".parse().unwrap()], vec!["bad space".into()]).is_err());
+        assert!(SandboxDnsConfig::new(vec!["10.0.0.1".parse().unwrap()], vec!["-bad.internal".into()]).is_err());
+        assert!(SandboxDnsConfig::parse_resolv_conf("nameserver not-an-ip\n").is_err());
+        assert!(SandboxDnsConfig::parse_resolv_conf("unknown directive\n").is_err());
+        assert!(SandboxDnsConfig::parse_resolv_conf(&" ".repeat(MAX_DNS_RESOLV_CONF_BYTES + 1)).is_err());
+
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let host_resolv = tempdir.path().join("resolv.conf");
+        fs::write(&host_resolv, "# comment\nnameserver 192.0.2.53\nsearch lab.local\n").unwrap();
+        let parsed = SandboxDnsConfig::from_host_resolv_conf(&host_resolv).expect("valid host resolv snapshot");
+        assert_eq!(parsed.render_resolv_conf().unwrap(), "nameserver 192.0.2.53\nsearch lab.local\n");
     }
 }

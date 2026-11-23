@@ -96,6 +96,196 @@ pub struct BuildRequest {
     /// Optional declared retained-tool workspace mount. Host storage paths are
     /// runtime-only and are never serialized into action or transport identity.
     pub workspace: Option<StatefulWorkspaceRequest>,
+    /// Explicit validated DNS resolver configuration for admitted network-enabled
+    /// sandboxes. Must be `None` when network access is denied.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dns_config: Option<SandboxDnsConfig>,
+}
+
+pub const MAX_DNS_NAMESERVERS: usize = 8;
+pub const MAX_DNS_SEARCH_DOMAINS: usize = 6;
+pub const MAX_DNS_SEARCH_DOMAIN_BYTES: usize = 253;
+pub const MAX_DNS_RESOLV_CONF_BYTES: usize = 4 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct SandboxDnsConfig {
+    pub nameservers: Vec<std::net::IpAddr>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub search_domains: Vec<String>,
+}
+
+impl SandboxDnsConfig {
+    pub fn new(nameservers: Vec<std::net::IpAddr>, search_domains: Vec<String>) -> Result<Self, String> {
+        let config = Self {
+            nameservers,
+            search_domains,
+        };
+        config.validate()?;
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.nameservers.is_empty() {
+            return Err("sandbox DNS configuration must specify at least one nameserver".to_string());
+        }
+        if self.nameservers.len() > MAX_DNS_NAMESERVERS {
+            return Err(format!(
+                "sandbox DNS configuration specifies {} nameservers, exceeding bound {MAX_DNS_NAMESERVERS}",
+                self.nameservers.len()
+            ));
+        }
+        if self.search_domains.len() > MAX_DNS_SEARCH_DOMAINS {
+            return Err(format!(
+                "sandbox DNS configuration specifies {} search domains, exceeding bound {MAX_DNS_SEARCH_DOMAINS}",
+                self.search_domains.len()
+            ));
+        }
+        for domain in &self.search_domains {
+            validate_dns_search_domain(domain)?;
+        }
+        let rendered = self.render_unchecked();
+        if rendered.len() > MAX_DNS_RESOLV_CONF_BYTES {
+            return Err(format!(
+                "rendered sandbox resolv.conf is {} bytes, exceeding bound {MAX_DNS_RESOLV_CONF_BYTES}",
+                rendered.len()
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn render_resolv_conf(&self) -> Result<String, String> {
+        self.validate()?;
+        Ok(self.render_unchecked())
+    }
+
+    fn render_unchecked(&self) -> String {
+        let mut out = String::new();
+        for nameserver in &self.nameservers {
+            out.push_str("nameserver ");
+            out.push_str(&nameserver.to_string());
+            out.push('\n');
+        }
+        if !self.search_domains.is_empty() {
+            out.push_str("search ");
+            out.push_str(&self.search_domains.join(" "));
+            out.push('\n');
+        }
+        out
+    }
+
+    pub fn parse_resolv_conf(contents: &str) -> Result<Self, String> {
+        if contents.len() > MAX_DNS_RESOLV_CONF_BYTES {
+            return Err(format!(
+                "resolv.conf input is {} bytes, exceeding bound {MAX_DNS_RESOLV_CONF_BYTES}",
+                contents.len()
+            ));
+        }
+        if contents.as_bytes().contains(&0) {
+            return Err("resolv.conf input contains NUL byte".to_string());
+        }
+        let mut nameservers = Vec::new();
+        let mut search_domains = Vec::new();
+        for (line_index, raw_line) in contents.lines().enumerate() {
+            let line = raw_line.trim();
+            if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            let Some(keyword) = parts.next() else {
+                continue;
+            };
+            match keyword {
+                "nameserver" => {
+                    let Some(addr_str) = parts.next() else {
+                        return Err(format!("resolv.conf line {} missing nameserver address", line_index + 1));
+                    };
+                    if parts.next().is_some() {
+                        return Err(format!(
+                            "resolv.conf line {} has trailing tokens after nameserver address",
+                            line_index + 1
+                        ));
+                    }
+                    let ip = addr_str.parse::<std::net::IpAddr>().map_err(|_| {
+                        format!("resolv.conf line {} has invalid nameserver IP {addr_str:?}", line_index + 1)
+                    })?;
+                    nameservers.push(ip);
+                }
+                "search" => {
+                    let domains: Vec<String> = parts.map(str::to_string).collect();
+                    if domains.is_empty() {
+                        return Err(format!("resolv.conf line {} missing search domain", line_index + 1));
+                    }
+                    search_domains = domains;
+                }
+                "domain" => {
+                    let Some(domain) = parts.next() else {
+                        return Err(format!("resolv.conf line {} missing domain value", line_index + 1));
+                    };
+                    if parts.next().is_some() {
+                        return Err(format!(
+                            "resolv.conf line {} has trailing tokens after domain value",
+                            line_index + 1
+                        ));
+                    }
+                    search_domains = vec![domain.to_string()];
+                }
+                "options" | "sortlist" => {}
+                other => {
+                    return Err(format!(
+                        "resolv.conf line {} contains unsupported directive {other:?}",
+                        line_index + 1
+                    ));
+                }
+            }
+        }
+        Self::new(nameservers, search_domains)
+    }
+
+    pub fn from_host_resolv_conf(path: &std::path::Path) -> Result<Self, String> {
+        use std::io::Read;
+
+        let file = std::fs::File::open(path)
+            .map_err(|error| format!("opening host resolv.conf {}: {error}", path.display()))?;
+        let mut bytes = Vec::new();
+        file.take((MAX_DNS_RESOLV_CONF_BYTES as u64).saturating_add(1))
+            .read_to_end(&mut bytes)
+            .map_err(|error| format!("reading host resolv.conf {}: {error}", path.display()))?;
+        if bytes.len() > MAX_DNS_RESOLV_CONF_BYTES {
+            return Err(format!(
+                "host resolv.conf {} exceeds bound {MAX_DNS_RESOLV_CONF_BYTES} bytes",
+                path.display()
+            ));
+        }
+        let text = String::from_utf8(bytes)
+            .map_err(|_| format!("host resolv.conf {} is not valid UTF-8", path.display()))?;
+        Self::parse_resolv_conf(&text)
+    }
+}
+
+fn validate_dns_search_domain(domain: &str) -> Result<(), String> {
+    if domain.is_empty() {
+        return Err("sandbox DNS search domain must not be empty".to_string());
+    }
+    if domain.len() > MAX_DNS_SEARCH_DOMAIN_BYTES {
+        return Err(format!(
+            "sandbox DNS search domain {domain:?} exceeds {MAX_DNS_SEARCH_DOMAIN_BYTES} bytes"
+        ));
+    }
+    if domain.starts_with('.') || domain.ends_with('.') || domain.contains("..") {
+        return Err(format!("sandbox DNS search domain {domain:?} has empty label"));
+    }
+    for label in domain.split('.') {
+        if label.is_empty() || label.len() > 63 {
+            return Err(format!("sandbox DNS search domain {domain:?} has invalid label length"));
+        }
+        if label.starts_with('-') || label.ends_with('-') {
+            return Err(format!("sandbox DNS search domain {domain:?} label must not start or end with '-'"));
+        }
+        if !label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+            return Err(format!("sandbox DNS search domain {domain:?} contains invalid characters"));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

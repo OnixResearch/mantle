@@ -233,6 +233,7 @@ pub fn derivation_to_build_request(
         network_policy.allow_network,
     )?;
     build_request.workspace = workspace;
+    build_request.dns_config = network_policy.dns_config;
     Ok(BuildRequestEnvelope {
         build_request,
         audit_events: normalized.audit_events,
@@ -534,6 +535,7 @@ pub(crate) fn build_request_from_environment(
         additional_files,
         refscan_needles,
         workspace: None,
+        dns_config: None,
     })
 }
 
@@ -2761,5 +2763,76 @@ mod tests {
             derivation_to_build_request(&drv, &BTreeMap::new(), "/nix/store", HermeticityMode::Practical).unwrap_err();
         assert!(error.to_string().contains("invalid stateful workspace policy"));
         assert!(!error.to_string().contains("runtime_host_path"));
+    }
+
+    #[test]
+    fn admitted_network_derivation_plumbs_explicit_private_dns_config_to_sandbox() {
+        let mut profile = ExecutionProfile::native_compatibility();
+        profile.network_mode = ExecutionNetworkMode::AllowDeclared;
+
+        let mut drv = test_derivation();
+        drv.environment
+            .insert(crate::ENV_NETWORK_CAPABILITY.to_string(), crate::NETWORK_CAPABILITY_BUILD_TIME.into());
+        drv.environment.insert(crate::ENV_NETWORK_POLICY_BASIS.to_string(), "operator-private-dns".into());
+        drv.environment.insert(crate::ENV_NETWORK_AUDIT_CLASS.to_string(), "private-dns-network".into());
+        drv.environment
+            .insert(crate::ENV_NETWORK_DNS_POLICY.to_string(), crate::NETWORK_DNS_POLICY_EXPLICIT.into());
+        drv.environment
+            .insert(crate::ENV_NETWORK_DNS_NAMESERVERS.to_string(), "10.53.0.2, 2001:db8::53".into());
+        drv.environment.insert(crate::ENV_NETWORK_DNS_SEARCH.to_string(), "corp.internal".into());
+
+        let envelope = super::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            "/nix/store",
+            &profile,
+            HermeticityMode::Strict,
+            1,
+        )
+        .unwrap();
+
+        assert!(envelope.build_request.constraints.contains(&BuildConstraints::NetworkAccess));
+        assert_eq!(envelope.network_policy_report.dns_policy.as_deref(), Some(crate::NETWORK_DNS_POLICY_EXPLICIT));
+        assert_eq!(
+            envelope.network_policy_report.dns_nameservers.as_deref(),
+            Some(&["10.53.0.2".to_string(), "2001:db8::53".to_string()][..])
+        );
+        let dns = envelope.build_request.dns_config.clone().expect("explicit DNS config must be bound");
+        assert_eq!(
+            dns.render_resolv_conf().unwrap(),
+            "nameserver 10.53.0.2\nnameserver 2001:db8::53\nsearch corp.internal\n"
+        );
+
+        #[cfg(target_os = "linux")]
+        {
+            let tempdir = tempfile::tempdir().unwrap();
+            let spec = snix_build::sandbox::SandboxSpec::builder()
+                .host_workdir(tempdir.path())
+                .command(["/bin/sh", "-c", "true"])
+                .sandbox_workdir("build")
+                .scratches(["build"])
+                .allow_network(envelope.build_request.constraints.contains(&BuildConstraints::NetworkAccess))
+                .dns_config(envelope.build_request.dns_config)
+                .build();
+            let _bwrap = snix_build::bwrap::Bwrap::initialize(spec).unwrap();
+            let rendered = std::fs::read_to_string(tempdir.path().join("etc/resolv.conf")).unwrap();
+            assert_eq!(rendered, "nameserver 10.53.0.2\nnameserver 2001:db8::53\nsearch corp.internal\n");
+            assert!(!rendered.contains("8.8.8.8"));
+        }
+
+        // Builtin fixed-output fetchers keep their separate transport policy with dns_config = None.
+        let mut fetcher = test_derivation();
+        fetcher.builder = "builtin:fetchurl".to_string();
+        fetcher.system = "builtin".to_string();
+        fetcher.arguments.clear();
+        fetcher.environment.insert("url".to_string(), "https://example.com/src.tar.gz".into());
+        fetcher.outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: None,
+            ca_hash: Some(nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([0xAB; 32]))),
+        });
+        let fetcher_envelope =
+            derivation_to_build_request(&fetcher, &BTreeMap::new(), "/nix/store", HermeticityMode::Strict).unwrap();
+        assert!(fetcher_envelope.build_request.constraints.contains(&BuildConstraints::NetworkAccess));
+        assert!(fetcher_envelope.build_request.dns_config.is_none());
     }
 }

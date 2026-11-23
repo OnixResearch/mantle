@@ -355,6 +355,7 @@ impl TryFrom<BuildRequest> for crate::buildservice::BuildRequest {
             additional_files: value.additional_files.into_iter().map(Into::into).collect(),
             refscan_needles: value.refscan_needles,
             workspace: value.workspace.map(workspace_from_proto).transpose()?,
+            dns_config: None,
         })
     }
 }

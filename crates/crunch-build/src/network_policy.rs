@@ -1,6 +1,10 @@
+use std::net::IpAddr;
+use std::path::Path;
+
 use nix_compat::derivation::Derivation;
 use nix_compat::nixhash::CAHash;
 use nix_compat::nixhash::CAHashMode;
+use snix_build::buildservice::SandboxDnsConfig;
 
 const FETCH_BUILDER_SELECTOR: &str = "builtin:fetchurl";
 const OUTPUT_NAME_OUT: &str = "out";
@@ -9,7 +13,13 @@ const ENV_URL: &str = "url";
 pub const ENV_NETWORK_CAPABILITY: &str = "__mantle_network_capability";
 pub const ENV_NETWORK_POLICY_BASIS: &str = "__mantle_network_policy_basis";
 pub const ENV_NETWORK_AUDIT_CLASS: &str = "__mantle_network_audit_class";
+pub const ENV_NETWORK_DNS_POLICY: &str = "__mantle_network_dns_policy";
+pub const ENV_NETWORK_DNS_NAMESERVERS: &str = "__mantle_network_dns_nameservers";
+pub const ENV_NETWORK_DNS_SEARCH: &str = "__mantle_network_dns_search";
 pub const NETWORK_CAPABILITY_BUILD_TIME: &str = "build-time-network";
+pub const NETWORK_DNS_POLICY_EXPLICIT: &str = "explicit";
+pub const NETWORK_DNS_POLICY_HOST_SNAPSHOT: &str = "host-snapshot";
+const DEFAULT_HOST_RESOLV_CONF_PATH: &str = "/etc/resolv.conf";
 pub const NETWORK_MODE_OFFLINE: &str = "offline";
 pub const NETWORK_MODE_FIXED_OUTPUT_FETCHER: &str = "fixed-output-fetcher";
 pub const NETWORK_MODE_COMPATIBILITY_CAPABILITY: &str = "compatibility-capability";
@@ -24,6 +34,8 @@ const HASH_MODE_TEXT: &str = "text";
 const DENY_BY_DEFAULT_DIAGNOSTIC: &str = "ordinary derivation network access is denied by default";
 const MISSING_POLICY_BASIS_DIAGNOSTIC: &str = "declared network capability is missing policy basis";
 const MISSING_AUDIT_CLASS_DIAGNOSTIC: &str = "declared network capability is missing audit class";
+const MISSING_DNS_POLICY_DIAGNOSTIC: &str = "declared network capability is missing explicit DNS policy";
+const UNSUPPORTED_DNS_POLICY_DIAGNOSTIC: &str = "declared network DNS policy must be 'explicit' or 'host-snapshot'";
 const INVALID_CAPABILITY_DIAGNOSTIC: &str = "declared network capability is unsupported";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +60,8 @@ pub struct BuildNetworkPolicyReport {
     pub capability: Option<String>,
     pub policy_basis: Option<String>,
     pub audit_class: Option<String>,
+    pub dns_policy: Option<String>,
+    pub dns_nameservers: Option<Vec<String>>,
     pub fixed_output: Option<FixedOutputNetworkDeclaration>,
     pub diagnostic: Option<String>,
 }
@@ -55,6 +69,7 @@ pub struct BuildNetworkPolicyReport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BuildNetworkPolicyPlan {
     pub allow_network: bool,
+    pub dns_config: Option<SandboxDnsConfig>,
     pub report: BuildNetworkPolicyReport,
 }
 
@@ -70,6 +85,18 @@ pub fn plan_network_policy(
     derivation: &Derivation,
     compatibility_policy: CompatibilityNetworkPolicy,
 ) -> Result<BuildNetworkPolicyPlan, NetworkPolicyDenied> {
+    plan_network_policy_with_host_resolv_conf(
+        derivation,
+        compatibility_policy,
+        Path::new(DEFAULT_HOST_RESOLV_CONF_PATH),
+    )
+}
+
+fn plan_network_policy_with_host_resolv_conf(
+    derivation: &Derivation,
+    compatibility_policy: CompatibilityNetworkPolicy,
+    host_resolv_conf_path: &Path,
+) -> Result<BuildNetworkPolicyPlan, NetworkPolicyDenied> {
     debug_assert!(!derivation.builder.is_empty(), "builder must not be empty");
     debug_assert!(!derivation.outputs.is_empty(), "derivation must declare outputs");
 
@@ -80,7 +107,9 @@ pub fn plan_network_policy(
     }
     match capability {
         None => Ok(offline_plan(action_name)),
-        Some(capability) => compatibility_plan(derivation, compatibility_policy, action_name, capability),
+        Some(capability) => {
+            compatibility_plan(derivation, compatibility_policy, action_name, capability, host_resolv_conf_path)
+        }
     }
 }
 
@@ -98,6 +127,7 @@ fn fixed_output_fetcher_plan(
 ) -> BuildNetworkPolicyPlan {
     BuildNetworkPolicyPlan {
         allow_network: true,
+        dns_config: None,
         report: BuildNetworkPolicyReport {
             action_name,
             mode: NETWORK_MODE_FIXED_OUTPUT_FETCHER.to_string(),
@@ -105,6 +135,8 @@ fn fixed_output_fetcher_plan(
             capability,
             policy_basis: Some("declared fixed-output fetcher".to_string()),
             audit_class: Some("fixed-output-source-acquisition".to_string()),
+            dns_policy: None,
+            dns_nameservers: None,
             fixed_output: Some(fixed_output_declaration(derivation)),
             diagnostic: None,
         },
@@ -114,6 +146,7 @@ fn fixed_output_fetcher_plan(
 fn offline_plan(action_name: String) -> BuildNetworkPolicyPlan {
     BuildNetworkPolicyPlan {
         allow_network: false,
+        dns_config: None,
         report: BuildNetworkPolicyReport {
             action_name,
             mode: NETWORK_MODE_OFFLINE.to_string(),
@@ -121,6 +154,8 @@ fn offline_plan(action_name: String) -> BuildNetworkPolicyPlan {
             capability: None,
             policy_basis: Some(DENY_BY_DEFAULT_DIAGNOSTIC.to_string()),
             audit_class: None,
+            dns_policy: None,
+            dns_nameservers: None,
             fixed_output: None,
             diagnostic: None,
         },
@@ -132,6 +167,7 @@ fn compatibility_plan(
     compatibility_policy: CompatibilityNetworkPolicy,
     action_name: String,
     capability: String,
+    host_resolv_conf_path: &Path,
 ) -> Result<BuildNetworkPolicyPlan, NetworkPolicyDenied> {
     assert!(!action_name.is_empty(), "network policy action name must not be empty");
     assert!(!capability.is_empty(), "network capability must not be empty");
@@ -159,8 +195,18 @@ fn compatibility_plan(
             DENY_BY_DEFAULT_DIAGNOSTIC,
         ));
     }
+    let (dns_policy, dns_config) = resolve_sandbox_dns_policy(
+        derivation,
+        &action_name,
+        &capability,
+        &policy_basis,
+        &audit_class,
+        host_resolv_conf_path,
+    )?;
+    let dns_nameservers = dns_config.nameservers.iter().map(ToString::to_string).collect();
     Ok(BuildNetworkPolicyPlan {
         allow_network: true,
+        dns_config: Some(dns_config),
         report: BuildNetworkPolicyReport {
             action_name,
             mode: NETWORK_MODE_COMPATIBILITY_CAPABILITY.to_string(),
@@ -168,10 +214,79 @@ fn compatibility_plan(
             capability: Some(capability),
             policy_basis: Some(policy_basis),
             audit_class: Some(audit_class),
+            dns_policy: Some(dns_policy),
+            dns_nameservers: Some(dns_nameservers),
             fixed_output: None,
             diagnostic: None,
         },
     })
+}
+
+fn resolve_sandbox_dns_policy(
+    derivation: &Derivation,
+    action_name: &str,
+    capability: &str,
+    policy_basis: &str,
+    audit_class: &str,
+    host_resolv_conf_path: &Path,
+) -> Result<(String, SandboxDnsConfig), NetworkPolicyDenied> {
+    let deny = |diagnostic: &str| {
+        denied_with_scope(
+            action_name.to_string(),
+            Some(capability.to_string()),
+            Some(policy_basis.to_string()),
+            Some(audit_class.to_string()),
+            diagnostic,
+        )
+    };
+    let Some(dns_policy) = env_string(derivation, ENV_NETWORK_DNS_POLICY)? else {
+        return Err(deny(MISSING_DNS_POLICY_DIAGNOSTIC));
+    };
+    match dns_policy.as_str() {
+        NETWORK_DNS_POLICY_EXPLICIT => {
+            let Some(raw_nameservers) = env_string(derivation, ENV_NETWORK_DNS_NAMESERVERS)? else {
+                return Err(deny("explicit DNS policy requires __mantle_network_dns_nameservers"));
+            };
+            let nameservers = parse_nameserver_list(&raw_nameservers).map_err(|error| deny(&error))?;
+            let search_domains = match env_string(derivation, ENV_NETWORK_DNS_SEARCH)? {
+                Some(raw_search) => parse_token_list(&raw_search),
+                None => Vec::new(),
+            };
+            let config = SandboxDnsConfig::new(nameservers, search_domains).map_err(|error| deny(&error))?;
+            Ok((dns_policy, config))
+        }
+        NETWORK_DNS_POLICY_HOST_SNAPSHOT => {
+            if env_string(derivation, ENV_NETWORK_DNS_NAMESERVERS)?.is_some()
+                || env_string(derivation, ENV_NETWORK_DNS_SEARCH)?.is_some()
+            {
+                return Err(deny("host-snapshot DNS policy forbids explicit nameserver or search overrides"));
+            }
+            let config =
+                SandboxDnsConfig::from_host_resolv_conf(host_resolv_conf_path).map_err(|error| deny(&error))?;
+            Ok((dns_policy, config))
+        }
+        _ => Err(deny(UNSUPPORTED_DNS_POLICY_DIAGNOSTIC)),
+    }
+}
+
+fn parse_token_list(raw: &str) -> Vec<String> {
+    raw.split(|ch: char| ch == ',' || ch.is_ascii_whitespace())
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn parse_nameserver_list(raw: &str) -> Result<Vec<IpAddr>, String> {
+    let tokens = parse_token_list(raw);
+    if tokens.is_empty() {
+        return Err("explicit DNS policy requires at least one nameserver IP".to_string());
+    }
+    let mut nameservers = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let addr = token.parse::<IpAddr>().map_err(|_| format!("invalid DNS nameserver IP {token:?}"))?;
+        nameservers.push(addr);
+    }
+    Ok(nameservers)
 }
 
 fn fixed_output_declaration(derivation: &Derivation) -> FixedOutputNetworkDeclaration {
@@ -255,6 +370,8 @@ fn denied_with_scope(
             capability,
             policy_basis,
             audit_class,
+            dns_policy: None,
+            dns_nameservers: None,
             fixed_output: None,
             diagnostic: Some(diagnostic.to_string()),
         }),
@@ -319,6 +436,11 @@ mod tests {
             .environment
             .insert(ENV_NETWORK_POLICY_BASIS.to_string(), "compat-policy:legacy-upstream".into());
         derivation.environment.insert(ENV_NETWORK_AUDIT_CLASS.to_string(), "legacy-network-build".into());
+        derivation
+            .environment
+            .insert(ENV_NETWORK_DNS_POLICY.to_string(), NETWORK_DNS_POLICY_EXPLICIT.into());
+        derivation.environment.insert(ENV_NETWORK_DNS_NAMESERVERS.to_string(), "10.53.0.2".into());
+        derivation.environment.insert(ENV_NETWORK_DNS_SEARCH.to_string(), "corp.internal".into());
     }
 
     #[test]
@@ -392,6 +514,53 @@ mod tests {
         assert_eq!(plan.report.capability.as_deref(), Some(NETWORK_CAPABILITY_BUILD_TIME));
         assert_eq!(plan.report.policy_basis.as_deref(), Some("compat-policy:legacy-upstream"));
         assert_eq!(plan.report.audit_class.as_deref(), Some("legacy-network-build"));
+        assert_eq!(plan.report.dns_policy.as_deref(), Some(NETWORK_DNS_POLICY_EXPLICIT));
+        assert_eq!(plan.report.dns_nameservers.as_deref(), Some(&["10.53.0.2".to_string()][..]));
+        let dns = plan.dns_config.expect("explicit DNS config must be attached");
+        assert_eq!(dns.render_resolv_conf().unwrap(), "nameserver 10.53.0.2\nsearch corp.internal\n");
+    }
+
+    #[test]
+    fn compatibility_capability_requires_explicit_dns_policy_and_rejects_malformed_config() {
+        let mut missing_policy = ordinary_derivation();
+        declare_network_capability(&mut missing_policy);
+        missing_policy.environment.remove(ENV_NETWORK_DNS_POLICY);
+        let error = plan_network_policy(&missing_policy, CompatibilityNetworkPolicy::AllowDeclared).unwrap_err();
+        assert_eq!(error.diagnostic, MISSING_DNS_POLICY_DIAGNOSTIC);
+
+        let mut bad_ip = ordinary_derivation();
+        declare_network_capability(&mut bad_ip);
+        bad_ip.environment.insert(ENV_NETWORK_DNS_NAMESERVERS.to_string(), "not-an-ip".into());
+        let error = plan_network_policy(&bad_ip, CompatibilityNetworkPolicy::AllowDeclared).unwrap_err();
+        assert!(error.diagnostic.contains("invalid DNS nameserver IP"));
+
+        let mut bad_mode = ordinary_derivation();
+        declare_network_capability(&mut bad_mode);
+        bad_mode.environment.insert(ENV_NETWORK_DNS_POLICY.to_string(), "public-default".into());
+        let error = plan_network_policy(&bad_mode, CompatibilityNetworkPolicy::AllowDeclared).unwrap_err();
+        assert_eq!(error.diagnostic, UNSUPPORTED_DNS_POLICY_DIAGNOSTIC);
+
+        let temp = tempfile::tempdir().unwrap();
+        let host_resolv = temp.path().join("resolv.conf");
+        std::fs::write(&host_resolv, "nameserver 192.0.2.53\nsearch lab.internal\n").unwrap();
+        let mut host_snapshot = ordinary_derivation();
+        declare_network_capability(&mut host_snapshot);
+        host_snapshot
+            .environment
+            .insert(ENV_NETWORK_DNS_POLICY.to_string(), NETWORK_DNS_POLICY_HOST_SNAPSHOT.into());
+        host_snapshot.environment.remove(ENV_NETWORK_DNS_NAMESERVERS);
+        host_snapshot.environment.remove(ENV_NETWORK_DNS_SEARCH);
+        let plan = plan_network_policy_with_host_resolv_conf(
+            &host_snapshot,
+            CompatibilityNetworkPolicy::AllowDeclared,
+            &host_resolv,
+        )
+        .unwrap();
+        assert_eq!(plan.report.dns_policy.as_deref(), Some(NETWORK_DNS_POLICY_HOST_SNAPSHOT));
+        assert_eq!(
+            plan.dns_config.unwrap().render_resolv_conf().unwrap(),
+            "nameserver 192.0.2.53\nsearch lab.internal\n"
+        );
     }
 
     #[test]

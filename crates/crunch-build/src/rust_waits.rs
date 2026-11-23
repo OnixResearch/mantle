@@ -186,6 +186,7 @@ fn request_identity(request: &BuildRequest) -> io::Result<Digest> {
         additional_files,
         refscan_needles,
         workspace,
+        dns_config,
     } = request;
     debug_assert!(environment_vars.windows(2).all(|pair| pair[0].key < pair[1].key));
     debug_assert!(outputs.windows(2).all(|pair| pair[0] < pair[1]));
@@ -215,6 +216,7 @@ fn request_identity(request: &BuildRequest) -> io::Result<Digest> {
             additional_files,
             refscan_needles,
             workspace,
+            dns_config,
         ),
     )?;
     Digest::parse(identity.finalize().to_hex().to_string())

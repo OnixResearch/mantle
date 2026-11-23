@@ -5,6 +5,7 @@ use typed_builder::TypedBuilder;
 
 use crate::buildservice::AdditionalFile;
 use crate::buildservice::EnvVar;
+use crate::buildservice::SandboxDnsConfig;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SandboxMount {
@@ -103,6 +104,10 @@ pub struct SandboxSpec {
     #[builder(default)]
     allow_network: bool,
 
+    /// Explicit validated DNS resolver configuration for network-enabled sandboxes.
+    #[builder(default)]
+    dns_config: Option<SandboxDnsConfig>,
+
     /// Whether normal kernel `/proc` metadata files must remain visible.
     #[builder(default)]
     provide_proc_metadata: bool,
@@ -143,6 +148,10 @@ impl SandboxSpec {
 
     pub fn allow_network(&self) -> bool {
         self.allow_network
+    }
+
+    pub fn dns_config(&self) -> Option<&SandboxDnsConfig> {
+        self.dns_config.as_ref()
     }
 
     pub fn provide_proc_metadata(&self) -> bool {
