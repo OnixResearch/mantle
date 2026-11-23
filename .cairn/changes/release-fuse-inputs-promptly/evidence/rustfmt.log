@@ -1,0 +1,2 @@
+$ rustfmt --check --edition 2024 vendor/snix-castore/src/fs/fuse/mod.rs vendor/snix-castore/src/fs/fuse/tests.rs
+EXIT=0

@@ -1,0 +1,36 @@
+$ cargo test -p snix-castore --features fuse --lib fs::fuse::tests::
+warning: /home/brittonr/wt/mantle-followups/Cargo.toml: file `/home/brittonr/wt/mantle-followups/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.61s
+     Running unittests src/lib.rs (/datapool/mantle-store/followups-20261122/mantle-target/debug/deps/snix_castore-08b0b3e984f1f837)
+
+running 24 tests
+test fs::fuse::tests::disallow_writes ... ok
+test fs::fuse::tests::check_attributes ... ok
+test fs::fuse::tests::compare_inodes_symlinks ... ok
+test fs::fuse::tests::compare_inodes_files ... ok
+test fs::fuse::tests::readdir ... ok
+test fs::fuse::tests::readdir_deep ... ok
+test fs::fuse::tests::missing_blob ... ok
+test fs::fuse::tests::read_wrong_paths_in_root ... ok
+test fs::fuse::tests::read_stat_through_symlink ... ok
+test fs::fuse::tests::stat_file_at_root ... ok
+test fs::fuse::tests::read_stat_directory ... ok
+test fs::fuse::tests::compare_inodes_directories ... ok
+test fs::fuse::tests::root ... ok
+test fs::fuse::tests::read_blob_inside_dir ... ok
+test fs::fuse::tests::missing_directory ... ok
+test fs::fuse::tests::read_file_at_root ... ok
+test fs::fuse::tests::read_large_file_at_root ... ok
+test fs::fuse::tests::symlink_readlink ... ok
+test fs::fuse::tests::mount ... ok
+test fs::fuse::tests::unmount_with_held_descriptor ... ok
+test fs::fuse::tests::read_blob_deep_inside_dir ... ok
+test fs::fuse::tests::xattr ... ok
+test fs::fuse::tests::uid_gid_override ... ok
+test fs::fuse::tests::root_with_listing ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 267 filtered out; finished in 0.21s
+
+EXIT=0

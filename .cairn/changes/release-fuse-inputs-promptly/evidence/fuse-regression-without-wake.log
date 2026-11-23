@@ -1,0 +1,25 @@
+$ # wake() call temporarily removed from FuseDaemon::unmount
+$ cargo test -p snix-castore --features fuse --lib fs::fuse::tests::unmount_with_held_descriptor -- --nocapture
+warning: /home/brittonr/wt/mantle-followups/Cargo.toml: file `/home/brittonr/wt/mantle-followups/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling snix-castore v0.1.0 (/home/brittonr/wt/mantle-followups/vendor/snix-castore)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 24.91s
+     Running unittests src/lib.rs (/datapool/mantle-store/followups-20261122/mantle-target/debug/deps/snix_castore-08b0b3e984f1f837)
+
+running 1 test
+
+thread 'fs::fuse::tests::unmount_with_held_descriptor' (3116645) panicked at vendor/snix-castore/src/fs/fuse/tests.rs:252:13:
+unmount did not return within 10s while a descriptor into the mount was open
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test fs::fuse::tests::unmount_with_held_descriptor ... FAILED
+
+failures:
+
+failures:
+    fs::fuse::tests::unmount_with_held_descriptor
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 290 filtered out; finished in 10.17s
+
+error: test failed, to rerun pass `-p snix-castore --lib`
+EXIT=101

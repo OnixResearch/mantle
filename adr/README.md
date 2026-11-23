@@ -167,3 +167,4 @@ compatibility surface, crate name, or historical decision.
 | [0167](0167-admit-octet-current-producer-layout-in-the-verification-bridge.md) | Admit Octet's current producer layout in the verification bridge | Accepted |
 | [0168](0168-admit-a-trellis-verus-producer-job-in-the-verification-bridge.md) | Admit a Trellis-owned Verus producer job in the verification bridge | Accepted |
 | [0169](0169-build-preserved-roots-from-cache-hydrated-inputs.md) | Build preserved roots from cache-hydrated inputs | Accepted |
+| [0170](0170-wake-castore-fuse-channels-before-joining.md) | Wake castore FUSE channels before joining the inputs daemon | Accepted |

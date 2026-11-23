@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::io::Cursor;
+use std::io::Read;
 use std::io::{self};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
@@ -197,6 +198,97 @@ async fn mount() {
 
     fuse_daemon.unmount().expect("unmount");
 }
+
+/// Upper bound for `unmount()` to return while a descriptor into the mount is still open.
+const UNMOUNT_RETURN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Ensure unmounting does not wait for references the daemon does not own.
+///
+/// A descriptor opened inside the mount keeps the lazily detached filesystem alive, which is the
+/// condition that stalled a realization in production. The unmount must still return promptly, and
+/// the stale descriptor must then observe a disconnected filesystem.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unmount_with_held_descriptor() {
+    // r[verify vendored_snix.fuse_unmount_release]
+    // https://plume.benboeckel.net/~/JustAnotherBlog/skipping-tests-in-rust
+    if !std::path::Path::new("/dev/fuse").exists() {
+        eprintln!("skipping test");
+        return;
+    }
+
+    let tmpdir = TempDir::new().unwrap();
+
+    let (blob_service, directory_service) = gen_svcs();
+    let mut root_nodes = BTreeMap::default();
+    populate_blob_a(&blob_service, &mut root_nodes).await;
+
+    let fuse_daemon = do_mount(blob_service, directory_service, root_nodes, tmpdir.path(), FSSettings::default())
+        .expect("must succeed");
+
+    // Hold a descriptor into the mount across the unmount. It is only opened, never read: a read
+    // before the teardown would populate the page cache and could then be served from it.
+    let path = tmpdir.path().join(BLOB_A_NAME);
+    let file = Arc::new(std::fs::File::open(&path).expect("must succeed"));
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let unmounter = fuse_daemon.clone();
+    let unmount_thread = std::thread::spawn(move || {
+        let result = unmounter.unmount().map_err(|e| e.to_string());
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(UNMOUNT_RETURN_TIMEOUT) {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            drop(file);
+            unmount_thread.join().expect("unmount thread must not panic");
+            panic!("unmount failed: {error}");
+        }
+        Err(_) => {
+            // Without the wake, the unmount thread only finishes after the kernel aborts the
+            // connection, so release the held reference before joining it.
+            drop(file);
+            unmount_thread.join().expect("unmount thread must not panic");
+            panic!(
+                "unmount did not return within {UNMOUNT_RETURN_TIMEOUT:?} while a descriptor into \
+                 the mount was open"
+            );
+        }
+    }
+
+    // Let every daemon handle go away before touching the stale descriptor: if the session still
+    // held `/dev/fuse`, a read with no server thread could block indefinitely.
+    drop(fuse_daemon);
+    unmount_thread.join().expect("unmount thread must not panic");
+
+    let (read_tx, read_rx) = std::sync::mpsc::channel();
+    let reader = Arc::clone(&file);
+    let read_thread = std::thread::spawn(move || {
+        let mut buf = [0u8; 1];
+        let result = (&*reader).read(&mut buf).map_err(|e| e.raw_os_error());
+        let _ = read_tx.send(result);
+    });
+
+    match read_rx.recv_timeout(UNMOUNT_RETURN_TIMEOUT) {
+        Ok(Ok(read)) => {
+            drop(file);
+            read_thread.join().expect("read thread must not panic");
+            panic!("read through the held descriptor returned {read} byte(s) after unmount");
+        }
+        Ok(Err(error_number)) => {
+            assert_eq!(Some(libc::ENOTCONN), error_number, "expected ENOTCONN after the unmount");
+        }
+        Err(_) => {
+            // The read thread is blocked on the connection; drop nothing it could release and fail
+            // the run without waiting for it.
+            panic!("read through the held descriptor did not return within {UNMOUNT_RETURN_TIMEOUT:?}");
+        }
+    }
+
+    drop(file);
+    read_thread.join().expect("read thread must not panic");
+}
+
 /// Ensure listing the root isn't allowed
 #[tokio::test]
 async fn root() {

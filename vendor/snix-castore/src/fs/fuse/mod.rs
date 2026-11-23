@@ -107,8 +107,18 @@ impl FuseDaemon {
     /// Send the unmount command, and waits for all threads to finish.
     #[instrument(skip_all, err)]
     pub fn unmount(&self) -> Result<(), io::Error> {
+        // r[impl vendored_snix.fuse_unmount_release]
+        let mut session = self.session.lock();
         // Send the unmount command.
-        self.session.lock().umount().map_err(|e| io::Error::other(e.to_string()))?;
+        session.umount().map_err(|e| io::Error::other(e.to_string()))?;
+
+        // The unmount is lazy: it detaches the filesystem but the kernel keeps the FUSE connection
+        // alive until every reference is gone, and the channel threads would then sit in
+        // `get_request` until that happens. An outside reference Mantle does not own must not delay
+        // the caller, so wake the channels: each thread closes its `/dev/fuse` descriptor, which
+        // aborts the connection, and a stale reference observes a disconnected filesystem.
+        session.wake().map_err(|e| io::Error::other(e.to_string()))?;
+        drop(session);
 
         self.wait();
         Ok(())

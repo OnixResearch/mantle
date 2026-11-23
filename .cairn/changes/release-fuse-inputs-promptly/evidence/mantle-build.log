@@ -1,0 +1,22 @@
+$ cargo build -p mantle --bin mantle
+warning: /home/brittonr/wt/mantle-followups/Cargo.toml: file `/home/brittonr/wt/mantle-followups/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling snix-castore v0.1.0 (/home/brittonr/wt/mantle-followups/vendor/snix-castore)
+   Compiling ouroboros v0.18.5
+   Compiling nickel-lang-parser v0.3.0
+   Compiling snix-store v0.1.0 (/home/brittonr/wt/mantle-followups/vendor/snix-store)
+   Compiling snix-build v0.1.0 (/home/brittonr/wt/mantle-followups/vendor/snix-build)
+   Compiling crunch-store v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-store)
+   Compiling crunch-rust-cache v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-rust-cache)
+   Compiling crunch-delta v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-delta)
+   Compiling crunch-rustc-wrapper v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-rustc-wrapper)
+   Compiling crunch-build v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-build)
+   Compiling nickel-lang-core v0.18.0
+   Compiling crunch-nix-gateway v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-nix-gateway)
+   Compiling nickel-lang v2.2.0
+   Compiling crunch-eval v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-eval)
+   Compiling crunch-pipeline v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-pipeline)
+   Compiling mantle v0.1.0 (/home/brittonr/wt/mantle-followups)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 21s
+EXIT=0
