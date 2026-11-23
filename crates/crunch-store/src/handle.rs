@@ -116,6 +116,11 @@ const OVERLAY_DIRECTORY_READ_LIMIT: usize = 1_000_000;
 const MAX_LAYERED_CLOSURE_PATHS: usize = 1_000_000;
 const MAX_RECORDED_LAYER_SELECTIONS: usize = 65_536;
 const SOURCE_SLICE_NAR_MAX_BYTES: u64 = 1_073_741_824;
+/// Bound on castore node identities one handle remembers as verified complete.
+///
+/// At the bound the handle stops inserting and keeps running full checks, so
+/// retention never forces an eviction that could admit a stale answer.
+const MAX_VERIFIED_COMPLETE_NODES: usize = 65_536;
 
 /// Configuration for opening a store.
 pub struct StoreConfig {
@@ -936,6 +941,41 @@ fn configured_action_result_stores(
     stores
 }
 
+/// Discriminator for the finalized identity of a memoized complete node.
+///
+/// Executable bits and symlink targets are not part of the key: completeness of
+/// a file is a property of its digest and size, and symlinks are inline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum VerifiedCompleteNodeKind {
+    Directory,
+    File,
+}
+
+/// Finalized castore node identity whose full tree one handle verified complete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct VerifiedCompleteNodeKey {
+    kind: VerifiedCompleteNodeKind,
+    digest: snix_castore::B3Digest,
+    size: u64,
+}
+
+/// Return the memo identity of a node, or `None` for inline symlinks.
+fn verified_complete_node_key(node: &Node) -> Option<VerifiedCompleteNodeKey> {
+    match node {
+        Node::Directory { digest, size } => Some(VerifiedCompleteNodeKey {
+            kind: VerifiedCompleteNodeKind::Directory,
+            digest: *digest,
+            size: *size,
+        }),
+        Node::File { digest, size, .. } => Some(VerifiedCompleteNodeKey {
+            kind: VerifiedCompleteNodeKind::File,
+            digest: *digest,
+            size: *size,
+        }),
+        Node::Symlink { .. } => None,
+    }
+}
+
 /// Dynamic dispatch via trait objects. Store operations are I/O-bound so
 /// the vtable cost is irrelevant.
 pub struct StoreHandle {
@@ -973,6 +1013,14 @@ pub struct StoreHandle {
     pub output_nodes: HashMap<StorePath<String>, Node>,
     /// Absolute output path -> PathInfo for outputs built this session.
     pub built_outputs: HashMap<String, PathInfo>,
+    /// Castore node identities this handle verified complete, bounded by
+    /// `MAX_VERIFIED_COMPLETE_NODES`.
+    ///
+    /// The memo is per handle and in memory: it is born empty, never outlives
+    /// the process, and is cleared by every handle operation that can remove
+    /// castore content. A separate process deleting blobs while this handle is
+    /// live was already outside the completeness check's guarantee.
+    verified_complete_nodes: HashSet<VerifiedCompleteNodeKey>,
     /// Successful remote substitutions recorded for reporting.
     output_substitution_reports: HashMap<StorePath<String>, OutputSubstitutionReport>,
     /// Exact composed-layer selections observed during this store session.
@@ -1102,6 +1150,7 @@ impl StoreHandle {
             startup_audit_events: std::mem::take(&mut startup_audit_events),
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
+            verified_complete_nodes: HashSet::new(),
             output_substitution_reports: HashMap::new(),
             read_layer_selections: BTreeMap::new(),
             ca_mappings,
@@ -1263,6 +1312,7 @@ impl StoreHandle {
             startup_audit_events: std::mem::take(&mut startup_audit_events),
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
+            verified_complete_nodes: HashSet::new(),
             output_substitution_reports: HashMap::new(),
             read_layer_selections: BTreeMap::new(),
             ca_mappings,
@@ -1322,6 +1372,7 @@ impl StoreHandle {
             startup_audit_events: Vec::new(),
             output_nodes: HashMap::new(),
             built_outputs: HashMap::new(),
+            verified_complete_nodes: HashSet::new(),
             output_substitution_reports: HashMap::new(),
             read_layer_selections: BTreeMap::new(),
             ca_mappings,
@@ -1382,6 +1433,9 @@ impl StoreHandle {
                 "gc-plan-stale: recovery guard does not protect selected state directory".to_string(),
             ));
         }
+        // Fenced removals delete castore content, so no memoized node identity
+        // may outlive this call.
+        self.verified_complete_nodes.clear();
         if let Some(store) = &self.casita_store {
             gc::recover_casita_gc(
                 &self.state_dir,
@@ -1891,6 +1945,9 @@ impl StoreHandle {
         retained_castore_roots: &[Node],
     ) -> Result<GcReport, Error> {
         self.revalidate_overlay_bases()?;
+        // GC removes castore blobs and directories, so every memoized identity
+        // must be re-checked against the services afterwards.
+        self.verified_complete_nodes.clear();
         let ctx = gc::GcContext {
             state_dir: &self.state_dir,
             output_dir_str: &self.output_dir_str,
@@ -2073,10 +2130,44 @@ impl StoreHandle {
     /// Returns `true` if the full tree rooted at `node` is present in
     /// local castore storage.  Checks all child blobs/directories
     /// recursively (bounded by `MAX_RECURSIVE_NODES` and `MAX_DEPTH`).
-    /// Every call checks the active services so stale process-global state
-    /// cannot admit an action result whose data was removed or never imported.
+    /// The free function stays uncached: every call checks the active services
+    /// so stale process-global state cannot admit an action result whose data
+    /// was removed or never imported. Only the handle-level memo in
+    /// [`Self::castore_node_verified_complete`] skips honest repeats.
     pub async fn castore_has_complete_content(&self, node: &Node) -> Result<bool, Error> {
         recursive_castore_completeness(&*self.blob_service, &*self.directory_service, node).await
+    }
+
+    /// Verify one castore node's completeness at most once per handle.
+    ///
+    /// r[impl cache_substitution.completeness_memo] A memo hit returns `true`
+    /// without touching the services. Otherwise this runs the full recursive
+    /// check and records the finalized node identity only when the check
+    /// succeeds, so an incomplete node is re-checked on every call. The memo is
+    /// bounded by `MAX_VERIFIED_COMPLETE_NODES`: at the bound this keeps doing
+    /// full checks instead of evicting entries. A symlink is inline and needs
+    /// no entry. The memo survives only while this handle does, and every
+    /// handle operation that can delete castore content clears it.
+    pub async fn castore_node_verified_complete(&mut self, node: &Node) -> Result<bool, Error> {
+        assert!(!self.store_dir.is_empty(), "logical store prefix must not be empty");
+        debug_assert!(
+            self.verified_complete_nodes.len() <= MAX_VERIFIED_COMPLETE_NODES,
+            "verified complete node memo must stay within its bound"
+        );
+        let Some(key) = verified_complete_node_key(node) else {
+            return self.castore_has_complete_content(node).await;
+        };
+        if self.verified_complete_nodes.contains(&key) {
+            return Ok(true);
+        }
+        let is_complete = self.castore_has_complete_content(node).await?;
+        if !is_complete {
+            return Ok(false);
+        }
+        if self.verified_complete_nodes.len() < MAX_VERIFIED_COMPLETE_NODES {
+            self.verified_complete_nodes.insert(key);
+        }
+        Ok(true)
     }
 
     /// Read the full content of a file blob from castore.
@@ -2158,7 +2249,7 @@ impl StoreHandle {
         if self.backend == StoreBackend::Snix
             && let Some(node) = self.output_nodes.get(path).cloned()
         {
-            if self.castore_has_complete_content(&node).await? {
+            if self.castore_node_verified_complete(&node).await? {
                 return Ok(Some(crate::layer::Layered::overlay(node)));
             }
             self.output_nodes.remove(path);
@@ -2168,7 +2259,7 @@ impl StoreHandle {
         let Some(path_info) = self.path_info_with_layer(path).await? else {
             return Ok(None);
         };
-        if !self.castore_has_complete_content(&path_info.value.node).await? {
+        if !self.castore_node_verified_complete(&path_info.value.node).await? {
             if self.overlay_state.is_none() {
                 return Ok(None);
             }
@@ -2298,7 +2389,7 @@ impl StoreHandle {
                     // file outputs verify the blob can reconstruct the declared size;
                     // symlinks are inline and always complete.
                     // r[impl cache_substitution.castore_completeness]
-                    let has_content = self.castore_has_complete_content(&path_info.node).await?;
+                    let has_content = self.castore_node_verified_complete(&path_info.node).await?;
                     if has_content {
                         self.persist_artifact_attestation_without_evidence_loss(&path_info, output_name, None).await?;
                         self.export_output_if_needed(&output_path, &path_info.node, is_root).await?;
@@ -4472,6 +4563,14 @@ mod tests {
 
     fn test_handle_with_store_dir(state_dir: &Path, store_dir: &str) -> StoreHandle {
         let blob_service = Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>;
+        test_handle_with_blob_service(state_dir, blob_service, store_dir)
+    }
+
+    fn test_handle_with_blob_service(
+        state_dir: &Path,
+        blob_service: Arc<dyn BlobService>,
+        store_dir: &str,
+    ) -> StoreHandle {
         let directory_service = Arc::new(
             RedbDirectoryService::new_temporary("handle-test".to_string(), RedbDirectoryServiceConfig::default())
                 .unwrap(),
@@ -4494,6 +4593,44 @@ mod tests {
             store_dir.to_string(),
         )
         .unwrap()
+    }
+
+    /// Blob service wrapper counting every existence probe and content read.
+    struct CountingBlobService {
+        inner: Arc<dyn BlobService>,
+        has_calls: Arc<AtomicUsize>,
+        read_calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl BlobService for CountingBlobService {
+        async fn has(&self, digest: &snix_castore::B3Digest) -> std::io::Result<bool> {
+            self.has_calls.fetch_add(1, Ordering::SeqCst);
+            self.inner.has(digest).await
+        }
+
+        async fn open_read(
+            &self,
+            digest: &snix_castore::B3Digest,
+        ) -> std::io::Result<Option<Box<dyn snix_castore::blobservice::BlobReader>>> {
+            self.read_calls.fetch_add(1, Ordering::SeqCst);
+            self.inner.open_read(digest).await
+        }
+
+        async fn open_write(&self) -> Box<dyn snix_castore::blobservice::BlobWriter> {
+            self.inner.open_write().await
+        }
+    }
+
+    fn counting_blob_service() -> (Arc<dyn BlobService>, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+        let has_calls = Arc::new(AtomicUsize::new(0));
+        let read_calls = Arc::new(AtomicUsize::new(0));
+        let service: Arc<dyn BlobService> = Arc::new(CountingBlobService {
+            inner: Arc::new(MemoryBlobService::default()) as Arc<dyn BlobService>,
+            has_calls: has_calls.clone(),
+            read_calls: read_calls.clone(),
+        });
+        (service, has_calls, read_calls)
     }
 
     fn test_handle_with_remote(state_dir: &Path) -> (StoreHandle, Arc<dyn PathInfoService>) {
@@ -4833,6 +4970,145 @@ mod tests {
         let unknown =
             StorePath::<String>::from_name_and_digest_fixed("unknown-cached-path", [UNKNOWN_SEED; 20]).unwrap();
         assert!(handle.cached_path_info(&unknown).await.unwrap().is_none());
+    }
+
+    async fn store_complete_signed_file(
+        handle: &mut StoreHandle,
+        name: &str,
+        seed: u8,
+        content: &[u8],
+    ) -> (StorePath<String>, PathInfo) {
+        assert!(!name.is_empty(), "test store path name must not be empty");
+        assert!(!content.is_empty(), "test file content must not be empty");
+        let digest = store_local_blob(handle, content).await;
+        let node = Node::File {
+            digest,
+            size: u64::try_from(content.len()).unwrap(),
+            executable: false,
+        };
+        let renderer = SimpleRenderer::new(handle.blob_service(), handle.directory_service());
+        let (nar_size, nar_sha256) = renderer.calculate_nar(&node).await.unwrap();
+        let store_path = StorePath::<String>::from_name_and_digest_fixed(name, [seed; 20]).unwrap();
+        let path_info =
+            signed_pathinfo_with_signing_key(store_path.clone(), node, nar_size, nar_sha256, &test_signing_key());
+        handle.pathinfo_service.put(path_info.clone()).await.unwrap();
+        (store_path, path_info)
+    }
+
+    // r[verify cache_substitution.completeness_memo]
+    #[tokio::test]
+    async fn cached_path_info_repeat_on_one_handle_reads_no_blobs() {
+        const CONTENT: &[u8] = b"memoized completeness content";
+        const OTHER_CONTENT: &[u8] = b"a different node is still checked";
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        std::fs::create_dir_all(&state).unwrap();
+        let (blob_service, has_calls, read_calls) = counting_blob_service();
+        let mut handle = test_handle_with_blob_service(&state, blob_service, "/nix/store");
+        let (path, path_info) = store_complete_signed_file(&mut handle, "memoized-path", 61, CONTENT).await;
+
+        let first = handle.cached_path_info(&path).await.unwrap().unwrap();
+        assert_eq!(first, path_info);
+        let reads_after_first = read_calls.load(Ordering::SeqCst);
+        let probes_after_first = has_calls.load(Ordering::SeqCst);
+        assert!(reads_after_first > 0, "first check must read the blob");
+        assert!(probes_after_first > 0, "first check must probe the blob");
+
+        let second = handle.cached_path_info(&path).await.unwrap().unwrap();
+        assert_eq!(second, path_info);
+        assert_eq!(read_calls.load(Ordering::SeqCst), reads_after_first, "repeat check must not read blobs");
+        assert_eq!(has_calls.load(Ordering::SeqCst), probes_after_first, "repeat check must not probe blobs");
+
+        let (other_path, _) = store_complete_signed_file(&mut handle, "unverified-path", 62, OTHER_CONTENT).await;
+        assert!(handle.cached_path_info(&other_path).await.unwrap().is_some());
+        assert!(
+            read_calls.load(Ordering::SeqCst) > reads_after_first,
+            "a node that was never verified must still be checked in full"
+        );
+    }
+
+    // r[verify cache_substitution.completeness_memo]
+    #[tokio::test]
+    async fn castore_node_verified_complete_rechecks_incomplete_nodes() {
+        const CONTENT: &[u8] = b"short content";
+        const DECLARED_SIZE: u64 = 1;
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        std::fs::create_dir_all(&state).unwrap();
+        let (blob_service, _, read_calls) = counting_blob_service();
+        let mut handle = test_handle_with_blob_service(&state, blob_service, "/nix/store");
+        let digest = store_local_blob(&handle, CONTENT).await;
+        let incomplete_node = Node::File {
+            digest,
+            size: DECLARED_SIZE,
+            executable: false,
+        };
+
+        assert!(!handle.castore_node_verified_complete(&incomplete_node).await.unwrap());
+        let reads_after_first = read_calls.load(Ordering::SeqCst);
+        assert!(reads_after_first > 0, "a failed check reads the blob");
+        assert!(
+            !handle.verified_complete_nodes.contains(&verified_complete_node_key(&incomplete_node).unwrap()),
+            "an incomplete node must never be recorded"
+        );
+
+        assert!(!handle.castore_node_verified_complete(&incomplete_node).await.unwrap());
+        assert_eq!(read_calls.load(Ordering::SeqCst), reads_after_first + 1, "each call re-checks the blob");
+    }
+
+    // r[verify cache_substitution.completeness_memo]
+    #[tokio::test]
+    async fn castore_node_verified_complete_rechecks_an_absent_blob() {
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        std::fs::create_dir_all(&state).unwrap();
+        let (blob_service, has_calls, _) = counting_blob_service();
+        let mut handle = test_handle_with_blob_service(&state, blob_service, "/nix/store");
+        let missing_digest = snix_castore::B3Digest::from(blake3::hash(b"absent-memoized-blob").as_bytes());
+        let missing_node = Node::File {
+            digest: missing_digest,
+            size: 1,
+            executable: false,
+        };
+
+        assert!(!handle.castore_node_verified_complete(&missing_node).await.unwrap());
+        let probes_after_first = has_calls.load(Ordering::SeqCst);
+        assert!(probes_after_first > 0, "an absent blob check probes the services");
+        assert!(!handle.castore_node_verified_complete(&missing_node).await.unwrap());
+        assert!(has_calls.load(Ordering::SeqCst) > probes_after_first);
+        assert!(
+            !handle.verified_complete_nodes.contains(&verified_complete_node_key(&missing_node).unwrap()),
+            "an absent blob must never be recorded"
+        );
+    }
+
+    // r[verify cache_substitution.completeness_memo]
+    #[tokio::test]
+    async fn garbage_collection_clears_verified_complete_nodes() {
+        const CONTENT: &[u8] = b"gc clears the memo";
+        let root = tempfile::tempdir().unwrap();
+        let state = root.path().join("state");
+        std::fs::create_dir_all(&state).unwrap();
+        let (blob_service, _, read_calls) = counting_blob_service();
+        let mut handle = test_handle_with_blob_service(&state, blob_service, "/nix/store");
+        let digest = store_local_blob(&handle, CONTENT).await;
+        let node = Node::File {
+            digest,
+            size: u64::try_from(CONTENT.len()).unwrap(),
+            executable: false,
+        };
+        assert!(handle.castore_node_verified_complete(&node).await.unwrap());
+        assert_eq!(handle.verified_complete_nodes.len(), 1);
+        let reads_after_verification = read_calls.load(Ordering::SeqCst);
+
+        handle.garbage_collect(None).await.unwrap();
+
+        assert!(handle.verified_complete_nodes.is_empty(), "deletion must clear the memo");
+        assert!(handle.castore_node_verified_complete(&node).await.unwrap());
+        assert!(
+            read_calls.load(Ordering::SeqCst) > reads_after_verification,
+            "the next check must read the services again"
+        );
     }
 
     fn narinfo_body_for(

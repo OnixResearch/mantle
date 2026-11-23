@@ -24,8 +24,12 @@ const INITIAL_COMPLETENESS_WORKLIST_CAPACITY: usize = 128;
 /// Recursively check that a node's full castore tree is present.
 ///
 /// Checks every child blob and directory under `node` root. Symlinks
-/// are always complete because their targets are inline. Every call checks
-/// the active services so stale process-global facts cannot admit missing data.
+/// are always complete because their targets are inline. This free function is
+/// uncached: every call checks the active services so stale process-global
+/// facts cannot admit missing data. Callers that may honestly repeat a check
+/// within one store handle use `StoreHandle::castore_node_verified_complete`,
+/// whose per-handle memo skips repeats; action-result admission keeps this
+/// fresh check.
 pub async fn recursive_castore_completeness(
     blob_service: &dyn BlobService,
     directory_service: &dyn DirectoryService,

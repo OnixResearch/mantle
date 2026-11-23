@@ -1,0 +1,2 @@
+$ cargo fmt --check -p mantle -p crunch-store -p crunch-build -p crunch-pipeline
+exit=0

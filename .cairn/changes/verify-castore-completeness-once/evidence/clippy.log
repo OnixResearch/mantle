@@ -1,0 +1,17 @@
+$ cargo clippy -p mantle -p crunch-store -p crunch-build -p crunch-pipeline --all-targets --no-deps -- -D warnings
+warning: /home/brittonr/wt/mantle-followups/Cargo.toml: file `/home/brittonr/wt/mantle-followups/src/main.rs` found to be present in multiple build targets:
+  * `bin` target `crunch`
+  * `bin` target `mantle`
+   Compiling snix-castore v0.1.0 (/home/brittonr/wt/mantle-followups/vendor/snix-castore)
+    Checking snix-store v0.1.0 (/home/brittonr/wt/mantle-followups/vendor/snix-store)
+    Checking snix-build v0.1.0 (/home/brittonr/wt/mantle-followups/vendor/snix-build)
+    Checking crunch-store v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-store)
+    Checking crunch-rust-cache v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-rust-cache)
+    Checking crunch-delta v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-delta)
+    Checking crunch-rustc-wrapper v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-rustc-wrapper)
+    Checking crunch-build v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-build)
+    Checking crunch-pipeline v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-pipeline)
+    Checking crunch-nix-gateway v0.1.0 (/home/brittonr/wt/mantle-followups/crates/crunch-nix-gateway)
+    Checking mantle v0.1.0 (/home/brittonr/wt/mantle-followups)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4m 39s
+exit=0
