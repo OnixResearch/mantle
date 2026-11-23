@@ -63,9 +63,10 @@ header format, and writer as `mantle build`. An outcome served from cache or reu
 MUST write nothing and MUST NOT overwrite an existing log.
 
 A log-write failure MUST NOT change the realization result, the receipt, the published receipt
-bytes, or the built-root index. It MUST be reported as a diagnostic persistence failure the way
-`mantle build` reports one, and `--json` stdout MUST remain the receipt alone with no additional
-prose on stderr. No receipt field or schema version MUST change.
+bytes, or the built-root index. It MUST be reported as a diagnostic persistence failure: in human
+mode as the warning `mantle build` prints, and under `--json` as one JSON object line
+`{"diagnostic_persistence_failure": {...}}` per failure on stderr, with stdout remaining the receipt
+alone and no prose on stderr. No receipt field or schema version MUST change.
 
 #### Scenario: A built root keeps its log
 
@@ -87,4 +88,5 @@ prose on stderr. No receipt field or schema version MUST change.
 - WHEN realization otherwise succeeds
 - THEN the receipt MUST still be published and the realization MUST still succeed
 - AND the failure MUST be reported as a diagnostic persistence failure without changing the
-  receipt.
+  receipt
+- AND under `--json` it MUST appear as one `diagnostic_persistence_failure` JSON line on stderr.

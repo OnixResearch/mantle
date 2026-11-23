@@ -965,6 +965,36 @@ fn cache_inputs_build_or_reuse_route_keeps_the_built_root_log_and_leaves_reused_
     );
 }
 
+#[test]
+fn cache_inputs_build_or_reuse_route_reports_an_unwritable_log_dir_as_json_and_still_succeeds() {
+    let temp = TempDir::new().expect("tempdir");
+    let cache = positive_cache();
+    let fixture = prepare_route_v2(&temp, &cache);
+    let binding = write_binding(&temp, &cache.base_url, &cache.url_with_key);
+    let state_dir = temp.path().join("state");
+    fs::create_dir_all(&state_dir).expect("create state dir");
+    // A regular file where the logs directory belongs makes every log write fail.
+    fs::write(state_dir.join("logs"), "not a directory\n").expect("block the logs directory");
+
+    let output = realize_with_receipt(&temp, &fixture, &binding, "blocked-logs-receipt.json");
+    assert!(
+        output.status.success(),
+        "a log failure must not fail realize: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(json_file(&temp.path().join("blocked-logs-receipt.json"))["roots"][0]["disposition"], "built");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let failures = stderr
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter_map(|value| value.get("diagnostic_persistence_failure").cloned())
+        .collect::<Vec<_>>();
+    assert_eq!(failures.len(), 1, "expected one JSON failure line on stderr: {stderr}");
+    assert_eq!(failures[0]["operation"], "create-log-dir");
+    assert_eq!(failures[0]["artifact"], "build-log");
+    assert!(!stderr.contains("WARNING:"), "--json stderr must stay machine-readable: {stderr}");
+}
+
 fn realize_with_build_cores(
     temp: &TempDir,
     fixture: &Fixture,

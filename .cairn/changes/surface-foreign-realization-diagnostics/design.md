@@ -41,17 +41,20 @@ import (the flat pull would then need a second download path); logging structure
 `build_cmd::write_log` for each `RegisteredBuildResult.outcomes[].log` (`success = true`) and each
 `RegisteredBuildResult.failed_roots[].build_log` (`success = false`), using the derivation basename
 as the label. It returns `Vec<DiagnosticPersistenceFailure>`; the outcome carries it to
-`run_realize`, which prints the same `WARNING: diagnostic persistence failed` block as
-`mantle build` when stdout is human-readable. No placeholder log is written for cached or reused
-outcomes, so a reuse run leaves an existing file untouched.
+`run_realize`. In human mode `run_realize` prints the same `WARNING: diagnostic persistence failed`
+block as `mantle build`. Under `--json`, where stdout is the receipt itself, it writes each failure as
+one JSON object line `{"diagnostic_persistence_failure": {...}}` on stderr, using the struct's
+existing serialization. No placeholder log is written for cached or reused outcomes, so a reuse run
+leaves an existing file untouched.
 
 **Rationale:** the file name, header, timestamp and status semantics stay byte-compatible with
 `mantle build`, so `mantle log` needs no change and an operator can quote either. Keeping the
-failures out of the receipt preserves receipt v1/v2 identity; printing them only in human mode keeps
-`--json` stdout a single receipt and stderr free of additional prose.
+failures out of the receipt preserves receipt v1/v2 identity and keeps `--json` stdout a single
+receipt. JSON lines keep `--json` stderr machine-readable, as `AGENTS.md` requires, while making
+the failure visible in the mode the pilot runs use.
 
-**Consequence:** a log-write failure is observable only as a warning in human mode. That matches the
-request: the realization result and the receipt are authoritative, and the log is a diagnostic.
+**Consequence:** a log-write failure never changes the result or the receipt and is always
+reported: as a warning in human mode, as a JSON line on stderr under `--json`.
 
 **Rejected alternatives:** adding a receipt field (schema change, and the receipt is published
 before this point); failing the realization when a log cannot be written (a full disk would then

@@ -9,8 +9,8 @@
 
 - [x] [serial] T2.1 Persist every executed outcome log and every retained failed-root log to `<state-dir>/logs/<drv>.log` with the existing `build_log` writer, write nothing for cached or reused outcomes, and collect failures as diagnostic persistence failures. r[foreign_derivation_import.realization_build_logs]
   - Evidence: shell unit test that a failed logs directory yields one `DiagnosticPersistenceFailure` and no error.
-- [x] [serial] T2.2 Report collected failures the way `mantle build` does in human output only, leaving `--json` stdout a single receipt and the receipt bytes unchanged. r[foreign_derivation_import.realization_build_logs]
-  - Evidence: CLI test asserting the receipt parses on a successful realize.
+- [x] [serial] T2.2 Report collected failures without touching the receipt: the `mantle build` warning in human mode, and one `{"diagnostic_persistence_failure": …}` JSON line per failure on stderr under `--json`, leaving `--json` stdout a single receipt. r[foreign_derivation_import.realization_build_logs]
+  - Evidence: `tests/cache_inputs_build_route.rs` `cache_inputs_build_or_reuse_route_reports_an_unwritable_log_dir_as_json_and_still_succeeds` (blocked logs directory: realize succeeds, receipt built, one JSON failure line, no prose on stderr).
 - [x] [serial] T2.3 Add the CLI regression: a successful realize leaves the root log with the builder's output, `mantle log` shows it, and a reuse run does not rewrite the log. r[foreign_derivation_import.realization_build_logs]
   - Evidence: `tests/cache_inputs_build_route.rs`.
 

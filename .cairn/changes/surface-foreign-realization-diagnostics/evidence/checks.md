@@ -44,3 +44,22 @@ a time), the new regression was run once, and the edit was reverted.
 
 The refusal classes and detail are therefore pinned by tests that fail without the change, and the
 log regression is pinned by the CLI test that fails when `write_realization_logs` is bypassed.
+
+## Follow-up: log failures under `--json` (orchestrator review)
+
+Review found that a log-write failure was printed only in human mode, so under `--json` (the mode
+the pilot runs use) it was invisible. `run_realize` now writes each failure as one
+`{"diagnostic_persistence_failure": {...}}` JSON line on stderr under `--json`, and the design,
+spec, and task T2.2 say so. New CLI test
+`cache_inputs_build_or_reuse_route_reports_an_unwritable_log_dir_as_json_and_still_succeeds` blocks
+`<state-dir>/logs` with a regular file: realize exits 0, the receipt reports the root `built`, and
+stderr holds exactly one `create-log-dir` failure line and no `WARNING:` prose.
+
+| Command | Result |
+|---|---|
+| `cargo test -p mantle --test cache_inputs_build_route` | `test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s` |
+| `cargo fmt --check -p mantle` | exit 0, no diff |
+| `cargo clippy -p mantle --all-targets --no-deps -- -D warnings` | exit 0, no warning or error lines |
+| `cairn validate --root .` (pinned 007ba519) | `{"valid":true,"issues":0}` |
+| `cairn gate proposal\|design\|tasks surface-foreign-realization-diagnostics` | PASS, PASS, PASS |
+| `git diff --check` | exit 0 |

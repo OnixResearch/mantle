@@ -2104,7 +2104,12 @@ fn run_realize(
         build_cores: request.build_cores,
     })?;
     let receipt = &outcome.receipt;
-    if !context.json {
+    if context.json {
+        // stdout carries the receipt itself, so each failure is one JSON line on stderr.
+        for failure in &outcome.diagnostic_persistence_failures {
+            eprintln!("{}", serde_json::json!({ "diagnostic_persistence_failure": failure }));
+        }
+    } else {
         crate::build_cmd::print_diagnostic_persistence_failures(&outcome.diagnostic_persistence_failures);
     }
     port.publish(request.receipt_out, receipt, "foreign realization receipt")?;
