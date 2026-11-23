@@ -38,6 +38,7 @@ const NON_CLAIM_COMPILER_CORRECTNESS: &str = "not-compiler-correctness";
 const NON_CLAIM_DEPLOY_SUCCESS: &str = "not-deploy-success";
 const NON_CLAIM_PHYSICAL_TARGET_DETERMINISM: &str = "not-physical-target-determinism";
 const NON_CLAIM_GLOBAL_BLOCKED: &str = "global-reproducibility-blocked";
+pub const NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE: &str = "matched-under-pinned-machine";
 const LEGACY_WITNESS_METADATA_NOT_RECORDED: &str = "not-recorded";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,6 +107,25 @@ pub struct GlobalSurfaceEvidence {
     pub witnesses: Vec<GlobalWitnessEvidence>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GlobalWitnessPinnedInputs {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_epoch_seconds: Option<u64>,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub entropy_seed: Option<String>,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub schedule_seed: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GlobalWitnessExecutionMachine {
+    pub engine_name: String,
+    pub engine_version_digest_blake3: String,
+    pub cpu_vendor_class: String,
+    #[serde(default)]
+    pub pinned_inputs: GlobalWitnessPinnedInputs,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlobalWitnessEvidence {
     pub identity: String,
@@ -126,6 +146,8 @@ pub struct GlobalWitnessEvidence {
     pub trust_status: GlobalWitnessTrustStatus,
     #[serde(default = "empty_strings")]
     pub output_digest_set_blake3: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_machine: Option<GlobalWitnessExecutionMachine>,
 }
 
 fn default_legacy_witness_metadata() -> String {
@@ -170,6 +192,10 @@ impl GlobalReproducibilityClaimClass {
     }
 }
 
+fn is_zero_u32(value: &u32) -> bool {
+    *value == ZERO_COUNT
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlobalWitnessCounts {
     pub accepted: u32,
@@ -179,6 +205,8 @@ pub struct GlobalWitnessCounts {
     pub failed_invalid_signature: u32,
     pub failed_digest_mismatched: u32,
     pub policy_insufficient: u32,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub skipped_pinned_axes: u32,
 }
 
 impl GlobalWitnessCounts {
@@ -191,6 +219,7 @@ impl GlobalWitnessCounts {
             failed_invalid_signature: ZERO_COUNT,
             failed_digest_mismatched: ZERO_COUNT,
             policy_insufficient: ZERO_COUNT,
+            skipped_pinned_axes: ZERO_COUNT,
         }
     }
 }
@@ -280,6 +309,7 @@ struct SurfaceWitnessEvaluation {
     covered_perturbation_axes: Vec<String>,
     witness_counts: GlobalWitnessCounts,
     blockers: Vec<GlobalReproducibilityBlocker>,
+    matched_only_under_pinned_machine: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -307,6 +337,7 @@ struct GlobalEvaluationAggregate {
     blockers: Vec<GlobalReproducibilityBlocker>,
     evidence_digests_blake3: BTreeSet<String>,
     witness_identities: BTreeSet<String>,
+    any_surface_matched_only_under_pinned_machine: bool,
 }
 
 struct CollectedSurfaceEvidence {
@@ -334,6 +365,9 @@ struct WitnessAccumulator {
     domains: BTreeSet<String>,
     host_classes: BTreeSet<String>,
     axes: BTreeSet<String>,
+    pinned_skipped_axes: BTreeMap<String, &'static str>,
+    accepted_native_count: u32,
+    accepted_pinned_count: u32,
     blockers: Vec<GlobalReproducibilityBlocker>,
 }
 
@@ -344,6 +378,7 @@ struct WitnessPolicyInput<'a> {
     domains: &'a BTreeSet<String>,
     host_classes: &'a BTreeSet<String>,
     axes: &'a BTreeSet<String>,
+    pinned_skipped_axes: &'a BTreeMap<String, &'static str>,
 }
 
 #[derive(Clone, Copy)]
@@ -466,6 +501,7 @@ fn evaluate_global_surfaces(
     blockers.reserve(collection_capacity_count(MAX_GLOBAL_BLOCKER_COUNT)?.saturating_sub(blockers.len()));
     let mut evidence_digests_blake3 = BTreeSet::new();
     let mut witness_identities = BTreeSet::new();
+    let mut any_surface_matched_only_under_pinned_machine = false;
     let included_surface_ids =
         universe.included_surfaces.iter().map(|surface| surface.id.clone()).collect::<BTreeSet<_>>();
     debug_assert!(surfaces.capacity() >= universe.included_surfaces.len());
@@ -478,6 +514,9 @@ fn evaluate_global_surfaces(
             policy,
             digests,
         })?;
+        if evaluated_surface.non_claims.iter().any(|claim| claim == NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE) {
+            any_surface_matched_only_under_pinned_machine = true;
+        }
         for digest in collect_surface_report_digests(evidence) {
             evidence_digests_blake3.insert(digest);
         }
@@ -493,6 +532,7 @@ fn evaluate_global_surfaces(
         blockers,
         evidence_digests_blake3,
         witness_identities,
+        any_surface_matched_only_under_pinned_machine,
     })
 }
 
@@ -508,6 +548,9 @@ fn assemble_global_report(
     let mut non_claims = default_global_non_claims(&universe.excluded_surfaces);
     if !claim_class.is_global_claim() {
         non_claims.insert(NON_CLAIM_GLOBAL_BLOCKED.to_string());
+    }
+    if aggregate.any_surface_matched_only_under_pinned_machine {
+        non_claims.insert(NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE.to_string());
     }
     let assembled = GlobalReproducibilityReport {
         schema: GLOBAL_REPRODUCIBILITY_REPORT_SCHEMA.to_string(),
@@ -757,6 +800,10 @@ fn evaluate_missing_surface(surface: &GlobalBuildSurface) -> SurfaceEvidenceEval
 }
 
 fn build_surface_report(surface: &GlobalBuildSurface, evaluation: SurfaceEvidenceEvaluation) -> GlobalSurfaceReport {
+    let mut non_claims = surface_non_claims();
+    if evaluation.witness.matched_only_under_pinned_machine {
+        non_claims.push(NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE.to_string());
+    }
     GlobalSurfaceReport {
         surface_id: surface.id.clone(),
         target_system: surface.target_system.clone(),
@@ -771,7 +818,7 @@ fn build_surface_report(surface: &GlobalBuildSurface, evaluation: SurfaceEvidenc
         covered_perturbation_axes: evaluation.witness.covered_perturbation_axes,
         witness_counts: evaluation.witness.witness_counts,
         blockers: evaluation.blockers,
-        non_claims: surface_non_claims(),
+        non_claims,
     }
 }
 
@@ -918,6 +965,7 @@ fn evaluate_witness_matrix(
             domains: &accumulator.domains,
             host_classes: &accumulator.host_classes,
             axes: &accumulator.axes,
+            pinned_skipped_axes: &accumulator.pinned_skipped_axes,
         },
         &mut accumulator.blockers,
     )?;
@@ -932,6 +980,9 @@ impl WitnessAccumulator {
             domains: BTreeSet::new(),
             host_classes: BTreeSet::new(),
             axes: BTreeSet::new(),
+            pinned_skipped_axes: BTreeMap::new(),
+            accepted_native_count: ZERO_COUNT,
+            accepted_pinned_count: ZERO_COUNT,
             blockers: Vec::with_capacity(witness_capacity_count),
         }
     }
@@ -986,13 +1037,32 @@ impl WitnessAccumulator {
         self.counts.accepted = self.counts.accepted.saturating_add(1);
         self.identities.insert(witness.identity.clone());
         self.domains.insert(witness.operator_domain.clone());
-        self.host_classes.insert(witness.host_class.clone());
-        for axis in &witness.perturbation_axes {
-            self.axes.insert(axis.clone());
+        match &witness.execution_machine {
+            None => {
+                self.accepted_native_count = self.accepted_native_count.saturating_add(1);
+                self.host_classes.insert(witness.host_class.clone());
+                for axis in &witness.perturbation_axes {
+                    self.axes.insert(axis.clone());
+                }
+            }
+            Some(machine) => {
+                self.accepted_pinned_count = self.accepted_pinned_count.saturating_add(1);
+                self.host_classes.insert(pinned_machine_host_class(machine));
+                for axis in &witness.perturbation_axes {
+                    if let Some(pinned_input) = neutralized_by_pinned_input(axis, &machine.pinned_inputs) {
+                        self.counts.skipped_pinned_axes = self.counts.skipped_pinned_axes.saturating_add(1);
+                        self.pinned_skipped_axes.entry(axis.clone()).or_insert(pinned_input);
+                    } else {
+                        self.axes.insert(axis.clone());
+                    }
+                }
+            }
         }
     }
 
     fn into_evaluation(self) -> SurfaceWitnessEvaluation {
+        let matched_only_under_pinned_machine =
+            self.accepted_pinned_count > ZERO_COUNT && self.accepted_native_count == ZERO_COUNT;
         SurfaceWitnessEvaluation {
             accepted_witness_identities: self.identities.into_iter().collect(),
             accepted_operator_domains: self.domains.into_iter().collect(),
@@ -1000,8 +1070,48 @@ impl WitnessAccumulator {
             covered_perturbation_axes: self.axes.into_iter().collect(),
             witness_counts: self.counts,
             blockers: self.blockers,
+            matched_only_under_pinned_machine,
         }
     }
+}
+
+fn pinned_machine_host_class(machine: &GlobalWitnessExecutionMachine) -> String {
+    format!(
+        "pinned-machine:{}:{}:{}",
+        machine.engine_name, machine.engine_version_digest_blake3, machine.cpu_vendor_class
+    )
+}
+
+pub fn neutralized_by_pinned_input(axis: &str, pinned: &GlobalWitnessPinnedInputs) -> Option<&'static str> {
+    let normalized = axis.trim().to_ascii_lowercase();
+    if pinned.start_epoch_seconds.is_some()
+        && (matches!(
+            normalized.as_str(),
+            "time" | "clock" | "timestamp" | "mtime" | "build-time" | "wall-clock" | "epoch"
+        ) || normalized.starts_with("time:")
+            || normalized.starts_with("clock:")
+            || normalized.starts_with("timestamp:"))
+    {
+        return Some("start_epoch_seconds");
+    }
+    if pinned.entropy_seed.is_some()
+        && (matches!(normalized.as_str(), "randomness" | "entropy" | "rng" | "uuid" | "aslr")
+            || normalized.starts_with("randomness:")
+            || normalized.starts_with("entropy:")
+            || normalized.starts_with("rng:"))
+    {
+        return Some("entropy_seed");
+    }
+    if pinned.schedule_seed.is_some()
+        && (matches!(
+            normalized.as_str(),
+            "scheduling" | "schedule" | "concurrency" | "parallelism" | "thread-order" | "cpu-order"
+        ) || normalized.starts_with("schedule:")
+            || normalized.starts_with("scheduling:"))
+    {
+        return Some("schedule_seed");
+    }
+    None
 }
 
 fn classify_valid_witness(
@@ -1065,7 +1175,23 @@ fn push_host_class_quorum_blocker(
 
 fn push_missing_axis_blockers(input: WitnessPolicyInput<'_>, blockers: &mut Vec<GlobalReproducibilityBlocker>) {
     for axis in &input.policy.required_perturbation_axes {
-        if !input.axes.contains(axis) {
+        if input.axes.contains(axis) {
+            continue;
+        }
+        if let Some(pinned_input) = input.pinned_skipped_axes.get(axis) {
+            blockers.push(blocker(BlockerInput {
+                surface_id: Some(input.surface.id.clone()),
+                evidence_class: "witness-perturbation-axis-pinned",
+                expected_digest_blake3: None,
+                observed_digest_blake3: None,
+                message: &format!(
+                    "perturbation axis {axis} was neutralized by pinned execution machine input {pinned_input}"
+                ),
+                next_action: &format!(
+                    "rerun an accepted witness without pinning {pinned_input} so perturbation axis {axis} varies freely"
+                ),
+            }));
+        } else {
             blockers.push(blocker(BlockerInput {
                 surface_id: Some(input.surface.id.clone()),
                 evidence_class: "witness-perturbation-axis",
@@ -1087,6 +1213,7 @@ impl SurfaceWitnessEvaluation {
             covered_perturbation_axes: Vec::new(),
             witness_counts: GlobalWitnessCounts::empty(),
             blockers: Vec::new(),
+            matched_only_under_pinned_machine: false,
         }
     }
 }
@@ -1142,6 +1269,9 @@ fn collect_digest_slice(digests: &mut BTreeSet<String>, values: &[String]) {
 fn collect_witness_digests(digests: &mut BTreeSet<String>, witnesses: &[GlobalWitnessEvidence]) {
     for witness in witnesses {
         collect_digest_slice(digests, &witness.output_digest_set_blake3);
+        if let Some(machine) = &witness.execution_machine {
+            digests.insert(machine.engine_version_digest_blake3.clone());
+        }
     }
 }
 
@@ -1257,7 +1387,26 @@ fn validate_witness(
     validate_non_empty_string(&witness.source_acquisition_mode, FieldName("witness.source_acquisition_mode"))?;
     validate_digest_set(&witness.output_digest_set_blake3, "witness.output_digest_set_blake3")?;
     validate_string_set(&witness.perturbation_axes, "witness.perturbation_axes")?;
+    if let Some(machine) = &witness.execution_machine {
+        validate_execution_machine(machine)?;
+    }
     insert_unique(identities, &witness.identity, FieldName("witness identity"))
+}
+
+fn validate_execution_machine(machine: &GlobalWitnessExecutionMachine) -> Result<(), ReleaseEvidenceError> {
+    validate_non_empty_string(&machine.engine_name, FieldName("witness.execution_machine.engine_name"))?;
+    validate_blake3_hex(
+        &machine.engine_version_digest_blake3,
+        "witness.execution_machine.engine_version_digest_blake3",
+    )?;
+    validate_non_empty_string(&machine.cpu_vendor_class, FieldName("witness.execution_machine.cpu_vendor_class"))?;
+    if let Some(seed) = &machine.pinned_inputs.entropy_seed {
+        validate_non_empty_string(seed, FieldName("witness.execution_machine.pinned_inputs.entropy_seed"))?;
+    }
+    if let Some(seed) = &machine.pinned_inputs.schedule_seed {
+        validate_non_empty_string(seed, FieldName("witness.execution_machine.pinned_inputs.schedule_seed"))?;
+    }
+    Ok(())
 }
 
 fn validate_digest_set(digests: &[String], field_name: &str) -> Result<(), ReleaseEvidenceError> {
@@ -1490,6 +1639,7 @@ mod tests {
             perturbation_axes: vec!["PATH".to_string()],
             trust_status: GlobalWitnessTrustStatus::Valid,
             output_digest_set_blake3: digest_set,
+            execution_machine: None,
         }
     }
 
@@ -1657,5 +1807,119 @@ mod tests {
     ) -> GlobalReproducibilityEvaluationInput {
         input.policy.required_operator_domains = 2;
         input
+    }
+
+    fn sample_pinned_machine(cpu_vendor_class: &str) -> GlobalWitnessExecutionMachine {
+        GlobalWitnessExecutionMachine {
+            engine_name: "chaoscontrol".to_string(),
+            engine_version_digest_blake3: sample_digest(55),
+            cpu_vendor_class: cpu_vendor_class.to_string(),
+            pinned_inputs: GlobalWitnessPinnedInputs {
+                start_epoch_seconds: Some(1_700_000_000),
+                entropy_seed: Some("seed-01".to_string()),
+                schedule_seed: Some("sched-01".to_string()),
+            },
+        }
+    }
+
+    #[test]
+    fn pinned_machine_witness_cannot_cover_neutralized_axes_and_emits_pinned_non_claim() {
+        let mut input = sample_input();
+        input.policy.required_perturbation_axes = vec![
+            "PATH".to_string(),
+            "time".to_string(),
+            "randomness".to_string(),
+            "scheduling".to_string(),
+        ];
+        input.policy_digest_blake3 = global_reproducibility_policy_digest_blake3(input.policy.clone()).unwrap();
+        input.surface_evidence[0].policy_digest_blake3 = input.policy_digest_blake3.clone();
+        input.surface_evidence[0].witnesses[0].perturbation_axes = vec![
+            "PATH".to_string(),
+            "time".to_string(),
+            "randomness".to_string(),
+            "scheduling".to_string(),
+        ];
+        input.surface_evidence[0].witnesses[0].execution_machine = Some(sample_pinned_machine("amd-zen4"));
+
+        let report = evaluate_global_reproducibility(input).unwrap();
+        let surface = &report.surfaces[0];
+
+        assert_eq!(report.claim_class, GlobalReproducibilityClaimClass::Blocked);
+        assert_eq!(surface.covered_perturbation_axes, vec!["PATH".to_string()]);
+        assert_eq!(surface.witness_counts.skipped_pinned_axes, 3);
+        assert!(surface.non_claims.contains(&NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE.to_string()));
+        assert!(report.non_claims.contains(&NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE.to_string()));
+        for axis in ["time", "randomness", "scheduling"] {
+            assert!(
+                report.blockers.iter().any(|blocker| {
+                    blocker.evidence_class == "witness-perturbation-axis-pinned" && blocker.message.contains(axis)
+                }),
+                "missing pinned-axis blocker for {axis}: {:#?}",
+                report.blockers
+            );
+        }
+    }
+
+    #[test]
+    fn mixed_native_and_pinned_witnesses_satisfy_time_from_native_and_omit_pinned_only_non_claim() {
+        let mut input = sample_input();
+        input.policy.required_perturbation_axes = vec!["PATH".to_string(), "time".to_string()];
+        input.policy_digest_blake3 = global_reproducibility_policy_digest_blake3(input.policy.clone()).unwrap();
+        input.surface_evidence[0].policy_digest_blake3 = input.policy_digest_blake3.clone();
+        let digest_set = input.surface_evidence[0].output_digest_set_blake3.clone();
+
+        let mut pinned = sample_witness("vm-witness", "vm-domain", digest_set.clone());
+        pinned.perturbation_axes = vec!["PATH".to_string(), "time".to_string()];
+        pinned.execution_machine = Some(sample_pinned_machine("amd-zen4"));
+
+        let mut native = sample_witness("native-witness", "native-domain", digest_set);
+        native.perturbation_axes = vec!["PATH".to_string(), "time".to_string()];
+
+        input.surface_evidence[0].witnesses = vec![pinned, native];
+
+        let report = evaluate_global_reproducibility(input).unwrap();
+        let surface = &report.surfaces[0];
+
+        assert_eq!(report.claim_class, GlobalReproducibilityClaimClass::Eligible);
+        assert!(report.blockers.is_empty());
+        assert_eq!(surface.witness_counts.accepted, 2);
+        assert_eq!(surface.witness_counts.skipped_pinned_axes, 1);
+        assert_eq!(surface.covered_perturbation_axes, vec!["PATH".to_string(), "time".to_string()]);
+        assert!(!surface.non_claims.contains(&NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE.to_string()));
+        assert!(!report.non_claims.contains(&NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE.to_string()));
+    }
+
+    #[test]
+    fn same_pinned_machine_witnesses_collapse_to_one_host_class() {
+        let mut input = sample_input();
+        input.policy.required_operator_domains = 2;
+        input.policy.required_host_classes = 2;
+        input.policy_digest_blake3 = global_reproducibility_policy_digest_blake3(input.policy.clone()).unwrap();
+        input.surface_evidence[0].policy_digest_blake3 = input.policy_digest_blake3.clone();
+        let digest_set = input.surface_evidence[0].output_digest_set_blake3.clone();
+
+        let mut first = sample_witness("vm-a", "domain-a", digest_set.clone());
+        first.host_class = "claimed-host-a".to_string();
+        first.execution_machine = Some(sample_pinned_machine("intel-sapphire"));
+
+        let mut second = sample_witness("vm-b", "domain-b", digest_set);
+        second.host_class = "claimed-host-b".to_string();
+        second.execution_machine = Some(sample_pinned_machine("intel-sapphire"));
+
+        input.surface_evidence[0].witnesses = vec![first, second];
+
+        let report = evaluate_global_reproducibility(input).unwrap();
+        assert_eq!(report.claim_class, GlobalReproducibilityClaimClass::Blocked);
+        assert_eq!(report.surfaces[0].accepted_host_classes.len(), 1);
+        assert!(report.blockers.iter().any(|blocker| blocker.evidence_class == "witness-host-class-quorum"));
+    }
+
+    #[test]
+    fn native_witness_report_omits_optional_pinned_fields() {
+        let report = evaluate_global_reproducibility(sample_input()).unwrap();
+        let bytes = global_reproducibility_report_canonical_bytes(report).unwrap();
+        let json = alloc::string::String::from_utf8(bytes).unwrap();
+        assert!(!json.contains("skipped_pinned_axes"));
+        assert!(!json.contains(NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE));
     }
 }

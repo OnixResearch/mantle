@@ -80,3 +80,36 @@ adds those digests to the evidence digest set and treats the blockers exactly
 like other admission blockers. This preserves the existing global gate: gauntlet
 reports can block or support scoped evidence, but they cannot bypass action,
 source, toolchain, hermeticity, output, or witness requirements.
+
+### Pinned deterministic execution machines in witness evidence
+
+Each witness in `GlobalWitnessEvidence` carries an optional `execution_machine`
+record (`engine_name`, `engine_version_digest_blake3`, `cpu_vendor_class`, and
+`pinned_inputs` containing optional `start_epoch_seconds`, `entropy_seed`, and
+`schedule_seed`). When `execution_machine` is omitted, the witness represents
+native host execution and existing canonical report bytes are unchanged.
+
+When a witness carries `execution_machine`, the evaluator enforces three rules:
+
+1. **Axis neutralization**: a pinned input neutralizes the corresponding
+   perturbation axes so that witness cannot satisfy them in
+   `required_perturbation_axes` (counted in `witness_counts.skipped_pinned_axes`,
+   and surfaced as a `witness-perturbation-axis-pinned` blocker whenever no
+   unpinned witness covers that required axis):
+
+   | Pinned input | Neutralized perturbation axes (case-insensitive) |
+   |---|---|
+   | `start_epoch_seconds` | `time`, `clock`, `timestamp`, `mtime`, `build-time`, `wall-clock`, `epoch`, and `time:*` / `clock:*` / `timestamp:*` |
+   | `entropy_seed` | `randomness`, `entropy`, `rng`, `uuid`, `aslr`, and `randomness:*` / `entropy:*` / `rng:*` |
+   | `schedule_seed` | `scheduling`, `schedule`, `concurrency`, `parallelism`, `thread-order`, `cpu-order`, and `schedule:*` / `scheduling:*` |
+
+2. **Host-class collapsing**: pinned-machine witnesses count toward
+   `required_host_classes` by their machine identity
+   (`pinned-machine:<engine_name>:<engine_version_digest_blake3>:<cpu_vendor_class>`),
+   so multiple witnesses running on the same pinned machine collapse to a single
+   host class regardless of their free-form `host_class` label.
+3. **Pinned-only non-claim**: when every accepted witness for an included
+   surface ran inside a pinned machine, both that surface report and the
+   top-level `GlobalReproducibilityReport` emit the
+   `matched-under-pinned-machine` non-claim so the report cannot be misread as
+   native-host reproducibility.

@@ -579,6 +579,7 @@ fn witnesses_for_surface(
                 perturbation_axes: Vec::new(),
                 trust_status: GlobalWitnessTrustStatus::Valid,
                 output_digest_set_blake3: vec![output_digest.to_string()],
+                execution_machine: None,
             });
         }
     }
