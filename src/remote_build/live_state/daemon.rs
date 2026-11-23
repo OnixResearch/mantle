@@ -1563,15 +1563,16 @@ mod tests {
             schema: LIVE_BUILD_FACT_SCHEMA,
             value,
         };
-        serde_json::to_string(&serde_json::json!({
+        let mut encoded = serde_json::json!({
             "schema": LIVE_PROTOCOL_SCHEMA,
             "op": "publish",
             "owner_run_id": owner,
             "fact_id": id,
             "fact": fact,
-        }))
-        .unwrap()
-            + "\n"
+        })
+        .to_string();
+        encoded.push('\n');
+        encoded
     }
 
     #[test]
