@@ -322,27 +322,112 @@ pub fn fetch_to_store(fetch: &Fetch, out_path: &str) -> Result<(), FetchError> {
 /// - Flat fetches: hash the raw file bytes.
 /// - Tarball/NAR/Git: hash the NAR serialization of the output tree.
 ///
+/// Fixed streaming buffer size for flat fixed-output hash verification (64 KiB).
+pub const FLAT_HASH_BUFFER_BYTES: usize = 64 * 1024;
+const _: () = assert!(FLAT_HASH_BUFFER_BYTES > 0);
+
 /// `nar_hash_fn` is called for recursive (NAR) hashes — the caller
 /// provides the NAR computation since it requires async castore services.
-/// For flat hashes, this function reads the file directly.
+/// For flat hashes, this function streams the file through a fixed-size buffer.
 pub fn verify_flat_hash(out_path: &str, expected: &NixHash, name: &str) -> Result<(), FetchError> {
+    verify_flat_hash_with_limit(out_path, expected, name, MAX_EXPANDED_FILE_BYTES)
+}
+
+/// Stream-verify a flat file's digest against `expected`, failing if the file
+/// exceeds `limit_bytes` without ever buffering the whole file in memory.
+pub fn verify_flat_hash_with_limit(
+    out_path: &str,
+    expected: &NixHash,
+    name: &str,
+    limit_bytes: u64,
+) -> Result<(), FetchError> {
     assert!(!out_path.is_empty(), "output path must not be empty");
     assert!(!name.is_empty(), "name must not be empty for hash verification");
+    assert!(limit_bytes > 0, "flat hash byte limit must be positive");
 
-    let content = std::fs::read(out_path)?;
-    let actual_bytes = flat_hash_bytes(&content, expected.algo());
+    let mut file = std::fs::File::open(out_path)?;
+    let actual_bytes = hash_reader_bounded(&mut file, expected.algo(), limit_bytes, name)?;
     verify_hash_bytes(out_path, expected, name, &actual_bytes)
 }
 
-fn flat_hash_bytes(content: &[u8], algo: HashAlgo) -> Vec<u8> {
-    use sha2::Digest;
-    match algo {
-        HashAlgo::Sha256 => sha2::Sha256::digest(content).to_vec(),
-        HashAlgo::Sha512 => sha2::Sha512::digest(content).to_vec(),
-        HashAlgo::Sha1 => sha1::Sha1::digest(content).to_vec(),
-        HashAlgo::Md5 => md5::Md5::digest(content).to_vec(),
-        HashAlgo::Blake3 => blake3::hash(content).as_bytes().to_vec(),
+enum FlatHasher {
+    Sha256(sha2::Sha256),
+    Sha512(sha2::Sha512),
+    Sha1(sha1::Sha1),
+    Md5(md5::Md5),
+    Blake3(Box<blake3::Hasher>),
+}
+
+impl FlatHasher {
+    fn new(algo: HashAlgo) -> Self {
+        use sha2::Digest;
+        match algo {
+            HashAlgo::Sha256 => Self::Sha256(sha2::Sha256::new()),
+            HashAlgo::Sha512 => Self::Sha512(sha2::Sha512::new()),
+            HashAlgo::Sha1 => Self::Sha1(sha1::Sha1::new()),
+            HashAlgo::Md5 => Self::Md5(md5::Md5::new()),
+            HashAlgo::Blake3 => Self::Blake3(Box::new(blake3::Hasher::new())),
+        }
     }
+
+    fn update(&mut self, chunk: &[u8]) {
+        use sha2::Digest;
+        match self {
+            Self::Sha256(hasher) => hasher.update(chunk),
+            Self::Sha512(hasher) => hasher.update(chunk),
+            Self::Sha1(hasher) => hasher.update(chunk),
+            Self::Md5(hasher) => hasher.update(chunk),
+            Self::Blake3(hasher) => {
+                hasher.update(chunk);
+            }
+        }
+    }
+
+    fn finalize(self) -> Vec<u8> {
+        use sha2::Digest;
+        match self {
+            Self::Sha256(hasher) => hasher.finalize().to_vec(),
+            Self::Sha512(hasher) => hasher.finalize().to_vec(),
+            Self::Sha1(hasher) => hasher.finalize().to_vec(),
+            Self::Md5(hasher) => hasher.finalize().to_vec(),
+            Self::Blake3(hasher) => hasher.finalize().as_bytes().to_vec(),
+        }
+    }
+}
+
+fn hash_reader_bounded(
+    reader: &mut impl io::Read,
+    algo: HashAlgo,
+    limit_bytes: u64,
+    resource: &str,
+) -> Result<Vec<u8>, FetchError> {
+    assert!(limit_bytes > 0, "hash byte limit must be positive");
+    assert!(!resource.is_empty(), "resource label must not be empty");
+
+    let mut hasher = FlatHasher::new(algo);
+    let mut buffer = vec![0u8; FLAT_HASH_BUFFER_BYTES];
+    let mut total_bytes: u64 = 0;
+
+    loop {
+        let read_bytes = match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(count) => count,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(FetchError::Io(error)),
+        };
+        let next_total = total_bytes.saturating_add(read_bytes as u64);
+        if next_total > limit_bytes {
+            return Err(FetchError::LimitExceeded {
+                resource: resource.to_string(),
+                limit_bytes,
+            });
+        }
+        hasher.update(&buffer[..read_bytes]);
+        total_bytes = next_total;
+    }
+
+    debug_assert!(total_bytes <= limit_bytes, "hashed bytes must stay within limit");
+    Ok(hasher.finalize())
 }
 
 pub fn verify_recursive_hash(out_path: &Path, expected: &NixHash, name: &str) -> Result<(), FetchError> {
@@ -3344,6 +3429,177 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, FetchError::HashMismatch { .. }));
+    }
+
+    #[test]
+    fn verify_flat_hash_streaming_matches_known_vectors_across_all_algorithms_and_sizes() {
+        use sha2::Digest;
+
+        // Well-known empty-input vectors (FIPS / RFC / BLAKE3 reference).
+        let empty_cases = [
+            NixHash::Sha256(
+                data_encoding::HEXLOWER
+                    .decode(b"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+            NixHash::Sha512(Box::new(
+                data_encoding::HEXLOWER
+                    .decode(b"cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            )),
+            NixHash::Sha1(
+                data_encoding::HEXLOWER
+                    .decode(b"da39a3ee5e6b4b0d3255bfef95601890afd80709")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+            NixHash::Md5(
+                data_encoding::HEXLOWER
+                    .decode(b"d41d8cd98f00b204e9800998ecf8427e")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+            NixHash::Blake3(
+                data_encoding::HEXLOWER
+                    .decode(b"af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262")
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            ),
+        ];
+
+        let dir = tempfile::tempdir().unwrap();
+        let empty_path = dir.path().join("empty.bin");
+        std::fs::write(&empty_path, b"").unwrap();
+        for expected in &empty_cases {
+            verify_flat_hash(empty_path.to_str().unwrap(), expected, "empty").unwrap();
+        }
+
+        // Small and multi-buffer (> 2 * FLAT_HASH_BUFFER_BYTES) payloads.
+        let small = b"mantle-streaming-vector-small".to_vec();
+        let multi_buffer: Vec<u8> = (0..(FLAT_HASH_BUFFER_BYTES * 2 + 137))
+            .map(|index| (index.wrapping_mul(31).wrapping_add(7) & 0xff) as u8)
+            .collect();
+
+        for (label, payload) in [("small", small), ("multi-buffer", multi_buffer)] {
+            let path = dir.path().join(format!("{label}.bin"));
+            std::fs::write(&path, &payload).unwrap();
+            let vectors = [
+                NixHash::Sha256(sha2::Sha256::digest(&payload).into()),
+                NixHash::Sha512(Box::new(sha2::Sha512::digest(&payload).into())),
+                NixHash::Sha1(sha1::Sha1::digest(&payload).into()),
+                NixHash::Md5(md5::Md5::digest(&payload).into()),
+                NixHash::Blake3(*blake3::hash(&payload).as_bytes()),
+            ];
+            for expected in &vectors {
+                verify_flat_hash(path.to_str().unwrap(), expected, label).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn hash_reader_bounded_never_requests_full_file_and_handles_short_reads_and_eintr() {
+        struct ChunkedReader<'a> {
+            data: &'a [u8],
+            offset: usize,
+            max_chunk: usize,
+            calls: usize,
+            max_requested_buf: usize,
+        }
+
+        impl io::Read for ChunkedReader<'_> {
+            fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+                self.calls += 1;
+                self.max_requested_buf = self.max_requested_buf.max(buf.len());
+                if self.calls == 2 {
+                    return Err(io::Error::new(io::ErrorKind::Interrupted, "simulated EINTR"));
+                }
+                if self.offset >= self.data.len() {
+                    return Ok(0);
+                }
+                let remaining = self.data.len() - self.offset;
+                let count = remaining.min(self.max_chunk).min(buf.len());
+                buf[..count].copy_from_slice(&self.data[self.offset..self.offset + count]);
+                self.offset += count;
+                Ok(count)
+            }
+        }
+
+        let payload: Vec<u8> = (0..(FLAT_HASH_BUFFER_BYTES * 3 + 99)).map(|i| (i % 251) as u8).collect();
+        let mut reader = ChunkedReader {
+            data: &payload,
+            offset: 0,
+            max_chunk: 4093,
+            calls: 0,
+            max_requested_buf: 0,
+        };
+
+        let digest = hash_reader_bounded(&mut reader, HashAlgo::Blake3, payload.len() as u64, "chunked").unwrap();
+        assert_eq!(digest.as_slice(), blake3::hash(&payload).as_bytes());
+        assert_eq!(reader.max_requested_buf, FLAT_HASH_BUFFER_BYTES);
+        assert!(reader.max_requested_buf < payload.len(), "reader must never request the entire payload");
+        assert!(reader.calls > 3, "short chunks and EINTR must iterate multiple reads");
+    }
+
+    #[test]
+    fn hash_reader_bounded_propagates_io_errors_and_enforces_exact_byte_limit() {
+        struct FailingReader;
+        impl io::Read for FailingReader {
+            fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "simulated read failure"))
+            }
+        }
+
+        let err = hash_reader_bounded(&mut FailingReader, HashAlgo::Sha256, 1024, "failing").unwrap_err();
+        assert!(matches!(err, FetchError::Io(ref io_err) if io_err.kind() == io::ErrorKind::BrokenPipe));
+
+        let payload = vec![0xABu8; FLAT_HASH_BUFFER_BYTES + 17];
+        let exact =
+            hash_reader_bounded(&mut io::Cursor::new(&payload), HashAlgo::Sha256, payload.len() as u64, "exact");
+        assert!(exact.is_ok());
+
+        let over = hash_reader_bounded(
+            &mut io::Cursor::new(&payload),
+            HashAlgo::Sha256,
+            (payload.len() as u64) - 1,
+            "over-limit",
+        )
+        .unwrap_err();
+        assert!(
+            matches!(over, FetchError::LimitExceeded { limit_bytes, .. } if limit_bytes == (payload.len() as u64) - 1)
+        );
+    }
+
+    #[test]
+    fn verify_flat_hash_removes_tampered_multi_buffer_file_and_reports_sri_mismatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("large-source.bin");
+        let original: Vec<u8> = (0..(FLAT_HASH_BUFFER_BYTES * 2 + 512)).map(|i| (i & 0xff) as u8).collect();
+        let expected = NixHash::Blake3(*blake3::hash(&original).as_bytes());
+
+        std::fs::write(&path, &original).unwrap();
+        verify_flat_hash(path.to_str().unwrap(), &expected, "large-source").unwrap();
+        assert!(path.is_file(), "valid file must remain on disk");
+
+        let mut tampered = original;
+        tampered[FLAT_HASH_BUFFER_BYTES + 10] ^= 0x01;
+        std::fs::write(&path, &tampered).unwrap();
+        let err = verify_flat_hash(path.to_str().unwrap(), &expected, "large-source").unwrap_err();
+        assert!(matches!(
+            err,
+            FetchError::HashMismatch {
+                ref expected,
+                ref actual,
+                ..
+            } if expected.starts_with("blake3-") && actual.starts_with("blake3-") && expected != actual
+        ));
+        assert!(!path.exists(), "tampered file must be removed by mismatch cleanup");
     }
 
     #[test]
