@@ -597,7 +597,11 @@ impl FetchBuildService {
         if cancellation.is_some_and(fetch_watch_cancelled) {
             return Err(cancelled_fetch());
         }
-        Ok(BuildResult { outputs, log })
+        Ok(BuildResult {
+            outputs,
+            log,
+            timing: None,
+        })
     }
 }
 

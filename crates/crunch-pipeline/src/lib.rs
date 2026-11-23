@@ -1001,6 +1001,7 @@ fn create_pipeline_builder_with_source_policy(
         .map_err(|error| Error::Internal(format!("create local sandbox work root: {error}")))?;
     let remote_work_root = private_build_work_root(&config.state_dir, "sandbox-remote")
         .map_err(|error| Error::Internal(format!("create remote sandbox work root: {error}")))?;
+    let max_jobs = config.max_jobs;
     create_pipeline_builder_with_sandbox(config, store, source_policy, move |build_service_store| {
         use crunch_build::compile_driver::CompileDriverBuildService;
         use crunch_build::compile_driver::CompileDriverExecutionService;
@@ -1021,6 +1022,7 @@ fn create_pipeline_builder_with_source_policy(
                         compile_cache_socket: runtime.as_ref().map(|runtime| runtime.host_socket.clone()),
                         rust_wait_socket: socket,
                         command_factory: runtime.as_ref().and_then(|runtime| runtime.command_factory()),
+                        max_concurrent_builds: Some(max_jobs),
                     },
                 )?;
                 CompileDriverBuildService::new(local, runtime.clone())
@@ -1041,6 +1043,7 @@ fn create_pipeline_builder_with_source_policy(
                     compile_cache_socket: Some(runtime.host_socket.clone()),
                     rust_wait_socket: None,
                     command_factory: runtime.command_factory(),
+                    max_concurrent_builds: Some(max_jobs),
                 })
                 .map_err(|error| Error::Build(format!("compile driver socket: {error}")))?;
             return CompileDriverBuildService::new(local, Some(runtime))
@@ -1057,8 +1060,12 @@ fn create_pipeline_builder_with_source_policy(
             capabilities: Vec::new(),
             parameters: std::collections::BTreeMap::new(),
         };
-        let local_bwrap = build_service_store.bubblewrap_build_service(local_work_root.clone(), None);
-        let remote_bwrap = build_service_store.bubblewrap_build_service(workdir, None);
+        let local_bwrap = build_service_store
+            .bubblewrap_build_service_with_concurrency(local_work_root.clone(), None, max_jobs)
+            .map_err(|error| Error::Build(format!("local sandbox concurrency policy: {error}")))?;
+        let remote_bwrap = build_service_store
+            .bubblewrap_build_service_with_concurrency(workdir, None, max_jobs)
+            .map_err(|error| Error::Build(format!("remote sandbox concurrency policy: {error}")))?;
         let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
         Ok(RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Default(
             RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure),
@@ -1081,8 +1088,11 @@ fn create_watch_pipeline_builder(
     }
     let watch_work_root = private_build_work_root(&config.state_dir, "sandbox-watch")
         .map_err(|error| Error::Internal(format!("create watch sandbox work root: {error}")))?;
+    let max_jobs = config.max_jobs;
     create_pipeline_builder_with_sandbox(config, store, source_policy_for_config(config), move |build_service_store| {
-        Ok(build_service_store.bubblewrap_build_service(watch_work_root.clone(), None))
+        build_service_store
+            .bubblewrap_build_service_with_concurrency(watch_work_root.clone(), None, max_jobs)
+            .map_err(|error| Error::Build(format!("watch sandbox concurrency policy: {error}")))
     })
 }
 
@@ -1756,6 +1766,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let registration = managed_test_registration();
 

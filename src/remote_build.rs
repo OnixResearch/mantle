@@ -21546,6 +21546,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         }
     }
 

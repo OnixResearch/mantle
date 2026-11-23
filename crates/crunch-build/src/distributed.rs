@@ -1797,6 +1797,7 @@ mod tests {
                 output_needles: std::collections::BTreeSet::new(),
             }],
             log: Some(log.to_string()),
+            timing: None,
         }
     }
 
@@ -2493,6 +2494,7 @@ mod tests {
                 Ok(snix_build::buildservice::BuildResult {
                     outputs: vec![],
                     log: Some("local".to_string()),
+                    timing: None,
                 })
             }
         }
@@ -2533,6 +2535,7 @@ mod tests {
                 Ok(snix_build::buildservice::BuildResult {
                     outputs: vec![],
                     log: Some("remote".to_string()),
+                    timing: None,
                 })
             }
         }

@@ -346,6 +346,53 @@ impl SandboxWorkspace {
     }
 }
 
+/// Default local sandbox concurrency when callers do not supply a job policy.
+pub const DEFAULT_CONCURRENT_SANDBOX_BUILDS: u32 = 2;
+/// Conservative per-sandbox file-descriptor allowance (FUSE, pipes, bwrap, proc).
+pub const ESTIMATED_FDS_PER_SANDBOX: u32 = 32;
+/// Default file-descriptor budget reserved for concurrent local sandboxes.
+pub const DEFAULT_SANDBOX_FD_BUDGET: u32 = 1024;
+/// Hard upper bound on concurrent local sandboxes under the default FD budget.
+pub const MAX_CONCURRENT_SANDBOX_BUILDS: u32 = DEFAULT_SANDBOX_FD_BUDGET / ESTIMATED_FDS_PER_SANDBOX;
+
+/// Explicit local sandbox admission policy combining requested jobs with a
+/// declared file-descriptor safety budget so excess work queues rather than
+/// exhausting open file descriptors (`EMFILE`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SandboxConcurrencyPolicy {
+    pub requested_jobs: u32,
+    pub fd_budget: u32,
+}
+
+impl SandboxConcurrencyPolicy {
+    pub const fn for_jobs(requested_jobs: u32) -> Self {
+        Self {
+            requested_jobs,
+            fd_budget: DEFAULT_SANDBOX_FD_BUDGET,
+        }
+    }
+
+    pub fn effective_permits(&self) -> std::io::Result<u32> {
+        if self.requested_jobs == 0 {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                "sandbox job limit must be at least 1",
+            ));
+        }
+        if self.fd_budget < ESTIMATED_FDS_PER_SANDBOX {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "sandbox file-descriptor budget {} is below minimum {} per sandbox",
+                    self.fd_budget, ESTIMATED_FDS_PER_SANDBOX
+                ),
+            ));
+        }
+        let fd_cap = self.fd_budget / ESTIMATED_FDS_PER_SANDBOX;
+        Ok(self.requested_jobs.min(fd_cap))
+    }
+}
+
 pub struct BubblewrapBuildService<BS, DS> {
     /// Root path in which all builds run
     workdir: PathBuf,
@@ -366,8 +413,9 @@ pub struct BubblewrapBuildService<BS, DS> {
     /// Execution-only launcher policy, applied after input population.
     command_factory: Option<Arc<dyn BwrapCommandFactory>>,
 
-    // semaphore to track number of concurrently running builds.
-    // this is necessary, as otherwise we very quickly run out of open file handles.
+    /// Effective permit count backing `concurrent_builds`.
+    max_concurrent_builds: u32,
+    // semaphore to track number of concurrently running builds under job + FD policy.
     concurrent_builds: std::sync::Arc<tokio::sync::Semaphore>,
     #[cfg(test)]
     watch_fault: Option<WatchFault>,
@@ -386,10 +434,32 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
             compile_socket: None,
             rust_wait_socket: None,
             command_factory: None,
-            concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(2)),
+            max_concurrent_builds: DEFAULT_CONCURRENT_SANDBOX_BUILDS,
+            concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(
+                DEFAULT_CONCURRENT_SANDBOX_BUILDS as usize,
+            )),
             #[cfg(test)]
             watch_fault: None,
         }
+    }
+
+    /// Size local sandbox concurrency from the resolved job policy under the
+    /// default file-descriptor safety budget.
+    pub fn with_max_concurrent_builds(self, requested_jobs: u32) -> std::io::Result<Self> {
+        self.with_concurrency_policy(SandboxConcurrencyPolicy::for_jobs(requested_jobs))
+    }
+
+    /// Size local sandbox concurrency from an explicit job + FD budget policy.
+    pub fn with_concurrency_policy(mut self, policy: SandboxConcurrencyPolicy) -> std::io::Result<Self> {
+        let permits = policy.effective_permits()?;
+        self.max_concurrent_builds = permits;
+        self.concurrent_builds = std::sync::Arc::new(tokio::sync::Semaphore::new(permits as usize));
+        Ok(self)
+    }
+
+    /// Return the effective concurrent sandbox admission limit.
+    pub fn max_concurrent_builds(&self) -> u32 {
+        self.max_concurrent_builds
     }
 
     /// Opt in to one socket, never a cache/state directory or arbitrary guest path.
@@ -445,12 +515,20 @@ where
         if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
             return Err(watch_cancelled());
         }
+        let admission_started = std::time::Instant::now();
         let _one_shot_permit = if cancellation.is_none() { Some(self.concurrent_builds.acquire().await.unwrap()) } else { None };
         let mut watch_permit = if cancellation.is_some() {
             Some(std::sync::Arc::clone(&self.concurrent_builds).acquire_owned().await.unwrap())
         } else {
             None
         };
+        let admission_wait_ms = u64::try_from(admission_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        tracing::info!(
+            admission_wait_ms,
+            max_concurrent_builds = self.max_concurrent_builds,
+            "local sandbox admission acquired"
+        );
+        let execution_started = std::time::Instant::now();
         if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
             return Err(watch_cancelled());
         }
@@ -640,9 +718,20 @@ where
         if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow()) {
             return Err(watch_cancelled());
         }
+        let execution_ms = u64::try_from(execution_started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        tracing::info!(
+            admission_wait_ms,
+            execution_ms,
+            max_concurrent_builds = self.max_concurrent_builds,
+            "local sandbox execution completed"
+        );
         Ok(BuildResult {
             outputs,
             log: if log.is_empty() { None } else { Some(log) },
+            timing: Some(super::SandboxExecutionTiming {
+                admission_wait_ms,
+                execution_ms,
+            }),
         })
     }
 }
@@ -1266,5 +1355,134 @@ mod tests {
         blobs.open_read(digest).await.unwrap().unwrap().read_to_end(&mut output).await.unwrap();
         assert_eq!(output, b"done\n");
         assert_eq!(std::fs::read(markers.path().join("late")).unwrap(), b"late\n");
+        assert!(result.timing.is_some(), "local sandbox result must report separate admission and execution timing");
+    }
+
+    #[test]
+    fn sandbox_concurrency_policy_respects_jobs_and_fd_budget_bounds() {
+        assert_eq!(SandboxConcurrencyPolicy::for_jobs(1).effective_permits().unwrap(), 1);
+        assert_eq!(SandboxConcurrencyPolicy::for_jobs(2).effective_permits().unwrap(), 2);
+        assert_eq!(SandboxConcurrencyPolicy::for_jobs(4).effective_permits().unwrap(), 4);
+        assert_eq!(
+            SandboxConcurrencyPolicy::for_jobs(MAX_CONCURRENT_SANDBOX_BUILDS + 16)
+                .effective_permits()
+                .unwrap(),
+            MAX_CONCURRENT_SANDBOX_BUILDS
+        );
+        assert_eq!(
+            SandboxConcurrencyPolicy {
+                requested_jobs: 8,
+                fd_budget: ESTIMATED_FDS_PER_SANDBOX * 2,
+            }
+            .effective_permits()
+            .unwrap(),
+            2
+        );
+
+        let zero_err = SandboxConcurrencyPolicy::for_jobs(0).effective_permits().unwrap_err();
+        assert_eq!(zero_err.kind(), ErrorKind::InvalidInput);
+        let low_fd_err = SandboxConcurrencyPolicy {
+            requested_jobs: 2,
+            fd_budget: ESTIMATED_FDS_PER_SANDBOX - 1,
+        }
+        .effective_permits()
+        .unwrap_err();
+        assert_eq!(low_fd_err.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[tokio::test]
+    async fn four_job_sandbox_policy_overlaps_four_independent_sandboxes_and_fd_cap_queues_excess() {
+        if !Path::new(&sandbox_shell()).is_file() {
+            eprintln!("skipping: static sandbox shell unavailable");
+            return;
+        }
+        let bwrap_ok = std::process::Command::new("bwrap")
+            .args(["--ro-bind", "/", "/", "--", "/bin/true"])
+            .status()
+            .is_ok_and(|s| s.success());
+        if !bwrap_ok {
+            eprintln!("skipping: bwrap unavailable");
+            return;
+        }
+
+        let make_sleep_request = |id: u32| -> BuildRequest {
+            let mut request = BuildRequest::default();
+            request.working_dir = PathBuf::from("build");
+            request.scratch_paths = vec![PathBuf::from("build"), PathBuf::from("nix/store")];
+            request.inputs_dir = PathBuf::from("nix/store");
+            request.outputs = vec![PathBuf::from(format!("nix/store/out-{id}"))];
+            request.constraints.insert(BuildConstraints::ProvideBinSh);
+            request.command_args = vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("/bin/busybox sleep 1; /bin/busybox echo ok-{id} > /nix/store/out-{id}"),
+            ];
+            request
+        };
+
+        // 1. With --jobs 4, four independent 1-second sandboxes overlap concurrently.
+        let root = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let service = Arc::new(
+            BubblewrapBuildService::new(root.path().to_path_buf(), blobs, tmp_ds())
+                .with_max_concurrent_builds(4)
+                .unwrap(),
+        );
+        assert_eq!(service.max_concurrent_builds(), 4);
+
+        let mut handles = Vec::new();
+        for id in 0..4u32 {
+            let svc = Arc::clone(&service);
+            let req = make_sleep_request(id);
+            handles.push(tokio::spawn(async move {
+                let started = std::time::Instant::now();
+                let result = svc.do_build(req).await.unwrap();
+                let finished = std::time::Instant::now();
+                (started, finished, result)
+            }));
+        }
+        let mut intervals = Vec::new();
+        for handle in handles {
+            let (started, finished, result) = handle.await.unwrap();
+            let timing = result.timing.expect("local sandbox must report timing");
+            assert!(timing.execution_ms >= 500, "execution_ms should reflect ~1s sleep: {timing:?}");
+            intervals.push((started, finished));
+        }
+        let latest_start = intervals.iter().map(|(s, _)| *s).max().unwrap();
+        let earliest_finish = intervals.iter().map(|(_, f)| *f).min().unwrap();
+        assert!(
+            latest_start < earliest_finish,
+            "all 4 sandboxes must overlap concurrently under jobs=4 (latest_start={latest_start:?}, earliest_finish={earliest_finish:?})"
+        );
+
+        // 2. When FD budget caps concurrency to 2, 4 builds queue cleanly and report admission wait.
+        let root_cap = tempfile::tempdir().unwrap();
+        let blobs_cap = MemoryBlobService::default();
+        let capped = Arc::new(
+            BubblewrapBuildService::new(root_cap.path().to_path_buf(), blobs_cap, tmp_ds())
+                .with_concurrency_policy(SandboxConcurrencyPolicy {
+                    requested_jobs: 4,
+                    fd_budget: ESTIMATED_FDS_PER_SANDBOX * 2,
+                })
+                .unwrap(),
+        );
+        assert_eq!(capped.max_concurrent_builds(), 2);
+
+        let mut capped_handles = Vec::new();
+        for id in 0..4u32 {
+            let svc = Arc::clone(&capped);
+            let req = make_sleep_request(id);
+            capped_handles.push(tokio::spawn(async move { svc.do_build(req).await.unwrap() }));
+        }
+        let mut max_wait_ms = 0u64;
+        for handle in capped_handles {
+            let result = handle.await.unwrap();
+            let timing = result.timing.expect("capped sandbox must report timing");
+            max_wait_ms = max_wait_ms.max(timing.admission_wait_ms);
+        }
+        assert!(
+            max_wait_ms >= 400,
+            "FD-capped 2-slot queue must record distinct admission_wait_ms for queued builds, got max_wait_ms={max_wait_ms}"
+        );
     }
 }

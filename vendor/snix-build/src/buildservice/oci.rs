@@ -197,7 +197,11 @@ where
             }))
             .await?;
 
-        Ok(BuildResult { outputs, log: None })
+        Ok(BuildResult {
+            outputs,
+            log: None,
+            timing: None,
+        })
     }
 }
 

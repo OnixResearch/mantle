@@ -154,7 +154,11 @@ impl BuildService for MockBuildService {
             })
             .collect();
 
-        Ok(BuildResult { outputs, log: None })
+        Ok(BuildResult {
+            outputs,
+            log: None,
+            timing: None,
+        })
     }
 }
 
@@ -337,7 +341,11 @@ impl BuildService for DrvProducingMockBuildService {
             })
             .collect();
 
-        Ok(BuildResult { outputs, log: None })
+        Ok(BuildResult {
+            outputs,
+            log: None,
+            timing: None,
+        })
     }
 }
 
@@ -397,6 +405,10 @@ impl BuildService for FailingMockBuildService {
             })
             .collect();
 
-        Ok(BuildResult { outputs, log: None })
+        Ok(BuildResult {
+            outputs,
+            log: None,
+            timing: None,
+        })
     }
 }

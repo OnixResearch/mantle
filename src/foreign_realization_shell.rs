@@ -1601,6 +1601,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached,
             log: log.map(str::to_owned),
+            sandbox_timing: None,
         }
     }
 

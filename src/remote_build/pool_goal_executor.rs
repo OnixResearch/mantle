@@ -599,6 +599,7 @@ impl RemotePoolGoalExecutor {
         Ok(BuildResult {
             outputs,
             log: Some(transcript.stderr_summary),
+            timing: None,
         })
     }
 }

@@ -165,6 +165,8 @@ pub struct BuildOutcome {
     pub cached: bool,
     /// Captured build stdout+stderr, if available.
     pub log: Option<String>,
+    /// Separate local sandbox admission-wait and execution timing, when built locally.
+    pub sandbox_timing: Option<snix_build::buildservice::SandboxExecutionTiming>,
 }
 
 struct CacheCheckHit {
@@ -1050,6 +1052,7 @@ where BServ: BuildService + 'static
                 substitutions: BTreeMap::new(),
                 cached: true,
                 log: None,
+                sandbox_timing: None,
             }));
         }
 
@@ -1071,6 +1074,7 @@ where BServ: BuildService + 'static
                 substitutions: cached_hit.substitutions,
                 cached: true,
                 log: None,
+                sandbox_timing: None,
             }));
         }
         self.label_resolved_report(prior_action_results_count, drv_path, &resolved, "built");
@@ -1310,6 +1314,8 @@ where BServ: BuildService + 'static
 
         info!(
             drv = %prepared.drv_name,
+            admission_wait_ms = build_result.timing.map(|t| t.admission_wait_ms),
+            execution_ms = build_result.timing.map(|t| t.execution_ms),
             outputs = ?output_names.iter()
                 .filter_map(|n| {
                     output_infos.get(n).map(|pi| {
@@ -1326,6 +1332,7 @@ where BServ: BuildService + 'static
             substitutions: BTreeMap::new(),
             cached: false,
             log: build_result.log,
+            sandbox_timing: build_result.timing,
         })
     }
 
@@ -2602,7 +2609,11 @@ mod tests {
                 })
                 .collect();
 
-            Ok(BuildResult { outputs, log: None })
+            Ok(BuildResult {
+                outputs,
+                log: None,
+                timing: None,
+            })
         }
     }
 
@@ -2644,7 +2655,11 @@ mod tests {
                     output_needles: BTreeSet::new(),
                 });
             }
-            Ok(BuildResult { outputs, log: None })
+            Ok(BuildResult {
+                outputs,
+                log: None,
+                timing: None,
+            })
         }
     }
 
@@ -2733,6 +2748,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let output_names: Vec<&str> = outcome.outputs.keys().map(String::as_str).collect();
         let insertion_order = vec!["zzz", "aaa", "mid"];

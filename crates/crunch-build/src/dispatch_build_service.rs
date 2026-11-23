@@ -120,6 +120,7 @@ mod tests {
                     output_needles: BTreeSet::new(),
                 }],
                 log: Some(format!("handled by {}", self.name)),
+                timing: None,
             })
         }
     }

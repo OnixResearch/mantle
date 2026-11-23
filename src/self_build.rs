@@ -3919,6 +3919,7 @@ mod tests {
                 substitutions: std::collections::BTreeMap::new(),
                 cached: false,
                 log: None,
+                sandbox_timing: None,
             }],
             failed: vec![],
             fod_mismatches: vec![],
@@ -3959,6 +3960,7 @@ mod tests {
                     substitutions: std::collections::BTreeMap::new(),
                     cached: false,
                     log: None,
+                    sandbox_timing: None,
                 },
                 crunch_build::BuildOutcome {
                     drv_path: drv_b.clone(),
@@ -3966,6 +3968,7 @@ mod tests {
                     substitutions: std::collections::BTreeMap::new(),
                     cached: false,
                     log: None,
+                    sandbox_timing: None,
                 },
             ],
             failed: vec![],

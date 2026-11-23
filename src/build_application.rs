@@ -280,6 +280,7 @@ mod tests {
                 substitutions: Default::default(),
                 cached: true,
                 log: None,
+                sandbox_timing: None,
             }],
             failed: Vec::new(),
             fod_mismatches: Vec::new(),

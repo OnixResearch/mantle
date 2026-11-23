@@ -1373,6 +1373,7 @@ mod tests {
             Ok(BuildResult {
                 outputs: Vec::new(),
                 log: Some(if warm { "warm" } else { "cold" }.to_string()),
+                timing: None,
             })
         }
     }
@@ -1420,6 +1421,7 @@ mod tests {
                     output_needles: BTreeSet::new(),
                 }],
                 log: None,
+                timing: None,
             })
         }
     }
@@ -1579,6 +1581,7 @@ mod tests {
             Ok(BuildResult {
                 outputs: Vec::new(),
                 log: None,
+                timing: None,
             })
         }
     }

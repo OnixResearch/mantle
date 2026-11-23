@@ -14,7 +14,10 @@ mod oci;
 mod bwrap;
 
 #[cfg(target_os = "linux")]
-pub use bwrap::BubblewrapBuildService;
+pub use bwrap::{
+    BubblewrapBuildService, DEFAULT_CONCURRENT_SANDBOX_BUILDS, DEFAULT_SANDBOX_FD_BUDGET,
+    ESTIMATED_FDS_PER_SANDBOX, MAX_CONCURRENT_SANDBOX_BUILDS, SandboxConcurrencyPolicy,
+};
 #[cfg(target_os = "linux")]
 pub use crate::bwrap::watch_cancel::UnobservedWatchSandbox;
 pub use dummy::DummyBuildService;

@@ -191,6 +191,15 @@ pub struct AdditionalFile {
     pub contents: Bytes,
 }
 
+/// Measured local sandbox admission wait and execution durations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SandboxExecutionTiming {
+    /// Milliseconds spent queued waiting for a local sandbox admission permit.
+    pub admission_wait_ms: u64,
+    /// Milliseconds spent executing after sandbox admission was acquired.
+    pub execution_ms: u64,
+}
+
 /// Describes the result of a [BuildRequest].
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct BuildResult {
@@ -199,6 +208,9 @@ pub struct BuildResult {
     pub outputs: Vec<BuildOutput>,
     /// Captured stdout+stderr from the build, if available.
     pub log: Option<String>,
+    /// Separate local sandbox admission-wait and execution timing, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<SandboxExecutionTiming>,
 }
 
 /// Specific information about an individual output in [BuildResult].

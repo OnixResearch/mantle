@@ -91,6 +91,7 @@ mod tests {
             substitutions: Default::default(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         assert!(verify_outputs(&[outcome], dir.path()).is_err());
     }
@@ -118,6 +119,7 @@ mod tests {
             substitutions: Default::default(),
             cached: true,
             log: None,
+            sandbox_timing: None,
         };
         assert!(verify_outputs(std::slice::from_ref(&outcome), directory.path()).is_err());
         #[cfg(unix)]

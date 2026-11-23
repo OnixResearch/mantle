@@ -1339,6 +1339,7 @@ pub struct LocalBuildRuntime {
     pub compile_cache_socket: Option<PathBuf>,
     pub rust_wait_socket: Option<PathBuf>,
     pub command_factory: Option<Arc<dyn snix_build::bwrap::BwrapCommandFactory>>,
+    pub max_concurrent_builds: Option<u32>,
 }
 
 impl BuildServiceStore {
@@ -1368,6 +1369,28 @@ impl BuildServiceStore {
         }
     }
 
+    /// Construct a local Bubblewrap sandbox sized from the resolved job policy
+    /// under the declared file-descriptor safety budget.
+    pub fn bubblewrap_build_service_with_concurrency(
+        &self,
+        work_directory: PathBuf,
+        failure_workspace_root: Option<PathBuf>,
+        max_concurrent_builds: u32,
+    ) -> std::io::Result<impl snix_build::buildservice::BuildService + use<>> {
+        assert!(!work_directory.as_os_str().is_empty(), "work directory must not be empty");
+        assert!(max_concurrent_builds >= 1, "sandbox concurrency must be at least 1");
+        let service = snix_build::buildservice::BubblewrapBuildService::new(
+            work_directory,
+            self.blob_service.clone(),
+            self.directory_service.clone(),
+        )
+        .with_max_concurrent_builds(max_concurrent_builds)?;
+        Ok(match failure_workspace_root {
+            Some(root) => service.with_failure_workspace_root(root),
+            None => service,
+        })
+    }
+
     /// Local runtime mappings and supervision, outside derivation/store identity.
     pub fn bubblewrap_build_service_with_runtime(
         &self,
@@ -1379,6 +1402,9 @@ impl BuildServiceStore {
             self.blob_service.clone(),
             self.directory_service.clone(),
         );
+        if let Some(max_concurrent) = runtime.max_concurrent_builds {
+            service = service.with_max_concurrent_builds(max_concurrent)?;
+        }
         if let Some(socket) = runtime.compile_cache_socket {
             service = service.with_compile_socket(socket)?;
         }

@@ -4465,6 +4465,7 @@ mod tests {
                     substitutions: BTreeMap::new(),
                     cached: true,
                     log: None,
+                    sandbox_timing: None,
                 },
                 &mut Vec::new(),
                 &mut Vec::new(),
@@ -4912,6 +4913,7 @@ mod tests {
             substitutions: std::collections::BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let mut outcomes = Vec::new();
         let mut all_outcomes = Vec::new();
@@ -4946,6 +4948,7 @@ mod tests {
             substitutions: std::collections::BTreeMap::new(),
             cached: true,
             log: None,
+            sandbox_timing: None,
         };
         let mut outcomes = Vec::new();
         let mut all_outcomes = Vec::new();
@@ -5003,6 +5006,7 @@ mod tests {
             substitutions: std::collections::BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let mut outcomes = Vec::new();
         let mut all_outcomes = Vec::new();
@@ -5516,6 +5520,7 @@ mod tests {
                 })
                 .collect(),
             log: None,
+            timing: None,
         };
         let mut worker = Worker::new(1);
         worker.want(&path, &paths, true).unwrap();
@@ -5699,6 +5704,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         (producer, outcome)
     }
@@ -5947,6 +5953,7 @@ mod tests {
                     substitutions: BTreeMap::new(),
                     cached: false,
                     log: None,
+                    sandbox_timing: None,
                 },
                 &mut outcomes,
                 &mut all_outcomes,
@@ -8104,6 +8111,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
 
         let worker = Worker::new(1);
@@ -8213,6 +8221,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
 
         let worker = Worker::new(1);
@@ -8262,6 +8271,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
 
         let worker = Worker::new(1);
@@ -8794,6 +8804,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let worker = Worker::new(1);
         let declared = worker.declared_native_dynamic_outputs(&outcome, &kp);
@@ -8844,6 +8855,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
 
         let worker = Worker::new(1);
@@ -8880,6 +8892,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let mut worker = Worker::new(1);
         let before = (
@@ -8935,6 +8948,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let worker = Worker::new(1);
         let before_entries = known_paths.len();
@@ -8989,6 +9003,7 @@ mod tests {
             substitutions: BTreeMap::new(),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let worker = Worker::new(1);
         let before = (known_paths.len(), worker.registry.len(), worker.ready_goals.len());

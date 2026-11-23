@@ -39,6 +39,7 @@ let MIN_AST_GREP_RULE_COUNT = 1 in
 let MIN_AST_GREP_TEST_COUNT = 0 in
 let MIN_BLOCKED_ROOT_COUNT = 0 in
 let MIN_BUILD_COUNT = 0 in
+let MIN_DURATION_MS = 0 in
 let MIN_ENVIRONMENT_VARIABLES = 0 in
 let MIN_EVIDENCE_VERSION = 1 in
 let MIN_FENCE_GENERATION = 1 in
@@ -766,7 +767,7 @@ let is_output = fun value => ((std.is_record (value)
   && (std.record.get "transferred_bytes" (std.record.get "substitution" (value))) >= MIN_TRANSFER_BYTES
   && (std.record.get "transferred_bytes" (std.record.get "substitution" (value))) <= MAX_U64)))))))))))) in
 let is_outcome = fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["cached","drv_key","label","log_file","outputs"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["cached","drv_key","label","log_file","outputs","sandbox_timing"]) (std.record.fields (value))
   && (std.record.has_field "cached" (value) && (((std.is_bool (std.record.get "cached" (value))))))
   && (std.record.has_field "drv_key" (value) && (((std.is_string (std.record.get "drv_key" (value))
   && C.IsSafeReference (std.record.get "drv_key" (value))))))
@@ -776,7 +777,17 @@ let is_outcome = fun value => ((std.is_record (value)
   && C.IsSafeReference (std.record.get "log_file" (value))))))))
   && (std.record.has_field "outputs" (value) && (((std.is_array (std.record.get "outputs" (value))
   && std.array.length (std.record.get "outputs" (value)) <= MAX_BUILD_REPORT_ROWS
-  && std.array.all (fun item_2 => is_output (item_2)) (std.record.get "outputs" (value)))))))) in
+  && std.array.all (fun item_2 => is_output (item_2)) (std.record.get "outputs" (value))))))
+  && (!std.record.has_field "sandbox_timing" (value) || ((((std.record.get "sandbox_timing" (value)) == null || ((std.is_record (std.record.get "sandbox_timing" (value))
+  && std.array.all (fun field_2 => std.array.elem field_2 ["admission_wait_ms","execution_ms"]) (std.record.fields (std.record.get "sandbox_timing" (value)))
+  && (std.record.has_field "admission_wait_ms" (std.record.get "sandbox_timing" (value)) && (((std.is_number (std.record.get "admission_wait_ms" (std.record.get "sandbox_timing" (value)))
+  && std.number.is_integer (std.record.get "admission_wait_ms" (std.record.get "sandbox_timing" (value)))
+  && (std.record.get "admission_wait_ms" (std.record.get "sandbox_timing" (value))) >= MIN_DURATION_MS
+  && (std.record.get "admission_wait_ms" (std.record.get "sandbox_timing" (value))) <= MAX_U64))))
+  && (std.record.has_field "execution_ms" (std.record.get "sandbox_timing" (value)) && (((std.is_number (std.record.get "execution_ms" (std.record.get "sandbox_timing" (value)))
+  && std.number.is_integer (std.record.get "execution_ms" (std.record.get "sandbox_timing" (value)))
+  && (std.record.get "execution_ms" (std.record.get "sandbox_timing" (value))) >= MIN_DURATION_MS
+  && (std.record.get "execution_ms" (std.record.get "sandbox_timing" (value))) <= MAX_U64)))))))))))) in
 let is_overlay_base_generation = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["descriptor_blake3","generation_blake3","layer_index"]) (std.record.fields (value))
   && (std.record.has_field "descriptor_blake3" (value) && (((std.is_string (std.record.get "descriptor_blake3" (value))

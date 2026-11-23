@@ -243,6 +243,12 @@ pub struct BuildJsonNativeSourceSlice {
     pub disposition: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct BuildJsonSandboxTiming {
+    pub admission_wait_ms: u64,
+    pub execution_ms: u64,
+}
+
 #[derive(Debug, Serialize)]
 pub struct BuildJsonOutcome {
     pub drv_key: String,
@@ -250,6 +256,8 @@ pub struct BuildJsonOutcome {
     pub cached: bool,
     pub log_file: Option<String>,
     pub outputs: Vec<BuildJsonOutput>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sandbox_timing: Option<BuildJsonSandboxTiming>,
 }
 
 #[derive(Debug, Serialize)]
@@ -749,6 +757,10 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
                 cached: outcome.cached,
                 log_file,
                 outputs,
+                sandbox_timing: outcome.sandbox_timing.map(|timing| BuildJsonSandboxTiming {
+                    admission_wait_ms: timing.admission_wait_ms,
+                    execution_ms: timing.execution_ms,
+                }),
             }
         })
         .collect();
@@ -1222,6 +1234,7 @@ mod tests {
                 cached: false,
                 log_file: None,
                 outputs: Vec::new(),
+                sandbox_timing: None,
             },
             BuildJsonOutcome {
                 drv_key: "b".into(),
@@ -1229,6 +1242,7 @@ mod tests {
                 cached: true,
                 log_file: None,
                 outputs: Vec::new(),
+                sandbox_timing: None,
             },
         ];
         let failed = vec![BuildFailureEnvelope {
@@ -1257,6 +1271,7 @@ mod tests {
             substitutions: std::collections::BTreeMap::new(),
             cached: false,
             log: Some("body".into()),
+            sandbox_timing: None,
         };
         let log_path = success_log_file(logs_dir.path(), &outcome);
         assert!(log_path.is_none());
@@ -1481,6 +1496,7 @@ mod tests {
             )]),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let result = PipelineResult {
             outcomes: vec![outcome],
@@ -1888,6 +1904,7 @@ mod tests {
             )]),
             cached: false,
             log: None,
+            sandbox_timing: None,
         };
         let result = PipelineResult {
             outcomes: vec![outcome],
@@ -2289,6 +2306,7 @@ mod tests {
             cached: false,
             log_file: None,
             outputs: vec![output],
+            sandbox_timing: None,
         }
     }
 
@@ -2488,6 +2506,7 @@ mod tests {
             )]),
             cached: true,
             log: None,
+            sandbox_timing: None,
         };
         let result = PipelineResult {
             outcomes: vec![outcome],
@@ -2587,6 +2606,84 @@ mod tests {
                 }],
                 "failed": [],
                 "fod_mismatches": [],
+            })
+        );
+    }
+
+    #[test]
+    fn build_outcome_report_separates_sandbox_admission_wait_from_execution() {
+        use std::collections::HashMap;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
+            base_state_dirs: Vec::new(),
+            source_admission: None,
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: 4,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
+            substituter_urls: Vec::new(),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            build_cores: 1,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            root_retention_source: None,
+            root_registration: None,
+            source_fetch_overrides: Vec::new(),
+            remote_enabled: false,
+            compile_driver_runtime: None,
+            rust_wait_runtime: None,
+            interchange_dir: None,
+            pool_executor_factory: None,
+        };
+        let drv_path = nix_compat::store_path::StorePath::from_name_and_digest_fixed("timed.drv", [5u8; 20]).unwrap();
+        let outcome = crunch_build::BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::new(),
+            cached: false,
+            log: None,
+            sandbox_timing: Some(snix_build::buildservice::SandboxExecutionTiming {
+                admission_wait_ms: 42,
+                execution_ms: 175,
+            }),
+        };
+        let result = PipelineResult {
+            outcomes: vec![outcome],
+            failed: Vec::new(),
+            fod_mismatches: Vec::new(),
+            root_labels: HashMap::from([(drv_key_for(&config.store_dir, &drv_path), "timed".to_string())]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            hermeticity_audit_events: Vec::new(),
+            build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
+            network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
+            native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
+            priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
+        };
+
+        let json_report = render_build_json_report(&config, &result, logs_dir.path(), &[]).unwrap();
+        let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
+        assert_eq!(
+            json_value["outcomes"][0]["sandbox_timing"],
+            json!({
+                "admission_wait_ms": 42,
+                "execution_ms": 175,
             })
         );
     }

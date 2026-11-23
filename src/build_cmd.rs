@@ -2100,6 +2100,7 @@ mod tests {
             )]),
             cached: true,
             log: None,
+            sandbox_timing: None,
         };
 
         let suffix = format_output_suffix(&outcome, "out", false);
@@ -2126,6 +2127,7 @@ mod tests {
             )]),
             cached: true,
             log: None,
+            sandbox_timing: None,
         };
 
         let suffix = format_output_suffix(&outcome, "out", false);

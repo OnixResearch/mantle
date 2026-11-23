@@ -133,7 +133,7 @@ let Registry = {
         "contract_blake3"= "1e26a6fd898d7bb8091f51b15baed11d1f0779399f21bcd3f03e839ab2bf78b3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "b2c0eee0dfbf01929d3f4b3aca13cab3695a693053e5249ca5d79c186966b586",
-        "producer_identity_blake3"= "e486965ad177059a62daff10b772b439125dcd4ed3e680a7525c241460b591c7",
+        "producer_identity_blake3"= "459d657f94ad96a9fc29771dbdedae68489002144049c16c56167b2661567181",
         "consumer_policy_blake3"= "9e1b4b671ba1ac277a6faee85e944fee5bc1b51ce308638f9a977b9b75606b82"
       },
       "non_claims"= [
@@ -200,11 +200,11 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
-        "schema_blake3"= "f70aa66c24c8dd6aefe6cefd0060270e57c57ebe6d30c6a14a99b088d05681ff",
-        "contract_blake3"= "800ad0551424b95f0b957b9e29a059120f371287b63bb2a4b3e6e981631c4398",
+        "schema_blake3"= "c71a0790b0bfc662f4b2d325b141d4d5234b80545fdd7789e580f46d43d3b1da",
+        "contract_blake3"= "f56b173ea1e31c94a8f70bc3ef0b4b976096e78420092b71782784f246db943a",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "bac4f2848f29aec6fceda1177e6a5089e4b39a9a809963b6eaf9bd24f918fde1",
-        "producer_identity_blake3"= "90743386660a3d1be526e36544db20fda023432c6fc4737a1c77e2b5b68781a0",
+        "producer_identity_blake3"= "8c3394754b5b6989a11d0d96d4c6aa0d3a252ece1d9d6755ea8f1a495daf58d3",
         "consumer_policy_blake3"= "2b9fbbc7e7b1ac6d8b371a3999378764b5ebfaaf5f0cff5cb04f63d938e8f0ce"
       },
       "non_claims"= [
@@ -527,7 +527,7 @@ let Registry = {
         "contract_blake3"= "d3b07cd0d3396e6798ec94d68d37cf06a5ee35f81866016fbf1f18e0f401c7ae",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "996d0ea5521663d8180e90e955fcba9c92b4570b8935e13b2e57af45c81260e2",
-        "producer_identity_blake3"= "c7e9e058d3707f4f5d82b07d5c0438274b9ca6ad59d63854e4e3faf44ae7bdbb",
+        "producer_identity_blake3"= "793013c55540ff54ed2277f1fb6a0037ed443ad0afe1e566a909db0d7e069f5f",
         "consumer_policy_blake3"= "b41da07fbbd17d793f07c51876465ca6e73d83db0dc79b9beb02c8a8110b59d1"
       },
       "non_claims"= [
@@ -638,7 +638,7 @@ let Registry = {
         "contract_blake3"= "1c816681434e8114cd6c4bab4a48fd5c5f86ce7c9f33c187ab609ec73f814fd8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1ad119357b7d7217396fe2f47598b14cb8d87bc105982a428e3924e7c3213c11",
-        "producer_identity_blake3"= "3a8be6145abe0b4d8d52928fcb43f03185bd48426c18df779064d3dd1e6277e2",
+        "producer_identity_blake3"= "411b7054991904fbbd3135e66f8327f1c2856a5e0d6ea0e7b73e20839114cd53",
         "consumer_policy_blake3"= "edc96af15dd9073d7cd0178ed0d617acd41c8cf91c6719a674dd1422a7e285e4"
       },
       "non_claims"= [
@@ -692,7 +692,7 @@ let Registry = {
         "contract_blake3"= "953be8500e8110bc2682b8d4aa14136c274f675dc951126f0b6a165f062c5bd3",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "cad5f96d2366110d1a790d5ab644163380b9af4f0a5b2be947ceaa39ee03fbd6",
-        "producer_identity_blake3"= "c36e7ab0b8601fa6b9d9d8ec1ccb98014804d3a873ffba8443161d3269992242",
+        "producer_identity_blake3"= "760b44037a26189ca09975724d1d2d11bce19b1d7a230c0f393e2ebbba3182d4",
         "consumer_policy_blake3"= "8af50ac86145048afc879ae1b6722e155ee6960c6261186014bb505db83b6cb8"
       },
       "non_claims"= [
@@ -861,7 +861,7 @@ let Registry = {
         "contract_blake3"= "d7b30efe0e40442383eb7c654a3bb0c88b508f059b88008085fd59f0a88b0f23",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "74b65baffbfcfb59d5557a99ea0ed63c02711ee4c865c5f7be1eb14ad57071c8",
-        "producer_identity_blake3"= "780808a31c0673111679a6a9a2b70817d4a9484b3c8614fec9761f5ef801d73d",
+        "producer_identity_blake3"= "e8aeb5047c30c30ba22da9df6b4ac397c53da605b4ef76803a0202501b9a06a3",
         "consumer_policy_blake3"= "2604bdd4cb6aa3824e00fa515e64f68a01ab5df84d2f2342ee0f1e7029f91f07"
       },
       "non_claims"= [
@@ -1506,7 +1506,7 @@ let Registry = {
         "contract_blake3"= "7cd1d3ffbfe1324271c5531447350406ae29898b845e4aea58102e9bfc23e0d8",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "1602d93a04a749077c6f0150e3e8c32ce41fc295585396e6e71f45938101fd0a",
-        "producer_identity_blake3"= "6aabf5103e6d54f637e3d789524c1697a28a6dc5c63fa802ffceafff8fd96fb8",
+        "producer_identity_blake3"= "7508b6da0c7fdc963f0a58da6f0dfddcfb51b614deb8c4152c93e2ae04bfa67a",
         "consumer_policy_blake3"= "094ac32746282ab41656266b861ea5b70bc9f4c54f3b9a3aedf1680c6695d49b"
       },
       "non_claims"= [
@@ -1564,7 +1564,7 @@ let Registry = {
         "contract_blake3"= "a3125cbf30f9cc54e2e9f372e58002415bee51e25fa539fc25a29210de8af948",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "144796c61a4d4ab37f35cf525e3947021ca18ada50293a777fdd644697847598",
-        "producer_identity_blake3"= "93d0fd4a59d8223961beb3c667d5678e923089be51ee85c6ae15c150badcda01",
+        "producer_identity_blake3"= "2f43e3092a984417478793d7113e5b104862f72bde5e4439cd230023b4b8c699",
         "consumer_policy_blake3"= "be8086e77584c68066c9042b83c5eff2df1d1f31680dec677d4cd4f3cd764a0f"
       },
       "non_claims"= [
