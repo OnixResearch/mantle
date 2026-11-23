@@ -63,3 +63,28 @@ stderr holds exactly one `create-log-dir` failure line and no `WARNING:` prose.
 | `cairn validate --root .` (pinned 007ba519) | `{"valid":true,"issues":0}` |
 | `cairn gate proposal\|design\|tasks surface-foreign-realization-diagnostics` | PASS, PASS, PASS |
 | `git diff --check` | exit 0 |
+
+## Follow-up: failed root logs on realize (live Octet finding)
+
+A live Octet run showed a builder-stage failure producing no `<state-dir>/logs/<drv>.log`
+(`mantle log --list` said "No build logs found") because `write_realization_logs` only read
+`FailedGoal.build_log`. `mantle build`'s failure-log gate, drv key, `origin …` detail, and writer are
+now extracted as `build_cmd::write_failed_goal_log` and shared; `mantle build`'s output is unchanged
+by construction. No CLI test drives a failing realize (the existing realize CLI tests succeed or are
+rejected before building), so the new coverage is the `src/foreign_realization_shell.rs` unit tests
+listed below.
+
+| Command | Result |
+|---|---|
+| `cargo test -p mantle --bin mantle -- foreign_realization_shell::tests --test-threads=1` | `test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 3026 filtered out; finished in 0.01s` |
+| `cargo test -p mantle --bin mantle -- foreign_ --test-threads=1` | `test result: ok. 124 passed; 0 failed; 1 ignored; 0 measured; 2907 filtered out; finished in 132.21s` |
+| `cargo test -p mantle --bin mantle -- build_cmd` | `test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 3019 filtered out; finished in 0.02s` |
+| `cargo test -p mantle --test cache_inputs_build_route` | `test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.16s` |
+| `cargo test -p mantle --test foreign_import_cli` | `test result: ok. 18 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 14.00s` |
+| `cargo test -p mantle --test operator_diagnostics -- saved_log_path failure_log --test-threads=1` | `test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 4.04s` |
+| `cargo test -p mantle --test operator_diagnostics -- build_human_failure_summary_matches_json_facts build_json_success_reports_log_persistence_failure --test-threads=1` | `test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 4.81s` |
+| `cargo fmt --check -p mantle` | exit 0, no diff |
+| `cargo clippy -p mantle --all-targets --no-deps -- -D warnings` | exit 0, `Finished \`dev\` profile [unoptimized + debuginfo] target(s) in 3m 06s`, no warning or error lines |
+| `cairn validate --root .` | `"issues": []`, `"valid": true` |
+| `cairn gate proposal\|design\|tasks surface-foreign-realization-diagnostics --root .` | `"verdict": "PASS"` for all three |
+| `git diff --check` | exit 0, no output |

@@ -454,9 +454,11 @@ pub(crate) async fn realize_foreign_plan(
 
 /// Persist every captured realization build log the way `mantle build` does.
 ///
-/// Cached or reused outcomes carry no log and therefore write nothing, and an existing
-/// `<state-dir>/logs/<drv>.log` is never touched by a reuse run. Failures are returned for the
-/// caller to report; they never change the receipt or the realization result.
+/// A failed root writes its retained build-service log when one was kept, and otherwise the same
+/// failure detail `mantle build` writes (gated by `should_write_failure_log`, with the `origin …`
+/// detail for a dependency failure). Cached or reused outcomes carry no log and therefore write
+/// nothing, and an existing `<state-dir>/logs/<drv>.log` is never touched by a reuse run. Failures
+/// are returned for the caller to report; they never change the receipt or the realization result.
 fn write_realization_logs(
     state_dir: &Path,
     store_dir: &str,
@@ -483,13 +485,16 @@ fn write_realization_logs(
         }
     }
     for failed in &result.failed_roots {
-        let Some(log) = failed.build_log.as_deref() else {
+        if let Some(log) = failed.build_log.as_deref() {
+            let Some(drv_path) = crunch_pipeline::parse_drv_key(store_dir, &failed.drv_key) else {
+                continue;
+            };
+            if let Err(failure) = crate::build_cmd::write_log(&logs_dir, &drv_path, drv_path.name(), false, log) {
+                failures.push(failure);
+            }
             continue;
-        };
-        let Some(drv_path) = crunch_pipeline::parse_drv_key(store_dir, &failed.drv_key) else {
-            continue;
-        };
-        if let Err(failure) = crate::build_cmd::write_log(&logs_dir, &drv_path, drv_path.name(), false, log) {
+        }
+        if let Some(failure) = crate::build_cmd::write_failed_goal_log(&logs_dir, store_dir, failed, None) {
             failures.push(failure);
         }
     }
@@ -1489,6 +1494,10 @@ mod tests {
         let failed_log = std::fs::read_to_string(logs_dir.join(format!("{failed}.log"))).unwrap();
         assert!(failed_log.contains("output admission failed"));
         assert!(failed_log.contains("# status: failure"));
+        assert!(
+            !failed_log.contains("realization root failed"),
+            "a retained build log must win over the failure detail: {failed_log}"
+        );
         assert!(!logs_dir.join(format!("{reused}.log")).exists(), "a cached outcome without a log writes nothing");
 
         std::fs::write(logs_dir.join(format!("{reused}.log")), "sentinel\n").unwrap();
@@ -1497,6 +1506,60 @@ mod tests {
         let failures = write_realization_logs(&state_dir, "/nix/store", &second);
         assert!(failures.is_empty());
         assert_eq!(std::fs::read_to_string(logs_dir.join(format!("{reused}.log"))).unwrap(), "sentinel\n");
+    }
+
+    #[test]
+    fn realization_logs_write_failed_root_failure_detail_when_no_build_log_was_retained() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        let root =
+            StorePath::<String>::from_name_and_digest_fixed("realize-log-builder-failed.drv", [9u8; 20]).unwrap();
+        let origin =
+            StorePath::<String>::from_name_and_digest_fixed("realize-log-leaf-failed.drv", [10u8; 20]).unwrap();
+        let mut result = empty_registered_build_result();
+        result.failed_roots.push(failed_goal_with_error(
+            &root,
+            "builder failed: affinity list\n",
+            Some((&origin, "leaf builder failed\n")),
+            None,
+        ));
+
+        let failures = write_realization_logs(&state_dir, "/nix/store", &result);
+
+        assert!(failures.is_empty(), "a fresh logs directory must accept the failure log: {failures:?}");
+        let log = std::fs::read_to_string(state_dir.join("logs").join(format!("{root}.log"))).unwrap();
+        assert!(log.contains("# status: failure"), "log header: {log}");
+        assert!(
+            log.contains(&format!("# derivation: {}", root.name())),
+            "log must carry the mantle build header: {log}"
+        );
+        assert!(log.contains(&format!("# drv_path: {root}")), "log must name the failed drv: {log}");
+        assert!(log.contains("builder failed: affinity list"), "log must carry the builder error: {log}");
+        assert!(
+            log.contains(&format!("origin {}: leaf builder failed", origin.to_absolute_path_with_prefix("/nix/store"))),
+            "a dependency failure must keep the origin detail `mantle build` writes: {log}"
+        );
+    }
+
+    #[test]
+    fn realization_logs_skip_failures_that_should_write_failure_log_rejects() {
+        let temp = tempfile::tempdir().unwrap();
+        let state_dir = temp.path().join("state");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        let root = StorePath::<String>::from_name_and_digest_fixed("realize-log-preflight.drv", [11u8; 20]).unwrap();
+        let mut result = empty_registered_build_result();
+        result
+            .failed_roots
+            .push(failed_goal_with_error(&root, "opening store: pathinfo fallback missing", None, None));
+
+        let failures = write_realization_logs(&state_dir, "/nix/store", &result);
+
+        assert!(failures.is_empty(), "a gated-out failure writes nothing: {failures:?}");
+        assert!(
+            !state_dir.join("logs").join(format!("{root}.log")).exists(),
+            "a preflight failure must not leave a log"
+        );
     }
 
     #[test]
@@ -1542,12 +1605,27 @@ mod tests {
     }
 
     fn failed_goal(drv_path: &StorePath<String>, build_log: Option<&str>) -> crunch_build::FailedGoal {
+        failed_goal_with_error(drv_path, "realization root failed", None, build_log)
+    }
+
+    fn failed_goal_with_error(
+        drv_path: &StorePath<String>,
+        error: &str,
+        origin: Option<(&StorePath<String>, &str)>,
+        build_log: Option<&str>,
+    ) -> crunch_build::FailedGoal {
         let drv_key = drv_path.to_absolute_path_with_prefix("/nix/store");
+        let (origin_drv_key, origin_error) = match origin {
+            Some((origin_path, origin_error)) => {
+                (origin_path.to_absolute_path_with_prefix("/nix/store"), origin_error.to_string())
+            }
+            None => (drv_key.clone(), error.to_string()),
+        };
         crunch_build::FailedGoal {
-            origin_drv_key: drv_key.clone(),
+            origin_drv_key,
             drv_key,
-            error: "realization root failed".to_string(),
-            origin_error: "realization root failed".to_string(),
+            error: error.to_string(),
+            origin_error,
             build_log: build_log.map(str::to_owned),
         }
     }

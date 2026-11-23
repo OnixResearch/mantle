@@ -57,10 +57,14 @@ report, and counters as before.
 ### Requirement: Successful realizations keep their build logs
 
 r[foreign_derivation_import.realization_build_logs] `foreign-import realize` MUST persist the
-captured build log of every executed unit outcome that has one, and the retained failure log of
-every failed selected root that has one, to `<state-dir>/logs/<drv>.log` using the same file name,
-header format, and writer as `mantle build`. An outcome served from cache or reuse without a log
-MUST write nothing and MUST NOT overwrite an existing log.
+captured build log of every executed unit outcome that has one, and for every failed selected root
+MUST persist `<state-dir>/logs/<drv>.log` using the same file name, header format, and writer as
+`mantle build`. A failed root whose build-service log was retained MUST use that log. A failed root
+without one MUST use the failure detail `mantle build` would write for that root, under the same
+gate: the failure MUST be persisted exactly when `mantle build`'s failure-log gate accepts it, and
+MUST carry the `origin …` detail for a dependency failure. A failure the gate rejects, and an
+outcome served from cache or reuse without a log, MUST write nothing and MUST NOT overwrite an
+existing log.
 
 A log-write failure MUST NOT change the realization result, the receipt, the published receipt
 bytes, or the built-root index. It MUST be reported as a diagnostic persistence failure: in human
@@ -75,6 +79,23 @@ alone and no prose on stderr. No receipt field or schema version MUST change.
 - THEN `<state-dir>/logs/<root derivation basename>.log` MUST exist
 - AND it MUST contain the builder's captured output
 - AND `mantle --state-dir <state-dir> log <drv>` MUST show that output.
+
+#### Scenario: A failed root keeps its builder failure detail
+
+- GIVEN a realization whose selected root build fails inside the builder, so no build-service log
+  was retained for the root
+- WHEN realization persists diagnostics
+- THEN `<state-dir>/logs/<root derivation basename>.log` MUST exist
+- AND it MUST contain the failure detail `mantle build` would write for that root, including the
+  `origin …` line for a dependency failure
+- AND `mantle --state-dir <state-dir> log <drv>` MUST show that detail.
+
+#### Scenario: A failure `mantle build` does not log writes no log
+
+- GIVEN a realization whose selected root fails in preflight, a failure the `mantle build`
+  failure-log gate rejects
+- WHEN realization persists diagnostics
+- THEN it MUST write no log for that root.
 
 #### Scenario: A reuse run writes no log
 

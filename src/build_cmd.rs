@@ -1618,28 +1618,39 @@ fn write_failure_logs(
 ) -> Vec<DiagnosticPersistenceFailure> {
     let mut failures = Vec::with_capacity(result.failed.len());
     for failed in &result.failed {
-        if !should_write_failure_log(&failed.error) {
-            continue;
-        }
-        let Some(drv_path) = parse_drv_key(&config.store_dir, &failed.drv_key) else {
-            continue;
-        };
-        let label = label_for_key(result, &failed.drv_key)
-            .map(str::to_owned)
-            .unwrap_or_else(|| drv_path.name().to_string());
-        let detail = if failed.origin_drv_key == failed.drv_key {
-            std::borrow::Cow::Borrowed(failed.error.as_str())
-        } else {
-            std::borrow::Cow::Owned(format!(
-                "{}\norigin {}: {}",
-                failed.error, failed.origin_drv_key, failed.origin_error
-            ))
-        };
-        if let Err(failure) = write_log(logs_dir, &drv_path, &label, false, &detail) {
+        let label = label_for_key(result, &failed.drv_key);
+        if let Some(failure) = write_failed_goal_log(logs_dir, &config.store_dir, failed, label) {
             failures.push(failure);
         }
     }
     failures
+}
+
+/// Write the failure log `mantle build` reports for one failed goal.
+///
+/// The gate, the derivation key, the `origin …` detail for a dependency failure, and the writer
+/// are the same rules `mantle build` has always used. `label` names the failed derivation in the
+/// log header and defaults to the derivation basename. Returns `None` when the failure is not a
+/// build-phase failure or its derivation key does not parse, and the write failure otherwise.
+pub(crate) fn write_failed_goal_log(
+    logs_dir: &Path,
+    store_dir: &str,
+    failed: &crunch_build::FailedGoal,
+    label: Option<&str>,
+) -> Option<DiagnosticPersistenceFailure> {
+    assert!(!logs_dir.as_os_str().is_empty(), "failure log directory must not be empty");
+    assert!(!store_dir.is_empty(), "failure log store prefix must not be empty");
+    if !should_write_failure_log(&failed.error) {
+        return None;
+    }
+    let drv_path = parse_drv_key(store_dir, &failed.drv_key)?;
+    let label = label.unwrap_or_else(|| drv_path.name());
+    let detail = if failed.origin_drv_key == failed.drv_key {
+        std::borrow::Cow::Borrowed(failed.error.as_str())
+    } else {
+        std::borrow::Cow::Owned(format!("{}\norigin {}: {}", failed.error, failed.origin_drv_key, failed.origin_error))
+    };
+    write_log(logs_dir, &drv_path, label, false, &detail).err()
 }
 
 fn print_failed_builds(result: &PipelineResult, store_dir: &str, logs_dir: &Path) {

@@ -13,6 +13,8 @@
   - Evidence: `tests/cache_inputs_build_route.rs` `cache_inputs_build_or_reuse_route_reports_an_unwritable_log_dir_as_json_and_still_succeeds` (blocked logs directory: realize succeeds, receipt built, one JSON failure line, no prose on stderr).
 - [x] [serial] T2.3 Add the CLI regression: a successful realize leaves the root log with the builder's output, `mantle log` shows it, and a reuse run does not rewrite the log. r[foreign_derivation_import.realization_build_logs]
   - Evidence: `tests/cache_inputs_build_route.rs`.
+- [x] [serial] T2.4 Persist a failed root's log from its retained build-service log when one exists and otherwise from the failure detail `mantle build` writes, sharing `write_failed_goal_log` (gate, drv key, `origin …` detail, writer) so a builder failure is visible through `mantle log` and a gated-out failure writes nothing. r[foreign_derivation_import.realization_build_logs]
+  - Evidence: `src/build_cmd.rs` `write_failed_goal_log` shared by `mantle build` and `write_realization_logs`; `src/foreign_realization_shell.rs` unit tests for the builder-error detail with an `origin …` line, the gated-out failure, and the retained build log winning; `tests/operator_diagnostics.rs` failure-log tests unchanged; see `evidence/checks.md`.
 
 ## Phase 3: Verification and records
 
