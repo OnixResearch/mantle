@@ -15,3 +15,15 @@ node, and route v2 made three full completeness passes over the same ~21.7 GB in
 
 The same `StoreHandle` flows through all three; `build_registered_derivations` takes it by value.
 This change makes each finalized node identity verify once per handle.
+
+## Observation on the exact memo build
+
+On `5f6a57b46`, after all 593 input NARs were served, the first sandbox
+started 12.3 minutes and 11.32 GiB of recorded process reads later. The
+`0b78fc1b6` comparison run measured 22.2 minutes and 24.86 GiB. Load and
+configured build cores differed, so the time delta is observational.
+
+A fresh process reused the existing local root in 226.14 seconds, with zero
+cache requests, downloads or builds and 6.25 GiB of reads. The memo is per
+handle; it does not persist across invocations or remove the first check.
+The repeated-lookup unit test provides the isolated no-extra-read evidence.

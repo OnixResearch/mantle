@@ -43,3 +43,13 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 471 filtered out
 
 The edit was reverted; the final run is `test result: ok. 1 passed`. On `origin/main` the method and
 its test do not exist, so the test also could not run at all.
+
+## Live observations
+
+On the same Octet job, the first follow-up rerun (`0b78fc1b6`) read 24.86 GiB
+between hydration and sandbox start, versus about 72 GiB in the prior pilot.
+The interval was 22.2 minutes versus about 19 minutes; it did not get shorter
+under that run's host load. The completeness memo (`5f6a57b46`) later observed
+11.32 GiB and 12.3 minutes. These are measurements of different runs under
+different load, not a controlled wall-time speedup benchmark. The lookup-only
+test above is the regression for avoiding re-export of an already-present input.

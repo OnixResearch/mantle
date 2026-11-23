@@ -88,3 +88,29 @@ listed below.
 | `cairn validate --root .` | `"issues": []`, `"valid": true` |
 | `cairn gate proposal\|design\|tasks surface-foreign-realization-diagnostics --root .` | `"verdict": "PASS"` for all three |
 | `git diff --check` | exit 0, no output |
+
+## Checked build and live scope
+
+Clean `git archive` export of `5c58ea50b3e23c78b5a14cdf2db93b171e05a6e1`:
+`nix build -L --print-out-paths path:<export>#default` with local builders exited 0
+(7,205 passed, 0 failed, 212 ignored across 89 suite results). Output package:
+`/nix/store/r5z7wyxna58ig4gkdbiwdyqxk1z3zaqf-mantle-0.1.0`.
+Binary BLAKE3 `a393733725dce076950fe938cc765e3e640dbf242f1ef9236d5a8b0e7ef8b421`;
+retained build log BLAKE3 `21a0b8a2d00856859128a05597e400468d484f817dc6eed96d66c142937841ee`.
+
+The real Octet rerun used the preceding checked Mantle `5f6a57b46`, not
+`5c58ea50b`. `mantle log --list` identified the successfully built root, and
+`mantle log <root-drv>` returned `pid 2's new affinity list: 0-7`.
+The remote sandbox hit the 45-minute Lean deadline; local fallback succeeded.
+The final receipt was successful. This rerun verifies the successful-root
+log, not the subsequent failed-root logging change or the cache refusal classes.
+Those paths are covered by the targeted tests above and the checked build.
+
+The operator's retained `followups/live-rerun-2/README.md` (BLAKE3
+`4214481891441c0545701b79a2dcd62b772f234ae85013a087ad6d845b5ae297`)
+indexes the exact inputs, logs, and receipts. On Octet `b6137b5b`, the
+Mantle and Nix roots were byte-identical, Octet's decisions were identical,
+and local reuse took 226 seconds with no builds or downloads. Cairn still
+reported both cases `stale` against the prior-revision fixture registry
+(`convergence.registry_unverified`, `convergence.revision_mismatch`); this
+run does not claim current assurance.

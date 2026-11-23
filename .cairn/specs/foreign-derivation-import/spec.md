@@ -1420,3 +1420,156 @@ value: a root built with any core count is reusable.
 - GIVEN the built-root index holds a receipt whose `built` object has no `build_cores`
 - WHEN realization finds that root present with an intact NAR and a valid builder signature
 - THEN the root still classifies as reusable
+
+### Requirement: Content-admission refusals name their cause
+
+r[foreign_derivation_import.content_admission_diagnostics] The HTTP NAR ingestion shared by the
+binary-cache pull paths MUST return every refusal as a value carrying a stable refusal class and a
+bounded detail string, not only a missing ingestion and a tracing line. The strict seeded closure
+import MUST report a refused member as
+`http-closure-content-admission-failed: <path>: <class>: <detail>`. The class MUST be a stable
+kebab-case token that distinguishes at least a rejected NAR URL, a rejected redirect, a non-success
+HTTP status, a request error, unsupported compression, and a NAR ingestion failure. The detail MUST
+include the HTTP status when a status caused the refusal, and MUST be truncated on a UTF-8 boundary
+to a named `MAX_*` byte limit. The detail MUST name the NAR by its narinfo-relative locator, not by
+the resolved absolute URL, and MUST NOT contain the cache URL's userinfo, query tokens, or another
+absolute URL, because the detail reaches JSON errors and receipts; HTTP client errors MUST be
+rendered without their URL. Existing tracing warnings MUST remain.
+
+The flat HTTP pull path MUST keep its skip-and-count behavior and counters, including for a refusal
+that now carries a class and detail. A successful ingestion MUST produce the same PathInfo,
+report, and counters as before.
+
+#### Scenario: A status refusal names its class and detail
+
+- GIVEN a seeded closure member whose NAR route answers with HTTP 503
+- WHEN the strict closure import pulls that member
+- THEN it MUST fail with `http-closure-content-admission-failed`
+- AND the message MUST name the member path, the `nar-http-status` class, and the HTTP status.
+
+#### Scenario: An ingestion refusal names its class and detail
+
+- GIVEN a seeded closure member whose NAR bytes are not the signed NAR
+- WHEN the strict closure import ingests that member
+- THEN it MUST fail with `http-closure-content-admission-failed`
+- AND the message MUST name the candidate path, the `nar-ingestion-failed` class, and a non-empty
+  bounded detail.
+
+#### Scenario: A refusal never echoes cache credentials
+
+- GIVEN a cache URL carrying userinfo and a query token, and a member whose NAR route fails
+- WHEN the strict closure import refuses that member
+- THEN the message MUST name the refusal class and the narinfo-relative NAR locator
+- AND it MUST NOT contain the userinfo, the query token, or an absolute cache URL.
+
+#### Scenario: The flat pull still skips and counts
+
+- GIVEN a flat HTTP pull request whose NAR response has a non-success status
+- WHEN the pull runs
+- THEN the path MUST be skipped and counted exactly as before
+- AND the pull MUST NOT return an error for the refusal.
+
+#### Scenario: A successful import is unchanged
+
+- GIVEN a seeded closure whose members are served intact
+- WHEN the strict closure import runs
+- THEN every member MUST be admitted with its declared counters and PathInfo as before.
+
+### Requirement: Successful realizations keep their build logs
+
+r[foreign_derivation_import.realization_build_logs] `foreign-import realize` MUST persist the
+captured build log of every executed unit outcome that has one, and for every failed selected root
+MUST persist `<state-dir>/logs/<drv>.log` using the same file name, header format, and writer as
+`mantle build`. A failed root whose build-service log was retained MUST use that log. A failed root
+without one MUST use the failure detail `mantle build` would write for that root, under the same
+gate: the failure MUST be persisted exactly when `mantle build`'s failure-log gate accepts it, and
+MUST carry the `origin …` detail for a dependency failure. A failure the gate rejects, and an
+outcome served from cache or reuse without a log, MUST write nothing and MUST NOT overwrite an
+existing log.
+
+A log-write failure MUST NOT change the realization result, the receipt, the published receipt
+bytes, or the built-root index. It MUST be reported as a diagnostic persistence failure: in human
+mode as the warning `mantle build` prints, and under `--json` as one JSON object line
+`{"diagnostic_persistence_failure": {...}}` per failure on stderr, with stdout remaining the receipt
+alone and no prose on stderr. No receipt field or schema version MUST change.
+
+#### Scenario: A built root keeps its log
+
+- GIVEN a `cache-inputs-build-roots-v2` plan whose selected root is absent locally
+- WHEN realization builds the root successfully
+- THEN `<state-dir>/logs/<root derivation basename>.log` MUST exist
+- AND it MUST contain the builder's captured output
+- AND `mantle --state-dir <state-dir> log <drv>` MUST show that output.
+
+#### Scenario: A failed root keeps its builder failure detail
+
+- GIVEN a realization whose selected root build fails inside the builder, so no build-service log
+  was retained for the root
+- WHEN realization persists diagnostics
+- THEN `<state-dir>/logs/<root derivation basename>.log` MUST exist
+- AND it MUST contain the failure detail `mantle build` would write for that root, including the
+  `origin …` line for a dependency failure
+- AND `mantle --state-dir <state-dir> log <drv>` MUST show that detail.
+
+#### Scenario: A failure `mantle build` does not log writes no log
+
+- GIVEN a realization whose selected root fails in preflight, a failure the `mantle build`
+  failure-log gate rejects
+- WHEN realization persists diagnostics
+- THEN it MUST write no log for that root.
+
+#### Scenario: A reuse run writes no log
+
+- GIVEN a first realization built and indexed a selected root, leaving its log
+- WHEN realization reuses that root unchanged
+- THEN it MUST NOT create or rewrite the root's log file.
+
+#### Scenario: A log write failure leaves the realization intact
+
+- GIVEN the logs directory cannot be created or written
+- WHEN realization otherwise succeeds
+- THEN the receipt MUST still be published and the realization MUST still succeed
+- AND the failure MUST be reported as a diagnostic persistence failure without changing the
+  receipt
+- AND under `--json` it MUST appear as one `diagnostic_persistence_failure` JSON line on stderr.
+
+### Requirement: Hydrated inputs are verified once per realization
+
+r[foreign_derivation_import.hydrated_input_verification_once] The cache-inputs build routes MUST
+verify each hydrated input against the signed cache in one pass and MUST NOT re-ingest physical
+input exports after hydration. A store lookup used for hydrated inputs and for the presence check of
+non-root unit outputs MUST return the complete local `PathInfo` with the same castore-completeness
+and `PathInfo` identity checks as the exporting lookup, MUST NOT materialize the path, and MUST NOT
+record a built output. Selected-root classification, the cache-only route, and route v1 MUST keep
+the exporting lookup.
+
+Consequence: on a reuse run the route MUST NOT re-verify or repair the physical exports of inputs.
+Builds read inputs from castore, and the selected root keeps its own NAR check in
+`classify_present_root`.
+
+#### Scenario: Hydration verifies members once
+
+- GIVEN a signed cache closure whose members were exported and NAR-checked by the closure import
+- WHEN `hydrate_signed_cache_closure` walks the members
+- THEN every member MUST yield its complete local `PathInfo` without an additional physical export
+- AND the resulting hydration facts MUST be unchanged.
+
+#### Scenario: A reuse run does no input re-ingest
+
+- GIVEN a route-v2 realization that reuses a previously built selected root
+- WHEN `locally_present_input_paths` checks non-root unit outputs
+- THEN it MUST use the lookup-only store access
+- AND it MUST NOT ingest or repair any input export.
+
+#### Scenario: Selected roots keep the exporting lookup
+
+- GIVEN a selected root that is present locally on route v2
+- WHEN realization classifies it
+- THEN the root MUST still be checked and exported through the exporting lookup
+- AND the reuse decision MUST be unchanged.
+
+#### Scenario: An unknown path is absent
+
+- GIVEN a store path with no complete local content
+- WHEN the lookup-only access is called
+- THEN it MUST return `None`.

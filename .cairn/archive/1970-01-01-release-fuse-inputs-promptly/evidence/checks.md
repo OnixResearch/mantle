@@ -130,3 +130,13 @@ EXIT=0
 
 `cairn validate` reports an empty `issues` array (0 issues); each gate reports
 `"verdict": "PASS"` with an empty `issues` array and exits 0.
+
+## Live observation
+
+In the real Octet rerun on `5f6a57b46`, the outside holder initially pinned
+the remote sandbox inputs mount. That attempt hit the Lean deadline and its
+holder copy detached. The successful local fallback then had no held copy.
+Realize exited 12 seconds after the last sandbox ended, with the holder
+process still alive; no stall was observed. This is inconclusive for the held
+copy at successful sandbox teardown. The held-descriptor regression above,
+not this rerun, covers that condition.
