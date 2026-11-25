@@ -8,19 +8,45 @@ use std::path::Path;
 
 pub use mantle_application_contract::inspection::Action;
 pub use mantle_application_contract::inspection::ActionComparison;
+pub use mantle_application_contract::inspection::AuthoringDiagnostic;
+#[cfg(test)]
+pub use mantle_application_contract::inspection::AuthoringDiagnosticKind;
+#[cfg(test)]
+pub use mantle_application_contract::inspection::AuthoringFacts;
+#[cfg(test)]
+pub use mantle_application_contract::inspection::ComposedImpactInput;
+#[cfg(test)]
+pub use mantle_application_contract::inspection::ComposedImpactResult;
 pub use mantle_application_contract::inspection::Configuration;
 pub use mantle_application_contract::inspection::DependencyIndex;
 pub use mantle_application_contract::inspection::Direction;
 pub use mantle_application_contract::inspection::EvaluationState;
+pub use mantle_application_contract::inspection::ExecutionOutcome;
+#[cfg(test)]
+pub use mantle_application_contract::inspection::ImpactOutcome;
 pub use mantle_application_contract::inspection::InspectionFacts;
+pub use mantle_application_contract::inspection::MAX_AUTHORING_RECORDS;
+pub use mantle_application_contract::inspection::MAX_CONSTRUCTOR_PATH_LEN;
+pub use mantle_application_contract::inspection::MAX_DIAGNOSTIC_TEXT_BYTES;
 use mantle_application_contract::inspection::MAX_GRAPH_BYTES;
+pub use mantle_application_contract::inspection::ObservedExecution;
+#[cfg(test)]
+pub use mantle_application_contract::inspection::PolicyFilter;
 pub use mantle_application_contract::inspection::QueryLimits;
 pub use mantle_application_contract::inspection::Reachability;
+pub use mantle_application_contract::inspection::RecipeReference;
+pub use mantle_application_contract::inspection::SelectedOutputHandle;
+pub use mantle_application_contract::inspection::SourceOrigin;
+pub use mantle_application_contract::inspection::TemplateFact;
+pub use mantle_application_contract::inspection::TemplateInstance;
 pub use mantle_application_contract::inspection::compare_actions;
+#[cfg(test)]
+pub use mantle_application_contract::inspection::composed_impact;
 use serde::Deserialize;
 use serde::Serialize;
 
 pub const SEMANTIC_GRAPH_SCHEMA: &str = "mantle-semantic-build-graph-v1";
+pub const SEMANTIC_GRAPH_SCHEMA_V2: &str = "mantle-semantic-build-graph-v2";
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -166,6 +192,68 @@ pub struct InspectionView<'a> {
     pub state: EvaluationState,
     pub configured: BTreeMap<&'a str, &'a Configuration>,
     pub actions: BTreeMap<&'a str, &'a Action>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub templates: BTreeMap<&'a str, &'a TemplateFact>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub instances: BTreeMap<&'a str, &'a TemplateInstance>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<&'a RecipeReference>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub selected_outputs: BTreeMap<&'a str, &'a SelectedOutputHandle>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<&'a AuthoringDiagnostic>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub observed_execution: BTreeMap<&'a str, &'a ObservedExecution>,
+}
+
+/// Explicit distinction between authoring, normalized recipes, configured
+/// actions, and observed execution. Missing execution is never inferred.
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
+pub struct LayerStatus {
+    pub is_authoring_present: bool,
+    pub is_normalized_recipe_present: bool,
+    pub is_configured_action_present: bool,
+    pub is_observed_execution_present: bool,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct AuthoringInstanceView<'a> {
+    pub instance_id: &'a str,
+    pub fact: &'a TemplateInstance,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct AuthoringSelectedOutputView<'a> {
+    pub handle_id: &'a str,
+    pub producer_recipe: &'a str,
+    pub output_name: &'a str,
+    pub selection_valid: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<&'a SourceOrigin>,
+}
+
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize)]
+pub struct AuthoringContext<'a> {
+    pub is_provenance_available: bool,
+    pub instances: Vec<AuthoringInstanceView<'a>>,
+    pub references: Vec<&'a RecipeReference>,
+    pub selected_outputs: Vec<AuthoringSelectedOutputView<'a>>,
+    pub diagnostics: Vec<&'a AuthoringDiagnostic>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct SelectedOutputExplanation<'a> {
+    pub schema: &'static str,
+    pub handle_id: String,
+    pub producer_recipe: String,
+    pub producer_node: Option<&'a SemanticNode>,
+    pub output_name: String,
+    pub selection_valid: Option<bool>,
+    pub consumer_instance: Option<&'a TemplateInstance>,
+    pub origin: Option<&'a SourceOrigin>,
+    pub is_provenance_available: bool,
+    pub diagnostics: Vec<&'a AuthoringDiagnostic>,
+    pub state: EvaluationState,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
@@ -202,6 +290,12 @@ pub struct WhyResult<'a> {
     pub state: EvaluationState,
     pub configuration: Option<&'a Configuration>,
     pub action: Option<&'a Action>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layers: Option<LayerStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authoring: Option<AuthoringContext<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observed_execution: Option<&'a ObservedExecution>,
 }
 
 impl SemanticGraph {
@@ -262,10 +356,15 @@ impl SemanticGraph {
         {
             return Err(SemanticGraphError::Invalid("graph exceeds inspection fact bound".to_string()));
         }
-        if self.schema != SEMANTIC_GRAPH_SCHEMA {
+        if self.schema != SEMANTIC_GRAPH_SCHEMA && self.schema != SEMANTIC_GRAPH_SCHEMA_V2 {
             return Err(SemanticGraphError::Invalid(format!(
-                "semantic graph schema is `{}`, expected `{}`",
-                self.schema, SEMANTIC_GRAPH_SCHEMA
+                "semantic graph schema is `{}`, expected `{}` or `{}`",
+                self.schema, SEMANTIC_GRAPH_SCHEMA, SEMANTIC_GRAPH_SCHEMA_V2
+            )));
+        }
+        if self.schema == SEMANTIC_GRAPH_SCHEMA && self.inspection.has_v2_facts() {
+            return Err(SemanticGraphError::Invalid(format!(
+                "v2 authoring or observed execution facts require schema `{SEMANTIC_GRAPH_SCHEMA_V2}`"
             )));
         }
         let mut ids = BTreeSet::new();
@@ -364,7 +463,70 @@ impl SemanticGraph {
         nodes.sort_by_key(|node| &node.id);
         edges.sort_by(|a, b| (&a.from, &a.to, &a.kind, &a.metadata).cmp(&(&b.from, &b.to, &b.kind, &b.metadata)));
         aliases.sort_by(|a, b| (&a.alias, &a.target, &a.metadata).cmp(&(&b.alias, &b.target, &b.metadata)));
-        let inspection = InspectionView {
+        let inspection = self.build_inspection_view(&visited);
+        Ok(GraphQueryResult {
+            schema: "mantle-semantic-build-graph-query-v2",
+            root,
+            state: self.inspection.state,
+            inspection,
+            nodes,
+            edges,
+            aliases,
+        })
+    }
+
+    fn build_inspection_view(&self, visited: &BTreeSet<String>) -> InspectionView<'_> {
+        let instances: BTreeMap<&str, &TemplateInstance> = self
+            .inspection
+            .authoring
+            .instances
+            .iter()
+            .filter(|(_, inst)| visited.contains(&inst.recipe_id))
+            .map(|(id, inst)| (id.as_str(), inst))
+            .collect();
+        let template_ids: BTreeSet<&str> = instances.values().filter_map(|inst| inst.template_id.as_deref()).collect();
+        let templates = self
+            .inspection
+            .authoring
+            .templates
+            .iter()
+            .filter(|(id, _)| template_ids.contains(id.as_str()))
+            .map(|(id, fact)| (id.as_str(), fact))
+            .collect();
+        let references = self
+            .inspection
+            .authoring
+            .references
+            .iter()
+            .filter(|reference| visited.contains(&reference.target_recipe))
+            .collect();
+        let selected_outputs = self
+            .inspection
+            .authoring
+            .selected_outputs
+            .iter()
+            .filter(|(_, handle)| visited.contains(&handle.producer_recipe))
+            .map(|(id, handle)| (id.as_str(), handle))
+            .collect();
+        let diagnostics = self
+            .inspection
+            .authoring
+            .diagnostics
+            .iter()
+            .filter(|diag| {
+                diag.recipe_id.as_ref().is_some_and(|id| visited.contains(id))
+                    || diag.root.as_ref().is_some_and(|id| visited.contains(id))
+                    || diag.instance_id.as_deref().is_some_and(|id| instances.contains_key(id))
+            })
+            .collect();
+        let observed_execution = self
+            .inspection
+            .observed_execution
+            .iter()
+            .filter(|(id, _)| visited.contains(*id))
+            .map(|(id, exec)| (id.as_str(), exec))
+            .collect();
+        InspectionView {
             state: self.inspection.state,
             configured: self
                 .inspection
@@ -380,16 +542,13 @@ impl SemanticGraph {
                 .filter(|(id, _)| visited.contains(*id))
                 .map(|(id, fact)| (id.as_str(), fact))
                 .collect(),
-        };
-        Ok(GraphQueryResult {
-            schema: "mantle-semantic-build-graph-query-v2",
-            root,
-            state: self.inspection.state,
-            inspection,
-            nodes,
-            edges,
-            aliases,
-        })
+            templates,
+            instances,
+            references,
+            selected_outputs,
+            diagnostics,
+            observed_execution,
+        }
     }
 
     pub fn dependents(&self, query: &str) -> Result<DependentsResult<'_>, SemanticGraphError> {
@@ -436,6 +595,10 @@ impl SemanticGraph {
             .iter()
             .find(|edge| edge.from == target && edge.kind == SemanticEdgeKind::ProducedBy)
             .and_then(|edge| self.node(&edge.to));
+        let is_v2 = self.schema == SEMANTIC_GRAPH_SCHEMA_V2 || self.inspection.has_v2_facts();
+        let authoring = is_v2.then(|| self.authoring_context_for_target(&target, producing_recipe));
+        let observed_execution = self.inspection.observed_execution.get(&target);
+        let layers = is_v2.then(|| self.layer_status_for_target(&target, node, authoring.as_ref(), observed_execution));
         let why = WhyResult {
             schema: "mantle-semantic-build-why-v2",
             target: target.clone(),
@@ -450,6 +613,9 @@ impl SemanticGraph {
             state: self.inspection.state,
             configuration: self.inspection.configured.get(&target),
             action: self.inspection.actions.get(&target),
+            layers,
+            authoring,
+            observed_execution,
         };
         if node.kind == SemanticNodeKind::StoreOutput && why.producing_recipe.is_none() {
             return Err(SemanticGraphError::Incomplete(IncompleteGraphDiagnostic {
@@ -460,6 +626,199 @@ impl SemanticGraph {
             }));
         }
         Ok(why)
+    }
+
+    fn authoring_context_for_target<'a>(
+        &'a self,
+        target: &str,
+        producing_recipe: Option<&'a SemanticNode>,
+    ) -> AuthoringContext<'a> {
+        let recipe_key = producing_recipe.map_or(target, |recipe| recipe.id.as_str());
+        let mut instances: Vec<AuthoringInstanceView<'a>> = self
+            .inspection
+            .authoring
+            .instances
+            .iter()
+            .filter(|(_, inst)| inst.recipe_id == recipe_key || inst.recipe_id == target)
+            .map(|(id, fact)| AuthoringInstanceView {
+                instance_id: id.as_str(),
+                fact,
+            })
+            .collect();
+        instances.sort_by_key(|view| view.instance_id);
+        let instance_ids: BTreeSet<&str> = instances.iter().map(|view| view.instance_id).collect();
+        let mut references: Vec<&'a RecipeReference> = self
+            .inspection
+            .authoring
+            .references
+            .iter()
+            .filter(|reference| {
+                reference.target_recipe == recipe_key
+                    || reference.target_recipe == target
+                    || reference.referencer_instance.as_deref().is_some_and(|id| instance_ids.contains(id))
+            })
+            .collect();
+        references.sort();
+        let mut selected_outputs: Vec<AuthoringSelectedOutputView<'a>> = self
+            .inspection
+            .authoring
+            .selected_outputs
+            .iter()
+            .filter(|(_, handle)| {
+                handle.producer_recipe == recipe_key
+                    || handle.producer_recipe == target
+                    || handle.consumer_instance.as_deref().is_some_and(|id| instance_ids.contains(id))
+            })
+            .map(|(id, handle)| AuthoringSelectedOutputView {
+                handle_id: id.as_str(),
+                producer_recipe: handle.producer_recipe.as_str(),
+                output_name: handle.output_name.as_str(),
+                selection_valid: handle.selection_valid(),
+                origin: handle.origin.as_ref(),
+            })
+            .collect();
+        selected_outputs.sort_by_key(|view| view.handle_id);
+        let diagnostics: Vec<&'a AuthoringDiagnostic> = self
+            .inspection
+            .authoring
+            .diagnostics
+            .iter()
+            .filter(|diag| {
+                diag.recipe_id.as_deref() == Some(recipe_key)
+                    || diag.recipe_id.as_deref() == Some(target)
+                    || diag.root.as_deref() == Some(target)
+                    || diag.instance_id.as_deref().is_some_and(|id| instance_ids.contains(id))
+            })
+            .collect();
+        let is_provenance_available = !instances.is_empty() || !references.is_empty() || !selected_outputs.is_empty();
+        AuthoringContext {
+            is_provenance_available,
+            instances,
+            references,
+            selected_outputs,
+            diagnostics,
+        }
+    }
+
+    fn layer_status_for_target(
+        &self,
+        target: &str,
+        node: &SemanticNode,
+        authoring: Option<&AuthoringContext<'_>>,
+        observed_execution: Option<&ObservedExecution>,
+    ) -> LayerStatus {
+        let is_authoring_present = authoring.is_some_and(|ctx| ctx.is_provenance_available);
+        let is_normalized_recipe_present = node.kind == SemanticNodeKind::Recipe
+            || self.edges.iter().any(|edge| {
+                edge.from == target
+                    && matches!(edge.kind, SemanticEdgeKind::ProducedBy | SemanticEdgeKind::ConfiguredFrom)
+            });
+        let is_configured_action_present = self.inspection.configured.contains_key(target)
+            || self.inspection.actions.contains_key(target)
+            || self.inspection.configured.values().any(|cfg| cfg.semantic_target == target);
+        let is_observed_execution_present =
+            observed_execution.is_some_and(|exec| exec.outcome != ExecutionOutcome::Unavailable);
+        LayerStatus {
+            is_authoring_present,
+            is_normalized_recipe_present,
+            is_configured_action_present,
+            is_observed_execution_present,
+        }
+    }
+
+    /// Explain a retained selected-output handle by handle identity, showing
+    /// its actual producer, output name, consumer instance, and diagnostics.
+    pub fn explain_selected_output(
+        &self,
+        handle_id: &str,
+    ) -> Result<SelectedOutputExplanation<'_>, SemanticGraphError> {
+        self.validate()?;
+        let Some(handle) = self.inspection.authoring.selected_outputs.get(handle_id) else {
+            return Err(SemanticGraphError::Incomplete(IncompleteGraphDiagnostic {
+                schema: "mantle-incomplete-semantic-graph-v1",
+                query: "explain-selected-output".to_string(),
+                target: handle_id.to_string(),
+                missing: vec!["selected-output handle".to_string()],
+            }));
+        };
+        let consumer_instance =
+            handle.consumer_instance.as_deref().and_then(|id| self.inspection.authoring.instances.get(id));
+        let producer_node = self.node(&handle.producer_recipe);
+        let diagnostics: Vec<_> = self
+            .inspection
+            .authoring
+            .diagnostics
+            .iter()
+            .filter(|diag| {
+                diag.recipe_id.as_deref() == Some(handle.producer_recipe.as_str())
+                    || diag.output_name.as_deref() == Some(handle.output_name.as_str())
+                    || (handle.consumer_instance.is_some() && diag.instance_id == handle.consumer_instance)
+            })
+            .collect();
+        let is_provenance_available = handle.origin.is_some() || consumer_instance.is_some();
+        Ok(SelectedOutputExplanation {
+            schema: "mantle-selected-output-explanation-v1",
+            handle_id: handle_id.to_string(),
+            producer_recipe: handle.producer_recipe.clone(),
+            producer_node,
+            output_name: handle.output_name.clone(),
+            selection_valid: handle.selection_valid(),
+            consumer_instance,
+            origin: handle.origin.as_ref(),
+            is_provenance_available,
+            diagnostics,
+            state: self.inspection.state,
+        })
+    }
+
+    /// Bounded composed impact query over saved `DependsOn` reverse reachability,
+    /// joined with configured targets, configurations, and execution policies.
+    #[cfg(test)]
+    pub fn composed_impact(
+        &self,
+        seeds: &BTreeSet<String>,
+        policy_filter: Option<&PolicyFilter>,
+        limits: QueryLimits,
+    ) -> Result<ComposedImpactResult, SemanticGraphError> {
+        self.admit_query_limits(limits)?;
+        self.validate()?;
+        let mut resolved_seeds = BTreeSet::new();
+        for seed in seeds {
+            resolved_seeds.insert(self.resolve_or_incomplete("impact", seed)?);
+        }
+        let ids: Vec<_> = self.nodes.iter().map(|node| node.id.as_str()).collect();
+        let depends_on_edges: Vec<_> = self
+            .edges
+            .iter()
+            .filter(|edge| edge.kind == SemanticEdgeKind::DependsOn)
+            .map(|edge| (edge.from.as_str(), edge.to.as_str()))
+            .collect();
+        let action_for_edges: Vec<_> = self
+            .edges
+            .iter()
+            .filter(|edge| edge.kind == SemanticEdgeKind::ActionFor)
+            .map(|edge| (edge.from.as_str(), edge.to.as_str()))
+            .collect();
+        let configured_from_edges: Vec<_> = self
+            .edges
+            .iter()
+            .filter(|edge| edge.kind == SemanticEdgeKind::ConfiguredFrom)
+            .map(|edge| (edge.from.as_str(), edge.to.as_str()))
+            .collect();
+        let snapshot_digest = mantle_rust_plan_core::domain_digest(b"mantle-semantic-graph-snapshot-v1\0", self)
+            .map_err(|err| SemanticGraphError::Invalid(format!("snapshot digest failed: {err}")))?;
+        composed_impact(&ComposedImpactInput {
+            ids: &ids,
+            depends_on_edges: &depends_on_edges,
+            action_for_edges: &action_for_edges,
+            configured_from_edges: &configured_from_edges,
+            inspection: &self.inspection,
+            snapshot_digest,
+            seeds: &resolved_seeds,
+            policy_filter,
+            limits,
+        })
+        .map_err(SemanticGraphError::Invalid)
     }
 
     fn dependency_index(&self, limits: QueryLimits) -> Result<DependencyIndex<'_>, SemanticGraphError> {
@@ -526,6 +885,74 @@ impl SemanticGraph {
                 || self.inspection.configured.keys().any(|id| !action_targets.contains(id.as_str()))
             {
                 return Err(invalid("complete graph is missing configured targets or declared actions"));
+            }
+        }
+        self.validate_authoring_and_execution(&nodes)
+    }
+
+    fn validate_authoring_and_execution(
+        &self,
+        nodes: &BTreeMap<&str, &SemanticNodeKind>,
+    ) -> Result<(), SemanticGraphError> {
+        let invalid = |message: &str| SemanticGraphError::Invalid(message.to_string());
+        let authoring = &self.inspection.authoring;
+        let record_count = authoring.record_count().map_err(SemanticGraphError::Invalid)?;
+        if record_count > MAX_AUTHORING_RECORDS
+            || self.inspection.observed_execution.len() > QueryLimits::default().nodes as usize
+        {
+            return Err(invalid("authoring or execution inspection exceeds bound"));
+        }
+        for (id, template) in &authoring.templates {
+            if id.trim().is_empty()
+                || template
+                    .name
+                    .as_ref()
+                    .is_some_and(|n| n.trim().is_empty() || n.len() > MAX_DIAGNOSTIC_TEXT_BYTES as usize)
+                || template
+                    .origin
+                    .as_ref()
+                    .is_some_and(|o| o.file.trim().is_empty() || o.file.len() > MAX_DIAGNOSTIC_TEXT_BYTES as usize)
+            {
+                return Err(invalid("template fact identity or origin is invalid"));
+            }
+        }
+        for (id, instance) in &authoring.instances {
+            if instance.identity().map_err(SemanticGraphError::Invalid)? != *id
+                || instance.recipe_id.trim().is_empty()
+                || instance.constructor_path.len() > MAX_CONSTRUCTOR_PATH_LEN as usize
+                || instance.constructor_path.iter().any(|segment| segment.trim().is_empty())
+                || instance.template_id.as_ref().is_some_and(|tid| !authoring.templates.contains_key(tid))
+                || nodes.get(instance.recipe_id.as_str()).is_some_and(|kind| **kind != SemanticNodeKind::Recipe)
+            {
+                return Err(invalid("template instance identity or target recipe is invalid"));
+            }
+        }
+        for reference in &authoring.references {
+            if reference.target_recipe.trim().is_empty()
+                || !nodes.contains_key(reference.target_recipe.as_str())
+                || reference.referencer_instance.as_ref().is_some_and(|id| !authoring.instances.contains_key(id))
+            {
+                return Err(invalid("recipe reference target or instance is invalid"));
+            }
+        }
+        for (id, handle) in &authoring.selected_outputs {
+            if handle.identity().map_err(SemanticGraphError::Invalid)? != *id
+                || handle.producer_recipe.trim().is_empty()
+                || handle.output_name.trim().is_empty()
+                || !nodes.contains_key(handle.producer_recipe.as_str())
+                || handle.consumer_instance.as_ref().is_some_and(|inst| !authoring.instances.contains_key(inst))
+            {
+                return Err(invalid("selected-output handle identity or producer is invalid"));
+            }
+        }
+        for diagnostic in &authoring.diagnostics {
+            if diagnostic.message.trim().is_empty() || diagnostic.message.len() > MAX_DIAGNOSTIC_TEXT_BYTES as usize {
+                return Err(invalid("authoring diagnostic message is empty or exceeds bound"));
+            }
+        }
+        for action_id in self.inspection.observed_execution.keys() {
+            if !self.inspection.actions.contains_key(action_id) {
+                return Err(invalid("observed execution references unknown action"));
             }
         }
         Ok(())
@@ -952,5 +1379,245 @@ mod tests {
         let mut ambiguous = graph.clone();
         ambiguous.aliases.push(ambiguous.aliases[0].clone());
         assert!(ambiguous.validate().is_err());
+    }
+
+    fn diamond_v2_graph() -> SemanticGraph {
+        let node = |id: &str, kind: SemanticNodeKind| SemanticNode {
+            id: id.to_string(),
+            kind,
+            digest: Some(format!("blake3:{id}")),
+            metadata: BTreeMap::new(),
+        };
+        let branch_template = TemplateFact {
+            name: Some("branch".to_string()),
+            origin: Some(SourceOrigin {
+                file: "examples/diamond-dependency.ncl".to_string(),
+                line: Some(14),
+                column: Some(14),
+            }),
+        };
+        let left_inst = TemplateInstance {
+            template_id: Some("template:branch".to_string()),
+            recipe_id: "recipe:diamond-left".to_string(),
+            root: Some("recipe:diamond-result".to_string()),
+            constructor_path: vec!["examples/diamond-dependency.ncl".into(), "branch".into(), "left".into()],
+            origin: Some(SourceOrigin {
+                file: "examples/diamond-dependency.ncl".into(),
+                line: Some(43),
+                column: Some(12),
+            }),
+            display_name: Some("diamond-branch".into()),
+        };
+        let right_inst = TemplateInstance {
+            template_id: Some("template:branch".to_string()),
+            recipe_id: "recipe:diamond-right".to_string(),
+            root: Some("recipe:diamond-result".to_string()),
+            constructor_path: vec![
+                "examples/diamond-dependency.ncl".into(),
+                "branch".into(),
+                "right".into(),
+            ],
+            origin: Some(SourceOrigin {
+                file: "examples/diamond-dependency.ncl".into(),
+                line: Some(44),
+                column: Some(13),
+            }),
+            display_name: Some("diamond-branch".into()),
+        };
+        let left_id = left_inst.identity().unwrap();
+        let right_id = right_inst.identity().unwrap();
+        let dev_handle = SelectedOutputHandle {
+            producer_recipe: "recipe:example-sdk".to_string(),
+            output_name: "dev".to_string(),
+            consumer_instance: Some(left_id.clone()),
+            origin: Some(SourceOrigin {
+                file: "examples/selected-output.ncl".into(),
+                line: Some(28),
+                column: Some(13),
+            }),
+            declared_outputs: Some(BTreeSet::from(["out".into(), "dev".into()])),
+        };
+        let bad_handle = SelectedOutputHandle {
+            producer_recipe: "recipe:example-sdk".to_string(),
+            output_name: "nonexistent".to_string(),
+            consumer_instance: Some(right_id.clone()),
+            origin: Some(SourceOrigin {
+                file: "examples/selected-output.ncl".into(),
+                line: Some(29),
+                column: Some(13),
+            }),
+            declared_outputs: Some(BTreeSet::from(["out".into(), "dev".into()])),
+        };
+        let dev_handle_id = dev_handle.identity().unwrap();
+        let bad_handle_id = bad_handle.identity().unwrap();
+
+        let authoring = AuthoringFacts {
+            templates: BTreeMap::from([("template:branch".into(), branch_template)]),
+            instances: BTreeMap::from([(left_id.clone(), left_inst), (right_id.clone(), right_inst)]),
+            references: vec![
+                RecipeReference {
+                    referencer_instance: Some(left_id.clone()),
+                    target_recipe: "recipe:diamond-shared".into(),
+                    handle_id: None,
+                    origin: Some(SourceOrigin {
+                        file: "examples/diamond-dependency.ncl".into(),
+                        line: Some(17),
+                        column: Some(13),
+                    }),
+                },
+                RecipeReference {
+                    referencer_instance: Some(right_id.clone()),
+                    target_recipe: "recipe:diamond-shared".into(),
+                    handle_id: None,
+                    origin: Some(SourceOrigin {
+                        file: "examples/diamond-dependency.ncl".into(),
+                        line: Some(17),
+                        column: Some(13),
+                    }),
+                },
+            ],
+            selected_outputs: BTreeMap::from([(dev_handle_id, dev_handle), (bad_handle_id, bad_handle)]),
+            diagnostics: vec![AuthoringDiagnostic {
+                kind: AuthoringDiagnosticKind::InvalidOutputSelection,
+                root: Some("recipe:diamond-result".into()),
+                instance_id: Some(right_id),
+                recipe_id: Some("recipe:example-sdk".into()),
+                output_name: Some("nonexistent".into()),
+                origin: Some(SourceOrigin {
+                    file: "examples/selected-output.ncl".into(),
+                    line: Some(29),
+                    column: Some(13),
+                }),
+                message: "selected output `nonexistent` is not declared by `recipe:example-sdk`".into(),
+            }],
+        };
+
+        SemanticGraph {
+            schema: SEMANTIC_GRAPH_SCHEMA_V2.to_string(),
+            nodes: vec![
+                node("recipe:diamond-shared", SemanticNodeKind::Recipe),
+                node("recipe:diamond-left", SemanticNodeKind::Recipe),
+                node("recipe:diamond-right", SemanticNodeKind::Recipe),
+                node("recipe:diamond-result", SemanticNodeKind::Recipe),
+                node("recipe:example-sdk", SemanticNodeKind::Recipe),
+                node("recipe:orphan", SemanticNodeKind::Recipe),
+            ],
+            edges: vec![
+                SemanticEdge {
+                    from: "recipe:diamond-result".into(),
+                    to: "recipe:diamond-left".into(),
+                    kind: SemanticEdgeKind::DependsOn,
+                    metadata: BTreeMap::new(),
+                },
+                SemanticEdge {
+                    from: "recipe:diamond-result".into(),
+                    to: "recipe:diamond-right".into(),
+                    kind: SemanticEdgeKind::DependsOn,
+                    metadata: BTreeMap::new(),
+                },
+                SemanticEdge {
+                    from: "recipe:diamond-left".into(),
+                    to: "recipe:diamond-shared".into(),
+                    kind: SemanticEdgeKind::DependsOn,
+                    metadata: BTreeMap::new(),
+                },
+                SemanticEdge {
+                    from: "recipe:diamond-right".into(),
+                    to: "recipe:diamond-shared".into(),
+                    kind: SemanticEdgeKind::DependsOn,
+                    metadata: BTreeMap::new(),
+                },
+            ],
+            aliases: Vec::new(),
+            inspection: InspectionFacts {
+                state: EvaluationState::Partial,
+                configured: BTreeMap::new(),
+                actions: BTreeMap::new(),
+                authoring,
+                observed_execution: BTreeMap::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn v2_graph_distinguishes_template_instances_references_selected_outputs_and_layers() {
+        let mut graph = diamond_v2_graph();
+        graph.validate().unwrap();
+
+        // v1 schema must reject v2 authoring/execution facts.
+        let mut wrong_schema = graph.clone();
+        wrong_schema.schema = SEMANTIC_GRAPH_SCHEMA.to_string();
+        assert!(wrong_schema.validate().is_err());
+
+        // Shared canonical recipe shows 2 references from distinct instances.
+        let shared_why = graph.why("recipe:diamond-shared").unwrap();
+        let shared_auth = shared_why.authoring.as_ref().unwrap();
+        assert!(shared_auth.is_provenance_available);
+        assert_eq!(shared_auth.references.len(), 2);
+        assert_ne!(shared_auth.references[0].referencer_instance, shared_auth.references[1].referencer_instance);
+
+        // Two instances of one template have distinct instance IDs even with identical display_name.
+        let left_why = graph.why("recipe:diamond-left").unwrap();
+        let right_why = graph.why("recipe:diamond-right").unwrap();
+        assert_ne!(
+            left_why.authoring.as_ref().unwrap().instances[0].instance_id,
+            right_why.authoring.as_ref().unwrap().instances[0].instance_id
+        );
+
+        // Selected-output handle reports actual producer, output name, validity, and diagnostic.
+        let dev_id = graph
+            .inspection
+            .authoring
+            .selected_outputs
+            .iter()
+            .find(|(_, h)| h.output_name == "dev")
+            .unwrap()
+            .0
+            .clone();
+        let dev_exp = graph.explain_selected_output(&dev_id).unwrap();
+        assert_eq!(dev_exp.producer_recipe, "recipe:example-sdk");
+        assert_eq!(dev_exp.output_name, "dev");
+        assert_eq!(dev_exp.selection_valid, Some(true));
+
+        let bad_id = graph
+            .inspection
+            .authoring
+            .selected_outputs
+            .iter()
+            .find(|(_, h)| h.output_name == "nonexistent")
+            .unwrap()
+            .0
+            .clone();
+        let bad_exp = graph.explain_selected_output(&bad_id).unwrap();
+        assert_eq!(bad_exp.selection_valid, Some(false));
+        assert_eq!(bad_exp.diagnostics.len(), 1);
+        assert_eq!(bad_exp.diagnostics[0].kind, AuthoringDiagnosticKind::InvalidOutputSelection);
+
+        // Unavailable provenance is reported explicitly, never fabricated.
+        let orphan_why = graph.why("recipe:orphan").unwrap();
+        assert!(!orphan_why.authoring.as_ref().unwrap().is_provenance_available);
+        let orphan_layers = orphan_why.layers.as_ref().unwrap();
+        assert!(!orphan_layers.is_authoring_present);
+        assert!(orphan_layers.is_normalized_recipe_present);
+        assert!(!orphan_layers.is_observed_execution_present);
+
+        // Diagnostic metadata changes do not alter recipe or instance identity.
+        let before_instance_ids: BTreeSet<_> = graph.inspection.authoring.instances.keys().cloned().collect();
+        graph.inspection.authoring.diagnostics[0].message = "updated diagnostic text".into();
+        let after_instance_ids: BTreeSet<_> =
+            graph.inspection.authoring.instances.values().map(|inst| inst.identity().unwrap()).collect();
+        assert_eq!(before_instance_ids, after_instance_ids);
+
+        // Composed impact on SemanticGraph matches reverse DependsOn reachability.
+        let impact = graph
+            .composed_impact(&BTreeSet::from(["recipe:diamond-shared".into()]), None, QueryLimits::default())
+            .unwrap();
+        assert_eq!(impact.impacted_nodes, [
+            "recipe:diamond-left",
+            "recipe:diamond-result",
+            "recipe:diamond-right",
+            "recipe:diamond-shared"
+        ]);
+        assert_eq!(impact.outcome, ImpactOutcome::Partial);
     }
 }

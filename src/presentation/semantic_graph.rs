@@ -74,11 +74,23 @@ pub(crate) fn render_why_result(
             release_evidence: PublicNodes(&result.release_evidence),
             configuration: result.configuration,
             action: result.action,
+            layers: result.layers.as_ref(),
+            authoring: result.authoring.as_ref(),
+            observed_execution: result.observed_execution,
         };
         return serde_json::to_string_pretty(&public).map_err(|err| RunError::Internal(err.to_string()));
     }
     let mut out = format!("why {}\nnode: {} [{}]\n", result.target, result.node.id, result.node.kind);
     append_state(&mut out, result.state);
+    if let Some(layers) = &result.layers {
+        out.push_str(&format!(
+            "layers: authoring={}, normalized-recipe={}, configured-action={}, observed-execution={}\n",
+            layers.is_authoring_present,
+            layers.is_normalized_recipe_present,
+            layers.is_configured_action_present,
+            layers.is_observed_execution_present,
+        ));
+    }
     if let Some(configuration) = result.configuration {
         out.push_str(&format!(
             "configuration: {}\ntoolchain: {}\n",
@@ -101,6 +113,14 @@ pub(crate) fn render_why_result(
         out.push_str(&serde_json::to_string_pretty(action).map_err(|err| RunError::Internal(err.to_string()))?);
         out.push('\n');
     }
+    if let Some(exec) = result.observed_execution {
+        out.push_str(&format!("observed execution: {:?}\n", exec.outcome));
+    } else if result.layers.is_some() {
+        out.push_str("observed execution: unavailable (not inferred from declarations)\n");
+    }
+    if let Some(authoring) = &result.authoring {
+        append_authoring_context(&mut out, authoring);
+    }
     if let Some(recipe) = result.producing_recipe {
         out.push_str(&format!("produced by: {}\n", recipe.id));
     }
@@ -113,6 +133,77 @@ pub(crate) fn render_why_result(
     debug_assert!(out.starts_with("why "));
     debug_assert!(out.contains(&result.node.id));
     Ok(out)
+}
+
+pub(crate) fn render_selected_output_explanation(
+    format: OutputFormat,
+    result: &semantic_graph::SelectedOutputExplanation<'_>,
+) -> Result<String, RunError> {
+    if format.is_machine_readable() {
+        let public = PublicSelectedOutput {
+            schema: result.schema,
+            handle_id: &result.handle_id,
+            producer_recipe: &result.producer_recipe,
+            producer_node: result.producer_node.map(public_node),
+            output_name: &result.output_name,
+            selection_valid: result.selection_valid,
+            consumer_instance: result.consumer_instance,
+            origin: result.origin,
+            is_provenance_available: result.is_provenance_available,
+            diagnostics: &result.diagnostics,
+            state: result.state,
+        };
+        return serde_json::to_string_pretty(&public).map_err(|err| RunError::Internal(err.to_string()));
+    }
+    let mut out = format!(
+        "selected output: {}\nproducer: {}\noutput: {}\n",
+        result.handle_id, result.producer_recipe, result.output_name
+    );
+    append_state(&mut out, result.state);
+    if !result.is_provenance_available {
+        out.push_str("authoring provenance: unavailable\n");
+    }
+    if let Some(valid) = result.selection_valid {
+        out.push_str(&format!("selection valid: {valid}\n"));
+    } else {
+        out.push_str("selection valid: unavailable\n");
+    }
+    for diag in &result.diagnostics {
+        out.push_str(&format!("diagnostic [{:?}]: {}\n", diag.kind, diag.message));
+    }
+    Ok(out)
+}
+
+fn append_authoring_context(out: &mut String, authoring: &semantic_graph::AuthoringContext<'_>) {
+    if !authoring.is_provenance_available && authoring.diagnostics.is_empty() {
+        out.push_str("authoring provenance: unavailable\n");
+        return;
+    }
+    for inst in &authoring.instances {
+        out.push_str(&format!(
+            "instance: {} -> {} (template: {}, path: {})\n",
+            inst.instance_id,
+            inst.fact.recipe_id,
+            inst.fact.template_id.as_deref().unwrap_or("unavailable"),
+            inst.fact.constructor_path.join(".")
+        ));
+    }
+    for reference in &authoring.references {
+        out.push_str(&format!(
+            "reference: {} -> {}\n",
+            reference.referencer_instance.as_deref().unwrap_or("unavailable"),
+            reference.target_recipe
+        ));
+    }
+    for selected in &authoring.selected_outputs {
+        out.push_str(&format!(
+            "selected output: {} -> {}[{}]\n",
+            selected.handle_id, selected.producer_recipe, selected.output_name
+        ));
+    }
+    for diag in &authoring.diagnostics {
+        out.push_str(&format!("diagnostic [{:?}]: {}\n", diag.kind, diag.message));
+    }
 }
 
 /// Render one dependents query result.
@@ -325,6 +416,27 @@ struct PublicWhy<'a> {
     release_evidence: PublicNodes<'a>,
     configuration: Option<&'a semantic_graph::Configuration>,
     action: Option<&'a semantic_graph::Action>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    layers: Option<&'a semantic_graph::LayerStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    authoring: Option<&'a semantic_graph::AuthoringContext<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    observed_execution: Option<&'a semantic_graph::ObservedExecution>,
+}
+
+#[derive(Serialize)]
+struct PublicSelectedOutput<'a> {
+    schema: &'a str,
+    handle_id: &'a str,
+    producer_recipe: &'a str,
+    producer_node: Option<PublicNode<'a>>,
+    output_name: &'a str,
+    selection_valid: Option<bool>,
+    consumer_instance: Option<&'a semantic_graph::TemplateInstance>,
+    origin: Option<&'a semantic_graph::SourceOrigin>,
+    is_provenance_available: bool,
+    diagnostics: &'a [&'a semantic_graph::AuthoringDiagnostic],
+    state: semantic_graph::EvaluationState,
 }
 
 #[cfg(test)]
@@ -378,6 +490,9 @@ mod tests {
             state: semantic_graph::EvaluationState::Partial,
             configuration: None,
             action: None,
+            layers: None,
+            authoring: None,
+            observed_execution: None,
         }
     }
 
@@ -467,5 +582,45 @@ mod tests {
             node.metadata["access_token"], "secret-node-value",
             "saved authority is not rewritten by inspection"
         );
+    }
+
+    #[test]
+    fn v2_why_and_selected_output_render_layers_and_unavailable_provenance() {
+        let node = node("recipe:orphan");
+        let mut why = why_result(&node);
+        why.layers = Some(semantic_graph::LayerStatus {
+            is_authoring_present: false,
+            is_normalized_recipe_present: true,
+            is_configured_action_present: false,
+            is_observed_execution_present: false,
+        });
+        why.authoring = Some(semantic_graph::AuthoringContext::default());
+        let human = render_why_result(OutputFormat::Human, &why).unwrap();
+        assert!(human.contains("authoring provenance: unavailable"));
+        assert!(human.contains("observed execution: unavailable (not inferred from declarations)"));
+        let json = render_why_result(OutputFormat::Json, &why).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["authoring"]["is_provenance_available"], false);
+        assert_eq!(parsed["layers"]["is_observed_execution_present"], false);
+
+        let selected = semantic_graph::SelectedOutputExplanation {
+            schema: "mantle-selected-output-explanation-v1",
+            handle_id: "select:v1:abc".to_string(),
+            producer_recipe: "recipe:sdk".to_string(),
+            producer_node: None,
+            output_name: "dev".to_string(),
+            selection_valid: Some(true),
+            consumer_instance: None,
+            origin: None,
+            is_provenance_available: false,
+            diagnostics: Vec::new(),
+            state: semantic_graph::EvaluationState::Partial,
+        };
+        let sel_human = render_selected_output_explanation(OutputFormat::Human, &selected).unwrap();
+        assert!(sel_human.contains("producer: recipe:sdk"));
+        assert!(sel_human.contains("output: dev"));
+        assert!(sel_human.contains("authoring provenance: unavailable"));
+        let sel_json = render_selected_output_explanation(OutputFormat::Json, &selected).unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&sel_json).unwrap()["output_name"], "dev");
     }
 }

@@ -1499,6 +1499,34 @@ conclusive only when both saved graphs are complete. Portable receipt v1 remains
 a semantic-provenance projection: it does not transport configured/action facts
 or their edges, and imports cannot promote a merged graph to complete.
 
+### Authoring templates, selected outputs, and composed impact (`mantle-semantic-build-graph-v2`)
+
+Saved graphs that retain Nickel authoring provenance, template instances,
+selected-output handles, attributed diagnostics, or observed execution facts
+must declare `"schema": "mantle-semantic-build-graph-v2"`. Existing v1 graphs
+without v2 facts remain valid and partial-compatible.
+
+- **Four distinct layers**: `authoring` (templates, instances, constructor paths,
+  references, selected-output handles), `normalized-recipe` (canonical recipe
+  nodes), `configured-action` (configured targets and concrete actions), and
+  `observed-execution` (optional execution outcome). Complete declared actions
+  never imply observed execution.
+- **Template instances vs shared references**: Two instances of one template
+  receive distinct `instance:v1:<blake3>` identities from `(template_id,
+  constructor_path, root)` even if they share a display name or normalize to the
+  same canonical recipe; two references to one canonical recipe share the target
+  recipe identity while keeping distinct `RecipeReference` sites.
+- **Diagnostic metadata isolation**: `display_name`, `SourceOrigin`, and
+  `AuthoringDiagnostic` records are excluded from recipe, instance, configured,
+  and action identities. When no reliable mapping exists, inspection reports
+  provenance as unavailable rather than inventing it.
+- **Composed impact adoption decision (keep)**: `composed_impact` in
+  `mantle-application-contract::inspection` implements bounded reverse
+  `DependsOn` traversal joined with configured targets, configurations,
+  toolchains, and execution-policy predicates (`PolicyMatch::Unavailable` when
+  unknown) directly over `DependencyIndex` without adding an external Datalog
+  engine dependency.
+
 
 ## Remote realization adapter boundary
 
