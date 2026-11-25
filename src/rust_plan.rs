@@ -189,7 +189,20 @@ const CARGO_VENDOR_CHECKSUM_READ_BUFFER_BYTES: usize =
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES: usize = 16;
 const RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES: usize =
     RUST_UNIT_REPLAY_EVIDENCE_MAX_KIBIBYTES.saturating_mul(BYTES_PER_KIBIBYTE);
-const RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS: u32 = 4096;
+const RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS: u32 =
+    mantle_rust_plan_core::RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS;
+const _: () = {
+    assert!(!TARGET_EXECUTION_KIND.is_empty());
+    assert!(!HOST_EXECUTION_KIND.is_empty());
+    assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
+    assert!(!DEFAULT_CARGO_PROFILE.is_empty());
+    assert!(!DEFAULT_RUST_EDITION.is_empty());
+    assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    assert!(!CARGO_REGISTRY_SOURCE_PREFIX.is_empty());
+    assert!(!COMPILER_POLICY_DIGEST_PREFIX.is_empty());
+    assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
+    assert!(!RUST_CACHE_EFFECTIVE_ENV_DOMAIN.is_empty());
+};
 const DETERMINISTIC_RELEASE_SOURCE_PREFIX: &str = "/mantle/release/source";
 const DETERMINISTIC_RELEASE_EXECUTION_PREFIX: &str = "/mantle/release/execution";
 const DETERMINISTIC_RELEASE_PROVIDER_C_TOOLCHAIN_PREFIX: &str = "/mantle/release/provider/c-toolchain";
@@ -213,8 +226,7 @@ const C_PREFIX_MAP_COMPILER_FAMILIES: &[&str] = &["clang", "gcc"];
 const ENV_FLAG_SEPARATOR: char = ' ';
 const ENV_FLAG_SEPARATOR_STR: &str = " ";
 const REDACTED_DIAGNOSTIC_MAX_LINES: usize = 12;
-const REDACTED_DIAGNOSTIC_TEMP_PATH: &str = "<redacted-temp-path>";
-const TEMP_PATH_PREFIXES: &[&str] = &["/tmp/", "/var/tmp/"];
+const REDACTED_DIAGNOSTIC_TEMP_PATH: &str = mantle_rust_plan_core::REDACTED_DIAGNOSTIC_TEMP_PATH;
 const CARGO_REGISTRY_SOURCE_PREFIX: &str = "registry+";
 const CARGO_GIT_SOURCE_PREFIX: &str = "git+";
 const REGISTRY_SOURCE_DIGEST_ALGORITHM: &str = "cargo-checksum-sha256";
@@ -2242,7 +2254,7 @@ struct NativePlanningInputs<'a> {
 
 fn summarize_native_planning_layers(inputs: NativePlanningInputs<'_>) -> Result<NativePlanningLayers, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let package_targets = summarize_native_package_target_planning_from_inputs(NativePackagePlanningInputs {
         root: &inputs.options.root,
         options: inputs.options,
@@ -2558,133 +2570,6 @@ fn plan_cargo_free_source_inputs(
         native_layers,
         unit_graph: unit_graph_value,
     })
-}
-
-pub(crate) fn print_rust_plan_receipt(receipt: &RustPlanReceipt, json_mode: bool) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| RunError::Internal(format!("rendering Rust plan receipt: {err}")))?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_execution_receipt(
-    receipt: &RustPlanExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| RunError::Internal(format!("rendering Rust plan execution receipt: {err}")))?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_dependency_chain_execution_receipt(
-    receipt: &RustPlanDependencyChainExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| RunError::Internal(format!("rendering Rust dependency-chain execution receipt: {err}")))?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_target_topology_execution_receipt(
-    receipt: &RustPlanTargetTopologyExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| RunError::Internal(format!("rendering Rust target-topology execution receipt: {err}")))?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_host_artifact_topology_execution_receipt(
-    receipt: &RustPlanHostArtifactTopologyExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| RunError::Internal(format!("rendering Rust host-artifact topology execution receipt: {err}")))?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_topology_execution_receipt(
-    receipt: &RustPlanTopologyExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| RunError::Internal(format!("rendering Rust topology execution receipt: {err}")))?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_dev_dependency_test_topology_execution_receipt(
-    receipt: &RustPlanDevDependencyTestTopologyExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| {
-        RunError::Internal(format!("rendering Rust dev-dependency test topology execution receipt: {err}"))
-    })?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_workspace_dependency_topology_execution_receipt(
-    receipt: &RustPlanWorkspaceDependencyTopologyExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| {
-        RunError::Internal(format!("rendering Rust workspace-dependency topology execution receipt: {err}"))
-    })?;
-    println!("{rendered}");
-    Ok(())
-}
-
-pub(crate) fn print_rust_plan_patch_source_topology_execution_receipt(
-    receipt: &RustPlanPatchSourceTopologyExecutionReceipt,
-    json_mode: bool,
-) -> Result<(), RunError> {
-    let rendered = if json_mode {
-        serde_json::to_string(receipt)
-    } else {
-        serde_json::to_string_pretty(receipt)
-    }
-    .map_err(|err| RunError::Internal(format!("rendering Rust patch-source topology execution receipt: {err}")))?;
-    println!("{rendered}");
-    Ok(())
 }
 
 pub(crate) fn default_profile() -> String {
@@ -3869,7 +3754,7 @@ fn native_registry_source(
     inputs: NativeRegistryPackageInputs<'_>,
 ) -> Result<NativeRegistrySourceSummary, NativeRegistrySourceBlocker> {
     debug_assert_eq!(source_kind(inputs.package.source.as_deref()), SourceKind::Registry);
-    debug_assert!(!CARGO_REGISTRY_SOURCE_PREFIX.is_empty());
+    debug_assert!(!inputs.package.id.is_empty());
     let package = inputs.package;
     let lock_identity = find_lock_package(package, inputs.lock_packages)
         .map(|lock_package| LockPackageIdentity {
@@ -4864,7 +4749,7 @@ fn native_package_manifest_paths(
     blockers: &mut Vec<NativePackagePlanningBlocker>,
 ) -> Vec<PathBuf> {
     const { assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0) };
-    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    debug_assert!(!inputs.root.as_os_str().is_empty());
     let mut manifest_paths = native_workspace_manifest_paths(inputs.root, blockers);
     manifest_paths.extend(
         inputs
@@ -4982,7 +4867,7 @@ fn summarize_native_package_target_planning_from_inputs(
     inputs: NativePackagePlanningInputs<'_>,
 ) -> Result<NativePackageTargetPlanningSummary, RunError> {
     const { assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0) };
-    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let options = inputs.options;
     let cargo_packages = inputs.cargo_packages;
     let workspace_members = inputs.workspace_members;
@@ -7481,7 +7366,7 @@ fn collect_native_rust_units(
     blockers: &mut Vec<NativeUnitGraphPlanningBlocker>,
 ) -> Vec<NativeRustUnitSummary> {
     const { assert!(NATIVE_PACKAGE_MANIFEST_REACHABILITY_MAX_STEPS > 0) };
-    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    debug_assert!(!options.profile.is_empty());
     let packages_by_id = package_planning
         .packages
         .iter()
@@ -8214,7 +8099,7 @@ fn native_host_planning_indexes<'a>(
     cargo_graph: &UnitDerivationGraphSummary,
 ) -> NativeHostPlanningIndexes<'a> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let packages_by_manifest = inputs
         .package_planning
         .packages
@@ -8252,7 +8137,7 @@ fn native_host_artifacts_by_package(
     indexes: &NativeHostPlanningIndexes<'_>,
 ) -> BTreeMap<String, Vec<RustHostArtifact>> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let mut artifacts_by_package: BTreeMap<String, Vec<RustHostArtifact>> = BTreeMap::new();
     for package in &inputs.package_planning.packages {
         let package_host_artifacts = package
@@ -8408,7 +8293,7 @@ fn collect_native_host_units(
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<NativeHostUnitSummary> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!PATH_SOURCE_DIGEST_ALGORITHM.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let mut host_units = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for package in &inputs.package_planning.packages {
         let Some(source) = inputs.source_closure.sources.iter().find(|source| source.package_id == package.package_id)
@@ -8473,7 +8358,7 @@ fn collect_native_host_target_consumers(
     blockers: &mut Vec<NativeHostUnitGraphPlanningBlocker>,
 ) -> Vec<NativeHostTargetConsumerSummary> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let all_host_artifacts = artifacts_by_package.values().flatten().cloned().collect::<Vec<_>>();
     let mut target_consumers = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for unit in &inputs.unit_planning.units {
@@ -8594,7 +8479,7 @@ fn summarize_native_host_unit_graph_planning_from_inputs(
     inputs: NativeHostPlanningInputs<'_>,
 ) -> Result<(NativeHostUnitGraphPlanningSummary, UnitDerivationGraphSummary), RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let cargo_graph = if inputs.options.no_cargo_oracle {
         empty_unit_derivation_graph()?
     } else {
@@ -10676,7 +10561,7 @@ struct CargoUnitFacts {
 
 fn cargo_unit_facts(inputs: &CargoUnitDerivationInputs<'_>) -> Result<CargoUnitFacts, UnitDerivationBlocker> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!DEFAULT_RUST_EDITION.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let package_id = required_unit_string(inputs.unit, "pkg_id", inputs.index)?;
     let target = inputs.unit.get("target").ok_or_else(|| {
         unit_blocker(UnitBlockerInputs {
@@ -10826,7 +10711,7 @@ fn summarize_unit_derivation(
     inputs: CargoUnitDerivationInputs<'_>,
 ) -> Result<RustUnitDerivationSummary, UnitDerivationBlocker> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!DEFAULT_RUST_EDITION.is_empty());
+    debug_assert!(!inputs.options.profile.is_empty());
     let facts = cargo_unit_facts(&inputs)?;
     let dependency_artifacts = unit_dependency_artifacts(inputs.unit, inputs.units);
     let consumed_host_artifacts = if facts.execution_kind == HOST_EXECUTION_KIND {
@@ -11343,10 +11228,71 @@ fn unit_derivation_graph_digest(
     Ok(blake3::hash(&canonical).to_hex().to_string())
 }
 
+struct SingleUnitDelegate<'a> {
+    unit: &'a RustUnitDerivationSummary,
+    executions: Vec<RustUnitExecutionReceipt>,
+}
+
+impl SelectedUnitExecutionDelegate for SingleUnitDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        (index == 0).then_some(self.unit)
+    }
+
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, _index: usize) -> bool {
+        is_supported_target_unit(unit)
+    }
+
+    fn bind_unit(
+        &mut self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        Ok(Ok(selected.clone()))
+    }
+
+    fn failure_blocker(
+        &self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        topology_unit_failed_blocker(
+            receipt,
+            "unit-execution-failed",
+            format!("unit {} did not execute successfully", selected.unit_id),
+        )
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        _ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &[]
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        None
+    }
+}
+
 pub(crate) fn execute_first_supported_rust_unit(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitExecutionReceipt, RunError> {
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     let Some(unit) = graph.derivations.iter().find(|unit| is_supported_target_unit(unit)) else {
         return blocked_execution_receipt(BlockedExecutionReceiptInputs {
             unit: None,
@@ -11399,7 +11345,22 @@ pub(crate) fn execute_first_supported_rust_unit(
             });
         }
     };
-    execute_planned_rust_unit(unit, options, &effects[0], &[], &[]).map(|result| result.receipt)
+    let mut delegate = SingleUnitDelegate {
+        unit,
+        executions: Vec::with_capacity(1),
+    };
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
+    if let Some(receipt) = delegate.executions.pop() {
+        return Ok(receipt);
+    }
+    let blocker = outcome.blocker.ok_or_else(|| {
+        RunError::Internal("Rust plan adapter finished first supported unit without a receipt".to_string())
+    })?;
+    blocked_execution_receipt(BlockedExecutionReceiptInputs {
+        unit: Some(unit),
+        class: &blocker.class,
+        message: &blocker.message,
+    })
 }
 
 struct RustUnitDependencyChain<'a> {
@@ -11411,8 +11372,7 @@ struct RustUnitDependencyChain<'a> {
 fn first_supported_rust_unit_dependency_chain(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<RustUnitDependencyChain<'_>, RustUnitExecutionBlocker> {
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(graph.ready);
     let consumer = graph
         .derivations
         .iter()
@@ -11451,6 +11411,7 @@ fn first_supported_rust_unit_dependency_chain(
             class: "missing-dependency-producer".to_string(),
             message: format!("no supported producer lib unit for dependency package {}", dependency.package_id),
         })?;
+    debug_assert_eq!(producer.package_id, dependency.package_id);
     Ok(RustUnitDependencyChain {
         consumer,
         dependency,
@@ -11458,12 +11419,97 @@ fn first_supported_rust_unit_dependency_chain(
     })
 }
 
+struct DependencyChainDelegate<'a> {
+    chain: RustUnitDependencyChain<'a>,
+    producer_artifact: Option<PathBuf>,
+    executions: Vec<RustUnitExecutionReceipt>,
+}
+
+impl SelectedUnitExecutionDelegate for DependencyChainDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        match index {
+            0 => Some(self.chain.producer),
+            1 => Some(self.chain.consumer),
+            _ => None,
+        }
+    }
+
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, _index: usize) -> bool {
+        is_supported_target_unit(unit)
+    }
+
+    fn bind_unit(
+        &mut self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        if index == 0 {
+            return Ok(Ok(selected.clone()));
+        }
+        let artifact = self.producer_artifact.as_ref().ok_or_else(|| {
+            RunError::Internal("dependency chain consumer ran before producer artifact was recorded".to_string())
+        })?;
+        bind_dependency_artifact(selected, self.chain.dependency, artifact).map(Ok)
+    }
+
+    fn failure_blocker(
+        &self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        if receipt.execution_status == "success" {
+            return None;
+        }
+        if index == 0 {
+            return Some(RustUnitExecutionBlocker {
+                class: "dependency-producer-failed".to_string(),
+                message: format!("producer unit {} did not produce a successful artifact", selected.unit_id),
+            });
+        }
+        topology_unit_failed_blocker(
+            receipt,
+            "dependency-consumer-failed",
+            format!("consumer unit {} did not execute successfully", selected.unit_id),
+        )
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        if ctx.index == 0 {
+            match produced_library_artifact_path(ctx.bound, ctx.options)? {
+                Ok(path) => self.producer_artifact = Some(path),
+                Err(blocker) => return Ok(Some(blocker)),
+            }
+        }
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &[]
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        None
+    }
+}
+
 pub(crate) fn execute_first_rust_unit_dependency_chain(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitDependencyChainExecutionReceipt, RunError> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     if !graph.ready {
         return dependency_chain_receipt(
             "blocked",
@@ -11484,295 +11530,75 @@ pub(crate) fn execute_first_rust_unit_dependency_chain(
         Ok(effects) => effects,
         Err(blocker) => return dependency_chain_receipt("blocked", Vec::new(), Some(blocker)),
     };
-    let producer_receipt = execute_planned_rust_unit(chain.producer, options, &effects[0], &[], &[])?.receipt;
-    if producer_receipt.execution_status != "success" {
-        return dependency_chain_receipt(
-            "blocked",
-            vec![producer_receipt],
-            Some(RustUnitExecutionBlocker {
-                class: "dependency-producer-failed".to_string(),
-                message: format!("producer unit {} did not produce a successful artifact", chain.producer.unit_id),
-            }),
-        );
+    let mut delegate = DependencyChainDelegate {
+        chain,
+        producer_artifact: None,
+        executions: Vec::with_capacity(2),
+    };
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
+    if let Some(blocker) = outcome.blocker {
+        return dependency_chain_receipt("blocked", delegate.executions, Some(blocker));
     }
-    let producer_artifact = match produced_library_artifact_path(chain.producer, options)? {
-        Ok(path) => path,
-        Err(blocker) => return dependency_chain_receipt("blocked", vec![producer_receipt], Some(blocker)),
-    };
-    let bound_consumer = bind_dependency_artifact(chain.consumer, chain.dependency, &producer_artifact)?;
-    let consumer_receipt =
-        execute_planned_rust_unit(&bound_consumer, options, &effects[1], std::slice::from_ref(&producer_receipt), &[])?
-            .receipt;
-    let status = if consumer_receipt.execution_status == "success" {
-        "success"
-    } else {
-        "blocked"
-    };
-    let blocker = consumer_receipt.blocker.clone();
-    dependency_chain_receipt(status, vec![producer_receipt, consumer_receipt], blocker)
+    dependency_chain_receipt("success", delegate.executions, None)
 }
 
 fn validate_role_sensitive_artifact_graph(
     graph: &UnitDerivationGraphSummary,
     host_triple: &str,
 ) -> Option<RustUnitExecutionBlocker> {
-    let unit_indices_by_id = rust_unit_indices_by_id(graph);
-    for unit in &graph.derivations {
-        if let Some(blocker) = validate_unit_role_triple(unit, host_triple) {
-            return Some(blocker);
-        }
-        for dependency in &unit.dependency_artifacts {
-            if let Some(blocker) = validate_dependency_artifact_role(unit, dependency, graph, &unit_indices_by_id) {
-                return Some(blocker);
-            }
-        }
-        for artifact in &unit.consumed_host_artifacts {
-            if let Some(blocker) = validate_host_artifact_role(unit, artifact, graph, &unit_indices_by_id, host_triple)
-            {
-                return Some(blocker);
-            }
-        }
-    }
-    None
-}
-
-fn validate_unit_role_triple(unit: &RustUnitDerivationSummary, host_triple: &str) -> Option<RustUnitExecutionBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    if unit.execution_kind == TARGET_EXECUTION_KIND {
-        if unit.selected_triple.is_empty() {
-            return Some(role_mismatch_blocker(RoleMismatchInputs {
-                unit,
-                edge: "unit",
-                expected_role: TARGET_EXECUTION_KIND,
-                expected_triple: "non-empty-target-triple",
-                actual_role: &unit.execution_kind,
-                actual_triple: &unit.selected_triple,
-            }));
-        }
-        return None;
-    }
-    if unit.execution_kind == HOST_EXECUTION_KIND || unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND {
-        if unit.selected_triple != host_triple {
-            return Some(role_mismatch_blocker(RoleMismatchInputs {
-                unit,
-                edge: "unit",
-                expected_role: &unit.execution_kind,
-                expected_triple: host_triple,
-                actual_role: &unit.execution_kind,
-                actual_triple: &unit.selected_triple,
-            }));
-        }
-        return None;
-    }
-    Some(role_mismatch_blocker(RoleMismatchInputs {
-        unit,
-        edge: "unit",
-        expected_role: "known-execution-kind",
-        expected_triple: "known-selected-triple",
-        actual_role: &unit.execution_kind,
-        actual_triple: &unit.selected_triple,
-    }))
-}
-
-fn validate_dependency_artifact_role(
-    consumer: &RustUnitDerivationSummary,
-    dependency: &RustDependencyArtifact,
-    graph: &UnitDerivationGraphSummary,
-    unit_indices_by_id: &BTreeMap<String, usize>,
-) -> Option<RustUnitExecutionBlocker> {
-    let expected_role = expected_dependency_artifact_role(consumer);
-    let expected_triple = consumer.selected_triple.as_str();
-    let producer = dependency_artifact_producer(consumer, dependency, expected_role, graph, unit_indices_by_id)?;
-    if producer.execution_kind != expected_role || producer.selected_triple != expected_triple {
-        return Some(role_mismatch_blocker(RoleMismatchInputs {
-            unit: consumer,
-            edge: &format!("dependency:{}", dependency.name),
-            expected_role,
-            expected_triple,
-            actual_role: &producer.execution_kind,
-            actual_triple: &producer.selected_triple,
-        }));
-    }
-    validate_dependency_artifact_identity(consumer, dependency, producer)
-}
-
-fn validate_host_artifact_role(
-    consumer: &RustUnitDerivationSummary,
-    artifact: &RustHostArtifact,
-    graph: &UnitDerivationGraphSummary,
-    unit_indices_by_id: &BTreeMap<String, usize>,
-    expected_triple: &str,
-) -> Option<RustUnitExecutionBlocker> {
-    let producer = host_artifact_producer(artifact, graph, unit_indices_by_id)?;
-    if producer.execution_kind != HOST_EXECUTION_KIND || producer.selected_triple != expected_triple {
-        return Some(role_mismatch_blocker(RoleMismatchInputs {
-            unit: consumer,
-            edge: &format!("host-artifact:{}", artifact.target_name),
-            expected_role: HOST_EXECUTION_KIND,
-            expected_triple,
-            actual_role: &producer.execution_kind,
-            actual_triple: &producer.selected_triple,
-        }));
-    }
-    None
-}
-
-fn validate_dependency_artifact_identity(
-    consumer: &RustUnitDerivationSummary,
-    dependency: &RustDependencyArtifact,
-    producer: &RustUnitDerivationSummary,
-) -> Option<RustUnitExecutionBlocker> {
-    const { assert!(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS > 0) };
-    const { assert!(MAX_SOURCE_TREE_ENTRIES >= INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS) };
-    if dependency.package_id != producer.package_id {
-        return Some(identity_mismatch_blocker(IdentityMismatchInputs {
-            unit: consumer,
-            edge: &format!("dependency:{}", dependency.name),
-            field: "source package",
-            expected: &dependency.package_id,
-            observed: &producer.package_id,
-        }));
-    }
-    let observed_metadata = rustc_metadata_hash_from_args(&producer.derivation.args);
-    if observed_metadata.as_deref() != Some(producer.rustc_metadata_hash.as_str()) {
-        return Some(identity_mismatch_blocker(IdentityMismatchInputs {
-            unit: consumer,
-            edge: &format!("dependency:{}", dependency.name),
-            field: "metadata hash",
-            expected: &producer.rustc_metadata_hash,
-            observed: observed_metadata.as_deref().unwrap_or("missing"),
-        }));
-    }
-    if let Some(blocker) = validate_dependency_toolchain_policy_digest(consumer, dependency, producer) {
-        return Some(blocker);
-    }
-    None
-}
-
-fn validate_dependency_toolchain_policy_digest(
-    consumer: &RustUnitDerivationSummary,
-    dependency: &RustDependencyArtifact,
-    producer: &RustUnitDerivationSummary,
-) -> Option<RustUnitExecutionBlocker> {
-    let expected = source_root_policy_digest_from_unit(consumer)?;
-    let observed = source_root_policy_digest_from_unit(producer)?;
-    if expected == observed {
-        return None;
-    }
-    Some(identity_mismatch_blocker(IdentityMismatchInputs {
-        unit: consumer,
-        edge: &format!("dependency:{}", dependency.name),
-        field: "toolchain-policy digest",
-        expected: &expected,
-        observed: &observed,
-    }))
-}
-
-fn source_root_policy_digest_from_unit(unit: &RustUnitDerivationSummary) -> Option<String> {
-    unit.derivation
-        .env
-        .get(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV)
-        .and_then(|value| normalized_blake3_hex(value))
-}
-
-fn rustc_metadata_hash_from_args(args: &[String]) -> Option<String> {
-    args.iter().find_map(|arg| arg.strip_prefix(RUSTC_METADATA_ARG_PREFIX)).map(ToOwned::to_owned)
-}
-
-fn expected_dependency_artifact_role(consumer: &RustUnitDerivationSummary) -> &'static str {
-    if consumer.execution_kind == HOST_EXECUTION_KIND || consumer.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND {
-        HOST_DEPENDENCY_EXECUTION_KIND
-    } else {
-        TARGET_EXECUTION_KIND
-    }
-}
-
-fn dependency_artifact_producer<'a>(
-    consumer: &RustUnitDerivationSummary,
-    dependency: &RustDependencyArtifact,
-    expected_role: &str,
-    graph: &'a UnitDerivationGraphSummary,
-    unit_indices_by_id: &BTreeMap<String, usize>,
-) -> Option<&'a RustUnitDerivationSummary> {
-    if let Some(producer_unit_id) = &dependency.producer_unit_id {
-        return unit_indices_by_id.get(producer_unit_id).and_then(|index| graph.derivations.get(*index));
-    }
-    graph.derivations.iter().find(|candidate| {
-        candidate.package_id == dependency.package_id
-            && candidate.target_kind == "lib"
-            && candidate.execution_kind == expected_role
-            && candidate.unit_id != consumer.unit_id
+    let core_units = graph
+        .derivations
+        .iter()
+        .map(|unit| mantle_rust_plan_core::RoleValidationUnit {
+            unit_id: &unit.unit_id,
+            package_id: &unit.package_id,
+            target_name: &unit.target_name,
+            target_kind: &unit.target_kind,
+            execution_kind: &unit.execution_kind,
+            selected_triple: &unit.selected_triple,
+            rustc_metadata_hash: &unit.rustc_metadata_hash,
+            args: &unit.derivation.args,
+            toolchain_policy_digest: unit
+                .derivation
+                .env
+                .get(RUST_TOPOLOGY_TOOLCHAIN_POLICY_DIGEST_ENV)
+                .map(String::as_str),
+            dependency_artifacts: unit
+                .dependency_artifacts
+                .iter()
+                .map(|dependency| mantle_rust_plan_core::RoleValidationDependency {
+                    name: &dependency.name,
+                    package_id: &dependency.package_id,
+                    producer_unit_id: dependency.producer_unit_id.as_deref(),
+                })
+                .collect(),
+            consumed_host_artifacts: unit
+                .consumed_host_artifacts
+                .iter()
+                .map(|artifact| mantle_rust_plan_core::RoleValidationHostArtifact {
+                    package_id: &artifact.package_id,
+                    target_name: &artifact.target_name,
+                    target_kind: &artifact.target_kind,
+                    producer_unit_id: artifact.producer_unit_id.as_deref(),
+                })
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    mantle_rust_plan_core::validate_role_sensitive_artifact_graph(
+        &mantle_rust_plan_core::RoleSensitiveArtifactGraphRequest {
+            host_triple,
+            units: &core_units,
+        },
+    )
+    .map(|blocker| RustUnitExecutionBlocker {
+        class: blocker.code,
+        message: blocker.message,
     })
-}
-
-fn host_artifact_producer<'a>(
-    artifact: &RustHostArtifact,
-    graph: &'a UnitDerivationGraphSummary,
-    unit_indices_by_id: &BTreeMap<String, usize>,
-) -> Option<&'a RustUnitDerivationSummary> {
-    if let Some(producer_unit_id) = &artifact.producer_unit_id {
-        return unit_indices_by_id.get(producer_unit_id).and_then(|index| graph.derivations.get(*index));
-    }
-    graph.derivations.iter().find(|candidate| {
-        candidate.package_id == artifact.package_id
-            && candidate.target_name == artifact.target_name
-            && candidate.target_kind == artifact.target_kind
-    })
-}
-
-struct RoleMismatchInputs<'a> {
-    unit: &'a RustUnitDerivationSummary,
-    edge: &'a str,
-    expected_role: &'a str,
-    expected_triple: &'a str,
-    actual_role: &'a str,
-    actual_triple: &'a str,
-}
-
-fn role_mismatch_blocker(inputs: RoleMismatchInputs<'_>) -> RustUnitExecutionBlocker {
-    let RoleMismatchInputs {
-        unit,
-        edge,
-        expected_role,
-        expected_triple,
-        actual_role,
-        actual_triple,
-    } = inputs;
-    RustUnitExecutionBlocker {
-        class: "artifact-identity-mismatch".to_string(),
-        message: format!(
-            "unit {} {edge} expected role {expected_role} triple {expected_triple}, got role {actual_role} triple {actual_triple}",
-            unit.unit_id
-        ),
-    }
-}
-
-struct IdentityMismatchInputs<'a> {
-    unit: &'a RustUnitDerivationSummary,
-    edge: &'a str,
-    field: &'a str,
-    expected: &'a str,
-    observed: &'a str,
-}
-
-fn identity_mismatch_blocker(inputs: IdentityMismatchInputs<'_>) -> RustUnitExecutionBlocker {
-    let IdentityMismatchInputs {
-        unit,
-        edge,
-        field,
-        expected,
-        observed,
-    } = inputs;
-    RustUnitExecutionBlocker {
-        class: "artifact-identity-mismatch".to_string(),
-        message: format!("unit {} {edge} expected {field} {expected}, got {field} {observed}", unit.unit_id),
-    }
 }
 
 fn selected_target_unit_indices(graph: &UnitDerivationGraphSummary) -> Result<Vec<usize>, RustUnitExecutionBlocker> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert_eq!(graph.derivation_count, graph.derivations.len());
     let mut selected_indices = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
     for (index, unit) in graph.derivations.iter().enumerate() {
         if !is_supported_target_unit(unit) {
@@ -11840,65 +11666,116 @@ fn target_topology_execution_order(
     topologically_order_units(selected_indices, &edges, graph)
 }
 
+struct TargetTopologyDelegate<'a> {
+    graph: &'a UnitDerivationGraphSummary,
+    ordered_indices: &'a [usize],
+    executions: Vec<RustUnitExecutionReceipt>,
+    produced_artifacts: ProducedArtifactIndex,
+}
+
+impl SelectedUnitExecutionDelegate for TargetTopologyDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        self.ordered_indices.get(index).and_then(|unit_index| self.graph.derivations.get(*unit_index))
+    }
+
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, _index: usize) -> bool {
+        is_supported_target_unit(unit)
+    }
+
+    fn bind_unit(
+        &mut self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        if selected.dependency_artifacts.is_empty() {
+            return Ok(Ok(selected.clone()));
+        }
+        let mut executable_unit = match bind_all_dependency_artifacts_with_index(selected, &self.produced_artifacts) {
+            Ok(bound) => bound,
+            Err(blocker) => return Ok(Err(blocker)),
+        };
+        if let Err(blocker) =
+            append_selected_dependency_search_paths(&mut executable_unit, self.graph, &self.produced_artifacts)
+        {
+            return Ok(Err(blocker));
+        }
+        Ok(Ok(executable_unit))
+    }
+
+    fn failure_blocker(
+        &self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        topology_unit_failed_blocker(
+            receipt,
+            "target-unit-failed",
+            format!("target topology unit {} did not execute successfully", selected.unit_id),
+        )
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        if ctx.selected.target_kind == "lib" {
+            match produced_library_artifact_path(ctx.bound, ctx.options)? {
+                Ok(path) => self.produced_artifacts.record_unit(ctx.selected, path),
+                Err(blocker) => return Ok(Some(blocker)),
+            }
+        }
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &[]
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        None
+    }
+}
+
 fn execute_target_topology_order(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
     ordered_indices: Vec<usize>,
 ) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
     debug_assert!(ordered_indices.iter().all(|index| *index < graph.derivations.len()));
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
+    debug_assert!(!ordered_indices.is_empty());
     let selected = ordered_indices.iter().map(|index| &graph.derivations[*index]).collect::<Vec<_>>();
     let effects = match plan_selected_rust_unit_effects(&selected) {
         Ok(effects) => effects,
         Err(blocker) => return target_topology_receipt("blocked", Vec::new(), Some(blocker)),
     };
-    let mut executions = Vec::with_capacity(ordered_indices.len());
-    let mut produced_artifacts = ProducedArtifactIndex::default();
-    for (index, planned) in ordered_indices.into_iter().zip(&effects) {
-        let unit = &graph.derivations[index];
-        let mut executable_unit = if unit.dependency_artifacts.is_empty() {
-            unit.clone()
-        } else {
-            match bind_all_dependency_artifacts_with_index(unit, &produced_artifacts) {
-                Ok(bound) => bound,
-                Err(blocker) => return target_topology_receipt("blocked", executions, Some(blocker)),
-            }
-        };
-        if !unit.dependency_artifacts.is_empty()
-            && let Err(blocker) =
-                append_selected_dependency_search_paths(&mut executable_unit, graph, &produced_artifacts)
-        {
-            return target_topology_receipt("blocked", executions, Some(blocker));
-        }
-        let receipt = execute_planned_rust_unit(&executable_unit, options, planned, &executions, &[])?.receipt;
-        if receipt.execution_status != "success" {
-            let blocker = receipt.blocker.clone().unwrap_or_else(|| RustUnitExecutionBlocker {
-                class: "target-unit-failed".to_string(),
-                message: format!("target topology unit {} did not execute successfully", unit.unit_id),
-            });
-            executions.push(receipt);
-            return target_topology_receipt("blocked", executions, Some(blocker));
-        }
-        if unit.target_kind == "lib" {
-            match produced_library_artifact_path(&executable_unit, options)? {
-                Ok(path) => produced_artifacts.record_unit(unit, path),
-                Err(blocker) => {
-                    executions.push(receipt);
-                    return target_topology_receipt("blocked", executions, Some(blocker));
-                }
-            }
-        }
-        executions.push(receipt);
+    let mut delegate = TargetTopologyDelegate {
+        graph,
+        ordered_indices: &ordered_indices,
+        executions: Vec::with_capacity(ordered_indices.len()),
+        produced_artifacts: ProducedArtifactIndex::default(),
+    };
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
+    if let Some(blocker) = outcome.blocker {
+        return target_topology_receipt("blocked", delegate.executions, Some(blocker));
     }
-    target_topology_receipt("success", executions, None)
+    target_topology_receipt("success", delegate.executions, None)
 }
 
 pub(crate) fn execute_rust_target_unit_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTargetTopologyExecutionReceipt, RunError> {
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     if !graph.ready {
         return target_topology_receipt(
             "blocked",
@@ -12333,7 +12210,7 @@ fn combined_topology_indices(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<CombinedTopologyIndices, RustUnitExecutionBlocker> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert_eq!(graph.derivation_count, graph.derivations.len());
     let host = graph
         .derivations
         .iter()
@@ -12962,6 +12839,7 @@ fn topology_primary_process_facts(
 }
 
 struct NativePreparedTopologyUnit {
+    unit_index: usize,
     unit: RustUnitDerivationSummary,
     inputs: Option<RustUnitExecutionInputs>,
     effect_id: mantle_rust_plan_core::EffectId,
@@ -12970,16 +12848,52 @@ struct NativePreparedTopologyUnit {
     restored_compiler: Option<mantle_rust_plan_core::RestoredCompilerArtifactObservation>,
 }
 
-struct NativeTopologyUnitExecutor<'a> {
-    graph: &'a UnitDerivationGraphSummary,
+struct SelectedUnitSuccessContext<'a> {
+    index: usize,
+    selected: &'a RustUnitDerivationSummary,
+    bound: &'a RustUnitDerivationSummary,
+    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
     options: &'a RustUnitExecutionOptions,
-    indices_by_id: BTreeMap<String, usize>,
-    state: RustUnitTopologyExecutionState,
+    cache: mantle_rust_plan_app::CacheObservation,
+    primary: Option<&'a mantle_rust_plan_core::ResolvedUnitEffect>,
+    restored_compiler: Option<&'a mantle_rust_plan_core::RestoredCompilerArtifactObservation>,
+    process_attempts: &'a mut Vec<mantle_rust_plan_app::ProcessAttempt>,
+    postprocess_failure: &'a mut Option<mantle_rust_plan_app::BuildScriptPostprocessFailure>,
+}
+
+trait SelectedUnitExecutionDelegate {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary>;
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, index: usize) -> bool;
+    fn bind_unit(
+        &mut self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError>;
+    fn failure_blocker(
+        &self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker>;
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError>;
+    fn executions(&self) -> &[RustUnitExecutionReceipt];
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt);
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt];
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt>;
+}
+
+struct SelectedRustUnitExecutor<'a, D: SelectedUnitExecutionDelegate> {
+    options: &'a RustUnitExecutionOptions,
+    effect_index_by_id: BTreeMap<String, usize>,
+    delegate: &'a mut D,
     blocker: Option<RustUnitExecutionBlocker>,
     error: Option<RunError>,
 }
 
-impl NativeTopologyUnitExecutor<'_> {
+impl<D: SelectedUnitExecutionDelegate> SelectedRustUnitExecutor<'_, D> {
     fn capability_error(&mut self, error: RunError) -> mantle_rust_plan_app::AdapterError {
         self.error = Some(error);
         mantle_rust_plan_app::AdapterError::new(
@@ -13003,7 +12917,7 @@ impl NativeTopologyUnitExecutor<'_> {
                 receipt.output_artifact_digests.iter().map(|artifact| artifact.blake3.clone()).collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        if let Some(metadata) = self.state.metadata_runs.last().filter(|metadata| metadata.unit_id == unit_id.0) {
+        if let Some(metadata) = self.delegate.last_metadata_run().filter(|metadata| metadata.unit_id == unit_id.0) {
             produced_artifacts.push(metadata.metadata_digest_blake3.clone());
             produced_artifacts.extend(metadata.out_dir_artifact_digests.iter().map(|artifact| artifact.blake3.clone()));
         }
@@ -13067,7 +12981,7 @@ fn restored_compiler_evidence(
     })
 }
 
-impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
+impl<D: SelectedUnitExecutionDelegate> mantle_rust_plan_app::UnitExecutor for SelectedRustUnitExecutor<'_, D> {
     type Prepared = NativePreparedTopologyUnit;
     type Receipt = RustUnitExecutionReceipt;
 
@@ -13075,10 +12989,12 @@ impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
         &mut self,
         effect: &mantle_rust_plan_core::ExistingUnitEffect,
     ) -> Result<mantle_rust_plan_app::PrepareOutcome<Self::Prepared>, mantle_rust_plan_app::AdapterError> {
-        let index = self.indices_by_id.get(&effect.unit_id.0).copied().ok_or_else(|| {
+        let index = self.effect_index_by_id.get(&effect.unit_id.0).copied().ok_or_else(|| {
             mantle_rust_plan_app::AdapterError::new("missing-unit-effect", "planned Rust unit has no derivation")
         })?;
-        let selected = &self.graph.derivations[index];
+        let selected = self.delegate.expected_unit(index).ok_or_else(|| {
+            mantle_rust_plan_app::AdapterError::new("missing-unit-effect", "planned Rust unit has no derivation")
+        })?;
         if effect.arguments != selected.derivation.args
             || effect.environment.iter().map(|(key, value)| (key.as_str(), value.as_str())).ne(selected
                 .derivation
@@ -13093,18 +13009,16 @@ impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
                 "planned Rust unit effect does not match the selected derivation",
             ));
         }
-        if !is_supported_host_dependency_unit(selected)
-            && !is_supported_host_unit(selected)
-            && !is_supported_target_unit(selected)
-        {
+        if !self.delegate.is_unit_supported(selected, index) {
             return Err(mantle_rust_plan_app::AdapterError::new(
                 "unsupported-unit-effect",
                 "selected Rust derivation has no supported execution handler",
             ));
         }
-        let bound = match bind_selected_topology_derivation(self.graph, selected, &self.state) {
-            Ok(bound) => bound,
-            Err(blocker) => {
+        let selected_cloned = selected.clone();
+        let bound = match self.delegate.bind_unit(index, &selected_cloned) {
+            Ok(Ok(bound)) => bound,
+            Ok(Err(blocker)) => {
                 self.blocker = Some(blocker);
                 return Ok(mantle_rust_plan_app::PrepareOutcome::Stopped(self.completed_observation(
                     effect.effect_id.clone(),
@@ -13114,20 +13028,17 @@ impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
                     Vec::new(),
                 )));
             }
+            Err(error) => return Err(self.capability_error(error)),
         };
         let inputs = match prepare_rust_unit_for_cache(&bound, self.options) {
             Ok(Ok(inputs)) => inputs,
             Ok(Err(receipt)) => {
-                self.blocker = topology_unit_failed_blocker(
-                    &receipt,
-                    "topology-unit-failed",
-                    format!("unit {} did not execute successfully", selected.unit_id),
-                );
-                self.state.executions.push(receipt);
+                self.blocker = self.delegate.failure_blocker(index, &selected_cloned, &receipt);
+                self.delegate.push_execution(receipt);
                 return Ok(mantle_rust_plan_app::PrepareOutcome::Stopped(self.completed_observation(
                     effect.effect_id.clone(),
                     effect.unit_id.clone(),
-                    self.state.executions.last(),
+                    self.delegate.executions().last(),
                     mantle_rust_plan_app::CacheObservation::NotObserved,
                     Vec::new(),
                 )));
@@ -13139,11 +13050,12 @@ impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
             &bound,
             &inputs,
             self.options,
-            &self.state.executions,
-            &self.state.metadata_runs,
+            self.delegate.executions(),
+            self.delegate.metadata_runs(),
         )?;
         Ok(mantle_rust_plan_app::PrepareOutcome::Ready {
             prepared: NativePreparedTopologyUnit {
+                unit_index: index,
                 unit: bound,
                 inputs: Some(inputs),
                 effect_id: effect.effect_id.clone(),
@@ -13179,66 +13091,31 @@ impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
         cache: mantle_rust_plan_app::CacheObservation,
         primary: Option<&mantle_rust_plan_core::ResolvedUnitEffect>,
     ) -> Result<mantle_rust_plan_app::UnitExecutionResult, mantle_rust_plan_app::AdapterError> {
-        let index = self.indices_by_id[&prepared.unit.unit_id];
-        let selected = &self.graph.derivations[index];
-        self.blocker = topology_unit_failed_blocker(
-            &receipt,
-            "topology-unit-failed",
-            format!("unit {} did not execute successfully", selected.unit_id),
-        );
-        self.state.executions.push(receipt);
+        let index = prepared.unit_index;
+        let selected = self
+            .delegate
+            .expected_unit(index)
+            .ok_or_else(|| {
+                mantle_rust_plan_app::AdapterError::new("missing-unit-effect", "planned Rust unit has no derivation")
+            })?
+            .clone();
+        self.blocker = self.delegate.failure_blocker(index, &selected, &receipt);
+        self.delegate.push_execution(receipt);
         let mut postprocess_failure = None;
         if self.blocker.is_none() {
-            let mut inputs = TopologyUnitExecutionInputs {
+            let outcome = self.delegate.record_success_outputs(SelectedUnitSuccessContext {
+                index,
+                selected: &selected,
+                bound: &prepared.unit,
+                planned,
                 options: self.options,
-                unit: selected,
-                state: &mut self.state,
-            };
-            let outputs = if is_supported_host_dependency_unit(selected) {
-                if selected.target_kind == "lib" {
-                    match produced_library_artifact_path(&prepared.unit, self.options) {
-                        Ok(Ok(path)) => inputs.state.host_dependency_artifacts.record_unit(selected, path),
-                        Ok(Err(blocker)) => self.blocker = Some(blocker),
-                        Err(error) => return Err(self.capability_error(error)),
-                    }
-                }
-                Ok(None)
-            } else if is_supported_host_unit(selected) {
-                let observed_compiler = prepared.process_attempts.last();
-                let compiler_effect = primary.or_else(|| observed_compiler.map(|attempt| &attempt.effect));
-                let admission = compiler_effect.map(|compiler| BuildScriptAdmissionContext {
-                    planned,
-                    primary: compiler,
-                    observed_compiler: observed_compiler.map(|attempt| &attempt.observation),
-                    restored_compiler: prepared.restored_compiler.as_ref(),
-                });
-                let mut script_attempts = Vec::new();
-                let outcome = match produced_host_artifact_path(selected, self.options) {
-                    Ok(Ok(path)) => record_host_topology_outputs(
-                        &mut inputs,
-                        &prepared.unit,
-                        path,
-                        admission.as_ref(),
-                        &mut script_attempts,
-                        cache,
-                        &mut postprocess_failure,
-                    ),
-                    Ok(Err(blocker)) => Ok(Some(blocker)),
-                    Err(error) => Err(error),
-                };
-                prepared.process_attempts.extend(script_attempts);
-                outcome
-            } else {
-                if selected.target_kind == "lib" {
-                    match produced_library_artifact_path(&prepared.unit, self.options) {
-                        Ok(Ok(path)) => inputs.state.target_artifacts.record_unit(selected, path),
-                        Ok(Err(blocker)) => self.blocker = Some(blocker),
-                        Err(error) => return Err(self.capability_error(error)),
-                    }
-                }
-                Ok(None)
-            };
-            match outputs {
+                cache,
+                primary,
+                restored_compiler: prepared.restored_compiler.as_ref(),
+                process_attempts: &mut prepared.process_attempts,
+                postprocess_failure: &mut postprocess_failure,
+            });
+            match outcome {
                 Ok(blocker) if blocker.is_some() => self.blocker = blocker,
                 Ok(_) => {}
                 Err(error) => return Err(self.capability_error(error)),
@@ -13247,7 +13124,7 @@ impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
         let mut result = self.completed_observation(
             prepared.effect_id,
             prepared.unit_id,
-            self.state.executions.last(),
+            self.delegate.executions().last(),
             cache,
             prepared.process_attempts,
         );
@@ -13257,8 +13134,9 @@ impl mantle_rust_plan_app::UnitExecutor for NativeTopologyUnitExecutor<'_> {
     }
 }
 
-impl mantle_rust_plan_app::RustCacheAccess<NativePreparedTopologyUnit, RustUnitExecutionReceipt>
-    for NativeTopologyUnitExecutor<'_>
+impl<D: SelectedUnitExecutionDelegate>
+    mantle_rust_plan_app::RustCacheAccess<NativePreparedTopologyUnit, RustUnitExecutionReceipt>
+    for SelectedRustUnitExecutor<'_, D>
 {
     fn restore_or_miss(
         &mut self,
@@ -13296,14 +13174,164 @@ impl mantle_rust_plan_app::RustCacheAccess<NativePreparedTopologyUnit, RustUnitE
     }
 }
 
+struct SelectedUnitsAppOutcome {
+    execution_outcome: mantle_rust_plan_core::PlanExecutionOutcome,
+    blocker: Option<RustUnitExecutionBlocker>,
+}
+
+fn execute_selected_units_via_app<D: SelectedUnitExecutionDelegate>(
+    effects: &[mantle_rust_plan_core::ExistingUnitEffect],
+    options: &RustUnitExecutionOptions,
+    delegate: &mut D,
+) -> Result<SelectedUnitsAppOutcome, RunError> {
+    let effect_index_by_id =
+        effects.iter().enumerate().map(|(index, effect)| (effect.unit_id.0.clone(), index)).collect();
+    let mut executor = SelectedRustUnitExecutor {
+        options,
+        effect_index_by_id,
+        delegate,
+        blocker: None,
+        error: None,
+    };
+    match mantle_rust_plan_app::execute_existing_units(effects, &mut executor) {
+        Ok(observed) => Ok(SelectedUnitsAppOutcome {
+            execution_outcome: observed.execution,
+            blocker: executor.blocker,
+        }),
+        Err(mantle_rust_plan_app::ExecutionError::Adapter(error)) => {
+            if let Some(source) = executor.error {
+                return Err(source);
+            }
+            Err(RunError::Internal(format!("Rust plan adapter {}: {}", error.code, error.detail)))
+        }
+        Err(mantle_rust_plan_app::ExecutionError::Blocked(blockers)) => {
+            let blocker = blockers.first().ok_or_else(|| {
+                RunError::Internal("Rust plan adapter rejected unit effects without a blocker".to_string())
+            })?;
+            Ok(SelectedUnitsAppOutcome {
+                execution_outcome: mantle_rust_plan_core::PlanExecutionOutcome::Failed { failed_effect_count: 1 },
+                blocker: Some(RustUnitExecutionBlocker {
+                    class: blocker.code.clone(),
+                    message: blocker.message.clone(),
+                }),
+            })
+        }
+    }
+}
+
+struct TopologyUnitDelegate<'a> {
+    graph: &'a UnitDerivationGraphSummary,
+    ordered_indices: &'a [usize],
+    state: RustUnitTopologyExecutionState,
+}
+
+impl SelectedUnitExecutionDelegate for TopologyUnitDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        self.ordered_indices.get(index).and_then(|unit_index| self.graph.derivations.get(*unit_index))
+    }
+
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, _index: usize) -> bool {
+        is_supported_host_dependency_unit(unit) || is_supported_host_unit(unit) || is_supported_target_unit(unit)
+    }
+
+    fn bind_unit(
+        &mut self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        Ok(bind_selected_topology_derivation(self.graph, selected, &self.state))
+    }
+
+    fn failure_blocker(
+        &self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        topology_unit_failed_blocker(
+            receipt,
+            "topology-unit-failed",
+            format!("unit {} did not execute successfully", selected.unit_id),
+        )
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        let mut inputs = TopologyUnitExecutionInputs {
+            options: ctx.options,
+            unit: ctx.selected,
+            state: &mut self.state,
+        };
+        if is_supported_host_dependency_unit(ctx.selected) {
+            if ctx.selected.target_kind == "lib" {
+                match produced_library_artifact_path(ctx.bound, ctx.options)? {
+                    Ok(path) => inputs.state.host_dependency_artifacts.record_unit(ctx.selected, path),
+                    Err(blocker) => return Ok(Some(blocker)),
+                }
+            }
+            return Ok(None);
+        }
+        if is_supported_host_unit(ctx.selected) {
+            let observed_compiler = ctx.process_attempts.last();
+            let compiler_effect = ctx.primary.or_else(|| observed_compiler.map(|attempt| &attempt.effect));
+            let admission = compiler_effect.map(|compiler| BuildScriptAdmissionContext {
+                planned: ctx.planned,
+                primary: compiler,
+                observed_compiler: observed_compiler.map(|attempt| &attempt.observation),
+                restored_compiler: ctx.restored_compiler,
+            });
+            let mut script_attempts = Vec::new();
+            let outcome = match produced_host_artifact_path(ctx.selected, ctx.options)? {
+                Ok(path) => record_host_topology_outputs(
+                    &mut inputs,
+                    ctx.bound,
+                    path,
+                    admission.as_ref(),
+                    &mut script_attempts,
+                    ctx.cache,
+                    ctx.postprocess_failure,
+                )?,
+                Err(blocker) => Some(blocker),
+            };
+            ctx.process_attempts.extend(script_attempts);
+            return Ok(outcome);
+        }
+        if ctx.selected.target_kind == "lib" {
+            match produced_library_artifact_path(ctx.bound, ctx.options)? {
+                Ok(path) => inputs.state.target_artifacts.record_unit(ctx.selected, path),
+                Err(blocker) => return Ok(Some(blocker)),
+            }
+        }
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.state.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.state.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &self.state.metadata_runs
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        self.state.metadata_runs.last()
+    }
+}
+
 pub(crate) fn execute_rust_unit_topology(
     native_registry_sources: &NativeRegistrySourcePlanningSummary,
     native_host_graph: &NativeHostUnitGraphPlanningSummary,
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitTopologyExecutionReceipt, RunError> {
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
         return topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
@@ -13351,47 +13379,22 @@ pub(crate) fn execute_rust_unit_topology(
             );
         }
     };
-    let mut executor = NativeTopologyUnitExecutor {
+    let mut delegate = TopologyUnitDelegate {
         graph,
-        options,
-        indices_by_id: rust_unit_indices_by_id(graph),
+        ordered_indices: &topology.ordered_indices,
         state: RustUnitTopologyExecutionState::default(),
-        blocker: None,
-        error: None,
     };
-    executor.state.executions.reserve(effects.len());
-    let observed = match mantle_rust_plan_app::execute_existing_units(&effects, &mut executor) {
-        Ok(observed) => observed,
-        Err(mantle_rust_plan_app::ExecutionError::Adapter(error)) => {
-            if let Some(source) = executor.error {
-                return Err(source);
-            }
-            return Err(RunError::Internal(format!("Rust plan adapter {}: {}", error.code, error.detail)));
-        }
-        Err(mantle_rust_plan_app::ExecutionError::Blocked(blockers)) => {
-            let blocker = blockers.first().ok_or_else(|| {
-                RunError::Internal("Rust plan adapter rejected unit effects without a blocker".to_string())
-            })?;
-            return topology_receipt(
-                "blocked",
-                executor.state.executions,
-                executor.state.metadata_runs,
-                Some(RustUnitExecutionBlocker {
-                    class: blocker.code.clone(),
-                    message: blocker.message.clone(),
-                }),
-            );
-        }
-    };
+    delegate.state.executions.reserve(effects.len());
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
     // The application stops on the first failed observation; the shell keeps
     // the original blocker, cache reports and ordered execution receipts.
-    if let Some(blocker) = executor.blocker {
-        return topology_receipt("blocked", executor.state.executions, executor.state.metadata_runs, Some(blocker));
+    if let Some(blocker) = outcome.blocker {
+        return topology_receipt("blocked", delegate.state.executions, delegate.state.metadata_runs, Some(blocker));
     }
-    if observed.execution != mantle_rust_plan_core::PlanExecutionOutcome::Completed {
+    if outcome.execution_outcome != mantle_rust_plan_core::PlanExecutionOutcome::Completed {
         return Err(RunError::Internal("Rust plan adapter rejected observed unit execution".to_string()));
     }
-    topology_receipt("success", executor.state.executions, executor.state.metadata_runs, None)
+    topology_receipt("success", delegate.state.executions, delegate.state.metadata_runs, None)
 }
 
 struct DevDependencyTestPlan<'a> {
@@ -13549,81 +13552,109 @@ fn select_dev_dependency_producers<'a>(
     Ok(selected)
 }
 
-struct DevDependencyProducerInputs<'a> {
+struct DevDependencyTestDelegate<'a> {
     graph: &'a UnitDerivationGraphSummary,
-    options: &'a RustUnitExecutionOptions,
-    dependency: &'a NativePathDependencySummary,
-    producer: &'a RustUnitDerivationSummary,
-    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
-    state: &'a mut DevDependencyExecutionState,
+    plan: &'a DevDependencyTestPlan<'a>,
+    selected_producers: &'a [SelectedDevDependencyProducer<'a>],
+    test_derivation: &'a RustUnitDerivationSummary,
+    state: DevDependencyExecutionState,
 }
 
-fn execute_dev_dependency_producer(
-    inputs: DevDependencyProducerInputs<'_>,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(!inputs.dependency.name.is_empty());
-    debug_assert!(!inputs.producer.package_id.is_empty());
-    let producer = inputs.producer;
-    let executable = bind_all_dependency_artifacts(producer, &inputs.state.produced_artifacts)?;
-    let receipt =
-        execute_planned_rust_unit(&executable, inputs.options, inputs.planned, &inputs.state.executions, &[])?.receipt;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "dev-dependency-producer-failed",
-        format!("dev dependency producer {} did not execute successfully", producer.unit_id),
-    );
-    inputs.state.executions.push(receipt);
-    if blocker.is_some() {
-        return Ok(blocker);
-    }
-    let path = match produced_library_artifact_path(&executable, inputs.options)? {
-        Ok(path) => path,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    insert_btree_entry_with_bound(
-        &mut inputs.state.produced_artifacts,
-        producer.package_id.clone(),
-        path,
-        inputs.graph.derivations.len(),
-    );
-    inputs
-        .state
-        .dependency_artifacts
-        .push(dev_dependency_producer_artifact(producer, inputs.dependency));
-    inputs.state.package_ids.push(producer.package_id.clone());
-    Ok(None)
-}
-
-fn execute_dev_dependency_producers(
-    selected: &[SelectedDevDependencyProducer<'_>],
-    effects: &[mantle_rust_plan_core::ExistingUnitEffect],
-    graph: &UnitDerivationGraphSummary,
-    options: &RustUnitExecutionOptions,
-) -> Result<DevDependencyExecutionState, RunError> {
-    let mut state = DevDependencyExecutionState::default();
-    state.executions.reserve(selected.len());
-    for (producer, planned) in selected.iter().zip(effects) {
-        if let Some(blocker) = execute_dev_dependency_producer(DevDependencyProducerInputs {
-            graph,
-            options,
-            dependency: producer.dependency,
-            producer: &producer.unit,
-            planned,
-            state: &mut state,
-        })? {
-            state.blocker = Some(blocker);
-            break;
+impl SelectedUnitExecutionDelegate for DevDependencyTestDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        if index < self.selected_producers.len() {
+            Some(&self.selected_producers[index].unit)
+        } else if index == self.selected_producers.len() {
+            Some(self.test_derivation)
+        } else {
+            None
         }
     }
-    state.dependency_artifacts.sort();
-    state.dependency_artifacts.dedup();
-    state.package_ids.sort();
-    state.package_ids.dedup();
-    Ok(state)
-}
 
-fn dev_dependency_state_blocker(state: &mut DevDependencyExecutionState) -> Option<RustUnitExecutionBlocker> {
-    state.blocker.take()
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, index: usize) -> bool {
+        if index < self.selected_producers.len() {
+            is_supported_target_unit(unit)
+        } else {
+            unit.execution_kind == TARGET_EXECUTION_KIND && unit.target_kind == "test"
+        }
+    }
+
+    fn bind_unit(
+        &mut self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        if index < self.selected_producers.len() {
+            return bind_all_dependency_artifacts(selected, &self.state.produced_artifacts).map(Ok);
+        }
+        self.state.dependency_artifacts.sort();
+        self.state.dependency_artifacts.dedup();
+        let mut test_unit = dev_dependency_test_unit(self.plan, &self.state);
+        test_unit = bind_all_dependency_artifacts(&test_unit, &self.state.produced_artifacts)?;
+        test_unit.rustc_args_digest_blake3 =
+            blake3::hash(test_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
+        Ok(Ok(test_unit))
+    }
+
+    fn failure_blocker(
+        &self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        if index < self.selected_producers.len() {
+            topology_unit_failed_blocker(
+                receipt,
+                "dev-dependency-producer-failed",
+                format!("dev dependency producer {} did not execute successfully", selected.unit_id),
+            )
+        } else {
+            topology_unit_failed_blocker(
+                receipt,
+                "dev-dependency-test-unit-failed",
+                format!("dev-dependency test unit {} did not execute successfully", selected.unit_id),
+            )
+        }
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        if ctx.index >= self.selected_producers.len() {
+            return Ok(None);
+        }
+        let dependency = self.selected_producers[ctx.index].dependency;
+        let path = match produced_library_artifact_path(ctx.bound, ctx.options)? {
+            Ok(path) => path,
+            Err(blocker) => return Ok(Some(blocker)),
+        };
+        insert_btree_entry_with_bound(
+            &mut self.state.produced_artifacts,
+            ctx.selected.package_id.clone(),
+            path,
+            self.graph.derivations.len(),
+        );
+        self.state.dependency_artifacts.push(dev_dependency_producer_artifact(ctx.selected, dependency));
+        self.state.package_ids.push(ctx.selected.package_id.clone());
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.state.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.state.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &[]
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        None
+    }
 }
 
 fn dev_dependency_test_rustc_args(
@@ -13720,7 +13751,8 @@ fn validate_dev_dependency_topology_inputs(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<Option<RustDevDependencyTestTopologyExecutionReceipt>, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(planning.packages.iter().all(|pkg| !pkg.package_id.is_empty()));
+    debug_assert_eq!(graph.derivation_count, graph.derivations.len());
     if !planning.ready {
         return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
             execution_status: "blocked",
@@ -13758,7 +13790,8 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
     options: &RustUnitExecutionOptions,
 ) -> Result<RustDevDependencyTestTopologyExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!DEFAULT_CARGO_PROFILE.is_empty());
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     if let Some(receipt) = validate_dev_dependency_topology_inputs(native_package_target_planning, graph)? {
         return Ok(receipt);
     }
@@ -13816,38 +13849,29 @@ pub(crate) fn execute_native_rust_dev_dependency_test_topology(
             });
         }
     };
-    let mut state = execute_dev_dependency_producers(&selected_producers, &effects, graph, options)?;
-    if let Some(blocker) = dev_dependency_state_blocker(&mut state) {
-        return dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
-            execution_status: "blocked",
-            package_id: Some(plan.package.package_id.clone()),
-            test_target: Some(plan.test_name.clone()),
-            dev_dependency_packages: state.package_ids,
-            unit_executions: state.executions,
-            blocker: Some(blocker),
-        });
-    }
-    let mut test_unit = dev_dependency_test_unit(&plan, &state);
-    test_unit = bind_all_dependency_artifacts(&test_unit, &state.produced_artifacts)?;
-    test_unit.rustc_args_digest_blake3 =
-        blake3::hash(test_unit.derivation.args.join("\0").as_bytes()).to_hex().to_string();
-    let receipt =
-        execute_planned_rust_unit(&test_unit, options, &effects[selected_producers.len()], &state.executions, &[])?
-            .receipt;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "dev-dependency-test-unit-failed",
-        format!("dev-dependency test unit {} did not execute successfully", test_unit.unit_id),
-    );
-    state.executions.push(receipt);
-    let status = if blocker.is_some() { "blocked" } else { "success" };
+    let mut delegate = DevDependencyTestDelegate {
+        graph,
+        plan: &plan,
+        selected_producers: &selected_producers,
+        test_derivation: &test_derivation,
+        state: DevDependencyExecutionState::default(),
+    };
+    delegate.state.executions.reserve(effects.len());
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
+    delegate.state.package_ids.sort();
+    delegate.state.package_ids.dedup();
+    let status = if outcome.blocker.is_some() {
+        "blocked"
+    } else {
+        "success"
+    };
     dev_dependency_test_topology_receipt(DevDependencyTopologyReceiptInputs {
         execution_status: status,
         package_id: Some(plan.package.package_id.clone()),
-        test_target: Some(plan.test_name),
-        dev_dependency_packages: state.package_ids,
-        unit_executions: state.executions,
-        blocker,
+        test_target: Some(plan.test_name.clone()),
+        dev_dependency_packages: delegate.state.package_ids,
+        unit_executions: delegate.state.executions,
+        blocker: outcome.blocker,
     })
 }
 
@@ -13964,85 +13988,93 @@ fn select_workspace_dependency_consumer<'a>(
         })
 }
 
-struct WorkspaceDependencyProducerInputs<'a> {
+struct WorkspaceDependencyDelegate<'a> {
     graph: &'a UnitDerivationGraphSummary,
-    options: &'a RustUnitExecutionOptions,
-    producer: &'a RustUnitDerivationSummary,
-    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
-    state: &'a mut WorkspaceDependencyExecutionState,
+    producers: &'a [&'a RustUnitDerivationSummary],
+    consumer: &'a RustUnitDerivationSummary,
+    state: WorkspaceDependencyExecutionState,
 }
 
-fn execute_workspace_dependency_producer(
-    inputs: WorkspaceDependencyProducerInputs<'_>,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(!inputs.producer.package_id.is_empty());
-    let producer = inputs.producer;
-    let executable = bind_all_dependency_artifacts(producer, &inputs.state.produced_artifacts)?;
-    let receipt =
-        execute_planned_rust_unit(&executable, inputs.options, inputs.planned, &inputs.state.executions, &[])?.receipt;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "workspace-dependency-producer-failed",
-        format!("workspace dependency producer {} did not execute successfully", producer.unit_id),
-    );
-    inputs.state.executions.push(receipt);
-    if blocker.is_some() {
-        return Ok(blocker);
-    }
-    let path = match produced_library_artifact_path(&executable, inputs.options)? {
-        Ok(path) => path,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    insert_btree_entry_with_bound(
-        &mut inputs.state.produced_artifacts,
-        producer.package_id.clone(),
-        path,
-        inputs.graph.derivations.len(),
-    );
-    inputs.state.package_ids.push(producer.package_id.clone());
-    Ok(None)
-}
-
-fn execute_workspace_dependency_producers(
-    producers: &[&RustUnitDerivationSummary],
-    effects: &[mantle_rust_plan_core::ExistingUnitEffect],
-    graph: &UnitDerivationGraphSummary,
-    options: &RustUnitExecutionOptions,
-) -> Result<(WorkspaceDependencyExecutionState, Option<RustUnitExecutionBlocker>), RunError> {
-    let mut state = WorkspaceDependencyExecutionState::default();
-    state.executions.reserve(producers.len());
-    for (producer, planned) in producers.iter().zip(effects) {
-        let blocker = execute_workspace_dependency_producer(WorkspaceDependencyProducerInputs {
-            graph,
-            options,
-            producer,
-            planned,
-            state: &mut state,
-        })?;
-        if blocker.is_some() {
-            return Ok((state, blocker));
+impl SelectedUnitExecutionDelegate for WorkspaceDependencyDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        if index < self.producers.len() {
+            self.producers.get(index).copied()
+        } else if index == self.producers.len() {
+            Some(self.consumer)
+        } else {
+            None
         }
     }
-    state.package_ids.sort();
-    state.package_ids.dedup();
-    Ok((state, None))
-}
 
-fn execute_workspace_dependency_consumer(
-    consumer: &RustUnitDerivationSummary,
-    planned: &mantle_rust_plan_core::ExistingUnitEffect,
-    options: &RustUnitExecutionOptions,
-    state: &mut WorkspaceDependencyExecutionState,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    let executable = bind_all_dependency_artifacts(consumer, &state.produced_artifacts)?;
-    let receipt = execute_planned_rust_unit(&executable, options, planned, &state.executions, &[])?.receipt;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "workspace-dependency-consumer-failed",
-        format!("workspace dependency consumer {} did not execute successfully", consumer.unit_id),
-    );
-    state.executions.push(receipt);
-    Ok(blocker)
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, _index: usize) -> bool {
+        is_supported_target_unit(unit)
+    }
+
+    fn bind_unit(
+        &mut self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        bind_all_dependency_artifacts(selected, &self.state.produced_artifacts).map(Ok)
+    }
+
+    fn failure_blocker(
+        &self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        if index < self.producers.len() {
+            topology_unit_failed_blocker(
+                receipt,
+                "workspace-dependency-producer-failed",
+                format!("workspace dependency producer {} did not execute successfully", selected.unit_id),
+            )
+        } else {
+            topology_unit_failed_blocker(
+                receipt,
+                "workspace-dependency-consumer-failed",
+                format!("workspace dependency consumer {} did not execute successfully", selected.unit_id),
+            )
+        }
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        if ctx.index >= self.producers.len() {
+            return Ok(None);
+        }
+        let path = match produced_library_artifact_path(ctx.bound, ctx.options)? {
+            Ok(path) => path,
+            Err(blocker) => return Ok(Some(blocker)),
+        };
+        insert_btree_entry_with_bound(
+            &mut self.state.produced_artifacts,
+            ctx.selected.package_id.clone(),
+            path,
+            self.graph.derivations.len(),
+        );
+        self.state.package_ids.push(ctx.selected.package_id.clone());
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.state.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.state.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &[]
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        None
+    }
 }
 
 fn validate_workspace_dependency_topology_inputs(
@@ -14050,7 +14082,8 @@ fn validate_workspace_dependency_topology_inputs(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<Option<RustWorkspaceDependencyTopologyExecutionReceipt>, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(planning.packages.iter().all(|pkg| !pkg.package_id.is_empty()));
+    debug_assert_eq!(graph.derivation_count, graph.derivations.len());
     if !planning.ready {
         return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
             execution_status: "blocked",
@@ -14088,7 +14121,8 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
     options: &RustUnitExecutionOptions,
 ) -> Result<RustWorkspaceDependencyTopologyExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     if let Some(receipt) = validate_workspace_dependency_topology_inputs(native_package_target_planning, graph)? {
         return Ok(receipt);
     }
@@ -14136,26 +14170,28 @@ pub(crate) fn execute_native_registry_workspace_dependency_topology(
             });
         }
     };
-    let (mut state, producer_blocker) = execute_workspace_dependency_producers(&producers, &effects, graph, options)?;
-    if let Some(blocker) = producer_blocker {
-        return workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
-            execution_status: "blocked",
-            workspace_root: plan.workspace_root,
-            member_package_id: Some(plan.package.package_id.clone()),
-            inherited_dependency_packages: state.package_ids,
-            unit_executions: state.executions,
-            blocker: Some(blocker),
-        });
-    }
-    let blocker = execute_workspace_dependency_consumer(consumer, &effects[producers.len()], options, &mut state)?;
-    let status = if blocker.is_some() { "blocked" } else { "success" };
+    let mut delegate = WorkspaceDependencyDelegate {
+        graph,
+        producers: &producers,
+        consumer,
+        state: WorkspaceDependencyExecutionState::default(),
+    };
+    delegate.state.executions.reserve(effects.len());
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
+    delegate.state.package_ids.sort();
+    delegate.state.package_ids.dedup();
+    let status = if outcome.blocker.is_some() {
+        "blocked"
+    } else {
+        "success"
+    };
     workspace_dependency_topology_receipt(WorkspaceDependencyTopologyReceiptInputs {
         execution_status: status,
         workspace_root: plan.workspace_root,
         member_package_id: Some(plan.package.package_id.clone()),
-        inherited_dependency_packages: state.package_ids,
-        unit_executions: state.executions,
-        blocker,
+        inherited_dependency_packages: delegate.state.package_ids,
+        unit_executions: delegate.state.executions,
+        blocker: outcome.blocker,
     })
 }
 
@@ -14261,6 +14297,85 @@ fn patch_source_topology_plan<'a>(
     })
 }
 
+struct PatchSourceDelegate<'a> {
+    plan: &'a PatchSourceTopologyPlan<'a>,
+    executions: Vec<RustUnitExecutionReceipt>,
+    produced_artifacts: BTreeMap<String, PathBuf>,
+}
+
+impl SelectedUnitExecutionDelegate for PatchSourceDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        match index {
+            0 => Some(self.plan.producer),
+            1 => Some(self.plan.consumer),
+            _ => None,
+        }
+    }
+
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, _index: usize) -> bool {
+        is_supported_target_unit(unit)
+    }
+
+    fn bind_unit(
+        &mut self,
+        _index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        bind_all_dependency_artifacts(selected, &self.produced_artifacts).map(Ok)
+    }
+
+    fn failure_blocker(
+        &self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        if index == 0 {
+            topology_unit_failed_blocker(
+                receipt,
+                "patch-source-producer-failed",
+                format!("patch source producer {} did not execute successfully", selected.unit_id),
+            )
+        } else {
+            topology_unit_failed_blocker(
+                receipt,
+                "patch-source-consumer-failed",
+                format!("patch source consumer {} did not execute successfully", selected.unit_id),
+            )
+        }
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        if ctx.index == 0 {
+            let path = match produced_library_artifact_path(ctx.bound, ctx.options)? {
+                Ok(path) => path,
+                Err(blocker) => return Ok(Some(blocker)),
+            };
+            self.produced_artifacts.insert(ctx.selected.package_id.clone(), path);
+        }
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &[]
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        None
+    }
+}
+
 fn execute_patch_source_topology_plan(
     plan: &PatchSourceTopologyPlan<'_>,
     options: &RustUnitExecutionOptions,
@@ -14271,35 +14386,13 @@ fn execute_patch_source_topology_plan(
         Ok(effects) => effects,
         Err(blocker) => return Ok((Vec::new(), Some(blocker))),
     };
-    let mut executions = Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS);
-    let mut produced_artifacts = BTreeMap::<String, PathBuf>::new();
-    let executable_producer = bind_all_dependency_artifacts(plan.producer, &produced_artifacts)?;
-    let producer_receipt =
-        execute_planned_rust_unit(&executable_producer, options, &effects[0], &executions, &[])?.receipt;
-    let blocker = topology_unit_failed_blocker(
-        &producer_receipt,
-        "patch-source-producer-failed",
-        format!("patch source producer {} did not execute successfully", plan.producer.unit_id),
-    );
-    executions.push(producer_receipt);
-    if blocker.is_some() {
-        return Ok((executions, blocker));
-    }
-    let path = match produced_library_artifact_path(&executable_producer, options)? {
-        Ok(path) => path,
-        Err(blocker) => return Ok((executions, Some(blocker))),
+    let mut delegate = PatchSourceDelegate {
+        plan,
+        executions: Vec::with_capacity(INITIAL_PLAN_COLLECTION_CAPACITY_ITEMS),
+        produced_artifacts: BTreeMap::new(),
     };
-    produced_artifacts.insert(plan.producer.package_id.clone(), path);
-    let executable_consumer = bind_all_dependency_artifacts(plan.consumer, &produced_artifacts)?;
-    let consumer_receipt =
-        execute_planned_rust_unit(&executable_consumer, options, &effects[1], &executions, &[])?.receipt;
-    let blocker = topology_unit_failed_blocker(
-        &consumer_receipt,
-        "patch-source-consumer-failed",
-        format!("patch source consumer {} did not execute successfully", plan.consumer.unit_id),
-    );
-    executions.push(consumer_receipt);
-    Ok((executions, blocker))
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
+    Ok((delegate.executions, outcome.blocker))
 }
 
 fn validate_patch_source_topology_inputs(
@@ -14308,7 +14401,8 @@ fn validate_patch_source_topology_inputs(
     graph: &UnitDerivationGraphSummary,
 ) -> Result<Option<RustPatchSourceTopologyExecutionReceipt>, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(registry_sources.sources.iter().all(|src| !src.package_id.is_empty()));
+    debug_assert_eq!(graph.derivation_count, graph.derivations.len());
     if !registry_sources.ready {
         return patch_source_topology_receipt(
             "blocked",
@@ -14358,7 +14452,8 @@ pub(crate) fn execute_native_registry_patch_source_topology(
     options: &RustUnitExecutionOptions,
 ) -> Result<RustPatchSourceTopologyExecutionReceipt, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     if let Some(receipt) =
         validate_patch_source_topology_inputs(native_registry_sources, native_package_target_planning, graph)?
     {
@@ -14467,7 +14562,8 @@ fn validate_native_host_unit_identities(
     graph_units: &BTreeSet<NativeHostUnitIdentity>,
 ) -> Option<RustUnitExecutionBlocker> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!HOST_EXECUTION_KIND.is_empty());
+    debug_assert!(native_units.iter().all(|unit| !unit.0.is_empty()));
+    debug_assert!(graph_units.iter().all(|unit| !unit.0.is_empty()));
     for native_unit in native_units {
         if !graph_units.contains(native_unit) {
             return Some(RustUnitExecutionBlocker {
@@ -14498,7 +14594,8 @@ fn validate_native_host_consumer_identities(
     graph_consumers: &BTreeMap<String, NativeHostConsumerIdentity>,
 ) -> Option<RustUnitExecutionBlocker> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!TARGET_EXECUTION_KIND.is_empty());
+    debug_assert!(native_consumers.keys().all(|key| !key.is_empty()));
+    debug_assert!(graph_consumers.keys().all(|key| !key.is_empty()));
     for (key, (unit_id, package_id, native_artifacts)) in native_consumers {
         let Some((_, graph_artifacts)) = graph_consumers.get_key_value(key) else {
             return Some(RustUnitExecutionBlocker {
@@ -14686,135 +14783,132 @@ fn host_artifact_target_execution_order(
     topologically_order_units(&indices.target, &edges, graph)
 }
 
-#[derive(Default)]
-struct HostArtifactTopologyExecutionState {
-    executions: Vec<RustUnitExecutionReceipt>,
-    metadata_runs: Vec<BuildScriptMetadataRunReceipt>,
-    host_artifacts: ProducedHostArtifactIndex,
-    build_script_metadata: ProducedBuildScriptMetadataIndex,
+struct HostArtifactTopologyDelegate<'a> {
+    graph: &'a UnitDerivationGraphSummary,
+    host_indices: &'a [usize],
+    target_order: &'a [usize],
+    state: RustUnitTopologyExecutionState,
     target_artifacts: BTreeMap<String, PathBuf>,
 }
 
-struct HostArtifactTopologyUnitInputs<'a> {
-    options: &'a RustUnitExecutionOptions,
-    unit: &'a RustUnitDerivationSummary,
-    planned: &'a mantle_rust_plan_core::ExistingUnitEffect,
-    state: &'a mut HostArtifactTopologyExecutionState,
-}
-
-fn execute_host_artifact_producer(
-    inputs: HostArtifactTopologyUnitInputs<'_>,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(is_supported_host_unit(inputs.unit));
-    debug_assert!(!inputs.unit.unit_id.is_empty());
-    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    let result = execute_planned_rust_unit(
-        &executable,
-        inputs.options,
-        inputs.planned,
-        &inputs.state.executions,
-        &inputs.state.metadata_runs,
-    )?;
-    let AdmittedRustUnitExecution {
-        receipt,
-        primary,
-        attempts,
-        restored_compiler,
-    } = result;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "host-unit-failed",
-        format!("host unit {} did not execute successfully", inputs.unit.unit_id),
-    );
-    inputs.state.executions.push(receipt);
-    if blocker.is_some() {
-        return Ok(blocker);
+impl SelectedUnitExecutionDelegate for HostArtifactTopologyDelegate<'_> {
+    fn expected_unit(&self, index: usize) -> Option<&RustUnitDerivationSummary> {
+        if let Some(&graph_index) = self.host_indices.get(index) {
+            return self.graph.derivations.get(graph_index);
+        }
+        let target_offset = index.checked_sub(self.host_indices.len())?;
+        self.target_order
+            .get(target_offset)
+            .and_then(|graph_index| self.graph.derivations.get(*graph_index))
     }
-    let path = match produced_host_artifact_path(inputs.unit, inputs.options)? {
-        Ok(path) => path,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    if inputs.unit.target_kind == "custom-build" {
-        let observed_compiler = attempts.last();
-        let compiler_effect = primary.as_ref().or_else(|| observed_compiler.map(|attempt| &attempt.effect));
-        let Some(compiler_effect) = compiler_effect else {
-            return Ok(Some(RustUnitExecutionBlocker {
-                class: "missing-compiler-observation".to_string(),
-                message: format!(
-                    "custom-build unit {} has no admitted compiler execution or restored artifact",
-                    inputs.unit.unit_id
-                ),
-            }));
-        };
-        let admission = BuildScriptAdmissionContext {
-            planned: inputs.planned,
-            primary: compiler_effect,
-            observed_compiler: observed_compiler.map(|attempt| &attempt.observation),
-            restored_compiler: restored_compiler.as_ref(),
-        };
-        match run_build_script_metadata(inputs.unit, inputs.options, &path, &admission)?.receipt {
-            Ok(metadata_run) => {
-                inputs
-                    .state
-                    .build_script_metadata
-                    .record_unit(inputs.unit, build_script_metadata_from_run(&metadata_run));
-                inputs.state.metadata_runs.push(metadata_run);
-            }
-            Err(blocker) => return Ok(Some(blocker)),
+
+    fn is_unit_supported(&self, unit: &RustUnitDerivationSummary, index: usize) -> bool {
+        if index < self.host_indices.len() {
+            is_supported_host_unit(unit)
+        } else {
+            is_supported_target_unit(unit)
         }
     }
-    inputs.state.host_artifacts.record_unit(inputs.unit, path);
-    Ok(None)
-}
 
-fn execute_host_artifact_consumer(
-    inputs: HostArtifactTopologyUnitInputs<'_>,
-) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
-    debug_assert!(is_supported_target_unit(inputs.unit));
-    debug_assert!(!inputs.unit.unit_id.is_empty());
-    let mut executable = match bind_all_host_artifacts_with_index(inputs.unit, &inputs.state.host_artifacts) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    executable = match bind_all_build_script_metadata_with_index(&executable, &inputs.state.build_script_metadata) {
-        Ok(unit) => unit,
-        Err(blocker) => return Ok(Some(blocker)),
-    };
-    if !executable.dependency_artifacts.is_empty() {
-        executable = bind_all_dependency_artifacts(&executable, &inputs.state.target_artifacts)?;
-    }
-    let receipt = execute_planned_rust_unit(
-        &executable,
-        inputs.options,
-        inputs.planned,
-        &inputs.state.executions,
-        &inputs.state.metadata_runs,
-    )?
-    .receipt;
-    let blocker = topology_unit_failed_blocker(
-        &receipt,
-        "target-unit-failed",
-        format!("target unit {} did not execute successfully", inputs.unit.unit_id),
-    );
-    inputs.state.executions.push(receipt);
-    if blocker.is_some() {
-        return Ok(blocker);
-    }
-    if inputs.unit.target_kind == "lib" {
-        let path = match produced_library_artifact_path(&executable, inputs.options)? {
-            Ok(path) => path,
-            Err(blocker) => return Ok(Some(blocker)),
+    fn bind_unit(
+        &mut self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+    ) -> Result<Result<RustUnitDerivationSummary, RustUnitExecutionBlocker>, RunError> {
+        let mut executable = match bind_all_host_artifacts_with_index(selected, &self.state.host_artifacts) {
+            Ok(unit) => unit,
+            Err(blocker) => return Ok(Err(blocker)),
         };
-        inputs.state.target_artifacts.insert(inputs.unit.package_id.clone(), path);
+        executable = match bind_all_build_script_metadata_with_index(&executable, &self.state.build_script_metadata) {
+            Ok(unit) => unit,
+            Err(blocker) => return Ok(Err(blocker)),
+        };
+        if index >= self.host_indices.len() && !executable.dependency_artifacts.is_empty() {
+            executable = bind_all_dependency_artifacts(&executable, &self.target_artifacts)?;
+        }
+        Ok(Ok(executable))
     }
-    Ok(None)
+
+    fn failure_blocker(
+        &self,
+        index: usize,
+        selected: &RustUnitDerivationSummary,
+        receipt: &RustUnitExecutionReceipt,
+    ) -> Option<RustUnitExecutionBlocker> {
+        if index < self.host_indices.len() {
+            topology_unit_failed_blocker(
+                receipt,
+                "host-unit-failed",
+                format!("host unit {} did not execute successfully", selected.unit_id),
+            )
+        } else {
+            topology_unit_failed_blocker(
+                receipt,
+                "target-unit-failed",
+                format!("target unit {} did not execute successfully", selected.unit_id),
+            )
+        }
+    }
+
+    fn record_success_outputs(
+        &mut self,
+        ctx: SelectedUnitSuccessContext<'_>,
+    ) -> Result<Option<RustUnitExecutionBlocker>, RunError> {
+        if ctx.index < self.host_indices.len() {
+            let mut inputs = TopologyUnitExecutionInputs {
+                options: ctx.options,
+                unit: ctx.selected,
+                state: &mut self.state,
+            };
+            let observed_compiler = ctx.process_attempts.last();
+            let compiler_effect = ctx.primary.or_else(|| observed_compiler.map(|attempt| &attempt.effect));
+            let admission = compiler_effect.map(|compiler| BuildScriptAdmissionContext {
+                planned: ctx.planned,
+                primary: compiler,
+                observed_compiler: observed_compiler.map(|attempt| &attempt.observation),
+                restored_compiler: ctx.restored_compiler,
+            });
+            let mut script_attempts = Vec::new();
+            let outcome = match produced_host_artifact_path(ctx.selected, ctx.options)? {
+                Ok(path) => record_host_topology_outputs(
+                    &mut inputs,
+                    ctx.bound,
+                    path,
+                    admission.as_ref(),
+                    &mut script_attempts,
+                    ctx.cache,
+                    ctx.postprocess_failure,
+                )?,
+                Err(blocker) => Some(blocker),
+            };
+            ctx.process_attempts.extend(script_attempts);
+            return Ok(outcome);
+        }
+        if ctx.selected.target_kind == "lib" {
+            let path = match produced_library_artifact_path(ctx.bound, ctx.options)? {
+                Ok(path) => path,
+                Err(blocker) => return Ok(Some(blocker)),
+            };
+            self.target_artifacts.insert(ctx.selected.package_id.clone(), path);
+        }
+        Ok(None)
+    }
+
+    fn executions(&self) -> &[RustUnitExecutionReceipt] {
+        &self.state.executions
+    }
+
+    fn push_execution(&mut self, receipt: RustUnitExecutionReceipt) {
+        self.state.executions.push(receipt);
+    }
+
+    fn metadata_runs(&self) -> &[BuildScriptMetadataRunReceipt] {
+        &self.state.metadata_runs
+    }
+
+    fn last_metadata_run(&self) -> Option<&BuildScriptMetadataRunReceipt> {
+        self.state.metadata_runs.last()
+    }
 }
 
 pub(crate) fn execute_rust_host_artifact_topology(
@@ -14823,8 +14917,8 @@ pub(crate) fn execute_rust_host_artifact_topology(
     graph: &UnitDerivationGraphSummary,
     options: &RustUnitExecutionOptions,
 ) -> Result<RustUnitHostArtifactTopologyExecutionReceipt, RunError> {
-    const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!HOST_EXECUTION_KIND.is_empty());
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!options.output_root.as_os_str().is_empty());
     if let Some(blocker) = validate_native_registry_topology_inputs(native_registry_sources, graph) {
         return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker));
     }
@@ -14856,33 +14950,24 @@ pub(crate) fn execute_rust_host_artifact_topology(
         Ok(effects) => effects,
         Err(blocker) => return host_artifact_topology_receipt("blocked", Vec::new(), Vec::new(), Some(blocker)),
     };
-    let mut state = HostArtifactTopologyExecutionState::default();
-    state.executions.reserve(indices.host.len().saturating_add(target_order.len()));
-    for (index, planned) in indices.host.into_iter().zip(&effects) {
-        let unit = &graph.derivations[index];
-        let blocker = execute_host_artifact_producer(HostArtifactTopologyUnitInputs {
-            options,
-            unit,
-            planned,
-            state: &mut state,
-        })?;
-        if let Some(blocker) = blocker {
-            return host_artifact_topology_receipt("blocked", state.executions, state.metadata_runs, Some(blocker));
-        }
+    let mut delegate = HostArtifactTopologyDelegate {
+        graph,
+        host_indices: &indices.host,
+        target_order: &target_order,
+        state: RustUnitTopologyExecutionState::default(),
+        target_artifacts: BTreeMap::new(),
+    };
+    delegate.state.executions.reserve(effects.len());
+    let outcome = execute_selected_units_via_app(&effects, options, &mut delegate)?;
+    if let Some(blocker) = outcome.blocker {
+        return host_artifact_topology_receipt(
+            "blocked",
+            delegate.state.executions,
+            delegate.state.metadata_runs,
+            Some(blocker),
+        );
     }
-    for (index, planned) in target_order.into_iter().zip(effects.iter().skip(state.executions.len())) {
-        let unit = &graph.derivations[index];
-        let blocker = execute_host_artifact_consumer(HostArtifactTopologyUnitInputs {
-            options,
-            unit,
-            planned,
-            state: &mut state,
-        })?;
-        if let Some(blocker) = blocker {
-            return host_artifact_topology_receipt("blocked", state.executions, state.metadata_runs, Some(blocker));
-        }
-    }
-    host_artifact_topology_receipt("success", state.executions, state.metadata_runs, None)
+    host_artifact_topology_receipt("success", delegate.state.executions, delegate.state.metadata_runs, None)
 }
 
 fn topologically_order_units(
@@ -16785,7 +16870,7 @@ fn compiler_policy_manifest_compatibility_blocker(
     manifest_digest: &str,
 ) -> Result<Option<RustCompilerPolicyResolutionBlocker>, RunError> {
     debug_assert!(!manifest_digest.is_empty());
-    debug_assert!(!COMPILER_POLICY_DIGEST_PREFIX.is_empty());
+    debug_assert!(!rustc.as_os_str().is_empty());
     if manifest.provider.is_empty() || manifest.profile.is_empty() || manifest.adapter_kind.is_empty() {
         return compiler_policy_resolution_blocker_for_manifest(CompilerPolicyManifestBlockerInputs {
             mode,
@@ -16859,7 +16944,7 @@ fn compiler_policy_artifact_digests(
     manifest_digest: &str,
 ) -> Result<Result<CompilerPolicyArtifactDigests, RustCompilerPolicyResolutionBlocker>, RunError> {
     debug_assert!(!manifest_digest.is_empty());
-    debug_assert!(!COMPILER_POLICY_DIGEST_PREFIX.is_empty());
+    debug_assert!(!manifest.provider.is_empty());
     let verify = |field, artifact| {
         verified_compiler_policy_artifact(CompilerPolicyArtifactVerificationInputs {
             mode,
@@ -17280,7 +17365,8 @@ fn prepare_rust_unit_execution_inputs(
     options: &RustUnitExecutionOptions,
 ) -> Result<Result<RustUnitExecutionInputs, RustUnitExecutionReceipt>, RunError> {
     const { assert!(RECEIPT_SCHEMA_VERSION > 0) };
-    debug_assert!(!RUST_UNIT_EXECUTION_RECEIPT_FILE.is_empty());
+    debug_assert!(!options.rustc.as_os_str().is_empty());
+    debug_assert!(!unit.unit_id.is_empty());
     if options.wait_diagnostics.is_some() && !options.compiler_policy.mode.is_plain() {
         return Err(RunError::Build(
             "native wait diagnostics require direct admitted rustc execution, not compiler-policy adapters".into(),
@@ -17741,7 +17827,7 @@ fn rust_cache_effective_environment_digest(environment: &BTreeMap<String, OsStri
     }
     let digest = hasher.finalize().to_hex().to_string();
     assert_eq!(digest.len(), BLAKE3_HEX_CHARS);
-    assert!(!RUST_CACHE_EFFECTIVE_ENV_DOMAIN.is_empty());
+    assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
     Ok(digest)
 }
 
@@ -18308,85 +18394,6 @@ fn execute_uncached_rust_unit(
     let (attempt, _) = observed_compiler_attempt(final_effect, &final_output, Some(&receipt), &output_dir)?;
     attempts.push(attempt);
     Ok((receipt, attempts))
-}
-
-struct AdmittedRustUnitExecution {
-    receipt: RustUnitExecutionReceipt,
-    primary: Option<mantle_rust_plan_core::ResolvedUnitEffect>,
-    attempts: Vec<mantle_rust_plan_app::ProcessAttempt>,
-    restored_compiler: Option<mantle_rust_plan_core::RestoredCompilerArtifactObservation>,
-}
-
-fn execute_planned_rust_unit(
-    unit: &RustUnitDerivationSummary,
-    options: &RustUnitExecutionOptions,
-    planned: &mantle_rust_plan_core::ExistingUnitEffect,
-    executions: &[RustUnitExecutionReceipt],
-    metadata_runs: &[BuildScriptMetadataRunReceipt],
-) -> Result<AdmittedRustUnitExecution, RunError> {
-    let stopped = |class: &str, message: &str| {
-        blocked_execution_receipt(BlockedExecutionReceiptInputs {
-            unit: Some(unit),
-            class,
-            message,
-        })
-        .map(|receipt| AdmittedRustUnitExecution {
-            receipt,
-            primary: None,
-            attempts: Vec::new(),
-            restored_compiler: None,
-        })
-    };
-    let mut inputs = match prepare_rust_unit_for_cache(unit, options)? {
-        Ok(inputs) => inputs,
-        Err(receipt) => {
-            return Ok(AdmittedRustUnitExecution {
-                receipt,
-                primary: None,
-                attempts: Vec::new(),
-                restored_compiler: None,
-            });
-        }
-    };
-    let facts = match topology_primary_process_facts(planned, unit, &inputs, options, executions, metadata_runs) {
-        Ok(facts) => facts,
-        Err(error) => return stopped(&error.code, &error.detail),
-    };
-    let primary = match mantle_rust_plan_core::admit_resolved_unit_effect(planned, facts, None) {
-        Ok(effect) => effect,
-        Err(blockers) => {
-            let blocker = &blockers[0];
-            return stopped(&blocker.code, &blocker.message);
-        }
-    };
-    request_native_wait_attempt(options, &primary, unit);
-    if let Some((receipt, cache)) = restore_or_miss_rust_unit(unit, options, &mut inputs)? {
-        record_native_wait_cache(options, &primary, unit, &receipt);
-        let restored_compiler = if unit.target_kind == "custom-build"
-            && matches!(
-                cache,
-                mantle_rust_plan_app::CacheObservation::ReusedOutput
-                    | mantle_rust_plan_app::CacheObservation::RestoredLocal
-                    | mantle_rust_plan_app::CacheObservation::RestoredShared
-            ) {
-            Some(restored_compiler_evidence(&receipt, &primary, cache)?)
-        } else {
-            None
-        };
-        return Ok(AdmittedRustUnitExecution {
-            receipt,
-            primary: Some(primary),
-            attempts: Vec::new(),
-            restored_compiler,
-        });
-    }
-    let (receipt, attempts) = execute_uncached_rust_unit(unit, options, inputs, planned, primary)?;
-    Ok(AdmittedRustUnitExecution {
-        receipt,
-        primary: None,
-        attempts,
-        restored_compiler: None,
-    })
 }
 
 struct ReuseRustUnitOutputsInputs<'a> {
@@ -19087,14 +19094,7 @@ fn failed_execution_receipt(inputs: FailedExecutionReceiptInputs<'_>) -> Result<
 }
 
 fn normalized_blake3_hex(value: &str) -> Option<String> {
-    let candidate = value.strip_prefix("b3:").or_else(|| value.strip_prefix("blake3:")).unwrap_or(value);
-    if candidate.len() != BLAKE3_HEX_CHARS {
-        return None;
-    }
-    if !candidate.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return None;
-    }
-    Some(candidate.to_ascii_lowercase())
+    mantle_rust_plan_core::normalize_blake3_hex(value)
 }
 
 fn rust_unit_toolchain_policy_digest(
@@ -19387,59 +19387,33 @@ fn canonical_blake3_digest<T: Serialize>(value: &T, label: &str) -> Result<Strin
 }
 
 #[cfg(test)]
+fn replay_evidence_facts(evidence: &RustUnitReplayEvidence) -> mantle_rust_plan_core::ReplayEvidenceFacts<'_> {
+    mantle_rust_plan_core::ReplayEvidenceFacts {
+        schema_version: evidence.schema_version,
+        unit_id: &evidence.unit_id,
+        package_id: &evidence.package_id,
+        blocker_class: &evidence.blocker_class,
+        rustc_args_digest_blake3: &evidence.rustc_args_digest_blake3,
+        environment_digest_blake3: &evidence.environment_digest_blake3,
+        toolchain_policy_digest_blake3: &evidence.toolchain_policy_digest_blake3,
+        artifact_identity_digest_blake3: &evidence.artifact_identity_digest_blake3,
+        declared_outputs_digest_blake3: &evidence.declared_outputs_digest_blake3,
+        dependency_artifacts_digest_blake3: &evidence.dependency_artifacts_digest_blake3,
+        host_artifacts_digest_blake3: &evidence.host_artifacts_digest_blake3,
+        output_artifacts_digest_blake3: &evidence.output_artifacts_digest_blake3,
+        consumed_artifact_roles_digest_blake3: &evidence.consumed_artifact_roles_digest_blake3,
+        declared_output_count: evidence.declared_output_count,
+        dependency_artifact_count: evidence.dependency_artifact_count,
+        host_artifact_count: evidence.host_artifact_count,
+        output_artifact_count: evidence.output_artifact_count,
+        consumed_artifact_role_count: evidence.consumed_artifact_role_count,
+    }
+}
+
+#[cfg(test)]
 fn rust_unit_replay_evidence_from_json(bytes: &[u8]) -> Result<RustUnitReplayEvidence, String> {
-    if bytes.len() > RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES {
-        return Err(format!(
-            "rust unit replay evidence JSON exceeds {} byte limit",
-            RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES
-        ));
-    }
-    let evidence: RustUnitReplayEvidence =
-        serde_json::from_slice(bytes).map_err(|err| format!("rust unit replay evidence JSON is malformed: {err}"))?;
-    validate_rust_unit_replay_evidence(&evidence)?;
-    Ok(evidence)
-}
-
-#[cfg(test)]
-fn validate_rust_unit_replay_evidence(evidence: &RustUnitReplayEvidence) -> Result<(), String> {
-    if evidence.schema_version != RECEIPT_SCHEMA_VERSION {
-        return Err("rust unit replay evidence schema version is unsupported".to_string());
-    }
-    if evidence.unit_id.is_empty() || evidence.package_id.is_empty() || evidence.blocker_class.is_empty() {
-        return Err("rust unit replay evidence identity fields must be non-empty".to_string());
-    }
-    for (field, value) in [
-        ("rustc_args_digest_blake3", evidence.rustc_args_digest_blake3.as_str()),
-        ("environment_digest_blake3", evidence.environment_digest_blake3.as_str()),
-        ("toolchain_policy_digest_blake3", evidence.toolchain_policy_digest_blake3.as_str()),
-        ("artifact_identity_digest_blake3", evidence.artifact_identity_digest_blake3.as_str()),
-        ("declared_outputs_digest_blake3", evidence.declared_outputs_digest_blake3.as_str()),
-        ("dependency_artifacts_digest_blake3", evidence.dependency_artifacts_digest_blake3.as_str()),
-        ("host_artifacts_digest_blake3", evidence.host_artifacts_digest_blake3.as_str()),
-        ("output_artifacts_digest_blake3", evidence.output_artifacts_digest_blake3.as_str()),
-        ("consumed_artifact_roles_digest_blake3", evidence.consumed_artifact_roles_digest_blake3.as_str()),
-    ] {
-        if !is_lowercase_blake3_hex(value) {
-            return Err(format!("rust unit replay evidence field {field} is not a lowercase BLAKE3 digest"));
-        }
-    }
-    for (field, count) in [
-        ("declared_output_count", evidence.declared_output_count),
-        ("dependency_artifact_count", evidence.dependency_artifact_count),
-        ("host_artifact_count", evidence.host_artifact_count),
-        ("output_artifact_count", evidence.output_artifact_count),
-        ("consumed_artifact_role_count", evidence.consumed_artifact_role_count),
-    ] {
-        if count > RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS {
-            return Err(format!("rust unit replay evidence field {field} exceeds bounded item limit"));
-        }
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-fn is_lowercase_blake3_hex(value: &str) -> bool {
-    value.len() == BLAKE3_HEX_CHARS && value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    mantle_rust_plan_core::parse_rust_unit_replay_evidence_json(bytes, replay_evidence_facts)
+        .map_err(|err| err.to_string())
 }
 
 fn rust_derivation_env_digest(env: &BTreeMap<String, String>) -> Result<String, RunError> {
@@ -19698,46 +19672,7 @@ fn resolve_tool_path(tool: impl AsRef<Path>) -> Option<PathBuf> {
 }
 
 fn redacted_diagnostic(stderr: &[u8]) -> String {
-    let text = String::from_utf8_lossy(stderr);
-    let compact = text.lines().take(REDACTED_DIAGNOSTIC_MAX_LINES).collect::<Vec<_>>().join("\n");
-    if compact.is_empty() {
-        "rustc exited with a nonzero status".to_string()
-    } else {
-        redact_temp_paths(&compact.replace('\0', ""))
-    }
-}
-
-fn redact_temp_paths(text: &str) -> String {
-    debug_assert!(!REDACTED_DIAGNOSTIC_TEMP_PATH.is_empty());
-    debug_assert!(!TEMP_PATH_PREFIXES.is_empty());
-    let mut redacted = String::with_capacity(text.len());
-    let mut cursor = 0usize;
-    while cursor < text.len() {
-        let Some((prefix_offset, prefix)) = next_temp_path_prefix(&text[cursor..]) else {
-            redacted.push_str(&text[cursor..]);
-            break;
-        };
-        let start = cursor.saturating_add(prefix_offset);
-        redacted.push_str(&text[cursor..start]);
-        redacted.push_str(REDACTED_DIAGNOSTIC_TEMP_PATH);
-        let path_start = start.saturating_add(prefix.len());
-        let path_tail = text[path_start..]
-            .find(temp_path_delimiter)
-            .map_or(text.len(), |offset| path_start.saturating_add(offset));
-        cursor = path_tail;
-    }
-    redacted
-}
-
-fn next_temp_path_prefix(text: &str) -> Option<(usize, &'static str)> {
-    TEMP_PATH_PREFIXES
-        .iter()
-        .filter_map(|prefix| text.find(prefix).map(|offset| (offset, *prefix)))
-        .min_by_key(|(offset, _prefix)| *offset)
-}
-
-fn temp_path_delimiter(ch: char) -> bool {
-    ch.is_whitespace() || matches!(ch, '"' | '\'' | '`' | ')' | '(' | '[' | ']')
+    mantle_rust_plan_core::redacted_diagnostic(stderr)
 }
 
 fn summarize_unit_graph(unit_graph: Value) -> Result<UnitGraphSummary, RunError> {

@@ -2620,6 +2620,7 @@ let Registry = {
         "marker"= "rust-plan.receipts",
         "source_paths"= [
           "src/rust_plan.rs",
+          "src/rust_plan_execution.rs",
           "src/trusted_keys.rs"
         ]
       },

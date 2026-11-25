@@ -7,14 +7,14 @@ This audit covers constant-only assertions (`assert!`, `assert_eq!`, `assert_ne!
 ## Verification & Enforcement Tooling
 
 - Guard script: `scripts/check-constant-assertions.py`
-  - Default check (`python3 scripts/check-constant-assertions.py`): enforces zero inside-`fn` constant-only assertions across M4-C.1 owned/clean targets (`src/shell_cmd.rs`, `src/lib.rs`, `src/main.rs`, `src/bin/crunch.rs`, `src/cli.rs`, `src/rust_plan_execution.rs`, `src/build_correctness.rs`, `src/profile_cli.rs`, `src/machine_contract_producer_tests.rs`, `crates/mantle-rust-plan-core/src`, `crates/mantle-rust-plan-app/src`, `crates/crunch-test-core/src`, `crates/crunch-test-app/src`, `crates/crunch-test/src`). Currently: **25 owned/clean files, 0 violations**.
+  - Default check (`python3 scripts/check-constant-assertions.py`): enforces zero inside-`fn` constant-only assertions across M4-C.1 & M4-C.2 owned/clean targets (`src/shell_cmd.rs`, `src/lib.rs`, `src/main.rs`, `src/bin/crunch.rs`, `src/cli.rs`, `src/rust_plan_execution.rs`, `src/build_correctness.rs`, `src/profile_cli.rs`, `src/machine_contract_producer_tests.rs`, `crates/mantle-rust-plan-core/src`, `crates/mantle-rust-plan-app/src`, `crates/crunch-test-core/src`, `crates/crunch-test-app/src`, `crates/crunch-test/src`, `src/rust_plan.rs`, `src/stagex_transition.rs`). Currently: **27 owned/clean files, 0 violations**.
   - Self-test (`python3 scripts/check-constant-assertions.py --self-test`): validates **10 positive** cases (top-level `const _: () = { ... };`, top-level `const _: () = assert!(...);`, inline `const { ... }`, string-literal macro false-positive rejection, runtime `&str` check, runtime `&[u8]` check against a constant bound, `static` `OnceLock` check, digit-containing runtime identifier `v1_name`, mixed runtime/const `u256_count <= U256_MAX && V1_NAME.len() <= u256_count`, and `#[cfg(test)]` module) and **11 negative** cases (`debug_assert!(!SIDECAR_FILENAME.is_empty())`, `assert!(MAX_ITEMS > 0, "must be positive")`, `debug_assert_ne!(MODE_A, MODE_B)`, `assert!("abc".len() == 3)`, `assert_ne!(1_usize, 2_usize)`, `debug_assert!(0x10_u64 > 0)`, `assert_eq!(0b1010_u8, 10_u8)`, `debug_assert!(0o77_u32 == 63)`, `assert!(1_000_i32 == 1_000_i32)`, `debug_assert!(1_000.0_f64 > 0.0_f64)`, and `assert!(!V1_NAME.is_empty() && U256_MAX > 0)` inside a production function).
   - Full-repository inventory (`python3 scripts/check-constant-assertions.py --audit-all`): scans all production Rust files under `src/` and `crates/*/src/` while attributing M4-C.1, M4-C.2, Forbidden Lane C, and Other Unowned files.
 
 ## Fixes Applied in M4-C.1
 
 1. **`src/shell_cmd.rs` (`SIDECAR_FILENAME` compile-time checks, runtime invariants & input guards)**:
-   - Replaced all **8** repeated inside-`fn` `SIDECAR_FILENAME` assertions from `HEAD:src/shell_cmd.rs` (`cmd_shell`, `build_shell_target`, `exec_hook`, `exec_plan` — 2 each) with a single top-level compile-time block:
+   - Replaced all **8** repeated inside-`fn` `SIDECAR_FILENAME` assertions from `main:src/shell_cmd.rs` (`df4a2c2c`: `cmd_shell`, `build_shell_target`, `exec_hook`, `exec_plan` — 2 each) with a single top-level compile-time block:
      ```rust
      const _: () = {
          assert!(!SIDECAR_FILENAME.is_empty());
@@ -36,12 +36,23 @@ This audit covers constant-only assertions (`assert!`, `assert_eq!`, `assert_ne!
 ## CLI Consolidation Context (`#58` + `#78`): `src/lib.rs` Backlog & Build Timings
 
 - **`src/lib.rs` consolidation & backlog**:
-  - `src/lib.rs` declares `225` modules (`224` unique modules from `HEAD:src/lib.rs` ∪ `HEAD:src/main.rs`, plus `mod cli;`), while `src/main.rs` and `src/bin/crunch.rs` are 3-line shims invoking `mantle::cli_main()`.
-  - `155` legacy modules consolidated from `HEAD:src/main.rs` carry `// HARDENING-BACKLOG 2026-11-25` outer `#[allow(tigerstyle::...)]` attributes in `src/lib.rs` scoped strictly to their pre-existing lints (including `source_built_fixed_point_planning` and `source_built_fixed_point_receipt`, which belong to forbidden `src/source_built_fixed_point*.rs` files); `35` `#[allow(dead_code)]` attributes remain (`27` retired, `0` added).
+  - `src/lib.rs` declares `225` modules (`224` unique modules from `main:src/lib.rs` ∪ `main:src/main.rs` at `df4a2c2c`, plus `mod cli;`), while `src/main.rs` and `src/bin/crunch.rs` are 3-line shims invoking `mantle::cli_main()`.
+  - `155` legacy modules consolidated from `main:src/main.rs` (`df4a2c2c`) carry `// HARDENING-BACKLOG 2026-11-25` outer `#[allow(tigerstyle::...)]` attributes in `src/lib.rs` scoped strictly to their pre-existing lints (including `source_built_fixed_point_planning` and `source_built_fixed_point_receipt`, which belong to forbidden `src/source_built_fixed_point*.rs` files); `34` `dead_code` suppression attributes remain (`33` `#[allow(dead_code...)]` plus `1` `#[cfg_attr(not(target_os = "linux"), allow(dead_code))]`, down from `35` in M4-C.1 `3f801e52` after M4-C.2 retired `#[allow(dead_code)]` on `mod stagex_transition;` — `28` retired relative to `main:src/main.rs`'s `62`, `30` retired overall across `main:src/{lib,main}.rs`, `0` added).
   - **0** `#[allow(tigerstyle::...)]` suppressions appear in M4-C.1 refactored/owned files (`src/cli.rs`, `src/shell_cmd.rs`, `src/profile_cli.rs`, `src/build_correctness.rs`, `src/main.rs`, `src/bin/crunch.rs`, or clean pre-existing `src/lib.rs` modules).
 - **Build timings on `aspen1` (`CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_INCREMENTAL=0`)**:
-  - Baseline (`HEAD` `df4a2c2c`, duplicate `src/main.rs` binary target via `cargo check -p mantle --bins`): `185.71s` clean (`user 316.55s`, `sys 63.35s`); `134.53s` incremental after comment edit in `src/main.rs` (`user 169.90s`, `sys 9.18s`).
+  - Baseline (`main` `df4a2c2c`, duplicate `src/main.rs` binary target via `cargo check -p mantle --bins`): `185.71s` clean (`user 316.55s`, `sys 63.35s`); `134.53s` incremental after comment edit in `src/main.rs` (`user 169.90s`, `sys 9.18s`).
   - Post-consolidation (`cargo check -p mantle --lib --bins`): `1m43.927s` clean (`CARGO_TARGET_DIR=/dev/shm/kiln-swarm/timing-c`, `user 2m51.612s`, `sys 0m51.608s`); `3.059s` incremental no-op; `1.363s` incremental after `touch src/main.rs`; `13.911s` incremental after `touch src/cli.rs`.
+
+## Fixes Applied in M4-C.2
+
+1. **`src/stagex_transition.rs` (`L6119` `BASH_COUNT_BOUNDS` assertion) & `src/lib.rs`**:
+   - Replaced the inside-`fn` constant-only `assert!(BASH_COUNT_BOUNDS[0] <= BASH_COUNT_BOUNDS[1]);` in `require_binutils_non_coreutils_counts` (`3f801e52:src/stagex_transition.rs:6119`) with module-level `BINUTILS_BASH_COUNT_BOUNDS` (`[7_619, 7_627]`) + top-level `const _: ()` compile-time checks (`BINUTILS_BASH_COUNT_BOUNDS[0] > 0` and `BINUTILS_BASH_COUNT_BOUNDS[0] <= BINUTILS_BASH_COUNT_BOUNDS[1]`, alongside `BINUTILS_MKDIR_EXEC_COUNT_BOUNDS` checks) and runtime invariants `debug_assert!(paths.bash.is_absolute());` and `debug_assert!(!counts.is_empty());` (alongside the pre-existing `assert_eq!(sed_count, report.sed_invocation_count + SED_COUNT_OFFSET);`).
+   - Moved `EXPECTED_PROMOTION_COUNT` into `src/stagex_transition.rs::tests` and removed `#[allow(dead_code)]` on `mod stagex_transition` in `src/lib.rs`.
+   - Promoted `src/stagex_transition.rs` into `OWNED_CLEAN_TARGETS` in `scripts/check-constant-assertions.py` (**0 violations**).
+
+2. **`src/rust_plan.rs` & `crates/mantle-rust-plan-core/src/plan.rs`**:
+   - Eliminated all **32** inside-`fn` constant-only assertions from `3f801e52:src/rust_plan.rs`: replaced **30** in `src/rust_plan.rs` with top-level `const _: ()` compile-time checks plus runtime `debug_assert!`/`assert!` invariants on live values, and moved the **2** diagnostic-redaction constant checks (`REDACTED_DIAGNOSTIC_TEMP_PATH`, `TEMP_PATH_PREFIXES`) into top-level `const _: ()` in `crates/mantle-rust-plan-core/src/plan.rs` alongside runtime `debug_assert!` invariants in `redact_temp_paths` (**0** constant-only inside-`fn` assertions in both files).
+   - Promoted `src/rust_plan.rs` into `OWNED_CLEAN_TARGETS` in `scripts/check-constant-assertions.py` (leaving `M4_C2_TARGETS` empty; **0 violations** across all **27** owned/clean files).
 
 ## Repository-Wide Backlog Snapshot (Owned vs. Unowned Breakdown)
 
@@ -50,15 +61,11 @@ Measured with `python3 scripts/check-constant-assertions.py --audit-all`:
 | Bucket | Files | Constant-Only Assertions | Notes |
 | --- | ---: | ---: | --- |
 | M4-C.1 owned (`src/shell_cmd.rs`) | 0 | 0 | Enforced clean |
-| Clean owned targets (`OWNED_CLEAN_TARGETS`) | 0 | 0 | Enforced clean across 25 files |
-| M4-C.2 owned (`src/rust_plan.rs`, `src/stagex_transition.rs`) | 2 | 33 | Deferred to M4-C.2 per lane scope |
+| M4-C.2 owned (`src/rust_plan.rs`, `src/stagex_transition.rs`) | 0 | 0 | Cleaned and promoted to `OWNED_CLEAN_TARGETS` |
+| Clean owned targets (`OWNED_CLEAN_TARGETS`) | 0 | 0 | Enforced clean across 27 files |
 | Forbidden for Lane C (owned by other lanes) | 12 | 24 | Untouched per worktree boundary |
 | Other unowned workspace files (`src/`: 59/197, `crates/`: 23/65) | 82 | 262 | Future hardening backlog (`--strict` mode tracks full cleanup) |
-| **Total repository production files** | **96** | **319** | Baseline for progressive ratchet |
-
-### M4-C.2 Owned (`2` files, `33` assertions)
-- `src/rust_plan.rs` (`32`): `L2245, L3872, L4867, L4985, L7484, L8217, L8255, L8411, L8476, L8597, L10679, L10829, L11415, L11775, L11901, L12336, L13306, L13723, L13761, L14053, L14091, L14311, L14361, L14470, L14501, L14827, L16788, L16862, L17283, L17744, L19711, L19712`
-- `src/stagex_transition.rs` (`1`): `L6119`
+| **Total repository production files** | **94** | **286** | Updated post-M4-C.2 baseline |
 
 ### Forbidden for Lane C (`12` files, `24` assertions)
 - `crates/crunch-build/src/build_request.rs` (`1`): `L904`

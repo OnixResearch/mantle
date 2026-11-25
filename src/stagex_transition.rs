@@ -111,7 +111,14 @@ pub(crate) const BINUTILS_COMPONENT_BUILD_STAGE_ID: &str = "binutils-component-m
 pub(crate) const BINUTILS_INSTALL_STAGE_ID: &str = "binutils-install-materialization";
 pub(crate) const BINUTILS_INSTALL_SMOKE_STAGE_ID: &str = "binutils-install-smoke";
 const BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT: usize = 20;
+const BINUTILS_BASH_COUNT_BOUNDS: [u32; 2] = [7_619, 7_627];
 const BINUTILS_MKDIR_EXEC_COUNT_BOUNDS: [u32; 2] = [5_377, 5_425];
+const _: () = {
+    assert!(BINUTILS_BASH_COUNT_BOUNDS[0] > 0);
+    assert!(BINUTILS_BASH_COUNT_BOUNDS[0] <= BINUTILS_BASH_COUNT_BOUNDS[1]);
+    assert!(BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[0] > 0);
+    assert!(BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[0] <= BINUTILS_MKDIR_EXEC_COUNT_BOUNDS[1]);
+};
 const BINUTILS_EXECUTED_COREUTILS_TOOL_NAMES: [&str; BINUTILS_EXECUTED_COREUTILS_TOOL_COUNT] = [
     "cat", "chmod", "cp", "echo", "install", "ln", "ls", "mkdir", "mv", "rm", "rmdir", "sort", "test", "head", "wc",
     "basename", "dirname", "tr", "expr", "touch",
@@ -174,7 +181,6 @@ const ETXTBSY_EXIT_CODE: i32 = 126;
 const ETXTBSY_STDERR_MARKER: &str = "Text file busy";
 const KAEM_SMOKE_MARKER: &[u8] = b"kaem-smoke-success\n";
 const EXPECTED_AUDIT_EVENT_COUNT: usize = 3;
-const EXPECTED_PROMOTION_COUNT: usize = 2;
 const SOURCE_STATE_DOMAIN: &[u8] = b"mantle-stagex-transition-source-state-v1\0";
 const REPORT_FILE_NAME: &str = "transition-report.json";
 const PLAN_FILE_NAME: &str = "transition-plan.json";
@@ -471,11 +477,162 @@ struct ExpectedAuditEvent<'a> {
     inventory_entry_id: String,
 }
 
+struct PreparedTransitionContext {
+    manifest_authority: TransitionManifestAuthority,
+    staged: StagedTransitionPaths,
+    source_state_digest_blake3: String,
+    plan: StagexMaterializationPlan,
+    stage0_root: PathBuf,
+    supervisor: ProtectedSeccompSupervisor,
+}
+
+struct SeedTransitionArtifacts {
+    hex0_promotion: OutputPromotionRecord,
+    kaem_promotion: OutputPromotionRecord,
+}
+
+#[derive(Clone, Copy)]
+struct StageDirSpec<'a> {
+    dir_name: &'a str,
+    create_action: &'a str,
+}
+
+struct PlannedExecutableSpec<'a> {
+    authorization_id: &'a str,
+    source_stage_id: &'a str,
+    path: PathBuf,
+    digest_hex: &'a str,
+}
+
+#[derive(Clone, Copy)]
+struct TransitionStageContext<'a> {
+    request: &'a StagexTransitionRequest<'a>,
+    manifest_authority: &'a TransitionManifestAuthority,
+    supervisor: &'a ProtectedSeccompSupervisor,
+    stage0_root: &'a Path,
+    source_bundle_path: &'a Path,
+}
+
+struct Stage0AndMesArtifacts {
+    stage0_full: crate::stagex_stage0_full::Stage0FullInventoryReport,
+    mes_m2: crate::stagex_mes::MesM2InventoryReport,
+    mes_runtime: crate::stagex_mes_lib::MesRuntimeInventoryReport,
+}
+
+struct EarlyToolchainArtifacts {
+    tinycc_sources: crate::stagex_tinycc::TinyccSourceMaterializationReport,
+    tinycc_runtime: crate::stagex_tinycc::TccMesInventoryReport,
+    tinycc27_sources: crate::stagex_tinycc27::Tinycc27SourceMaterializationReport,
+    tinycc27_runtime: crate::stagex_tinycc27::Tinycc27InventoryReport,
+    make_sources: crate::stagex_make::MakeSourceMaterializationReport,
+    make_runtime: crate::stagex_make::MakeInventoryReport,
+    gnu_patch_sources: crate::stagex_gnu_patch::GnuPatchSourceMaterializationReport,
+    gnu_patch_runtime: crate::stagex_gnu_patch::GnuPatchInventoryReport,
+}
+
+struct ArchiveToolsArtifacts {
+    gzip_sources: crate::stagex_gzip::GzipSourceMaterializationReport,
+    gzip_runtime: crate::stagex_gzip::GzipInventoryReport,
+    tar_sources: crate::stagex_tar::TarSourceMaterializationReport,
+    tar_runtime: crate::stagex_tar::TarInventoryReport,
+    sed_sources: crate::stagex_sed::SedSourceMaterializationReport,
+    sed_runtime: crate::stagex_sed::SedInventoryReport,
+    bzip2_sources: crate::stagex_bzip2::Bzip2SourceMaterializationReport,
+    bzip2_runtime: crate::stagex_bzip2::Bzip2InventoryReport,
+}
+
+struct EarlyShellToolsArtifacts {
+    coreutils_sources: crate::stagex_coreutils::CoreutilsSourceMaterializationReport,
+    coreutils_runtime: crate::stagex_coreutils::CoreutilsInventoryReport,
+    oyacc_sources: crate::stagex_oyacc::OyaccSourceMaterializationReport,
+    oyacc_runtime: crate::stagex_oyacc::OyaccInventoryReport,
+    bash_sources: crate::stagex_bash::BashSourceMaterializationReport,
+    bash_runtime: crate::stagex_bash::BashInventoryReport,
+}
+
+struct MuslBootstrapArtifacts {
+    tcc_musl_prep_runtime: crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport,
+    musl_sources: crate::stagex_musl::MuslSourceMaterializationReport,
+    musl_runtime: crate::stagex_musl::MuslInventoryReport,
+    tcc_musl_runtime: crate::stagex_tcc_musl::TccMuslInventoryReport,
+    musl_pass2_runtime: crate::stagex_musl::MuslInventoryReport,
+}
+
+struct TccSelfhostArtifacts {
+    tcc_musl_v2_runtime: crate::stagex_tcc_musl_v2::InventoryReport,
+    tcc_selfhost_runtime: crate::stagex_tcc_selfhost::InventoryReport,
+    musl_native_runtime: crate::stagex_musl_native::InventoryReport,
+}
+
+struct GnuTextToolsArtifacts {
+    m4_sources: crate::stagex_m4::M4SourceMaterializationReport,
+    m4_runtime: crate::stagex_m4::M4InventoryReport,
+    diffutils_sources: crate::stagex_diffutils::DiffutilsSourceMaterializationReport,
+    diffutils_runtime: crate::stagex_diffutils::DiffutilsInventoryReport,
+    grep_sources: crate::stagex_grep::GrepSourceMaterializationReport,
+    grep_runtime: crate::stagex_grep::GrepInventoryReport,
+    gawk_sources: crate::stagex_gawk::GawkSourceMaterializationReport,
+    gawk_runtime: crate::stagex_gawk::GawkInventoryReport,
+}
+
+struct GnuParserAndBashArtifacts {
+    bison_sources: crate::stagex_bison::BisonSourceMaterializationReport,
+    bison_runtime: crate::stagex_bison::BisonInventoryReport,
+    flex_sources: crate::stagex_flex::FlexSourceMaterializationReport,
+    flex_runtime: crate::stagex_flex::FlexInventoryReport,
+    bash_full_runtime: crate::stagex_bash_full::BashFullInventoryReport,
+}
+
+struct BinutilsArtifacts {
+    binutils_sources: crate::stagex_binutils::BinutilsSourceMaterializationReport,
+    binutils_runtime: crate::stagex_binutils::BinutilsInventoryReport,
+}
+
+struct FullSourceTransitionArtifacts {
+    stage0_and_mes: Stage0AndMesArtifacts,
+    early_toolchain: EarlyToolchainArtifacts,
+    archive_tools: ArchiveToolsArtifacts,
+    early_shell_tools: EarlyShellToolsArtifacts,
+    musl_bootstrap: MuslBootstrapArtifacts,
+    tcc_selfhost: TccSelfhostArtifacts,
+    gnu_text_tools: GnuTextToolsArtifacts,
+    gnu_parser_and_bash: GnuParserAndBashArtifacts,
+    binutils: BinutilsArtifacts,
+}
+
+struct CompletedTransitionExecution {
+    seed_artifacts: SeedTransitionArtifacts,
+    full_artifacts: Option<FullSourceTransitionArtifacts>,
+    binutils_event_count: Option<usize>,
+    protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
+}
+
+struct TransitionReportBase {
+    plan_digest_blake3: String,
+    source_state_digest_blake3: String,
+    kaem_smoke_digest_blake3: String,
+    promotions: Vec<OutputPromotionRecord>,
+    protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
+}
+
 pub(crate) fn materialize_protected_transition(
     request: StagexTransitionRequest<'_>,
 ) -> Result<StagexTransitionReport, StagexTransitionError> {
+    debug_assert!(!request.scratch_dir.as_os_str().is_empty());
+    let prepared = prepare_transition_context(&request)?;
+    let seed_artifacts = execute_seed_bootstrap_stages(&prepared.staged, &prepared.supervisor)?;
+    let completed = execute_protected_source_phases(&request, &prepared, seed_artifacts)?;
+    let report = finalize_protected_transition(&request, prepared, completed)?;
+    debug_assert_eq!(report.status, "complete");
+    Ok(report)
+}
+
+fn prepare_transition_context(
+    request: &StagexTransitionRequest<'_>,
+) -> Result<PreparedTransitionContext, StagexTransitionError> {
+    debug_assert!(!request.lineage_manifest_path.as_os_str().is_empty());
     let manifest_authority = load_transition_manifest_authority(request.lineage_manifest_path)?;
-    let staged = stage_transition_inputs(&request)?;
+    let staged = stage_transition_inputs(request)?;
     validate_stage0_optional_inputs(request.source_bundle_path, request.stage0_answers_path)?;
     validate_optional_source_bundle(request.source_bundle_path, &manifest_authority)?;
     let source_state_digest_blake3 = source_state_digest(
@@ -489,249 +646,10 @@ pub(crate) fn materialize_protected_transition(
         request.source_bundle_path.is_some(),
     )?;
     write_json_create_new(&request.scratch_dir.join(PLAN_FILE_NAME), &plan)?;
-
     let promotion_stage_ids = promotion_stage_ids(&plan);
     let stage0_root = request.scratch_dir.join("stage0-mini");
-    let planned_executables = if request.source_bundle_path.is_some() {
-        let mut planned = crate::stagex_stage0::planned_stage0_executables(&stage0_root)
-            .into_iter()
-            .map(|entry| PlannedExecutable {
-                authorization_id: entry.authorization_id,
-                source_stage_id: entry.source_stage_id,
-                path: entry.path,
-                digest_hex: entry.digest_blake3,
-            })
-            .collect::<Vec<_>>();
-        planned.extend(crate::stagex_stage0_full::planned_stage0_full_executables(&stage0_root).into_iter().map(
-            |entry| PlannedExecutable {
-                authorization_id: entry.authorization_id,
-                source_stage_id: entry.source_stage_id,
-                path: entry.path,
-                digest_hex: entry.digest_blake3,
-            },
-        ));
-        planned.extend(additional_mes_stage0_planned_executables(&stage0_root));
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:mes-m2-smoke:mes-m2".to_string(),
-            source_stage_id: MES_M2_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("mes-stage/mes-0.27.1/bin/mes-m2"),
-            digest_hex: crate::stagex_mes::MES_M2_BLAKE3.to_string(),
-        });
-        let tinycc_root = request.scratch_dir.join("tinycc-stage/runtime");
-        planned.extend([
-            PlannedExecutable {
-                authorization_id: "exec:tinycc-runtime-refresh:tcc-mes".to_string(),
-                source_stage_id: TINYCC_MES_STAGE_ID.to_string(),
-                path: tinycc_root.join("tinycc-0.9.26/tcc-mes"),
-                digest_hex: crate::stagex_tinycc::TCC_MES_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:tinycc-boot0-smoke:tcc-boot0".to_string(),
-                source_stage_id: TINYCC_BOOT0_STAGE_ID.to_string(),
-                path: tinycc_root.join("tinycc-0.9.26/tcc-boot0"),
-                digest_hex: crate::stagex_tinycc::TCC_BOOT0_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:tinycc-final-smoke:tinycc".to_string(),
-                source_stage_id: TINYCC_FINAL_STAGE_ID.to_string(),
-                path: tinycc_root.join("output/bin/tcc"),
-                digest_hex: crate::stagex_tinycc::TINYCC_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:tinycc27-smoke:tinycc27".to_string(),
-                source_stage_id: TINYCC27_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("tinycc27-stage/runtime/output/bin/tcc"),
-                digest_hex: crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:make-smoke:recipe-runner".to_string(),
-                source_stage_id: MAKE_RECIPE_RUNNER_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("make-stage/runtime/output/bin/make-recipe-runner"),
-                digest_hex: crate::stagex_make::MAKE_RECIPE_RUNNER_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:make-smoke:make".to_string(),
-                source_stage_id: MAKE_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("make-stage/runtime/output/bin/make"),
-                digest_hex: crate::stagex_make::MAKE_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:gnu-patch-smoke:patch".to_string(),
-                source_stage_id: GNU_PATCH_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("gnu-patch-stage/runtime/output/bin/patch"),
-                digest_hex: crate::stagex_gnu_patch::GNU_PATCH_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:gzip-generator-execution:makecrc".to_string(),
-                source_stage_id: GZIP_GENERATOR_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("gzip-stage/runtime/generated/bin/makecrc"),
-                digest_hex: crate::stagex_gzip::GZIP_MAKECRC_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:gzip-smoke:gzip".to_string(),
-                source_stage_id: GZIP_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("gzip-stage/runtime/output/bin/gzip"),
-                digest_hex: crate::stagex_gzip::GZIP_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:gzip-smoke:gunzip".to_string(),
-                source_stage_id: GZIP_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("gzip-stage/runtime/output/bin/gunzip"),
-                digest_hex: crate::stagex_gzip::GZIP_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:tar-smoke:tar".to_string(),
-                source_stage_id: TAR_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("tar-stage/runtime/output/bin/tar"),
-                digest_hex: crate::stagex_tar::TAR_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:sed-smoke:sed".to_string(),
-                source_stage_id: SED_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("sed-stage/runtime/output/bin/sed"),
-                digest_hex: crate::stagex_sed::SED_FINAL_BLAKE3.to_string(),
-            },
-            PlannedExecutable {
-                authorization_id: "exec:bzip2-smoke:bzip2".to_string(),
-                source_stage_id: BZIP2_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join("bzip2-stage/runtime/output/bin/bzip2"),
-                digest_hex: crate::stagex_bzip2::BZIP2_FINAL_BLAKE3.to_string(),
-            },
-        ]);
-        for (name, digest) in coreutils_smoke_executables() {
-            planned.push(PlannedExecutable {
-                authorization_id: format!("exec:coreutils-smoke:{name}"),
-                source_stage_id: COREUTILS_BUILD_STAGE_ID.to_string(),
-                path: request.scratch_dir.join(format!("coreutils-stage/runtime/output/bin/{name}")),
-                digest_hex: digest.to_string(),
-            });
-        }
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:oyacc-smoke:yacc".to_string(),
-            source_stage_id: OYACC_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("oyacc-stage/runtime/output/bin/yacc"),
-            digest_hex: crate::stagex_oyacc::OYACC_FINAL_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:bash-smoke:bash".to_string(),
-            source_stage_id: BASH_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("bash-stage/runtime/output/bin/bash"),
-            digest_hex: crate::stagex_bash::BASH_FINAL_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:tcc-musl-prep-smoke:tcc".to_string(),
-            source_stage_id: TCC_MUSL_PREP_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("tcc-musl-prep-stage/runtime/output/bin/tcc-musl-prep"),
-            digest_hex: crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_FINAL_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:tcc-musl-smoke:tcc".to_string(),
-            source_stage_id: TCC_MUSL_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("tcc-musl-stage/runtime/output/bin/tcc-0.9.27-musl"),
-            digest_hex: crate::stagex_tcc_musl::TCC_MUSL_FINAL_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:tcc-musl-v2-materialization:tinycc26".to_string(),
-            source_stage_id: TINYCC_FINAL_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("tinycc-stage/runtime/output/bin/tcc-0.9.26"),
-            digest_hex: crate::stagex_tinycc::TINYCC_FINAL_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:tcc-musl-v2-smoke:tcc".to_string(),
-            source_stage_id: TCC_MUSL_V2_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("tcc-musl-v2-stage/runtime/output/bin/tcc-0.9.27-musl-v2"),
-            digest_hex: crate::stagex_tcc_musl_v2::COMPILER_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:tcc-musl-v2-execution:positive".to_string(),
-            source_stage_id: TCC_MUSL_V2_SMOKE_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("tcc-musl-v2-stage/runtime/smoke/variadic-positive"),
-            digest_hex: crate::stagex_tcc_musl_v2::POSITIVE_BINARY_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:tcc-musl-selfhost-smoke:tcc".to_string(),
-            source_stage_id: TCC_SELFHOST_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("tcc-musl-selfhost-stage/runtime/output/bin/tcc-0.9.27-musl-selfhost"),
-            digest_hex: crate::stagex_tcc_selfhost::COMPILER_BLAKE3.to_string(),
-        });
-        let native_smoke_digest = crate::stagex_musl_native::EXPECTED_OUTPUTS
-            .iter()
-            .find(|output| output.artifact_id == "musl-native-smoke-binary")
-            .expect("native musl smoke output has a fixed identity")
-            .digest_blake3;
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:musl-native-execution:binary".to_string(),
-            source_stage_id: MUSL_NATIVE_SMOKE_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("musl-native-stage/runtime/smoke/native-musl-smoke"),
-            digest_hex: native_smoke_digest.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:m4-smoke:m4".to_string(),
-            source_stage_id: M4_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("m4-stage/runtime/output/bin/m4"),
-            digest_hex: crate::stagex_m4::M4_FINAL_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:diffutils-smoke:diff".to_string(),
-            source_stage_id: DIFFUTILS_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("diffutils-stage/runtime/output/bin/diff"),
-            digest_hex: crate::stagex_diffutils::DIFFUTILS_DIFF_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:diffutils-smoke:cmp".to_string(),
-            source_stage_id: DIFFUTILS_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("diffutils-stage/runtime/output/bin/cmp"),
-            digest_hex: crate::stagex_diffutils::DIFFUTILS_CMP_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:grep-smoke:grep".to_string(),
-            source_stage_id: GREP_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("grep-stage/runtime/output/bin/grep"),
-            digest_hex: crate::stagex_grep::GREP_RUNNER_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:gawk-smoke:gawk".to_string(),
-            source_stage_id: GAWK_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("gawk-stage/runtime/output/bin/gawk"),
-            digest_hex: crate::stagex_gawk::GAWK_BINARY_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:bison-smoke:bison".to_string(),
-            source_stage_id: BISON_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("bison-stage/runtime/output/bin/bison"),
-            digest_hex: crate::stagex_bison::BISON_BINARY_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:flex-smoke:flex".to_string(),
-            source_stage_id: FLEX_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("flex-stage/runtime/output/bin/flex"),
-            digest_hex: crate::stagex_flex::FLEX_BINARY_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:flex-smoke:libfl-consumer".to_string(),
-            source_stage_id: FLEX_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("flex-stage/runtime/libfl-consumer"),
-            digest_hex: crate::stagex_flex::FLEX_LIBFL_CONSUMER_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:bash-full-generator-execution:mkbuiltins".to_string(),
-            source_stage_id: BASH_FULL_GENERATOR_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("bash-full-stage/runtime/bash-2.05b-full/builtins/stagex-full-mkbuiltins"),
-            digest_hex: crate::stagex_bash_full::BASH_FULL_GENERATOR_BLAKE3.to_string(),
-        });
-        planned.push(PlannedExecutable {
-            authorization_id: "exec:bash-full-smoke:bash-full".to_string(),
-            source_stage_id: BASH_FULL_BUILD_STAGE_ID.to_string(),
-            path: request.scratch_dir.join("bash-full-stage/runtime/output/bin/bash-full"),
-            digest_hex: crate::stagex_bash_full::BASH_FULL_BINARY_BLAKE3.to_string(),
-        });
-        planned.extend(planned_binutils_executables(&request.scratch_dir.join("binutils-stage/runtime")));
-        let binutils_predecessors = additional_planned_binutils_predecessor_executables(request.scratch_dir, &planned);
-        planned.extend(binutils_predecessors);
-        planned
-    } else {
-        Vec::new()
-    };
+    let planned_executables =
+        planned_transition_executables(request.scratch_dir, request.source_bundle_path.is_some())?;
     let policy = ProtectedExecPolicy::from_stagex_plan(
         staged.seed.clone(),
         HEX0_SEED_BLAKE3.to_string(),
@@ -741,926 +659,572 @@ pub(crate) fn materialize_protected_transition(
     .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let supervisor = install_current_thread_exec_supervisor(policy)
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+    debug_assert!(!source_state_digest_blake3.is_empty());
+    Ok(PreparedTransitionContext {
+        manifest_authority,
+        staged,
+        source_state_digest_blake3,
+        plan,
+        stage0_root,
+        supervisor,
+    })
+}
 
-    run_hex0_reproduction(&staged)?;
+fn push_planned_executable(planned: &mut Vec<PlannedExecutable>, spec: PlannedExecutableSpec<'_>) {
+    debug_assert!(!spec.authorization_id.is_empty());
+    debug_assert!(!spec.digest_hex.is_empty());
+    planned.push(PlannedExecutable {
+        authorization_id: spec.authorization_id.to_string(),
+        source_stage_id: spec.source_stage_id.to_string(),
+        path: spec.path,
+        digest_hex: spec.digest_hex.to_string(),
+    });
+}
+
+fn planned_transition_executables(
+    scratch_dir: &Path,
+    has_source_bundle: bool,
+) -> Result<Vec<PlannedExecutable>, StagexTransitionError> {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(scratch_dir.is_dir());
+    if !has_source_bundle {
+        return Ok(Vec::new());
+    }
+    let stage0_root = scratch_dir.join("stage0-mini");
+    let mut planned = Vec::new();
+    append_stage0_planned_executables(&mut planned, scratch_dir, &stage0_root);
+    append_early_toolchain_planned_executables(&mut planned, scratch_dir);
+    append_archive_and_shell_planned_executables(&mut planned, scratch_dir);
+    append_musl_selfhost_planned_executables(&mut planned, scratch_dir)?;
+    append_gnu_tools_planned_executables(&mut planned, scratch_dir);
+    append_parser_bash_binutils_planned_executables(&mut planned, scratch_dir);
+    Ok(planned)
+}
+
+fn append_stage0_planned_executables(planned: &mut Vec<PlannedExecutable>, scratch_dir: &Path, stage0_root: &Path) {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(!stage0_root.as_os_str().is_empty());
+    planned.extend(crate::stagex_stage0::planned_stage0_executables(stage0_root).into_iter().map(|entry| {
+        PlannedExecutable {
+            authorization_id: entry.authorization_id,
+            source_stage_id: entry.source_stage_id,
+            path: entry.path,
+            digest_hex: entry.digest_blake3,
+        }
+    }));
+    planned.extend(crate::stagex_stage0_full::planned_stage0_full_executables(stage0_root).into_iter().map(|entry| {
+        PlannedExecutable {
+            authorization_id: entry.authorization_id,
+            source_stage_id: entry.source_stage_id,
+            path: entry.path,
+            digest_hex: entry.digest_blake3,
+        }
+    }));
+    planned.extend(additional_mes_stage0_planned_executables(stage0_root));
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:mes-m2-smoke:mes-m2",
+        source_stage_id: MES_M2_STAGE_ID,
+        path: scratch_dir.join("mes-stage/mes-0.27.1/bin/mes-m2"),
+        digest_hex: crate::stagex_mes::MES_M2_BLAKE3,
+    });
+}
+
+fn append_early_toolchain_planned_executables(planned: &mut Vec<PlannedExecutable>, scratch_dir: &Path) {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(scratch_dir.is_dir());
+    let tinycc_root = scratch_dir.join("tinycc-stage/runtime");
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tinycc-runtime-refresh:tcc-mes",
+        source_stage_id: TINYCC_MES_STAGE_ID,
+        path: tinycc_root.join("tinycc-0.9.26/tcc-mes"),
+        digest_hex: crate::stagex_tinycc::TCC_MES_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tinycc-boot0-smoke:tcc-boot0",
+        source_stage_id: TINYCC_BOOT0_STAGE_ID,
+        path: tinycc_root.join("tinycc-0.9.26/tcc-boot0"),
+        digest_hex: crate::stagex_tinycc::TCC_BOOT0_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tinycc-final-smoke:tinycc",
+        source_stage_id: TINYCC_FINAL_STAGE_ID,
+        path: tinycc_root.join("output/bin/tcc"),
+        digest_hex: crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tinycc27-smoke:tinycc27",
+        source_stage_id: TINYCC27_BUILD_STAGE_ID,
+        path: scratch_dir.join("tinycc27-stage/runtime/output/bin/tcc"),
+        digest_hex: crate::stagex_tinycc27::TINYCC27_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:make-smoke:recipe-runner",
+        source_stage_id: MAKE_RECIPE_RUNNER_STAGE_ID,
+        path: scratch_dir.join("make-stage/runtime/output/bin/make-recipe-runner"),
+        digest_hex: crate::stagex_make::MAKE_RECIPE_RUNNER_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:make-smoke:make",
+        source_stage_id: MAKE_BUILD_STAGE_ID,
+        path: scratch_dir.join("make-stage/runtime/output/bin/make"),
+        digest_hex: crate::stagex_make::MAKE_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:gnu-patch-smoke:patch",
+        source_stage_id: GNU_PATCH_BUILD_STAGE_ID,
+        path: scratch_dir.join("gnu-patch-stage/runtime/output/bin/patch"),
+        digest_hex: crate::stagex_gnu_patch::GNU_PATCH_FINAL_BLAKE3,
+    });
+}
+
+fn append_archive_and_shell_planned_executables(planned: &mut Vec<PlannedExecutable>, scratch_dir: &Path) {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(scratch_dir.is_dir());
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:gzip-generator-execution:makecrc",
+        source_stage_id: GZIP_GENERATOR_BUILD_STAGE_ID,
+        path: scratch_dir.join("gzip-stage/runtime/generated/bin/makecrc"),
+        digest_hex: crate::stagex_gzip::GZIP_MAKECRC_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:gzip-smoke:gzip",
+        source_stage_id: GZIP_BUILD_STAGE_ID,
+        path: scratch_dir.join("gzip-stage/runtime/output/bin/gzip"),
+        digest_hex: crate::stagex_gzip::GZIP_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:gzip-smoke:gunzip",
+        source_stage_id: GZIP_BUILD_STAGE_ID,
+        path: scratch_dir.join("gzip-stage/runtime/output/bin/gunzip"),
+        digest_hex: crate::stagex_gzip::GZIP_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tar-smoke:tar",
+        source_stage_id: TAR_BUILD_STAGE_ID,
+        path: scratch_dir.join("tar-stage/runtime/output/bin/tar"),
+        digest_hex: crate::stagex_tar::TAR_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:sed-smoke:sed",
+        source_stage_id: SED_BUILD_STAGE_ID,
+        path: scratch_dir.join("sed-stage/runtime/output/bin/sed"),
+        digest_hex: crate::stagex_sed::SED_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:bzip2-smoke:bzip2",
+        source_stage_id: BZIP2_BUILD_STAGE_ID,
+        path: scratch_dir.join("bzip2-stage/runtime/output/bin/bzip2"),
+        digest_hex: crate::stagex_bzip2::BZIP2_FINAL_BLAKE3,
+    });
+    for (name, digest) in coreutils_smoke_executables() {
+        push_planned_executable(planned, PlannedExecutableSpec {
+            authorization_id: &format!("exec:coreutils-smoke:{name}"),
+            source_stage_id: COREUTILS_BUILD_STAGE_ID,
+            path: scratch_dir.join(format!("coreutils-stage/runtime/output/bin/{name}")),
+            digest_hex: digest,
+        });
+    }
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:oyacc-smoke:yacc",
+        source_stage_id: OYACC_BUILD_STAGE_ID,
+        path: scratch_dir.join("oyacc-stage/runtime/output/bin/yacc"),
+        digest_hex: crate::stagex_oyacc::OYACC_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:bash-smoke:bash",
+        source_stage_id: BASH_BUILD_STAGE_ID,
+        path: scratch_dir.join("bash-stage/runtime/output/bin/bash"),
+        digest_hex: crate::stagex_bash::BASH_FINAL_BLAKE3,
+    });
+}
+
+fn append_musl_selfhost_planned_executables(
+    planned: &mut Vec<PlannedExecutable>,
+    scratch_dir: &Path,
+) -> Result<(), StagexTransitionError> {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(scratch_dir.is_dir());
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tcc-musl-prep-smoke:tcc",
+        source_stage_id: TCC_MUSL_PREP_BUILD_STAGE_ID,
+        path: scratch_dir.join("tcc-musl-prep-stage/runtime/output/bin/tcc-musl-prep"),
+        digest_hex: crate::stagex_tcc_musl_prep::TCC_MUSL_PREP_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tcc-musl-smoke:tcc",
+        source_stage_id: TCC_MUSL_BUILD_STAGE_ID,
+        path: scratch_dir.join("tcc-musl-stage/runtime/output/bin/tcc-0.9.27-musl"),
+        digest_hex: crate::stagex_tcc_musl::TCC_MUSL_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tcc-musl-v2-materialization:tinycc26",
+        source_stage_id: TINYCC_FINAL_STAGE_ID,
+        path: scratch_dir.join("tinycc-stage/runtime/output/bin/tcc-0.9.26"),
+        digest_hex: crate::stagex_tinycc::TINYCC_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tcc-musl-v2-smoke:tcc",
+        source_stage_id: TCC_MUSL_V2_BUILD_STAGE_ID,
+        path: scratch_dir.join("tcc-musl-v2-stage/runtime/output/bin/tcc-0.9.27-musl-v2"),
+        digest_hex: crate::stagex_tcc_musl_v2::COMPILER_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tcc-musl-v2-execution:positive",
+        source_stage_id: TCC_MUSL_V2_SMOKE_STAGE_ID,
+        path: scratch_dir.join("tcc-musl-v2-stage/runtime/smoke/variadic-positive"),
+        digest_hex: crate::stagex_tcc_musl_v2::POSITIVE_BINARY_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:tcc-musl-selfhost-smoke:tcc",
+        source_stage_id: TCC_SELFHOST_BUILD_STAGE_ID,
+        path: scratch_dir.join("tcc-musl-selfhost-stage/runtime/output/bin/tcc-0.9.27-musl-selfhost"),
+        digest_hex: crate::stagex_tcc_selfhost::COMPILER_BLAKE3,
+    });
+    let native_smoke_digest = crate::stagex_musl_native::EXPECTED_OUTPUTS
+        .iter()
+        .find(|output| output.artifact_id == "musl-native-smoke-binary")
+        .ok_or_else(|| StagexTransitionError::InvalidInput("missing native musl smoke identity".to_string()))?
+        .digest_blake3;
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:musl-native-execution:binary",
+        source_stage_id: MUSL_NATIVE_SMOKE_STAGE_ID,
+        path: scratch_dir.join("musl-native-stage/runtime/smoke/native-musl-smoke"),
+        digest_hex: native_smoke_digest,
+    });
+    Ok(())
+}
+
+fn append_gnu_tools_planned_executables(planned: &mut Vec<PlannedExecutable>, scratch_dir: &Path) {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(scratch_dir.is_dir());
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:m4-smoke:m4",
+        source_stage_id: M4_BUILD_STAGE_ID,
+        path: scratch_dir.join("m4-stage/runtime/output/bin/m4"),
+        digest_hex: crate::stagex_m4::M4_FINAL_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:diffutils-smoke:diff",
+        source_stage_id: DIFFUTILS_BUILD_STAGE_ID,
+        path: scratch_dir.join("diffutils-stage/runtime/output/bin/diff"),
+        digest_hex: crate::stagex_diffutils::DIFFUTILS_DIFF_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:diffutils-smoke:cmp",
+        source_stage_id: DIFFUTILS_BUILD_STAGE_ID,
+        path: scratch_dir.join("diffutils-stage/runtime/output/bin/cmp"),
+        digest_hex: crate::stagex_diffutils::DIFFUTILS_CMP_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:grep-smoke:grep",
+        source_stage_id: GREP_BUILD_STAGE_ID,
+        path: scratch_dir.join("grep-stage/runtime/output/bin/grep"),
+        digest_hex: crate::stagex_grep::GREP_RUNNER_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:gawk-smoke:gawk",
+        source_stage_id: GAWK_BUILD_STAGE_ID,
+        path: scratch_dir.join("gawk-stage/runtime/output/bin/gawk"),
+        digest_hex: crate::stagex_gawk::GAWK_BINARY_BLAKE3,
+    });
+}
+
+fn append_parser_bash_binutils_planned_executables(planned: &mut Vec<PlannedExecutable>, scratch_dir: &Path) {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(scratch_dir.is_dir());
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:bison-smoke:bison",
+        source_stage_id: BISON_BUILD_STAGE_ID,
+        path: scratch_dir.join("bison-stage/runtime/output/bin/bison"),
+        digest_hex: crate::stagex_bison::BISON_BINARY_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:flex-smoke:flex",
+        source_stage_id: FLEX_BUILD_STAGE_ID,
+        path: scratch_dir.join("flex-stage/runtime/output/bin/flex"),
+        digest_hex: crate::stagex_flex::FLEX_BINARY_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:flex-smoke:libfl-consumer",
+        source_stage_id: FLEX_BUILD_STAGE_ID,
+        path: scratch_dir.join("flex-stage/runtime/libfl-consumer"),
+        digest_hex: crate::stagex_flex::FLEX_LIBFL_CONSUMER_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:bash-full-generator-execution:mkbuiltins",
+        source_stage_id: BASH_FULL_GENERATOR_BUILD_STAGE_ID,
+        path: scratch_dir.join("bash-full-stage/runtime/bash-2.05b-full/builtins/stagex-full-mkbuiltins"),
+        digest_hex: crate::stagex_bash_full::BASH_FULL_GENERATOR_BLAKE3,
+    });
+    push_planned_executable(planned, PlannedExecutableSpec {
+        authorization_id: "exec:bash-full-smoke:bash-full",
+        source_stage_id: BASH_FULL_BUILD_STAGE_ID,
+        path: scratch_dir.join("bash-full-stage/runtime/output/bin/bash-full"),
+        digest_hex: crate::stagex_bash_full::BASH_FULL_BINARY_BLAKE3,
+    });
+    planned.extend(planned_binutils_executables(&scratch_dir.join("binutils-stage/runtime")));
+    let binutils_predecessors = additional_planned_binutils_predecessor_executables(scratch_dir, planned);
+    planned.extend(binutils_predecessors);
+}
+
+fn execute_seed_bootstrap_stages(
+    staged: &StagedTransitionPaths,
+    supervisor: &ProtectedSeccompSupervisor,
+) -> Result<SeedTransitionArtifacts, StagexTransitionError> {
+    debug_assert!(staged.seed.is_file());
+    run_hex0_reproduction(staged)?;
     let hex0_promotion =
-        promote_executable(&supervisor, HEX0_REPRODUCTION_STAGE_ID, &staged.reproduced_hex0, HEX0_SEED_BLAKE3)?;
-    run_kaem_materialization(&staged)?;
+        promote_executable(supervisor, HEX0_REPRODUCTION_STAGE_ID, &staged.reproduced_hex0, HEX0_SEED_BLAKE3)?;
+    run_kaem_materialization(staged)?;
     let kaem_promotion =
-        promote_executable(&supervisor, KAEM_MATERIALIZATION_STAGE_ID, &staged.kaem, KAEM_OUTPUT_BLAKE3)?;
-    run_kaem_smoke(&staged)?;
-    let stage0_full = match (request.source_bundle_path, request.stage0_answers_path) {
-        (Some(source_bundle_path), Some(answers_path)) => {
-            let mini = crate::stagex_stage0::derive_protected_stage0_mini_inventory(
-                crate::stagex_stage0::Stage0MiniInventoryRequest {
-                    source_bundle_path,
-                    expected_source_bundle_blake3: &manifest_authority.source_bundle_manifest_blake3,
-                    reproduced_hex0_path: &staged.reproduced_hex0,
-                    kaem_path: &staged.kaem,
-                    scratch_dir: &stage0_root,
-                },
-                &supervisor,
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            Some(
-                crate::stagex_stage0_full::derive_protected_stage0_full_inventory(mini, answers_path, &supervisor)
-                    .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?,
-            )
+        promote_executable(supervisor, KAEM_MATERIALIZATION_STAGE_ID, &staged.kaem, KAEM_OUTPUT_BLAKE3)?;
+    run_kaem_smoke(staged)?;
+    debug_assert!(staged.kaem_smoke.is_file());
+    Ok(SeedTransitionArtifacts {
+        hex0_promotion,
+        kaem_promotion,
+    })
+}
+
+fn run_stage_with_failure_audit<T, E: std::fmt::Display>(
+    scratch_dir: &Path,
+    supervisor: &ProtectedSeccompSupervisor,
+    stage_operation: impl FnOnce() -> Result<T, E>,
+) -> Result<T, StagexTransitionError> {
+    debug_assert!(!scratch_dir.as_os_str().is_empty());
+    debug_assert!(scratch_dir.is_dir());
+    match stage_operation() {
+        Ok(report) => Ok(report),
+        Err(error) => {
+            thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
+            let events = supervisor.audit_events();
+            write_protected_exec_audit(&scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
+            Err(StagexTransitionError::ProtectedExec(error.to_string()))
         }
-        (None, None) => None,
-        _ => unreachable!("Stage0 optional inputs validated before execution"),
-    };
-    let mes_m2 = match (request.source_bundle_path, stage0_full.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let result = crate::stagex_mes::derive_mes_m2_inventory(crate::stagex_mes::MesM2InventoryRequest {
+    }
+}
+
+fn run_authenticated_source_stage<S, R, E1: std::fmt::Display, E2: std::fmt::Display>(
+    ctx: &TransitionStageContext<'_>,
+    dir_spec: StageDirSpec<'_>,
+    materialize_sources: impl FnOnce(&Path, &str, &Path) -> Result<S, E1>,
+    derive_inventory: impl FnOnce(&S, &Path) -> Result<R, E2>,
+) -> Result<(S, R), StagexTransitionError> {
+    debug_assert!(!dir_spec.dir_name.is_empty());
+    debug_assert!(!dir_spec.create_action.is_empty());
+    let stage = ctx.request.scratch_dir.join(dir_spec.dir_name);
+    fs::create_dir(&stage).map_err(|source| io_error(dir_spec.create_action, source))?;
+    let sources = materialize_sources(
+        ctx.source_bundle_path,
+        &ctx.manifest_authority.source_bundle_manifest_blake3,
+        &stage.join("sources"),
+    )
+    .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+    let report = run_stage_with_failure_audit(ctx.request.scratch_dir, ctx.supervisor, || {
+        derive_inventory(&sources, &stage.join("runtime"))
+    })?;
+    Ok((sources, report))
+}
+
+fn run_derived_stage<R, E: std::fmt::Display>(
+    ctx: &TransitionStageContext<'_>,
+    dir_spec: StageDirSpec<'_>,
+    derive_inventory: impl FnOnce(&Path) -> Result<R, E>,
+) -> Result<R, StagexTransitionError> {
+    debug_assert!(!dir_spec.dir_name.is_empty());
+    debug_assert!(!dir_spec.create_action.is_empty());
+    let stage = ctx.request.scratch_dir.join(dir_spec.dir_name);
+    fs::create_dir(&stage).map_err(|source| io_error(dir_spec.create_action, source))?;
+    run_stage_with_failure_audit(ctx.request.scratch_dir, ctx.supervisor, || derive_inventory(&stage.join("runtime")))
+}
+
+struct PreBinutilsArtifacts {
+    stage0_and_mes: Stage0AndMesArtifacts,
+    early_toolchain: EarlyToolchainArtifacts,
+    archive_tools: ArchiveToolsArtifacts,
+    early_shell_tools: EarlyShellToolsArtifacts,
+    musl_bootstrap: MuslBootstrapArtifacts,
+    tcc_selfhost: TccSelfhostArtifacts,
+    gnu_text_tools: GnuTextToolsArtifacts,
+    gnu_parser_and_bash: GnuParserAndBashArtifacts,
+}
+
+fn execute_protected_source_phases(
+    request: &StagexTransitionRequest<'_>,
+    prepared: &PreparedTransitionContext,
+    seed_artifacts: SeedTransitionArtifacts,
+) -> Result<CompletedTransitionExecution, StagexTransitionError> {
+    debug_assert!(request.source_bundle_path.is_some() == request.stage0_answers_path.is_some());
+    debug_assert!(request.scratch_dir.is_dir());
+    let stage_ctx = match (request.source_bundle_path, request.stage0_answers_path) {
+        (Some(source_bundle_path), Some(answers_path)) => Some((
+            TransitionStageContext {
+                request,
+                manifest_authority: &prepared.manifest_authority,
+                supervisor: &prepared.supervisor,
+                stage0_root: &prepared.stage0_root,
                 source_bundle_path,
-                expected_source_bundle_blake3: &manifest_authority.source_bundle_manifest_blake3,
-                full_stage0_root: &stage0_root,
-                scratch_dir: &request.scratch_dir.join("mes-stage"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => None,
-        _ => unreachable!("full Stage0 and Mes execution must advance together"),
+            },
+            answers_path,
+        )),
+        _ => None,
     };
-
-    let mes_runtime = match (stage0_full.as_ref(), mes_m2.as_ref()) {
-        (Some(_), Some(_)) => {
-            let mes_stage_root = request.scratch_dir.join("mes-stage");
-            let result = crate::stagex_mes_lib::derive_mes_runtime_inventory(
-                crate::stagex_mes_lib::MesRuntimeInventoryRequest {
-                    mes_source_root: &mes_stage_root.join("mes-0.27.1"),
-                    nyacc_source_root: &mes_stage_root.join("nyacc"),
-                    stage0_root: &stage0_root,
-                    output_root: &mes_stage_root.join("mes-runtime"),
-                    protected_exec_enforced: true,
-                },
-            );
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => None,
-        _ => unreachable!("Mes runtime requires full Stage0 and mes-m2 reports together"),
-    };
-
-    let (tinycc_sources, tinycc_runtime) = match (request.source_bundle_path, mes_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let tinycc_stage = request.scratch_dir.join("tinycc-stage");
-            fs::create_dir(&tinycc_stage)
-                .map_err(|source| io_error("creating create-new protected TinyCC stage root", source))?;
-            let sources = crate::stagex_tinycc::materialize_authenticated_tinycc_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &tinycc_stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_tinycc::derive_tcc_mes_inventory(crate::stagex_tinycc::TccMesInventoryRequest {
-                tinycc_source_root: &sources.output_path,
-                mes_source_root: &sources.mes_output_path,
-                mes_runtime_root: &request.scratch_dir.join("mes-stage/mes-runtime"),
-                mes_m2_path: &request.scratch_dir.join("mes-stage/mes-0.27.1/bin/mes-m2"),
-                stage0_root: &stage0_root,
-                scratch_dir: &tinycc_stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("TinyCC runtime requires source bundle and Mes runtime together"),
-    };
-
-    let (tinycc27_sources, tinycc27_runtime) =
-        match (request.source_bundle_path, tinycc_sources.as_ref(), tinycc_runtime.as_ref()) {
-            (Some(source_bundle_path), Some(tinycc_sources), Some(_)) => {
-                let tinycc27_stage = request.scratch_dir.join("tinycc27-stage");
-                fs::create_dir(&tinycc27_stage)
-                    .map_err(|source| io_error("creating create-new protected TinyCC 0.9.27 stage root", source))?;
-                let sources = crate::stagex_tinycc27::materialize_authenticated_tinycc27_source(
-                    source_bundle_path,
-                    &manifest_authority.source_bundle_manifest_blake3,
-                    &tinycc27_stage.join("sources"),
-                )
-                .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-                let result = crate::stagex_tinycc27::derive_tinycc27_inventory(
-                    crate::stagex_tinycc27::Tinycc27InventoryRequest {
-                        source_root: &sources.output_path,
-                        mes_source_root: &tinycc_sources.mes_output_path,
-                        tinycc26_root: &request.scratch_dir.join("tinycc-stage/runtime/output"),
-                        scratch_dir: &tinycc27_stage.join("runtime"),
-                        protected_exec_enforced: true,
-                    },
-                );
-                match result {
-                    Ok(report) => (Some(sources), Some(report)),
-                    Err(error) => {
-                        thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                        let events = supervisor.audit_events();
-                        write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                        return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                    }
-                }
-            }
-            (None, None, None) => (None, None),
-            _ => unreachable!("TinyCC 0.9.27 requires source bundle and TinyCC 0.9.26 together"),
-        };
-
-    let (make_sources, make_runtime) = match (request.source_bundle_path, tinycc27_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let make_stage = request.scratch_dir.join("make-stage");
-            fs::create_dir(&make_stage)
-                .map_err(|source| io_error("creating create-new protected GNU Make stage root", source))?;
-            let sources = crate::stagex_make::materialize_authenticated_make_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &make_stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_make::derive_make_inventory(crate::stagex_make::MakeInventoryRequest {
-                source_root: &sources.output_path,
-                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                scratch_dir: &make_stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU Make requires source bundle and TinyCC 0.9.27 together"),
-    };
-
-    let (gnu_patch_sources, gnu_patch_runtime) = match (request.source_bundle_path, make_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let patch_stage = request.scratch_dir.join("gnu-patch-stage");
-            fs::create_dir(&patch_stage)
-                .map_err(|source| io_error("creating create-new protected GNU patch stage root", source))?;
-            let sources = crate::stagex_gnu_patch::materialize_authenticated_gnu_patch_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &patch_stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_gnu_patch::derive_gnu_patch_inventory(
-                crate::stagex_gnu_patch::GnuPatchInventoryRequest {
-                    source_root: &sources.output_path,
-                    tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                    scratch_dir: &patch_stage.join("runtime"),
-                    protected_exec_enforced: true,
-                },
-            );
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU patch requires source bundle and GNU Make together"),
-    };
-
-    let (gzip_sources, gzip_runtime) = match (request.source_bundle_path, gnu_patch_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let gzip_stage = request.scratch_dir.join("gzip-stage");
-            fs::create_dir(&gzip_stage)
-                .map_err(|source| io_error("creating create-new protected gzip stage root", source))?;
-            let sources = crate::stagex_gzip::materialize_authenticated_gzip_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &gzip_stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_gzip::derive_gzip_inventory(crate::stagex_gzip::GzipInventoryRequest {
-                source_root: &sources.output_path,
-                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                scratch_dir: &gzip_stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("gzip requires source bundle and GNU patch together"),
-    };
-
-    let (tar_sources, tar_runtime) = match (request.source_bundle_path, gzip_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let tar_stage = request.scratch_dir.join("tar-stage");
-            fs::create_dir(&tar_stage)
-                .map_err(|source| io_error("creating create-new protected GNU tar stage root", source))?;
-            let sources = crate::stagex_tar::materialize_authenticated_tar_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &tar_stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_tar::derive_tar_inventory(crate::stagex_tar::TarInventoryRequest {
-                source_root: &sources.output_path,
-                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                scratch_dir: &tar_stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU tar requires source bundle and gzip together"),
-    };
-
-    let (sed_sources, sed_runtime) = match (request.source_bundle_path, tar_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let sed_stage = request.scratch_dir.join("sed-stage");
-            fs::create_dir(&sed_stage)
-                .map_err(|source| io_error("creating create-new protected GNU sed stage root", source))?;
-            let sources = crate::stagex_sed::materialize_authenticated_sed_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &sed_stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_sed::derive_sed_inventory(crate::stagex_sed::SedInventoryRequest {
-                source_root: &sources.output_path,
-                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                scratch_dir: &sed_stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU sed requires source bundle and GNU tar together"),
-    };
-
-    let (bzip2_sources, bzip2_runtime) = match (request.source_bundle_path, sed_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("bzip2-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected bzip2 stage root", source))?;
-            let sources = crate::stagex_bzip2::materialize_authenticated_bzip2_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_bzip2::derive_bzip2_inventory(crate::stagex_bzip2::Bzip2InventoryRequest {
-                source_root: &sources.output_path,
-                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                sed_root: &request.scratch_dir.join("sed-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("bzip2 requires source bundle and GNU sed together"),
-    };
-
-    let (coreutils_sources, coreutils_runtime) = match (request.source_bundle_path, bzip2_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("coreutils-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected coreutils stage root", source))?;
-            let sources = crate::stagex_coreutils::materialize_authenticated_coreutils_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_coreutils::derive_coreutils_inventory(
-                crate::stagex_coreutils::CoreutilsInventoryRequest {
-                    source_root: &sources.output_path,
-                    tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                    patch_root: &request.scratch_dir.join("gnu-patch-stage/runtime/output"),
-                    scratch_dir: &stage.join("runtime"),
-                    protected_exec_enforced: true,
-                },
-            );
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("coreutils requires source bundle and bzip2 together"),
-    };
-
-    let (oyacc_sources, oyacc_runtime) = match (request.source_bundle_path, coreutils_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("oyacc-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected oyacc stage root", source))?;
-            let sources = crate::stagex_oyacc::materialize_authenticated_oyacc_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_oyacc::derive_oyacc_inventory(crate::stagex_oyacc::OyaccInventoryRequest {
-                source_root: &sources.output_path,
-                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                patch_root: &request.scratch_dir.join("gnu-patch-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("oyacc requires source bundle and coreutils together"),
-    };
-
-    let (bash_sources, bash_runtime) = match (request.source_bundle_path, oyacc_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("bash-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected bash stage root", source))?;
-            let sources = crate::stagex_bash::materialize_authenticated_bash_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_bash::derive_bash_inventory(crate::stagex_bash::BashInventoryRequest {
-                source_root: &sources.output_path,
-                tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("bash requires source bundle and oyacc together"),
-    };
-
-    let tcc_musl_prep_runtime = match (tinycc27_sources.as_ref(), bash_runtime.as_ref()) {
-        (Some(tinycc27_sources), Some(_)) => {
-            let stage = request.scratch_dir.join("tcc-musl-prep-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected TinyCC musl-prep stage root", source))?;
-            let result = crate::stagex_tcc_musl_prep::derive_tcc_musl_prep_inventory(
-                crate::stagex_tcc_musl_prep::TccMuslPrepInventoryRequest {
-                    tinycc27_source_root: &tinycc27_sources.output_path,
-                    tinycc27_root: &request.scratch_dir.join("tinycc27-stage/runtime/output"),
-                    scratch_dir: &stage.join("runtime"),
-                    protected_exec_enforced: true,
-                },
-            );
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => None,
-        _ => unreachable!("TinyCC musl-prep requires TinyCC 0.9.27 sources and bash together"),
-    };
-
-    let (musl_sources, musl_runtime) = match (request.source_bundle_path, tcc_musl_prep_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("musl-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected musl stage root", source))?;
-            let sources = crate::stagex_musl::materialize_authenticated_musl_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_musl::derive_musl_inventory(crate::stagex_musl::MuslInventoryRequest {
-                source_root: &sources.output_path,
-                compiler_root: &request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
-                profile: crate::stagex_musl::MuslProfile::First,
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("musl requires source bundle and TinyCC musl-prep together"),
-    };
-
-    let tcc_musl_runtime = match (tinycc27_sources.as_ref(), musl_runtime.as_ref()) {
-        (Some(tinycc27_sources), Some(_)) => {
-            let stage = request.scratch_dir.join("tcc-musl-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected musl-linked TinyCC stage root", source))?;
-            let result =
-                crate::stagex_tcc_musl::derive_tcc_musl_inventory(crate::stagex_tcc_musl::TccMuslInventoryRequest {
-                    tinycc27_source_root: &tinycc27_sources.output_path,
-                    tcc_musl_prep_root: &request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
-                    musl_root: &request.scratch_dir.join("musl-stage/runtime/output"),
-                    scratch_dir: &stage.join("runtime"),
-                    protected_exec_enforced: true,
-                });
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => None,
-        _ => unreachable!("musl-linked TinyCC requires TinyCC sources and musl together"),
-    };
-
-    let musl_pass2_runtime = match (musl_sources.as_ref(), tcc_musl_runtime.as_ref()) {
-        (Some(sources), Some(_)) => {
-            let stage = request.scratch_dir.join("musl-pass2-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected second-musl stage root", source))?;
-            let result = crate::stagex_musl::derive_musl_inventory(crate::stagex_musl::MuslInventoryRequest {
-                source_root: &sources.output_path,
-                compiler_root: &request.scratch_dir.join("tcc-musl-stage/runtime/output"),
-                profile: crate::stagex_musl::MuslProfile::Second,
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => None,
-        _ => unreachable!("second-musl requires authenticated musl source and musl-linked TinyCC"),
-    };
-
-    let tcc_musl_v2_runtime = match (tinycc27_sources.as_ref(), tinycc_runtime.as_ref(), musl_pass2_runtime.as_ref()) {
-        (Some(tinycc27_sources), Some(_), Some(_)) => {
-            let stage = request.scratch_dir.join("tcc-musl-v2-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected TinyCC musl-v2 stage root", source))?;
-            let result = crate::stagex_tcc_musl_v2::derive_inventory(crate::stagex_tcc_musl_v2::InventoryRequest {
-                tinycc27_source_root: &tinycc27_sources.output_path,
-                tinycc26_root: &request.scratch_dir.join("tinycc-stage/runtime/output"),
-                tcc_musl_prep_root: &request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
-                musl_pass2_root: &request.scratch_dir.join("musl-pass2-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None, None) => None,
-        _ => unreachable!("TinyCC musl-v2 requires source, TinyCC 0.9.26, and second-musl"),
-    };
-
-    let tcc_selfhost_runtime = match tcc_musl_v2_runtime.as_ref() {
-        Some(_) => {
-            let stage = request.scratch_dir.join("tcc-musl-selfhost-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected TinyCC self-host stage root", source))?;
-            let result = crate::stagex_tcc_selfhost::derive_inventory(crate::stagex_tcc_selfhost::InventoryRequest {
-                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                tinycc26_root: &request.scratch_dir.join("tinycc-stage/runtime/output"),
-                musl_pass2_root: &request.scratch_dir.join("musl-pass2-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
+    let pre_binutils = match stage_ctx {
+        Some((ctx, answers_path)) => Some(run_pre_binutils_source_phases(&ctx, &prepared.staged, answers_path)?),
         None => None,
     };
-
-    let musl_native_runtime = match (musl_sources.as_ref(), tcc_selfhost_runtime.as_ref()) {
-        (Some(sources), Some(_)) => {
-            let stage = request.scratch_dir.join("musl-native-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected native musl stage root", source))?;
-            let result = crate::stagex_musl_native::derive_inventory(crate::stagex_musl_native::InventoryRequest {
-                source_root: &sources.output_path,
-                selfhost_root: &request.scratch_dir.join("tcc-musl-selfhost-stage/runtime/output"),
-                predecessor_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => None,
-        _ => unreachable!("native musl requires authenticated source and self-hosted TinyCC"),
+    let binutils_ctx = stage_ctx.as_ref().map(|(ctx, _)| ctx);
+    let binutils_outcome = run_binutils_quiescent_bracket(&prepared.supervisor, binutils_ctx)?;
+    let full_artifacts = match (pre_binutils, binutils_outcome.binutils) {
+        (Some(pre), Some(binutils)) => Some(FullSourceTransitionArtifacts {
+            stage0_and_mes: pre.stage0_and_mes,
+            early_toolchain: pre.early_toolchain,
+            archive_tools: pre.archive_tools,
+            early_shell_tools: pre.early_shell_tools,
+            musl_bootstrap: pre.musl_bootstrap,
+            tcc_selfhost: pre.tcc_selfhost,
+            gnu_text_tools: pre.gnu_text_tools,
+            gnu_parser_and_bash: pre.gnu_parser_and_bash,
+            binutils,
+        }),
+        _ => None,
     };
+    Ok(CompletedTransitionExecution {
+        seed_artifacts,
+        full_artifacts,
+        binutils_event_count: binutils_outcome.event_count,
+        protected_exec_events: binutils_outcome.protected_exec_events,
+    })
+}
 
-    let (m4_sources, m4_runtime) = match (request.source_bundle_path, musl_native_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("m4-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected GNU M4 stage root", source))?;
-            let sources = crate::stagex_m4::materialize_authenticated_m4_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_m4::derive_m4_inventory(crate::stagex_m4::M4InventoryRequest {
-                source_root: &sources.output_path,
-                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU M4 requires authenticated source and native musl"),
-    };
+fn run_pre_binutils_source_phases(
+    ctx: &TransitionStageContext<'_>,
+    staged: &StagedTransitionPaths,
+    answers_path: &Path,
+) -> Result<PreBinutilsArtifacts, StagexTransitionError> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(answers_path.is_file());
+    let stage0_and_mes = run_stage0_and_mes_phases(ctx, staged, answers_path)?;
+    let early_toolchain = run_early_toolchain_phases(ctx)?;
+    let archive_tools = run_archive_tools_phases(ctx)?;
+    let early_shell_tools = run_early_shell_tools_phases(ctx)?;
+    let musl_bootstrap = run_musl_bootstrap_phases(ctx, &early_toolchain)?;
+    let tcc_selfhost = run_tcc_selfhost_phases(ctx, &early_toolchain, &musl_bootstrap)?;
+    let gnu_text_tools = run_gnu_text_tools_phases(ctx)?;
+    let gnu_parser_and_bash = run_gnu_parser_and_bash_phases(ctx)?;
+    Ok(PreBinutilsArtifacts {
+        stage0_and_mes,
+        early_toolchain,
+        archive_tools,
+        early_shell_tools,
+        musl_bootstrap,
+        tcc_selfhost,
+        gnu_text_tools,
+        gnu_parser_and_bash,
+    })
+}
 
-    let (diffutils_sources, diffutils_runtime) = match (request.source_bundle_path, m4_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("diffutils-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected GNU diffutils stage root", source))?;
-            let sources = crate::stagex_diffutils::materialize_authenticated_diffutils_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_diffutils::derive_diffutils_inventory(
-                crate::stagex_diffutils::DiffutilsInventoryRequest {
-                    source_root: &sources.output_path,
-                    tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                    musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
-                    scratch_dir: &stage.join("runtime"),
-                    protected_exec_enforced: true,
-                },
-            );
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU diffutils requires authenticated source and protected GNU M4 completion"),
-    };
+struct BinutilsQuiescentOutcome {
+    binutils: Option<BinutilsArtifacts>,
+    event_count: Option<usize>,
+    protected_exec_events: Vec<ProtectedSeccompAuditEvent>,
+}
 
-    let (grep_sources, grep_runtime) = match (request.source_bundle_path, diffutils_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("grep-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected GNU grep stage root", source))?;
-            let sources = crate::stagex_grep::materialize_authenticated_grep_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_grep::derive_grep_inventory(crate::stagex_grep::GrepInventoryRequest {
-                source_root: &sources.output_path,
-                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU grep requires authenticated source and protected GNU diffutils completion"),
-    };
-
-    let (gawk_sources, gawk_runtime) = match (request.source_bundle_path, grep_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("gawk-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected GNU Gawk stage root", source))?;
-            let sources = crate::stagex_gawk::materialize_authenticated_gawk_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_gawk::derive_gawk_inventory(crate::stagex_gawk::GawkInventoryRequest {
-                source_root: &sources.output_path,
-                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU Gawk requires authenticated source and protected GNU grep completion"),
-    };
-
-    let (bison_sources, bison_runtime) = match (request.source_bundle_path, gawk_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("bison-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected GNU Bison stage root", source))?;
-            let sources = crate::stagex_bison::materialize_authenticated_bison_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_bison::derive_bison_inventory(crate::stagex_bison::BisonInventoryRequest {
-                source_root: &sources.output_path,
-                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
-                m4_root: &request.scratch_dir.join("m4-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU Bison requires authenticated source and protected GNU Gawk completion"),
-    };
-
-    let (flex_sources, flex_runtime) = match (request.source_bundle_path, bison_runtime.as_ref()) {
-        (Some(source_bundle_path), Some(_)) => {
-            let stage = request.scratch_dir.join("flex-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected GNU Flex stage root", source))?;
-            let sources = crate::stagex_flex::materialize_authenticated_flex_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let result = crate::stagex_flex::derive_flex_inventory(crate::stagex_flex::FlexInventoryRequest {
-                source_root: &sources.output_path,
-                tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
-                m4_root: &request.scratch_dir.join("m4-stage/runtime/output"),
-                scratch_dir: &stage.join("runtime"),
-                protected_exec_enforced: true,
-            });
-            match result {
-                Ok(report) => (Some(sources), Some(report)),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => (None, None),
-        _ => unreachable!("GNU Flex requires authenticated source and protected GNU Bison completion"),
-    };
-
-    let bash_full_runtime = match (request.source_bundle_path, flex_runtime.as_ref()) {
-        (Some(_), Some(_)) => {
-            let stage = request.scratch_dir.join("bash-full-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected full Bash stage root", source))?;
-            let result = crate::stagex_bash_full::derive_bash_full_inventory(
-                crate::stagex_bash_full::BashFullInventoryRequest {
-                    configured_source_root: &request.scratch_dir.join("bash-stage/runtime/bash-2.05b"),
-                    tcc_musl_v2_root: &request.scratch_dir.join("tcc-musl-v2-stage/runtime/output"),
-                    musl_native_root: &request.scratch_dir.join("musl-native-stage/runtime/output"),
-                    make: &request.scratch_dir.join("make-stage/runtime/output/bin/make"),
-                    scratch_dir: &stage.join("runtime"),
-                    protected_exec_enforced: true,
-                },
-            );
-            match result {
-                Ok(report) => Some(report),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    return Err(StagexTransitionError::ProtectedExec(error.to_string()));
-                }
-            }
-        }
-        (None, None) => None,
-        _ => unreachable!("full Bash requires authenticated source closure and protected GNU Flex completion"),
-    };
-
+fn run_binutils_quiescent_bracket(
+    supervisor: &ProtectedSeccompSupervisor,
+    ctx: Option<&TransitionStageContext<'_>>,
+) -> Result<BinutilsQuiescentOutcome, StagexTransitionError> {
+    debug_assert!(ctx.is_none_or(|c| c.request.scratch_dir.is_dir()));
     crate::protected_exec_seccomp::reap_adopted_exec_descendants()
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let binutils_event_start = supervisor
         .wait_for_audit_quiescence()
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-    let (binutils_sources, binutils_runtime) =
-        materialize_binutils_stage(&request, &manifest_authority, &supervisor, bash_full_runtime.is_some())?;
+    let binutils = match ctx {
+        Some(ctx) => Some(run_binutils_stage(ctx)?),
+        None => None,
+    };
     crate::protected_exec_seccomp::reap_adopted_exec_descendants()
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let quiescent_event_count = supervisor
         .wait_for_audit_quiescence()
         .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
     let protected_exec_events = supervisor.audit_events();
-    let binutils_event_count = binutils_runtime.as_ref().map(|_| {
-        quiescent_event_count
-            .checked_sub(binutils_event_start)
-            .expect("binutils audit end follows its start")
-    });
+    let event_count = if binutils.is_some() {
+        Some(
+            quiescent_event_count
+                .checked_sub(binutils_event_start)
+                .ok_or_else(|| StagexTransitionError::Audit("binutils audit end precedes start".to_string()))?,
+        )
+    } else {
+        None
+    };
     if protected_exec_events.len() != quiescent_event_count {
         return Err(StagexTransitionError::Audit("protected exec audit changed after quiescence".to_string()));
     }
-    write_protected_exec_audit(&request.scratch_dir.join(AUDIT_FILE_NAME), &protected_exec_events)?;
-    validate_transition_audit(
-        &staged,
-        TransitionAuditReports {
-            stage0_full: stage0_full.as_ref(),
-            mes_m2: mes_m2.as_ref(),
-            mes_runtime: mes_runtime.as_ref(),
-            tinycc_runtime: tinycc_runtime.as_ref(),
-            tinycc27_runtime: tinycc27_runtime.as_ref(),
-            make_runtime: make_runtime.as_ref(),
-            gnu_patch_runtime: gnu_patch_runtime.as_ref(),
-            gzip_runtime: gzip_runtime.as_ref(),
-            tar_runtime: tar_runtime.as_ref(),
-            sed_runtime: sed_runtime.as_ref(),
-            bzip2_runtime: bzip2_runtime.as_ref(),
-            coreutils_runtime: coreutils_runtime.as_ref(),
-            oyacc_runtime: oyacc_runtime.as_ref(),
-            bash_runtime: bash_runtime.as_ref(),
-            tcc_musl_prep_runtime: tcc_musl_prep_runtime.as_ref(),
-            musl_runtime: musl_runtime.as_ref(),
-            tcc_musl_runtime: tcc_musl_runtime.as_ref(),
-            musl_pass2_runtime: musl_pass2_runtime.as_ref(),
-            tcc_musl_v2_runtime: tcc_musl_v2_runtime.as_ref(),
-            tcc_selfhost_runtime: tcc_selfhost_runtime.as_ref(),
-            musl_native_runtime: musl_native_runtime.as_ref(),
-            m4_runtime: m4_runtime.as_ref(),
-            diffutils_runtime: diffutils_runtime.as_ref(),
-            grep_runtime: grep_runtime.as_ref(),
-            gawk_runtime: gawk_runtime.as_ref(),
-            bison_runtime: bison_runtime.as_ref(),
-            flex_runtime: flex_runtime.as_ref(),
-            bash_full_runtime: bash_full_runtime.as_ref(),
-            binutils_runtime: binutils_runtime.as_ref(),
-            binutils_event_count,
+    debug_assert_eq!(protected_exec_events.len(), quiescent_event_count);
+    Ok(BinutilsQuiescentOutcome {
+        binutils,
+        event_count,
+        protected_exec_events,
+    })
+}
+
+fn run_stage0_and_mes_phases(
+    ctx: &TransitionStageContext<'_>,
+    staged: &StagedTransitionPaths,
+    answers_path: &Path,
+) -> Result<Stage0AndMesArtifacts, StagexTransitionError> {
+    debug_assert!(staged.reproduced_hex0.is_file());
+    debug_assert!(answers_path.is_file());
+    let mini = crate::stagex_stage0::derive_protected_stage0_mini_inventory(
+        crate::stagex_stage0::Stage0MiniInventoryRequest {
+            source_bundle_path: ctx.source_bundle_path,
+            expected_source_bundle_blake3: &ctx.manifest_authority.source_bundle_manifest_blake3,
+            reproduced_hex0_path: &staged.reproduced_hex0,
+            kaem_path: &staged.kaem,
+            scratch_dir: ctx.stage0_root,
         },
-        &protected_exec_events,
-    )?;
-    let kaem_smoke_digest_blake3 = blake3_file_hex(&staged.kaem_smoke).map_err(protected_digest_error)?;
-    let report = StagexTransitionReport {
-        schema_version: STAGEX_TRANSITION_REPORT_SCHEMA_V1.to_string(),
-        status: "complete".to_string(),
-        plan_digest_blake3: stagex_plan_digest_blake3(&plan)
-            .map_err(|error| StagexTransitionError::Plan(vec![error.to_string()]))?,
-        source_state_digest_blake3,
-        seed_digest_blake3: HEX0_SEED_BLAKE3.to_string(),
-        reproduced_hex0_digest_blake3: HEX0_SEED_BLAKE3.to_string(),
-        kaem_digest_blake3: KAEM_OUTPUT_BLAKE3.to_string(),
-        kaem_smoke_digest_blake3,
+        ctx.supervisor,
+    )
+    .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+    let stage0_full =
+        crate::stagex_stage0_full::derive_protected_stage0_full_inventory(mini, answers_path, ctx.supervisor)
+            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
+    let mes_stage_root = ctx.request.scratch_dir.join("mes-stage");
+    let mes_m2 = run_stage_with_failure_audit(ctx.request.scratch_dir, ctx.supervisor, || {
+        crate::stagex_mes::derive_mes_m2_inventory(crate::stagex_mes::MesM2InventoryRequest {
+            source_bundle_path: ctx.source_bundle_path,
+            expected_source_bundle_blake3: &ctx.manifest_authority.source_bundle_manifest_blake3,
+            full_stage0_root: ctx.stage0_root,
+            scratch_dir: &mes_stage_root,
+            protected_exec_enforced: true,
+        })
+    })?;
+    let mes_runtime = run_stage_with_failure_audit(ctx.request.scratch_dir, ctx.supervisor, || {
+        crate::stagex_mes_lib::derive_mes_runtime_inventory(crate::stagex_mes_lib::MesRuntimeInventoryRequest {
+            mes_source_root: &mes_stage_root.join("mes-0.27.1"),
+            nyacc_source_root: &mes_stage_root.join("nyacc"),
+            stage0_root: ctx.stage0_root,
+            output_root: &mes_stage_root.join("mes-runtime"),
+            protected_exec_enforced: true,
+        })
+    })?;
+    Ok(Stage0AndMesArtifacts {
         stage0_full,
         mes_m2,
         mes_runtime,
+    })
+}
+
+fn run_early_toolchain_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<EarlyToolchainArtifacts, StagexTransitionError> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(ctx.stage0_root.is_dir());
+    let (tinycc_sources, tinycc_runtime, tinycc27_sources, tinycc27_runtime) = run_tinycc_phases(ctx)?;
+    let (make_sources, make_runtime, gnu_patch_sources, gnu_patch_runtime) = run_make_and_patch_phases(ctx)?;
+    Ok(EarlyToolchainArtifacts {
         tinycc_sources,
         tinycc_runtime,
         tinycc27_sources,
@@ -1669,6 +1233,116 @@ pub(crate) fn materialize_protected_transition(
         make_runtime,
         gnu_patch_sources,
         gnu_patch_runtime,
+    })
+}
+
+fn run_tinycc_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<
+    (
+        crate::stagex_tinycc::TinyccSourceMaterializationReport,
+        crate::stagex_tinycc::TccMesInventoryReport,
+        crate::stagex_tinycc27::Tinycc27SourceMaterializationReport,
+        crate::stagex_tinycc27::Tinycc27InventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(ctx.stage0_root.is_dir());
+    let (tinycc_sources, tinycc_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "tinycc-stage",
+            create_action: "creating create-new protected TinyCC stage root",
+        },
+        crate::stagex_tinycc::materialize_authenticated_tinycc_source,
+        |sources, runtime_dir| {
+            crate::stagex_tinycc::derive_tcc_mes_inventory(crate::stagex_tinycc::TccMesInventoryRequest {
+                tinycc_source_root: &sources.output_path,
+                mes_source_root: &sources.mes_output_path,
+                mes_runtime_root: &ctx.request.scratch_dir.join("mes-stage/mes-runtime"),
+                mes_m2_path: &ctx.request.scratch_dir.join("mes-stage/mes-0.27.1/bin/mes-m2"),
+                stage0_root: ctx.stage0_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (tinycc27_sources, tinycc27_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "tinycc27-stage",
+            create_action: "creating create-new protected TinyCC 0.9.27 stage root",
+        },
+        crate::stagex_tinycc27::materialize_authenticated_tinycc27_source,
+        |sources, runtime_dir| {
+            crate::stagex_tinycc27::derive_tinycc27_inventory(crate::stagex_tinycc27::Tinycc27InventoryRequest {
+                source_root: &sources.output_path,
+                mes_source_root: &tinycc_sources.mes_output_path,
+                tinycc26_root: &ctx.request.scratch_dir.join("tinycc-stage/runtime/output"),
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((tinycc_sources, tinycc_runtime, tinycc27_sources, tinycc27_runtime))
+}
+
+fn run_make_and_patch_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<
+    (
+        crate::stagex_make::MakeSourceMaterializationReport,
+        crate::stagex_make::MakeInventoryReport,
+        crate::stagex_gnu_patch::GnuPatchSourceMaterializationReport,
+        crate::stagex_gnu_patch::GnuPatchInventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("tinycc27-stage/runtime/output").is_dir());
+    let tinycc27_root = ctx.request.scratch_dir.join("tinycc27-stage/runtime/output");
+    let (make_sources, make_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "make-stage",
+            create_action: "creating create-new protected GNU Make stage root",
+        },
+        crate::stagex_make::materialize_authenticated_make_source,
+        |sources, runtime_dir| {
+            crate::stagex_make::derive_make_inventory(crate::stagex_make::MakeInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (gnu_patch_sources, gnu_patch_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "gnu-patch-stage",
+            create_action: "creating create-new protected GNU patch stage root",
+        },
+        crate::stagex_gnu_patch::materialize_authenticated_gnu_patch_source,
+        |sources, runtime_dir| {
+            crate::stagex_gnu_patch::derive_gnu_patch_inventory(crate::stagex_gnu_patch::GnuPatchInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((make_sources, make_runtime, gnu_patch_sources, gnu_patch_runtime))
+}
+
+fn run_archive_tools_phases(ctx: &TransitionStageContext<'_>) -> Result<ArchiveToolsArtifacts, StagexTransitionError> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("tinycc27-stage/runtime/output").is_dir());
+    let (gzip_sources, gzip_runtime, tar_sources, tar_runtime) = run_gzip_and_tar_phases(ctx)?;
+    let (sed_sources, sed_runtime, bzip2_sources, bzip2_runtime) = run_sed_and_bzip2_phases(ctx)?;
+    Ok(ArchiveToolsArtifacts {
         gzip_sources,
         gzip_runtime,
         tar_sources,
@@ -1677,20 +1351,361 @@ pub(crate) fn materialize_protected_transition(
         sed_runtime,
         bzip2_sources,
         bzip2_runtime,
+    })
+}
+
+fn run_gzip_and_tar_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<
+    (
+        crate::stagex_gzip::GzipSourceMaterializationReport,
+        crate::stagex_gzip::GzipInventoryReport,
+        crate::stagex_tar::TarSourceMaterializationReport,
+        crate::stagex_tar::TarInventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("tinycc27-stage/runtime/output").is_dir());
+    let tinycc27_root = ctx.request.scratch_dir.join("tinycc27-stage/runtime/output");
+    let (gzip_sources, gzip_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "gzip-stage",
+            create_action: "creating create-new protected gzip stage root",
+        },
+        crate::stagex_gzip::materialize_authenticated_gzip_source,
+        |sources, runtime_dir| {
+            crate::stagex_gzip::derive_gzip_inventory(crate::stagex_gzip::GzipInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (tar_sources, tar_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "tar-stage",
+            create_action: "creating create-new protected GNU tar stage root",
+        },
+        crate::stagex_tar::materialize_authenticated_tar_source,
+        |sources, runtime_dir| {
+            crate::stagex_tar::derive_tar_inventory(crate::stagex_tar::TarInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((gzip_sources, gzip_runtime, tar_sources, tar_runtime))
+}
+
+fn run_sed_and_bzip2_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<
+    (
+        crate::stagex_sed::SedSourceMaterializationReport,
+        crate::stagex_sed::SedInventoryReport,
+        crate::stagex_bzip2::Bzip2SourceMaterializationReport,
+        crate::stagex_bzip2::Bzip2InventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("tinycc27-stage/runtime/output").is_dir());
+    let tinycc27_root = ctx.request.scratch_dir.join("tinycc27-stage/runtime/output");
+    let (sed_sources, sed_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "sed-stage",
+            create_action: "creating create-new protected GNU sed stage root",
+        },
+        crate::stagex_sed::materialize_authenticated_sed_source,
+        |sources, runtime_dir| {
+            crate::stagex_sed::derive_sed_inventory(crate::stagex_sed::SedInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (bzip2_sources, bzip2_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "bzip2-stage",
+            create_action: "creating create-new protected bzip2 stage root",
+        },
+        crate::stagex_bzip2::materialize_authenticated_bzip2_source,
+        |sources, runtime_dir| {
+            crate::stagex_bzip2::derive_bzip2_inventory(crate::stagex_bzip2::Bzip2InventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                sed_root: &ctx.request.scratch_dir.join("sed-stage/runtime/output"),
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((sed_sources, sed_runtime, bzip2_sources, bzip2_runtime))
+}
+
+fn run_early_shell_tools_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<EarlyShellToolsArtifacts, StagexTransitionError> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("gnu-patch-stage/runtime/output").is_dir());
+    let tinycc27_root = ctx.request.scratch_dir.join("tinycc27-stage/runtime/output");
+    let patch_root = ctx.request.scratch_dir.join("gnu-patch-stage/runtime/output");
+    let (coreutils_sources, coreutils_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "coreutils-stage",
+            create_action: "creating create-new protected coreutils stage root",
+        },
+        crate::stagex_coreutils::materialize_authenticated_coreutils_source,
+        |sources, runtime_dir| {
+            crate::stagex_coreutils::derive_coreutils_inventory(crate::stagex_coreutils::CoreutilsInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                patch_root: &patch_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (oyacc_sources, oyacc_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "oyacc-stage",
+            create_action: "creating create-new protected oyacc stage root",
+        },
+        crate::stagex_oyacc::materialize_authenticated_oyacc_source,
+        |sources, runtime_dir| {
+            crate::stagex_oyacc::derive_oyacc_inventory(crate::stagex_oyacc::OyaccInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                patch_root: &patch_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (bash_sources, bash_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "bash-stage",
+            create_action: "creating create-new protected bash stage root",
+        },
+        crate::stagex_bash::materialize_authenticated_bash_source,
+        |sources, runtime_dir| {
+            crate::stagex_bash::derive_bash_inventory(crate::stagex_bash::BashInventoryRequest {
+                source_root: &sources.output_path,
+                tinycc27_root: &tinycc27_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok(EarlyShellToolsArtifacts {
         coreutils_sources,
         coreutils_runtime,
         oyacc_sources,
         oyacc_runtime,
         bash_sources,
         bash_runtime,
+    })
+}
+
+fn run_musl_bootstrap_phases(
+    ctx: &TransitionStageContext<'_>,
+    early_toolchain: &EarlyToolchainArtifacts,
+) -> Result<MuslBootstrapArtifacts, StagexTransitionError> {
+    debug_assert!(early_toolchain.tinycc27_sources.output_path.is_dir());
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    let (tcc_musl_prep_runtime, musl_sources, musl_runtime) =
+        run_tcc_musl_prep_and_musl1_phases(ctx, &early_toolchain.tinycc27_sources.output_path)?;
+    let (tcc_musl_runtime, musl_pass2_runtime) =
+        run_tcc_musl_and_musl2_phases(ctx, &early_toolchain.tinycc27_sources.output_path, &musl_sources.output_path)?;
+    Ok(MuslBootstrapArtifacts {
         tcc_musl_prep_runtime,
         musl_sources,
         musl_runtime,
         tcc_musl_runtime,
         musl_pass2_runtime,
+    })
+}
+
+fn run_tcc_musl_prep_and_musl1_phases(
+    ctx: &TransitionStageContext<'_>,
+    tinycc27_source_root: &Path,
+) -> Result<
+    (
+        crate::stagex_tcc_musl_prep::TccMuslPrepInventoryReport,
+        crate::stagex_musl::MuslSourceMaterializationReport,
+        crate::stagex_musl::MuslInventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(tinycc27_source_root.is_dir());
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    let tcc_musl_prep_runtime = run_derived_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "tcc-musl-prep-stage",
+            create_action: "creating create-new protected TinyCC musl-prep stage root",
+        },
+        |runtime_dir| {
+            crate::stagex_tcc_musl_prep::derive_tcc_musl_prep_inventory(
+                crate::stagex_tcc_musl_prep::TccMuslPrepInventoryRequest {
+                    tinycc27_source_root,
+                    tinycc27_root: &ctx.request.scratch_dir.join("tinycc27-stage/runtime/output"),
+                    scratch_dir: runtime_dir,
+                    protected_exec_enforced: true,
+                },
+            )
+        },
+    )?;
+    let (musl_sources, musl_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "musl-stage",
+            create_action: "creating create-new protected musl stage root",
+        },
+        crate::stagex_musl::materialize_authenticated_musl_source,
+        |sources, runtime_dir| {
+            crate::stagex_musl::derive_musl_inventory(crate::stagex_musl::MuslInventoryRequest {
+                source_root: &sources.output_path,
+                compiler_root: &ctx.request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
+                profile: crate::stagex_musl::MuslProfile::First,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((tcc_musl_prep_runtime, musl_sources, musl_runtime))
+}
+
+fn run_tcc_musl_and_musl2_phases(
+    ctx: &TransitionStageContext<'_>,
+    tinycc27_source_root: &Path,
+    musl_source_root: &Path,
+) -> Result<
+    (crate::stagex_tcc_musl::TccMuslInventoryReport, crate::stagex_musl::MuslInventoryReport),
+    StagexTransitionError,
+> {
+    debug_assert!(tinycc27_source_root.is_dir());
+    debug_assert!(musl_source_root.is_dir());
+    let tcc_musl_runtime = run_derived_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "tcc-musl-stage",
+            create_action: "creating create-new protected musl-linked TinyCC stage root",
+        },
+        |runtime_dir| {
+            crate::stagex_tcc_musl::derive_tcc_musl_inventory(crate::stagex_tcc_musl::TccMuslInventoryRequest {
+                tinycc27_source_root,
+                tcc_musl_prep_root: &ctx.request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
+                musl_root: &ctx.request.scratch_dir.join("musl-stage/runtime/output"),
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let musl_pass2_runtime = run_derived_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "musl-pass2-stage",
+            create_action: "creating create-new protected second-musl stage root",
+        },
+        |runtime_dir| {
+            crate::stagex_musl::derive_musl_inventory(crate::stagex_musl::MuslInventoryRequest {
+                source_root: musl_source_root,
+                compiler_root: &ctx.request.scratch_dir.join("tcc-musl-stage/runtime/output"),
+                profile: crate::stagex_musl::MuslProfile::Second,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((tcc_musl_runtime, musl_pass2_runtime))
+}
+
+fn run_tcc_selfhost_phases(
+    ctx: &TransitionStageContext<'_>,
+    early_toolchain: &EarlyToolchainArtifacts,
+    musl_bootstrap: &MuslBootstrapArtifacts,
+) -> Result<TccSelfhostArtifacts, StagexTransitionError> {
+    debug_assert!(early_toolchain.tinycc27_sources.output_path.is_dir());
+    debug_assert!(musl_bootstrap.musl_sources.output_path.is_dir());
+    let tinycc26_root = ctx.request.scratch_dir.join("tinycc-stage/runtime/output");
+    let musl_pass2_root = ctx.request.scratch_dir.join("musl-pass2-stage/runtime/output");
+    let tcc_musl_v2_runtime = run_derived_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "tcc-musl-v2-stage",
+            create_action: "creating create-new protected TinyCC musl-v2 stage root",
+        },
+        |runtime_dir| {
+            crate::stagex_tcc_musl_v2::derive_inventory(crate::stagex_tcc_musl_v2::InventoryRequest {
+                tinycc27_source_root: &early_toolchain.tinycc27_sources.output_path,
+                tinycc26_root: &tinycc26_root,
+                tcc_musl_prep_root: &ctx.request.scratch_dir.join("tcc-musl-prep-stage/runtime/output"),
+                musl_pass2_root: &musl_pass2_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let tcc_musl_v2_root = ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output");
+    let tcc_selfhost_runtime = run_derived_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "tcc-musl-selfhost-stage",
+            create_action: "creating create-new protected TinyCC self-host stage root",
+        },
+        |runtime_dir| {
+            crate::stagex_tcc_selfhost::derive_inventory(crate::stagex_tcc_selfhost::InventoryRequest {
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                tinycc26_root: &tinycc26_root,
+                musl_pass2_root: &musl_pass2_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let musl_native_runtime = run_derived_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "musl-native-stage",
+            create_action: "creating create-new protected native musl stage root",
+        },
+        |runtime_dir| {
+            crate::stagex_musl_native::derive_inventory(crate::stagex_musl_native::InventoryRequest {
+                source_root: &musl_bootstrap.musl_sources.output_path,
+                selfhost_root: &ctx.request.scratch_dir.join("tcc-musl-selfhost-stage/runtime/output"),
+                predecessor_root: &tcc_musl_v2_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok(TccSelfhostArtifacts {
         tcc_musl_v2_runtime,
         tcc_selfhost_runtime,
         musl_native_runtime,
+    })
+}
+
+fn run_gnu_text_tools_phases(ctx: &TransitionStageContext<'_>) -> Result<GnuTextToolsArtifacts, StagexTransitionError> {
+    debug_assert!(ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output").is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("musl-native-stage/runtime/output").is_dir());
+    let (m4_sources, m4_runtime, diffutils_sources, diffutils_runtime) = run_m4_and_diffutils_phases(ctx)?;
+    let (grep_sources, grep_runtime, gawk_sources, gawk_runtime) = run_grep_and_gawk_phases(ctx)?;
+    Ok(GnuTextToolsArtifacts {
         m4_sources,
         m4_runtime,
         diffutils_sources,
@@ -1699,62 +1714,494 @@ pub(crate) fn materialize_protected_transition(
         grep_runtime,
         gawk_sources,
         gawk_runtime,
+    })
+}
+
+fn run_m4_and_diffutils_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<
+    (
+        crate::stagex_m4::M4SourceMaterializationReport,
+        crate::stagex_m4::M4InventoryReport,
+        crate::stagex_diffutils::DiffutilsSourceMaterializationReport,
+        crate::stagex_diffutils::DiffutilsInventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output").is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("musl-native-stage/runtime/output").is_dir());
+    let tcc_musl_v2_root = ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output");
+    let musl_native_root = ctx.request.scratch_dir.join("musl-native-stage/runtime/output");
+    let (m4_sources, m4_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "m4-stage",
+            create_action: "creating create-new protected GNU M4 stage root",
+        },
+        crate::stagex_m4::materialize_authenticated_m4_source,
+        |sources, runtime_dir| {
+            crate::stagex_m4::derive_m4_inventory(crate::stagex_m4::M4InventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                musl_native_root: &musl_native_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (diffutils_sources, diffutils_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "diffutils-stage",
+            create_action: "creating create-new protected GNU diffutils stage root",
+        },
+        crate::stagex_diffutils::materialize_authenticated_diffutils_source,
+        |sources, runtime_dir| {
+            crate::stagex_diffutils::derive_diffutils_inventory(crate::stagex_diffutils::DiffutilsInventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                musl_native_root: &musl_native_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((m4_sources, m4_runtime, diffutils_sources, diffutils_runtime))
+}
+
+fn run_grep_and_gawk_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<
+    (
+        crate::stagex_grep::GrepSourceMaterializationReport,
+        crate::stagex_grep::GrepInventoryReport,
+        crate::stagex_gawk::GawkSourceMaterializationReport,
+        crate::stagex_gawk::GawkInventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output").is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("musl-native-stage/runtime/output").is_dir());
+    let tcc_musl_v2_root = ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output");
+    let musl_native_root = ctx.request.scratch_dir.join("musl-native-stage/runtime/output");
+    let (grep_sources, grep_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "grep-stage",
+            create_action: "creating create-new protected GNU grep stage root",
+        },
+        crate::stagex_grep::materialize_authenticated_grep_source,
+        |sources, runtime_dir| {
+            crate::stagex_grep::derive_grep_inventory(crate::stagex_grep::GrepInventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                musl_native_root: &musl_native_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (gawk_sources, gawk_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "gawk-stage",
+            create_action: "creating create-new protected GNU Gawk stage root",
+        },
+        crate::stagex_gawk::materialize_authenticated_gawk_source,
+        |sources, runtime_dir| {
+            crate::stagex_gawk::derive_gawk_inventory(crate::stagex_gawk::GawkInventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                musl_native_root: &musl_native_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((grep_sources, grep_runtime, gawk_sources, gawk_runtime))
+}
+
+fn run_gnu_parser_and_bash_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<GnuParserAndBashArtifacts, StagexTransitionError> {
+    debug_assert!(ctx.request.scratch_dir.join("m4-stage/runtime/output").is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("bash-stage/runtime/bash-2.05b").is_dir());
+    let (bison_sources, bison_runtime, flex_sources, flex_runtime) = run_bison_and_flex_phases(ctx)?;
+    let tcc_musl_v2_root = ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output");
+    let musl_native_root = ctx.request.scratch_dir.join("musl-native-stage/runtime/output");
+    let bash_full_runtime = run_derived_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "bash-full-stage",
+            create_action: "creating create-new protected full Bash stage root",
+        },
+        |runtime_dir| {
+            crate::stagex_bash_full::derive_bash_full_inventory(crate::stagex_bash_full::BashFullInventoryRequest {
+                configured_source_root: &ctx.request.scratch_dir.join("bash-stage/runtime/bash-2.05b"),
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                musl_native_root: &musl_native_root,
+                make: &ctx.request.scratch_dir.join("make-stage/runtime/output/bin/make"),
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok(GnuParserAndBashArtifacts {
         bison_sources,
         bison_runtime,
         flex_sources,
         flex_runtime,
         bash_full_runtime,
+    })
+}
+
+fn run_bison_and_flex_phases(
+    ctx: &TransitionStageContext<'_>,
+) -> Result<
+    (
+        crate::stagex_bison::BisonSourceMaterializationReport,
+        crate::stagex_bison::BisonInventoryReport,
+        crate::stagex_flex::FlexSourceMaterializationReport,
+        crate::stagex_flex::FlexInventoryReport,
+    ),
+    StagexTransitionError,
+> {
+    debug_assert!(ctx.request.scratch_dir.join("m4-stage/runtime/output").is_dir());
+    debug_assert!(ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output").is_dir());
+    let tcc_musl_v2_root = ctx.request.scratch_dir.join("tcc-musl-v2-stage/runtime/output");
+    let musl_native_root = ctx.request.scratch_dir.join("musl-native-stage/runtime/output");
+    let m4_root = ctx.request.scratch_dir.join("m4-stage/runtime/output");
+    let (bison_sources, bison_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "bison-stage",
+            create_action: "creating create-new protected GNU Bison stage root",
+        },
+        crate::stagex_bison::materialize_authenticated_bison_source,
+        |sources, runtime_dir| {
+            crate::stagex_bison::derive_bison_inventory(crate::stagex_bison::BisonInventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                musl_native_root: &musl_native_root,
+                m4_root: &m4_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    let (flex_sources, flex_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "flex-stage",
+            create_action: "creating create-new protected GNU Flex stage root",
+        },
+        crate::stagex_flex::materialize_authenticated_flex_source,
+        |sources, runtime_dir| {
+            crate::stagex_flex::derive_flex_inventory(crate::stagex_flex::FlexInventoryRequest {
+                source_root: &sources.output_path,
+                tcc_musl_v2_root: &tcc_musl_v2_root,
+                musl_native_root: &musl_native_root,
+                m4_root: &m4_root,
+                scratch_dir: runtime_dir,
+                protected_exec_enforced: true,
+            })
+        },
+    )?;
+    Ok((bison_sources, bison_runtime, flex_sources, flex_runtime))
+}
+
+fn run_binutils_stage(ctx: &TransitionStageContext<'_>) -> Result<BinutilsArtifacts, StagexTransitionError> {
+    debug_assert!(ctx.request.scratch_dir.is_dir());
+    debug_assert!(!ctx.manifest_authority.source_bundle_manifest_blake3.is_empty());
+    let paths = BinutilsStagePaths::from_transition_root(ctx.request.scratch_dir);
+    let (binutils_sources, binutils_runtime) = run_authenticated_source_stage(
+        ctx,
+        StageDirSpec {
+            dir_name: "binutils-stage",
+            create_action: "creating create-new protected binutils stage root",
+        },
+        crate::stagex_binutils::materialize_authenticated_binutils_source,
+        |sources, _| crate::stagex_binutils::derive_binutils_inventory(paths.probe_request(&sources.output_path), true),
+    )?;
+    Ok(BinutilsArtifacts {
         binutils_sources,
         binutils_runtime,
-        fallback_events: Vec::new(),
-        promotions: vec![hex0_promotion, kaem_promotion],
-        protected_exec_events,
-    };
+    })
+}
+
+fn finalize_protected_transition(
+    request: &StagexTransitionRequest<'_>,
+    prepared: PreparedTransitionContext,
+    completed: CompletedTransitionExecution,
+) -> Result<StagexTransitionReport, StagexTransitionError> {
+    debug_assert!(request.scratch_dir.is_dir());
+    debug_assert!(!completed.seed_artifacts.hex0_promotion.source_entry_id.is_empty());
+    write_protected_exec_audit(&request.scratch_dir.join(AUDIT_FILE_NAME), &completed.protected_exec_events)?;
+    let mut audit_reports =
+        empty_transition_audit_reports(completed.binutils_event_count, completed.full_artifacts.as_ref());
+    if let Some(full) = completed.full_artifacts.as_ref() {
+        populate_early_audit_reports(&mut audit_reports, full);
+        populate_late_audit_reports(&mut audit_reports, full);
+    }
+    validate_transition_audit(&prepared.staged, audit_reports, &completed.protected_exec_events)?;
+    let kaem_smoke_digest_blake3 = blake3_file_hex(&prepared.staged.kaem_smoke).map_err(protected_digest_error)?;
+    let plan_digest_blake3 = stagex_plan_digest_blake3(&prepared.plan)
+        .map_err(|error| StagexTransitionError::Plan(vec![error.to_string()]))?;
+    let mut report = new_empty_transition_report(TransitionReportBase {
+        plan_digest_blake3,
+        source_state_digest_blake3: prepared.source_state_digest_blake3,
+        kaem_smoke_digest_blake3,
+        promotions: vec![
+            completed.seed_artifacts.hex0_promotion,
+            completed.seed_artifacts.kaem_promotion,
+        ],
+        protected_exec_events: completed.protected_exec_events,
+    });
+    if let Some(full) = completed.full_artifacts {
+        populate_early_transition_report_fields(
+            &mut report,
+            full.stage0_and_mes,
+            full.early_toolchain,
+            full.archive_tools,
+        );
+        populate_mid_transition_report_fields(
+            &mut report,
+            full.early_shell_tools,
+            full.musl_bootstrap,
+            full.tcc_selfhost,
+        );
+        populate_late_transition_report_fields(
+            &mut report,
+            full.gnu_text_tools,
+            full.gnu_parser_and_bash,
+            full.binutils,
+        );
+    }
     write_json_create_new(&request.scratch_dir.join(REPORT_FILE_NAME), &report)?;
     Ok(report)
 }
 
-fn materialize_binutils_stage(
-    request: &StagexTransitionRequest<'_>,
-    manifest_authority: &TransitionManifestAuthority,
-    supervisor: &ProtectedSeccompSupervisor,
-    bash_full_complete: bool,
-) -> Result<
-    (
-        Option<crate::stagex_binutils::BinutilsSourceMaterializationReport>,
-        Option<crate::stagex_binutils::BinutilsInventoryReport>,
-    ),
-    StagexTransitionError,
-> {
-    match (request.source_bundle_path, bash_full_complete) {
-        (Some(source_bundle_path), true) => {
-            let stage = request.scratch_dir.join("binutils-stage");
-            fs::create_dir(&stage)
-                .map_err(|source| io_error("creating create-new protected binutils stage root", source))?;
-            let sources = crate::stagex_binutils::materialize_authenticated_binutils_source(
-                source_bundle_path,
-                &manifest_authority.source_bundle_manifest_blake3,
-                &stage.join("sources"),
-            )
-            .map_err(|error| StagexTransitionError::ProtectedExec(error.to_string()))?;
-            let paths = BinutilsStagePaths::from_transition_root(request.scratch_dir);
-            let result =
-                crate::stagex_binutils::derive_binutils_inventory(paths.probe_request(&sources.output_path), true);
-            match result {
-                Ok(report) => Ok((Some(sources), Some(report))),
-                Err(error) => {
-                    thread::sleep(Duration::from_millis(AUDIT_FLUSH_WAIT_MS));
-                    let events = supervisor.audit_events();
-                    write_protected_exec_audit(&request.scratch_dir.join(FAILURE_AUDIT_FILE_NAME), &events)?;
-                    Err(StagexTransitionError::ProtectedExec(error.to_string()))
-                }
-            }
-        }
-        (None, false) => Ok((None, None)),
-        _ => Err(StagexTransitionError::InvalidInput(
-            "binutils requires authenticated source closure and protected full Bash completion".to_string(),
-        )),
+fn empty_transition_audit_reports<'a>(
+    binutils_event_count: Option<usize>,
+    full_artifacts: Option<&FullSourceTransitionArtifacts>,
+) -> TransitionAuditReports<'a> {
+    debug_assert!(binutils_event_count.is_none_or(|count| count > 0));
+    debug_assert_eq!(binutils_event_count.is_some(), full_artifacts.is_some());
+    TransitionAuditReports {
+        stage0_full: None,
+        mes_m2: None,
+        mes_runtime: None,
+        tinycc_runtime: None,
+        tinycc27_runtime: None,
+        make_runtime: None,
+        gnu_patch_runtime: None,
+        gzip_runtime: None,
+        tar_runtime: None,
+        sed_runtime: None,
+        bzip2_runtime: None,
+        coreutils_runtime: None,
+        oyacc_runtime: None,
+        bash_runtime: None,
+        tcc_musl_prep_runtime: None,
+        musl_runtime: None,
+        tcc_musl_runtime: None,
+        musl_pass2_runtime: None,
+        tcc_musl_v2_runtime: None,
+        tcc_selfhost_runtime: None,
+        musl_native_runtime: None,
+        m4_runtime: None,
+        diffutils_runtime: None,
+        grep_runtime: None,
+        gawk_runtime: None,
+        bison_runtime: None,
+        flex_runtime: None,
+        bash_full_runtime: None,
+        binutils_runtime: None,
+        binutils_event_count,
     }
+}
+
+fn populate_early_audit_reports<'a>(audit: &mut TransitionAuditReports<'a>, full: &'a FullSourceTransitionArtifacts) {
+    debug_assert!(audit.stage0_full.is_none());
+    audit.stage0_full = Some(&full.stage0_and_mes.stage0_full);
+    audit.mes_m2 = Some(&full.stage0_and_mes.mes_m2);
+    audit.mes_runtime = Some(&full.stage0_and_mes.mes_runtime);
+    audit.tinycc_runtime = Some(&full.early_toolchain.tinycc_runtime);
+    audit.tinycc27_runtime = Some(&full.early_toolchain.tinycc27_runtime);
+    audit.make_runtime = Some(&full.early_toolchain.make_runtime);
+    audit.gnu_patch_runtime = Some(&full.early_toolchain.gnu_patch_runtime);
+    audit.gzip_runtime = Some(&full.archive_tools.gzip_runtime);
+    audit.tar_runtime = Some(&full.archive_tools.tar_runtime);
+    audit.sed_runtime = Some(&full.archive_tools.sed_runtime);
+    audit.bzip2_runtime = Some(&full.archive_tools.bzip2_runtime);
+    audit.coreutils_runtime = Some(&full.early_shell_tools.coreutils_runtime);
+    audit.oyacc_runtime = Some(&full.early_shell_tools.oyacc_runtime);
+    audit.bash_runtime = Some(&full.early_shell_tools.bash_runtime);
+    debug_assert!(audit.bash_runtime.is_some());
+}
+
+fn populate_late_audit_reports<'a>(audit: &mut TransitionAuditReports<'a>, full: &'a FullSourceTransitionArtifacts) {
+    debug_assert!(audit.tcc_musl_prep_runtime.is_none());
+    audit.tcc_musl_prep_runtime = Some(&full.musl_bootstrap.tcc_musl_prep_runtime);
+    audit.musl_runtime = Some(&full.musl_bootstrap.musl_runtime);
+    audit.tcc_musl_runtime = Some(&full.musl_bootstrap.tcc_musl_runtime);
+    audit.musl_pass2_runtime = Some(&full.musl_bootstrap.musl_pass2_runtime);
+    audit.tcc_musl_v2_runtime = Some(&full.tcc_selfhost.tcc_musl_v2_runtime);
+    audit.tcc_selfhost_runtime = Some(&full.tcc_selfhost.tcc_selfhost_runtime);
+    audit.musl_native_runtime = Some(&full.tcc_selfhost.musl_native_runtime);
+    audit.m4_runtime = Some(&full.gnu_text_tools.m4_runtime);
+    audit.diffutils_runtime = Some(&full.gnu_text_tools.diffutils_runtime);
+    audit.grep_runtime = Some(&full.gnu_text_tools.grep_runtime);
+    audit.gawk_runtime = Some(&full.gnu_text_tools.gawk_runtime);
+    audit.bison_runtime = Some(&full.gnu_parser_and_bash.bison_runtime);
+    audit.flex_runtime = Some(&full.gnu_parser_and_bash.flex_runtime);
+    audit.bash_full_runtime = Some(&full.gnu_parser_and_bash.bash_full_runtime);
+    audit.binutils_runtime = Some(&full.binutils.binutils_runtime);
+    debug_assert!(audit.binutils_runtime.is_some());
+}
+
+fn new_empty_transition_report(base: TransitionReportBase) -> StagexTransitionReport {
+    debug_assert!(!base.plan_digest_blake3.is_empty());
+    debug_assert!(!base.kaem_smoke_digest_blake3.is_empty());
+    StagexTransitionReport {
+        schema_version: STAGEX_TRANSITION_REPORT_SCHEMA_V1.to_string(),
+        status: "complete".to_string(),
+        plan_digest_blake3: base.plan_digest_blake3,
+        source_state_digest_blake3: base.source_state_digest_blake3,
+        seed_digest_blake3: HEX0_SEED_BLAKE3.to_string(),
+        reproduced_hex0_digest_blake3: HEX0_SEED_BLAKE3.to_string(),
+        kaem_digest_blake3: KAEM_OUTPUT_BLAKE3.to_string(),
+        kaem_smoke_digest_blake3: base.kaem_smoke_digest_blake3,
+        stage0_full: None,
+        mes_m2: None,
+        mes_runtime: None,
+        tinycc_sources: None,
+        tinycc_runtime: None,
+        tinycc27_sources: None,
+        tinycc27_runtime: None,
+        make_sources: None,
+        make_runtime: None,
+        gnu_patch_sources: None,
+        gnu_patch_runtime: None,
+        gzip_sources: None,
+        gzip_runtime: None,
+        tar_sources: None,
+        tar_runtime: None,
+        sed_sources: None,
+        sed_runtime: None,
+        bzip2_sources: None,
+        bzip2_runtime: None,
+        coreutils_sources: None,
+        coreutils_runtime: None,
+        oyacc_sources: None,
+        oyacc_runtime: None,
+        bash_sources: None,
+        bash_runtime: None,
+        tcc_musl_prep_runtime: None,
+        musl_sources: None,
+        musl_runtime: None,
+        tcc_musl_runtime: None,
+        musl_pass2_runtime: None,
+        tcc_musl_v2_runtime: None,
+        tcc_selfhost_runtime: None,
+        musl_native_runtime: None,
+        m4_sources: None,
+        m4_runtime: None,
+        diffutils_sources: None,
+        diffutils_runtime: None,
+        grep_sources: None,
+        grep_runtime: None,
+        gawk_sources: None,
+        gawk_runtime: None,
+        bison_sources: None,
+        bison_runtime: None,
+        flex_sources: None,
+        flex_runtime: None,
+        bash_full_runtime: None,
+        binutils_sources: None,
+        binutils_runtime: None,
+        fallback_events: Vec::new(),
+        promotions: base.promotions,
+        protected_exec_events: base.protected_exec_events,
+    }
+}
+
+fn populate_early_transition_report_fields(
+    report: &mut StagexTransitionReport,
+    stage0_and_mes: Stage0AndMesArtifacts,
+    early_toolchain: EarlyToolchainArtifacts,
+    archive_tools: ArchiveToolsArtifacts,
+) {
+    debug_assert!(report.stage0_full.is_none());
+    report.stage0_full = Some(stage0_and_mes.stage0_full);
+    report.mes_m2 = Some(stage0_and_mes.mes_m2);
+    report.mes_runtime = Some(stage0_and_mes.mes_runtime);
+    report.tinycc_sources = Some(early_toolchain.tinycc_sources);
+    report.tinycc_runtime = Some(early_toolchain.tinycc_runtime);
+    report.tinycc27_sources = Some(early_toolchain.tinycc27_sources);
+    report.tinycc27_runtime = Some(early_toolchain.tinycc27_runtime);
+    report.make_sources = Some(early_toolchain.make_sources);
+    report.make_runtime = Some(early_toolchain.make_runtime);
+    report.gnu_patch_sources = Some(early_toolchain.gnu_patch_sources);
+    report.gnu_patch_runtime = Some(early_toolchain.gnu_patch_runtime);
+    report.gzip_sources = Some(archive_tools.gzip_sources);
+    report.gzip_runtime = Some(archive_tools.gzip_runtime);
+    report.tar_sources = Some(archive_tools.tar_sources);
+    report.tar_runtime = Some(archive_tools.tar_runtime);
+    report.sed_sources = Some(archive_tools.sed_sources);
+    report.sed_runtime = Some(archive_tools.sed_runtime);
+    report.bzip2_sources = Some(archive_tools.bzip2_sources);
+    report.bzip2_runtime = Some(archive_tools.bzip2_runtime);
+    debug_assert!(report.bzip2_runtime.is_some());
+}
+
+fn populate_mid_transition_report_fields(
+    report: &mut StagexTransitionReport,
+    early_shell_tools: EarlyShellToolsArtifacts,
+    musl_bootstrap: MuslBootstrapArtifacts,
+    tcc_selfhost: TccSelfhostArtifacts,
+) {
+    debug_assert!(report.coreutils_sources.is_none());
+    report.coreutils_sources = Some(early_shell_tools.coreutils_sources);
+    report.coreutils_runtime = Some(early_shell_tools.coreutils_runtime);
+    report.oyacc_sources = Some(early_shell_tools.oyacc_sources);
+    report.oyacc_runtime = Some(early_shell_tools.oyacc_runtime);
+    report.bash_sources = Some(early_shell_tools.bash_sources);
+    report.bash_runtime = Some(early_shell_tools.bash_runtime);
+    report.tcc_musl_prep_runtime = Some(musl_bootstrap.tcc_musl_prep_runtime);
+    report.musl_sources = Some(musl_bootstrap.musl_sources);
+    report.musl_runtime = Some(musl_bootstrap.musl_runtime);
+    report.tcc_musl_runtime = Some(musl_bootstrap.tcc_musl_runtime);
+    report.musl_pass2_runtime = Some(musl_bootstrap.musl_pass2_runtime);
+    report.tcc_musl_v2_runtime = Some(tcc_selfhost.tcc_musl_v2_runtime);
+    report.tcc_selfhost_runtime = Some(tcc_selfhost.tcc_selfhost_runtime);
+    report.musl_native_runtime = Some(tcc_selfhost.musl_native_runtime);
+    debug_assert!(report.musl_native_runtime.is_some());
+}
+
+fn populate_late_transition_report_fields(
+    report: &mut StagexTransitionReport,
+    gnu_text_tools: GnuTextToolsArtifacts,
+    gnu_parser_and_bash: GnuParserAndBashArtifacts,
+    binutils: BinutilsArtifacts,
+) {
+    debug_assert!(report.m4_sources.is_none());
+    report.m4_sources = Some(gnu_text_tools.m4_sources);
+    report.m4_runtime = Some(gnu_text_tools.m4_runtime);
+    report.diffutils_sources = Some(gnu_text_tools.diffutils_sources);
+    report.diffutils_runtime = Some(gnu_text_tools.diffutils_runtime);
+    report.grep_sources = Some(gnu_text_tools.grep_sources);
+    report.grep_runtime = Some(gnu_text_tools.grep_runtime);
+    report.gawk_sources = Some(gnu_text_tools.gawk_sources);
+    report.gawk_runtime = Some(gnu_text_tools.gawk_runtime);
+    report.bison_sources = Some(gnu_parser_and_bash.bison_sources);
+    report.bison_runtime = Some(gnu_parser_and_bash.bison_runtime);
+    report.flex_sources = Some(gnu_parser_and_bash.flex_sources);
+    report.flex_runtime = Some(gnu_parser_and_bash.flex_runtime);
+    report.bash_full_runtime = Some(gnu_parser_and_bash.bash_full_runtime);
+    report.binutils_sources = Some(binutils.binutils_sources);
+    report.binutils_runtime = Some(binutils.binutils_runtime);
+    debug_assert!(report.binutils_runtime.is_some());
 }
 
 fn validate_stage0_optional_inputs(
@@ -6094,7 +6541,6 @@ fn require_binutils_non_coreutils_counts(
     paths: &BinutilsStagePaths,
 ) -> Result<(), StagexTransitionError> {
     const TCC_COUNT: u32 = 1_423;
-    const BASH_COUNT_BOUNDS: [u32; 2] = [7_619, 7_627];
     const SED_COUNT_OFFSET: u32 = 125;
     let sed_count = report
         .sed_invocation_count
@@ -6114,9 +6560,10 @@ fn require_binutils_non_coreutils_counts(
     ] {
         require_binutils_path_count(counts, path, expected_count)?;
     }
-    require_binutils_path_count_bounds(counts, &paths.bash, BASH_COUNT_BOUNDS)?;
+    require_binutils_path_count_bounds(counts, &paths.bash, BINUTILS_BASH_COUNT_BOUNDS)?;
     assert_eq!(sed_count, report.sed_invocation_count + SED_COUNT_OFFSET);
-    assert!(BASH_COUNT_BOUNDS[0] <= BASH_COUNT_BOUNDS[1]);
+    debug_assert!(paths.bash.is_absolute());
+    debug_assert!(!counts.is_empty());
     Ok(())
 }
 
@@ -9519,6 +9966,7 @@ mod tests {
     const SCRATCH_ENV: &str = "MANTLE_STAGE_X_TRANSITION_SCRATCH";
     const SOURCE_BUNDLE_ENV: &str = "MANTLE_STAGE_X_SOURCE_BUNDLE";
     const CHILD_TEST_NAME: &str = "stagex_transition::tests::protected_transition_reproduces_seed_and_builds_kaem";
+    const EXPECTED_PROMOTION_COUNT: usize = 2;
     const TEST_LINEAGE_MANIFEST_DIGEST: &str = "e477ab39a0348812f9bd5a3af52759db3bd8dbc84f721315d1f78c766ca7d06d";
 
     #[test]

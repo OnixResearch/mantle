@@ -101,6 +101,34 @@ pub(crate) fn reportable_execution(
     }
 }
 
+fn render_rust_plan_receipt_json<T: serde::Serialize>(
+    receipt: &T,
+    label: &str,
+    is_compact_json: bool,
+) -> Result<String, RunError> {
+    debug_assert!(!label.is_empty());
+    let rendered = if is_compact_json {
+        serde_json::to_string(receipt)
+    } else {
+        serde_json::to_string_pretty(receipt)
+    }
+    .map_err(|err| RunError::Internal(format!("rendering {label}: {err}")))?;
+    debug_assert!(!rendered.is_empty());
+    Ok(rendered)
+}
+
+fn print_rust_plan_receipt_json<T: serde::Serialize>(
+    receipt: &T,
+    label: &str,
+    is_compact_json: bool,
+) -> Result<(), RunError> {
+    let rendered = render_rust_plan_receipt_json(receipt, label, is_compact_json)?;
+    debug_assert!(!rendered.is_empty());
+    debug_assert!(!label.is_empty());
+    println!("{rendered}");
+    Ok(())
+}
+
 pub(crate) fn execute_rust_plan_receipt(request: RustPlanExecutionRequest<'_>) -> Result<(), RunError> {
     let diagnostics = request.wait_diagnostics.clone();
     let result = match request.mode {
@@ -112,7 +140,9 @@ pub(crate) fn execute_rust_plan_receipt(request: RustPlanExecutionRequest<'_>) -
         RustPlanExecutionMode::DevDependencyTestTopology => execute_dev_dependency_test_topology_rust_plan(request),
         RustPlanExecutionMode::WorkspaceDependencyTopology => execute_workspace_dependency_topology_rust_plan(request),
         RustPlanExecutionMode::PatchSourceTopology => execute_patch_source_topology_rust_plan(request),
-        RustPlanExecutionMode::PrintOnly => rust_plan::print_rust_plan_receipt(&request.receipt, request.json),
+        RustPlanExecutionMode::PrintOnly => {
+            print_rust_plan_receipt_json(&request.receipt, "Rust plan receipt", request.json)
+        }
     };
     if let Some(diagnostics) = diagnostics {
         let outcome = match &result {
@@ -156,11 +186,12 @@ fn execute_first_supported_rust_plan(request: RustPlanExecutionRequest<'_>) -> R
     });
     let unit_execution = result?;
     let classification = reportable_execution(classification, &unit_execution.execution_status)?;
-    rust_plan::print_rust_plan_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanExecutionReceipt {
             rust_plan: request.receipt,
             unit_execution,
         },
+        "Rust plan execution receipt",
         request.json,
     )?;
     classification
@@ -175,11 +206,12 @@ fn execute_first_dependency_chain_rust_plan(request: RustPlanExecutionRequest<'_
     });
     let dependency_chain_execution = result?;
     let classification = reportable_execution(classification, &dependency_chain_execution.execution_status)?;
-    rust_plan::print_rust_plan_dependency_chain_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanDependencyChainExecutionReceipt {
             rust_plan: request.receipt,
             dependency_chain_execution,
         },
+        "Rust dependency-chain execution receipt",
         request.json,
     )?;
     classification
@@ -194,11 +226,12 @@ fn execute_target_topology_rust_plan(request: RustPlanExecutionRequest<'_>) -> R
     });
     let target_topology_execution = result?;
     let classification = reportable_execution(classification, &target_topology_execution.execution_status)?;
-    rust_plan::print_rust_plan_target_topology_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanTargetTopologyExecutionReceipt {
             rust_plan: request.receipt,
             target_topology_execution,
         },
+        "Rust target-topology execution receipt",
         request.json,
     )?;
     classification
@@ -218,11 +251,12 @@ fn execute_host_artifact_topology_rust_plan(request: RustPlanExecutionRequest<'_
     });
     let execution = result?;
     let classification = reportable_execution(classification, &execution.execution_status)?;
-    rust_plan::print_rust_plan_host_artifact_topology_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanHostArtifactTopologyExecutionReceipt {
             rust_plan: request.receipt,
             host_artifact_topology_execution: execution,
         },
+        "Rust host-artifact topology execution receipt",
         request.json,
     )?;
     classification
@@ -242,11 +276,12 @@ fn execute_topology_rust_plan(request: RustPlanExecutionRequest<'_>) -> Result<(
     });
     let topology_execution = result?;
     let classification = reportable_execution(classification, &topology_execution.execution_status)?;
-    rust_plan::print_rust_plan_topology_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanTopologyExecutionReceipt {
             rust_plan: request.receipt,
             topology_execution,
         },
+        "Rust topology execution receipt",
         request.json,
     )?;
     classification
@@ -265,11 +300,12 @@ fn execute_dev_dependency_test_topology_rust_plan(request: RustPlanExecutionRequ
     });
     let execution = result?;
     let classification = reportable_execution(classification, &execution.execution_status)?;
-    rust_plan::print_rust_plan_dev_dependency_test_topology_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanDevDependencyTestTopologyExecutionReceipt {
             rust_plan: request.receipt,
             native_rust_dev_dependency_test_topology_execution: execution,
         },
+        "Rust dev-dependency test topology execution receipt",
         request.json,
     )?;
     classification
@@ -288,11 +324,12 @@ fn execute_workspace_dependency_topology_rust_plan(request: RustPlanExecutionReq
     });
     let execution = result?;
     let classification = reportable_execution(classification, &execution.execution_status)?;
-    rust_plan::print_rust_plan_workspace_dependency_topology_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanWorkspaceDependencyTopologyExecutionReceipt {
             rust_plan: request.receipt,
             native_registry_workspace_dependency_topology_execution: execution,
         },
+        "Rust workspace-dependency topology execution receipt",
         request.json,
     )?;
     classification
@@ -312,12 +349,56 @@ fn execute_patch_source_topology_rust_plan(request: RustPlanExecutionRequest<'_>
     });
     let execution = result?;
     let classification = reportable_execution(classification, &execution.execution_status)?;
-    rust_plan::print_rust_plan_patch_source_topology_execution_receipt(
+    print_rust_plan_receipt_json(
         &rust_plan::RustPlanPatchSourceTopologyExecutionReceipt {
             rust_plan: request.receipt,
             native_registry_patch_source_topology_execution: execution,
         },
+        "Rust patch-source topology execution receipt",
         request.json,
     )?;
     classification
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(serde::Serialize)]
+    struct SampleReceipt {
+        status: &'static str,
+        count: u32,
+    }
+
+    struct FailingSerialize;
+
+    impl serde::Serialize for FailingSerialize {
+        fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+            Err(serde::ser::Error::custom("cannot-encode"))
+        }
+    }
+
+    #[test]
+    fn render_rust_plan_receipt_json_supports_compact_and_pretty_modes() {
+        let receipt = SampleReceipt {
+            status: "success",
+            count: 2,
+        };
+        let compact = render_rust_plan_receipt_json(&receipt, "Rust plan receipt", true).unwrap();
+        assert_eq!(compact, r#"{"status":"success","count":2}"#);
+        let pretty = render_rust_plan_receipt_json(&receipt, "Rust plan receipt", false).unwrap();
+        assert!(pretty.contains('\n'));
+        assert!(pretty.contains("\"status\": \"success\""));
+    }
+
+    #[test]
+    fn render_rust_plan_receipt_json_preserves_label_on_error() {
+        let err =
+            render_rust_plan_receipt_json(&FailingSerialize, "Rust topology execution receipt", true).unwrap_err();
+        assert!(
+            err.message().starts_with("rendering Rust topology execution receipt: "),
+            "unexpected error: {}",
+            err.message()
+        );
+    }
 }

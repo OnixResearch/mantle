@@ -24,12 +24,11 @@ OWNED_CLEAN_TARGETS = [
     "crates/crunch-test-core/src",
     "crates/crunch-test-app/src",
     "crates/crunch-test/src",
-]
-
-M4_C2_TARGETS = {
     "src/rust_plan.rs",
     "src/stagex_transition.rs",
-}
+]
+
+M4_C2_TARGETS: set[str] = set()
 
 FORBIDDEN_LANE_C_TARGETS = {
     "src/build_report.rs",

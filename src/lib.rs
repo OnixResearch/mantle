@@ -1670,8 +1670,6 @@ mod stagex_tinycc;
     tigerstyle::raw_arithmetic_overflow
 )]
 mod stagex_tinycc27;
-// Retains `EXPECTED_PROMOTION_COUNT` constant until M4-C.2 hardening.
-#[allow(dead_code)]
 // HARDENING-BACKLOG 2026-11-25: pre-existing tigerstyle findings from binary-root
 // consolidation; scheduled for standalone hardening pass.
 #[allow(
