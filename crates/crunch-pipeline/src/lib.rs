@@ -90,6 +90,8 @@ pub use watch::watch_build;
 pub use watch::watch_build_incremental;
 
 const EVAL_MESSAGE_CHANNEL_CAPACITY: usize = 16;
+const STORE_MUTATION_LOCK_POLL_INTERVAL_MS: u64 = 25;
+const STORE_MUTATION_LOCK_WAIT_TIMEOUT_MS: u64 = 300_000;
 /// Live observation is bounded separately from the build scheduler's goal cap.
 pub const MAX_LIVE_WORKER_GOALS: usize = 4_095;
 
@@ -471,6 +473,52 @@ pub async fn build_with_owned_cancellation(
     build_with_stream_sender(config, cancellation, Some(stream_tx), worker_observation, None, true).await
 }
 
+async fn acquire_build_mutation_guard(
+    state_dir: &std::path::Path,
+    cancellation: &EvaluationCancellation,
+) -> Result<StoreMutationGuard, Error> {
+    assert!(!state_dir.as_os_str().is_empty(), "state_dir must not be empty");
+    const {
+        assert!(STORE_MUTATION_LOCK_WAIT_TIMEOUT_MS >= STORE_MUTATION_LOCK_POLL_INTERVAL_MS);
+    }
+    acquire_build_mutation_guard_with_timeout(state_dir, cancellation, STORE_MUTATION_LOCK_WAIT_TIMEOUT_MS).await
+}
+
+async fn acquire_build_mutation_guard_with_timeout(
+    state_dir: &std::path::Path,
+    cancellation: &EvaluationCancellation,
+    timeout_ms: u64,
+) -> Result<StoreMutationGuard, Error> {
+    assert!(!state_dir.as_os_str().is_empty(), "state_dir must not be empty");
+    let max_polls = timeout_ms.checked_div(STORE_MUTATION_LOCK_POLL_INTERVAL_MS).unwrap_or(0).saturating_add(1);
+    assert!(max_polls >= 1);
+    for poll_index in 0..max_polls {
+        let waited_ms = poll_index.saturating_mul(STORE_MUTATION_LOCK_POLL_INTERVAL_MS);
+        if cancellation.is_requested() {
+            let busy = StoreMutationGuard::format_busy_diagnostic(state_dir, waited_ms);
+            return Err(Error::Internal(format!("cancelled while waiting for store mutation lock: {busy}")));
+        }
+        if let Some(guard) = StoreMutationGuard::try_acquire_nonblocking(state_dir, "build")
+            .map_err(|err| Error::Internal(format!("acquiring store mutation lock: {err}")))?
+        {
+            return Ok(guard);
+        }
+        if poll_index.saturating_add(1) >= max_polls {
+            break;
+        }
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => {
+                let busy = StoreMutationGuard::format_busy_diagnostic(state_dir, waited_ms);
+                return Err(Error::Internal(format!("cancelled while waiting for store mutation lock: {busy}")));
+            }
+            _ = tokio::time::sleep(std::time::Duration::from_millis(STORE_MUTATION_LOCK_POLL_INTERVAL_MS)) => {}
+        }
+    }
+    let busy = StoreMutationGuard::format_busy_diagnostic(state_dir, timeout_ms);
+    Err(Error::Internal(format!("timed out waiting for store mutation lock: {busy}")))
+}
+
 async fn build_with_stream_sender(
     config: &BuildConfig,
     cancellation: EvaluationCancellation,
@@ -493,8 +541,7 @@ async fn build_with_stream_sender(
     store_config
         .preflight_backend_identity()
         .map_err(|error| Error::Internal(format!("opening store: {error}")))?;
-    let _mutation_guard = StoreMutationGuard::acquire_wait(&config.state_dir)
-        .map_err(|err| Error::Internal(format!("acquiring store mutation lock: {err}")))?;
+    let _mutation_guard = acquire_build_mutation_guard(&config.state_dir, &cancellation).await?;
 
     let mut session = crunch_eval::session::EvaluationSession::open_file(&config.file, &config.import_paths)
         .map_err(map_eval_error)?;
@@ -2327,5 +2374,48 @@ mod tests {
         assert_eq!(forward["release"].1.as_deref(), Some(&["-c".to_string(), "echo release > $out".to_string()][..]));
         assert_eq!(forward, reverse);
         assert_eq!(forward, delayed_debug);
+    }
+
+    #[tokio::test]
+    async fn contended_build_mutation_guard_cancels_promptly_without_blocking_runtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let state_dir = dir.path().join("state");
+        let _holder = StoreMutationGuard::try_acquire_for(&state_dir, "watch-holder").unwrap();
+        let cancellation = EvaluationCancellation::new();
+        let cancel_trigger = cancellation.clone();
+
+        let ticker = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            cancel_trigger.request();
+        });
+
+        let err = acquire_build_mutation_guard(&state_dir, &cancellation).await.unwrap_err();
+        ticker.await.unwrap();
+        let msg = err.to_string();
+        assert!(msg.contains("cancelled while waiting for store mutation lock"), "{msg}");
+        assert!(msg.contains("role=watch-holder"), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn contended_build_mutation_guard_times_out_and_recovers_on_release() {
+        let dir = tempfile::tempdir().unwrap();
+        let state_dir = dir.path().join("state");
+        let holder = StoreMutationGuard::try_acquire_for(&state_dir, "gc-holder").unwrap();
+        let cancellation = EvaluationCancellation::new();
+
+        let timeout_err = acquire_build_mutation_guard_with_timeout(&state_dir, &cancellation, 60).await.unwrap_err();
+        let msg = timeout_err.to_string();
+        assert!(msg.contains("timed out waiting for store mutation lock"), "{msg}");
+        assert!(msg.contains("role=gc-holder"), "{msg}");
+
+        let waiter_state = state_dir.clone();
+        let waiter_cancel = cancellation.clone();
+        let waiter = tokio::spawn(async move {
+            acquire_build_mutation_guard_with_timeout(&waiter_state, &waiter_cancel, 5_000).await
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        drop(holder);
+        let acquired = waiter.await.unwrap().expect("waiter acquires after release");
+        drop(acquired);
     }
 }

@@ -9,15 +9,28 @@
 //! These operate on a PathInfoService and are independent of the build
 //! engine. Callable from the CLI or as a library.
 
+use async_trait::async_trait;
+use crunch_gc_core::retention::RuntimeClosureExplanation;
+use crunch_gc_core::retention::RuntimeClosureLimits;
+use crunch_gc_core::retention::RuntimeClosureRequest;
+use crunch_gc_core::retention::explain_runtime_closure;
 use crunch_nar::CaseHackPolicy;
 use crunch_nar::FilesystemNarRequest;
 use futures::StreamExt;
 use nix_compat::narinfo::SigningKey;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::nixhash::HashAlgo;
+use nix_compat::store_path::StorePath;
+use snix_store::path_info::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
 
 use crate::Error;
+use crate::StoreBackend;
+use crate::StoreHandle;
+use crate::closure::LocalMetadataRead;
+use crate::closure::RuntimeClosureMetadataPolicy;
+use crate::closure::RuntimeMetadataSource;
+use crate::closure::collect_runtime_closure_metadata_from_source;
 use crate::gc::saturating_u32;
 
 /// Info for a single store path, returned by `store_info`.
@@ -346,6 +359,246 @@ pub async fn store_sign(
     }
 
     Ok(results)
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeClosureQueryOptions {
+    pub limits: RuntimeClosureLimits,
+    pub trusted_public_keys: Vec<VerifyingKey>,
+    pub is_allow_unsigned_local: bool,
+    pub is_allow_remote_metadata: bool,
+    pub remote_source_id: Option<String>,
+}
+
+impl RuntimeClosureQueryOptions {
+    #[must_use]
+    pub fn local_only(is_allow_unsigned_local: bool) -> Self {
+        Self {
+            limits: RuntimeClosureLimits::standard(),
+            trusted_public_keys: Vec::new(),
+            is_allow_unsigned_local,
+            is_allow_remote_metadata: false,
+            remote_source_id: None,
+        }
+    }
+
+    pub fn for_store(store: &StoreHandle) -> Result<Self, Error> {
+        assert!(!store.store_dir().is_empty());
+        assert!(!store.state_dir().as_os_str().is_empty());
+        let trusted_public_keys = load_store_closure_trusted_keys(store)?;
+        let is_allow_unsigned_local = store.backend().profile().unsigned_admission;
+        let is_allow_remote_metadata = store.remote_pathinfo().is_some();
+        Ok(Self {
+            limits: RuntimeClosureLimits::standard(),
+            trusted_public_keys,
+            is_allow_unsigned_local,
+            is_allow_remote_metadata,
+            remote_source_id: None,
+        })
+    }
+
+    pub fn with_base_state_dirs(mut self, base_state_dirs: &[std::path::PathBuf]) -> Result<Self, Error> {
+        for base_dir in base_state_dirs {
+            self.trusted_public_keys.extend(crate::overlay::load_layer_trust_keys(base_dir)?);
+        }
+        self.trusted_public_keys.sort_by_cached_key(ToString::to_string);
+        self.trusted_public_keys.dedup();
+        Ok(self)
+    }
+
+    pub fn with_trusted_public_keys(mut self, keys: &[VerifyingKey]) -> Self {
+        self.trusted_public_keys.extend(keys.iter().cloned());
+        self.trusted_public_keys.sort_by_cached_key(ToString::to_string);
+        self.trusted_public_keys.dedup();
+        self
+    }
+}
+
+pub struct PathInfoRuntimeClosureRequest<'a> {
+    pub local: &'a dyn PathInfoService,
+    pub remote: Option<&'a dyn PathInfoService>,
+    pub store_dir: &'a str,
+    pub roots: &'a [StorePath<String>],
+    pub options: RuntimeClosureQueryOptions,
+}
+
+pub async fn pathinfo_runtime_closure(
+    request: PathInfoRuntimeClosureRequest<'_>,
+) -> Result<RuntimeClosureExplanation, Error> {
+    if request.roots.is_empty() {
+        return Err(Error::Store("runtime closure requires at least one root".to_string()));
+    }
+    if request.store_dir.is_empty() {
+        return Err(Error::Store("runtime closure store_dir must not be empty".to_string()));
+    }
+    debug_assert!(!request.roots.is_empty());
+    debug_assert!(!request.store_dir.is_empty());
+    let source = PlainPathInfoMetadataSource {
+        local: request.local,
+        remote: request.remote,
+    };
+    let policy = RuntimeClosureMetadataPolicy {
+        store_dir: request.store_dir.to_string(),
+        limits: request.options.limits,
+        trusted_public_keys: request.options.trusted_public_keys,
+        is_allow_unsigned_local: request.options.is_allow_unsigned_local,
+        is_allow_remote_metadata: request.options.is_allow_remote_metadata,
+        remote_source_id: request.options.remote_source_id,
+    };
+    let mut now_ms = unix_wall_clock_ms;
+    let collected = collect_runtime_closure_metadata_from_source(request.roots, &source, &policy, &mut now_ms).await?;
+    explain_from_collected(request.store_dir, request.roots, policy.limits, collected)
+}
+
+pub async fn store_runtime_closure(
+    store: &StoreHandle,
+    roots: &[StorePath<String>],
+    options: RuntimeClosureQueryOptions,
+) -> Result<RuntimeClosureExplanation, Error> {
+    if roots.is_empty() {
+        return Err(Error::Store("runtime closure requires at least one root".to_string()));
+    }
+    if store.store_dir().is_empty() {
+        return Err(Error::Store("runtime closure store_dir must not be empty".to_string()));
+    }
+    debug_assert!(!roots.is_empty());
+    debug_assert!(!store.store_dir().is_empty());
+    store.revalidate_overlay_bases()?;
+    let source = StoreHandleMetadataSource { store };
+    let policy = RuntimeClosureMetadataPolicy {
+        store_dir: store.store_dir().to_string(),
+        limits: options.limits,
+        trusted_public_keys: options.trusted_public_keys,
+        is_allow_unsigned_local: options.is_allow_unsigned_local,
+        is_allow_remote_metadata: options.is_allow_remote_metadata,
+        remote_source_id: options.remote_source_id,
+    };
+    let mut now_ms = unix_wall_clock_ms;
+    let collected = collect_runtime_closure_metadata_from_source(roots, &source, &policy, &mut now_ms).await?;
+    store.revalidate_overlay_bases()?;
+    explain_from_collected(store.store_dir(), roots, policy.limits, collected)
+}
+
+fn explain_from_collected(
+    store_dir: &str,
+    roots: &[StorePath<String>],
+    limits: RuntimeClosureLimits,
+    collected: crate::closure::RuntimeClosureCollectedMetadata,
+) -> Result<RuntimeClosureExplanation, Error> {
+    assert!(!store_dir.is_empty());
+    assert!(!roots.is_empty());
+    let root_strings = roots.iter().map(|root| root.to_absolute_path_with_prefix(store_dir)).collect();
+    explain_runtime_closure(RuntimeClosureRequest {
+        store_prefix: store_dir.to_string(),
+        roots: root_strings,
+        limits,
+        elapsed_ms: collected.elapsed_ms,
+        members: collected.members,
+    })
+    .map_err(|error| Error::Store(format!("explaining runtime closure: {error:?}")))
+}
+
+fn unix_wall_clock_ms() -> u64 {
+    match crate::roots::current_unix_seconds() {
+        Ok(secs) => match u64::try_from(secs) {
+            Ok(unsigned) => unsigned.saturating_mul(1_000),
+            Err(_) => 0,
+        },
+        Err(_) => 0,
+    }
+}
+
+fn append_public_keys_if_present(keys: &mut Vec<VerifyingKey>, path: &std::path::Path) -> Result<(), Error> {
+    assert!(!path.as_os_str().is_empty());
+    if !path.exists() {
+        return Ok(());
+    }
+    let policy = crate::overlay::store_overlay_runtime_policy()?;
+    keys.extend(crate::overlay::parse_public_keys(path, policy.limits.max_descriptor_bytes)?);
+    debug_assert!(keys.iter().all(|key| !key.name().is_empty()));
+    Ok(())
+}
+
+fn load_store_closure_trusted_keys(store: &StoreHandle) -> Result<Vec<VerifyingKey>, Error> {
+    assert!(!store.state_dir().as_os_str().is_empty());
+    assert!(!store.store_dir().is_empty());
+    let mut keys = Vec::new();
+    if store.backend() == StoreBackend::Casita {
+        append_public_keys_if_present(&mut keys, &store.state_dir().join("casita-trusted-public-keys"))?;
+        if keys.is_empty()
+            && let Some(local_key) = crate::overlay::load_local_verifying_key(store.state_dir())?
+        {
+            keys.push(local_key);
+        }
+        return Ok(keys);
+    }
+    if store.overlay_report()?.is_some() {
+        append_public_keys_if_present(&mut keys, &store.state_dir().join("overlay-trusted-public-keys"))?;
+    }
+    append_public_keys_if_present(&mut keys, &store.state_dir().join("trusted-public-keys"))?;
+    if let Some(local_key) = crate::overlay::load_local_verifying_key(store.state_dir())? {
+        keys.push(local_key);
+    }
+    keys.sort_by_cached_key(ToString::to_string);
+    keys.dedup();
+    Ok(keys)
+}
+
+struct PlainPathInfoMetadataSource<'a> {
+    local: &'a dyn PathInfoService,
+    remote: Option<&'a dyn PathInfoService>,
+}
+
+#[async_trait]
+impl RuntimeMetadataSource for PlainPathInfoMetadataSource<'_> {
+    async fn read_local(&self, path: &StorePath<String>) -> LocalMetadataRead {
+        match self.local.get(*path.digest()).await {
+            Ok(Some(pi)) => LocalMetadataRead::Found(Box::new(crate::layer::Layered::overlay(pi))),
+            Ok(None) => LocalMetadataRead::Missing,
+            Err(error) => LocalMetadataRead::Failed(format!("local PathInfo lookup failed: {error}")),
+        }
+    }
+
+    async fn read_remote(&self, path: &StorePath<String>) -> Result<Option<PathInfo>, String> {
+        let Some(remote) = self.remote else {
+            return Ok(None);
+        };
+        remote.get(*path.digest()).await.map_err(|error| format!("remote PathInfo lookup failed: {error}"))
+    }
+}
+
+struct StoreHandleMetadataSource<'a> {
+    store: &'a StoreHandle,
+}
+
+#[async_trait]
+impl RuntimeMetadataSource for StoreHandleMetadataSource<'_> {
+    async fn read_local(&self, path: &StorePath<String>) -> LocalMetadataRead {
+        match self.store.path_info_with_layer(path).await {
+            Ok(Some(layered)) => LocalMetadataRead::Found(Box::new(layered)),
+            Ok(None) => LocalMetadataRead::Missing,
+            Err(error) => classify_store_metadata_error(error.to_string()),
+        }
+    }
+
+    async fn read_remote(&self, path: &StorePath<String>) -> Result<Option<PathInfo>, String> {
+        let Some(remote) = self.store.remote_pathinfo() else {
+            return Ok(None);
+        };
+        remote.get(*path.digest()).await.map_err(|error| format!("remote PathInfo lookup failed: {error}"))
+    }
+}
+
+fn classify_store_metadata_error(detail: String) -> LocalMetadataRead {
+    assert!(!detail.is_empty());
+    debug_assert!(detail.is_ascii() || !detail.is_empty());
+    if detail.contains("overlay-pathinfo-digest-collision") {
+        return LocalMetadataRead::IdentityConflict(detail);
+    }
+    if detail.contains("overlay-layer-trust-failure") || detail.contains("casita-signer-untrusted") {
+        return LocalMetadataRead::UntrustedSource(detail);
+    }
+    LocalMetadataRead::Failed(detail)
 }
 
 #[cfg(test)]
@@ -688,5 +941,253 @@ mod tests {
         assert_eq!(verify_results.len(), 1);
         assert!(!verify_results[0].is_trusted());
         assert_eq!(verify_results[0].trusted_count, 0);
+    }
+
+    #[tokio::test]
+    async fn pathinfo_runtime_closure_explains_diamond_and_counts_shared_once() {
+        let svc = test_pathinfo_service();
+        let make = |name: &str, seed: u8, size: u64, refs: Vec<StorePath<String>>| {
+            let sp = StorePath::from_name_and_digest_fixed(name, [seed; 20]).unwrap();
+            PathInfo {
+                store_path: sp,
+                node: Node::Symlink {
+                    target: SymlinkTarget::try_from("x").unwrap(),
+                },
+                references: refs,
+                nar_size: size,
+                nar_sha256: [seed; 32],
+                signatures: vec![],
+                deriver: None,
+                ca: None,
+            }
+        };
+        let leaf = make("leaf", 4, 400, vec![]);
+        let left = make("left", 2, 20, vec![leaf.store_path.clone()]);
+        let right = make("right", 3, 30, vec![leaf.store_path.clone()]);
+        let root = make("root", 1, 10, vec![left.store_path.clone(), right.store_path.clone()]);
+        for pi in [leaf, left, right, root.clone()] {
+            svc.put(pi).await.unwrap();
+        }
+
+        let explanation = pathinfo_runtime_closure(PathInfoRuntimeClosureRequest {
+            local: &svc,
+            remote: None,
+            store_dir: CUSTOM_PREFIX,
+            roots: &[root.store_path],
+            options: RuntimeClosureQueryOptions::local_only(true),
+        })
+        .await
+        .unwrap();
+        assert_eq!(explanation.completeness, crunch_gc_core::retention::RuntimeClosureCompleteness::Complete);
+        assert_eq!(explanation.observed_member_count, 4);
+        assert_eq!(explanation.observed_known_nar_bytes, 460);
+    }
+
+    #[tokio::test]
+    async fn store_runtime_closure_on_snix_and_casita_never_mutates_roots() {
+        for backend in [StoreBackend::Snix, StoreBackend::Casita] {
+            let dir = tempfile::tempdir().unwrap();
+            let state_dir = dir.path().join("state");
+            let output_dir = dir.path().join("store");
+            let (signing_key, verifying_key) = test_keypair();
+            if backend == StoreBackend::Casita {
+                std::fs::create_dir_all(&state_dir).unwrap();
+                std::fs::write(state_dir.join("casita-trusted-public-keys"), format!("{}\n", verifying_key)).unwrap();
+            }
+            let store = StoreHandle::open(crate::StoreConfig::new(
+                backend,
+                state_dir.clone(),
+                output_dir.clone(),
+                CUSTOM_PREFIX.to_string(),
+            ))
+            .await
+            .unwrap();
+
+            use snix_store::nar::NarCalculationService as _;
+            let mut writer = store.blob_service().open_write().await;
+            tokio::io::AsyncWriteExt::write_all(&mut writer, b"hello closure").await.unwrap();
+            let blob_digest = writer.close().await.unwrap();
+            let final_node = Node::File {
+                digest: blob_digest,
+                size: 13,
+                executable: false,
+            };
+            let (nar_size, nar_sha256) =
+                snix_store::nar::SimpleRenderer::new(store.blob_service(), store.directory_service())
+                    .calculate_nar(&final_node)
+                    .await
+                    .unwrap();
+            let root = StorePath::from_name_and_digest_fixed("app", [11u8; 20]).unwrap();
+            let empty_refs: [nix_compat::store_path::StorePathRef<'_>; 0] = [];
+            let fp = nix_compat::narinfo::fingerprint_with_store_dir(
+                &root.as_ref(),
+                &nar_sha256,
+                nar_size,
+                empty_refs.iter(),
+                CUSTOM_PREFIX,
+            );
+            let sig = signing_key.sign(fp.as_bytes()).to_owned();
+            let path_info = PathInfo {
+                store_path: root.clone(),
+                node: final_node.clone(),
+                references: Vec::new(),
+                nar_size,
+                nar_sha256,
+                signatures: vec![sig],
+                deriver: None,
+                ca: None,
+            };
+            let mut store = store;
+            store
+                .persist_and_export_signed_output(crate::PersistOutputRequest {
+                    output_name: "out",
+                    output_path: &root,
+                    path_info,
+                    final_node,
+                    provenance: None,
+                    is_root: false,
+                    root_source: None,
+                })
+                .await
+                .unwrap();
+
+            let roots_before = store.list_retained_roots().unwrap();
+            let options = RuntimeClosureQueryOptions::for_store(&store).unwrap();
+            let explanation = store_runtime_closure(&store, &[root], options).await.unwrap();
+            let roots_after = store.list_retained_roots().unwrap();
+            assert_eq!(roots_before, roots_after);
+            assert_eq!(explanation.completeness, crunch_gc_core::retention::RuntimeClosureCompleteness::Complete);
+            assert_eq!(explanation.observed_member_count, 1);
+            assert!(explanation.observed_known_nar_bytes > 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn store_runtime_closure_single_snix_store_with_signing_key_admits_trusted_and_imported_other_signer() {
+        let dir = tempfile::tempdir().unwrap();
+        let state_dir = dir.path().join("state");
+        let output_dir = dir.path().join("store");
+        std::fs::create_dir_all(&state_dir).unwrap();
+
+        let local_key_line =
+            "local-build-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+        std::fs::write(state_dir.join("signing-key"), format!("{local_key_line}\n")).unwrap();
+        let (local_signing, _) = nix_compat::narinfo::parse_keypair(local_key_line).unwrap();
+
+        let configured_raw = ed25519_dalek::SigningKey::from_bytes(&[71_u8; 32]);
+        let configured_verifying = VerifyingKey::new("configured-1".to_string(), configured_raw.verifying_key());
+        let configured_signing = SigningKey::new("configured-1".to_string(), configured_raw);
+        std::fs::write(state_dir.join("trusted-public-keys"), format!("{configured_verifying}\n")).unwrap();
+
+        let other_signing = other_signing_key();
+
+        let store = StoreHandle::open(crate::StoreConfig::new(
+            StoreBackend::Snix,
+            state_dir,
+            output_dir,
+            CUSTOM_PREFIX.to_string(),
+        ))
+        .await
+        .unwrap();
+
+        let sign_pi =
+            |name: &str, seed: u8, refs: Vec<StorePath<String>>, signer: &SigningKey<ed25519_dalek::SigningKey>| {
+                let mut pi = dummy_pathinfo(name);
+                pi.store_path = StorePath::from_name_and_digest_fixed(name, [seed; 20]).unwrap();
+                pi.references = refs;
+                let ref_refs: Vec<_> = pi.references.iter().map(StorePath::as_ref).collect();
+                let fp = nix_compat::narinfo::fingerprint_with_store_dir(
+                    &pi.store_path.as_ref(),
+                    &pi.nar_sha256,
+                    pi.nar_size,
+                    ref_refs.iter(),
+                    CUSTOM_PREFIX,
+                );
+                pi.signatures.push(signer.sign(fp.as_bytes()).to_owned());
+                pi
+            };
+
+        let other_dep = sign_pi("other-dep", 81, vec![], &other_signing);
+        let configured_dep = sign_pi("configured-dep", 82, vec![], &configured_signing);
+        let local_root = sign_pi(
+            "local-root",
+            83,
+            vec![other_dep.store_path.clone(), configured_dep.store_path.clone()],
+            &local_signing,
+        );
+        for pi in [other_dep.clone(), configured_dep.clone(), local_root.clone()] {
+            store.pathinfo_service().put(pi).await.unwrap();
+        }
+
+        let options = RuntimeClosureQueryOptions::for_store(&store).unwrap();
+        let explanation =
+            store_runtime_closure(&store, std::slice::from_ref(&local_root.store_path), options).await.unwrap();
+        assert_eq!(explanation.completeness, crunch_gc_core::retention::RuntimeClosureCompleteness::Complete);
+        assert_eq!(explanation.observed_member_count, 3);
+
+        let local_member = explanation
+            .members
+            .iter()
+            .find(|m| m.path_id == local_root.store_path.to_absolute_path_with_prefix(CUSTOM_PREFIX))
+            .unwrap();
+        assert!(matches!(local_member.trust, crunch_gc_core::retention::RuntimeClosureTrustStatus::Trusted { .. }));
+
+        let configured_member = explanation
+            .members
+            .iter()
+            .find(|m| m.path_id == configured_dep.store_path.to_absolute_path_with_prefix(CUSTOM_PREFIX))
+            .unwrap();
+        assert!(matches!(
+            configured_member.trust,
+            crunch_gc_core::retention::RuntimeClosureTrustStatus::Trusted { .. }
+        ));
+
+        let other_member = explanation
+            .members
+            .iter()
+            .find(|m| m.path_id == other_dep.store_path.to_absolute_path_with_prefix(CUSTOM_PREFIX))
+            .unwrap();
+        assert_eq!(other_member.state, crunch_gc_core::retention::RuntimeClosureMemberState::Observed);
+        assert!(matches!(other_member.trust, crunch_gc_core::retention::RuntimeClosureTrustStatus::Untrusted { .. }));
+    }
+
+    #[tokio::test]
+    async fn pathinfo_runtime_closure_and_store_runtime_closure_reject_empty_roots_without_panicking() {
+        let svc = test_pathinfo_service();
+        let empty_pi_err = pathinfo_runtime_closure(PathInfoRuntimeClosureRequest {
+            local: &svc,
+            remote: None,
+            store_dir: CUSTOM_PREFIX,
+            roots: &[],
+            options: RuntimeClosureQueryOptions::local_only(true),
+        })
+        .await
+        .unwrap_err();
+        assert!(empty_pi_err.to_string().contains("at least one root"), "{empty_pi_err}");
+
+        let root = dummy_pathinfo("valid-root").store_path;
+        let empty_dir_err = pathinfo_runtime_closure(PathInfoRuntimeClosureRequest {
+            local: &svc,
+            remote: None,
+            store_dir: "",
+            roots: std::slice::from_ref(&root),
+            options: RuntimeClosureQueryOptions::local_only(true),
+        })
+        .await
+        .unwrap_err();
+        assert!(empty_dir_err.to_string().contains("store_dir must not be empty"), "{empty_dir_err}");
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = StoreHandle::open(crate::StoreConfig::new(
+            StoreBackend::Snix,
+            dir.path().join("state"),
+            dir.path().join("store"),
+            CUSTOM_PREFIX.to_string(),
+        ))
+        .await
+        .unwrap();
+        let options = RuntimeClosureQueryOptions::for_store(&store).unwrap();
+        let store_err = store_runtime_closure(&store, &[], options).await.unwrap_err();
+        assert!(store_err.to_string().contains("at least one root"), "{store_err}");
     }
 }
