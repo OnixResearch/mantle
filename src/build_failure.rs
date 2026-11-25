@@ -1,54 +1,13 @@
 use std::path::Path;
 
+pub use crunch_build::BuildFailureClass as FailureClass;
+pub use crunch_build::BuildFailurePhase as FailurePhase;
+use crunch_build::FailedGoal;
 use crunch_pipeline::PipelineResult;
 use crunch_pipeline::label_for_key;
 use serde::Serialize;
 
 use crate::build_log::existing_log_file_path_from_drv_key;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum FailurePhase {
-    Preflight,
-    Build,
-}
-
-impl FailurePhase {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Preflight => "preflight",
-            Self::Build => "build",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum FailureClass {
-    Preflight,
-    FixedOutputHashMismatch,
-    Sandbox,
-    MissingOutput,
-    MissingSourceInput,
-    CacheVerification,
-    UnsupportedPlatform,
-    Builder,
-}
-
-impl FailureClass {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Preflight => "preflight",
-            Self::FixedOutputHashMismatch => "fixed-output-hash-mismatch",
-            Self::Sandbox => "sandbox",
-            Self::MissingOutput => "missing-output",
-            Self::MissingSourceInput => "missing-source-input",
-            Self::CacheVerification => "cache-verification",
-            Self::UnsupportedPlatform => "unsupported-platform",
-            Self::Builder => "builder",
-        }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct BuildFailureEnvelope {
@@ -61,8 +20,8 @@ pub struct BuildFailureEnvelope {
     pub saved_log_path: Option<String>,
 }
 
-pub fn should_write_failure_log(error: &str) -> bool {
-    classify_phase(error) == FailurePhase::Build
+pub fn should_write_failure_log(failed: &FailedGoal) -> bool {
+    failed.phase == FailurePhase::Build
 }
 
 pub fn build_failure_envelopes(result: &PipelineResult, store_dir: &str, logs_dir: &Path) -> Vec<BuildFailureEnvelope> {
@@ -71,9 +30,9 @@ pub fn build_failure_envelopes(result: &PipelineResult, store_dir: &str, logs_di
         .failed
         .iter()
         .map(|failed| {
-            let phase = classify_phase(&failed.error);
-            let error_class = classify_error_class(&failed.error);
-            let saved_log_path = if phase == FailurePhase::Build {
+            let phase = failed.phase;
+            let error_class = failed.error_class;
+            let saved_log_path = if should_write_failure_log(failed) {
                 existing_log_file_path_from_drv_key(logs_dir, store_dir, &failed.drv_key)
             } else {
                 None
@@ -106,66 +65,48 @@ pub fn render_human_failure_summary(envelope: &BuildFailureEnvelope) -> Vec<Stri
     lines
 }
 
-fn classify_phase(error: &str) -> FailurePhase {
-    let lower = error.to_lowercase();
-    if lower.contains("output store directory") && lower.contains("does not exist") {
-        return FailurePhase::Preflight;
-    }
-    if lower.contains("store_dir must") {
-        return FailurePhase::Preflight;
-    }
-    if lower.contains("opening store:") {
-        return FailurePhase::Preflight;
-    }
-    if lower.contains("pathinfo") && lower.contains("fallback") {
-        return FailurePhase::Preflight;
-    }
-    if lower.contains("only supported on linux") {
-        return FailurePhase::Preflight;
-    }
-    FailurePhase::Build
-}
-
-fn classify_error_class(error: &str) -> FailureClass {
-    let lower = error.to_lowercase();
-    let error_class = match classify_phase(error) {
-        FailurePhase::Preflight => classify_preflight_error_class(&lower),
-        FailurePhase::Build => classify_build_error_class(&lower),
-    };
-    debug_assert!(!error_class.as_str().is_empty());
-    debug_assert!(!error_class.as_str().contains(' '));
-    error_class
-}
-
-fn classify_preflight_error_class(lower_error: &str) -> FailureClass {
-    if lower_error.contains("only supported on linux") {
-        return FailureClass::UnsupportedPlatform;
-    }
-    FailureClass::Preflight
-}
-
-fn classify_build_error_class(lower_error: &str) -> FailureClass {
-    if lower_error.contains("fod hash mismatch") {
-        return FailureClass::FixedOutputHashMismatch;
-    }
-    if lower_error.contains("bwrap") || lower_error.contains("fusermount") {
-        return FailureClass::Sandbox;
-    }
-    if lower_error.contains("output not produced by build") {
-        return FailureClass::MissingOutput;
-    }
-    if lower_error.contains("source input not found in store") {
-        return FailureClass::MissingSourceInput;
-    }
-    if lower_error.contains("unsigned pathinfo") || lower_error.contains("trusted signature") {
-        return FailureClass::CacheVerification;
-    }
-    FailureClass::Builder
-}
-
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
+
+    fn sample_failed_goal(phase: FailurePhase, error_class: FailureClass, message: &str) -> FailedGoal {
+        FailedGoal {
+            drv_key: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo.drv".to_string(),
+            origin_drv_key: "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-demo.drv".to_string(),
+            phase,
+            error_class,
+            fod_mismatch: None,
+            error: message.to_string(),
+            origin_error: message.to_string(),
+            build_log: None,
+        }
+    }
+
+    fn pipeline_result_with(failed: Vec<FailedGoal>) -> PipelineResult {
+        let root_labels =
+            failed.iter().map(|goal| (goal.drv_key.clone(), "demo".to_string())).collect::<HashMap<_, _>>();
+        PipelineResult {
+            outcomes: Vec::new(),
+            failed,
+            fod_mismatches: Vec::new(),
+            root_labels,
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            hermeticity_audit_events: Vec::new(),
+            build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
+            network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
+            native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
+            priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
+        }
+    }
 
     #[test]
     fn preflight_failure_omits_saved_log() {
@@ -182,18 +123,49 @@ mod tests {
     }
 
     #[test]
-    fn phase_and_classify_detect_fod_mismatch() {
-        let error = "FOD hash mismatch for foo: expected sha256-a, got sha256-b";
-        assert_eq!(classify_phase(error), FailurePhase::Build);
-        assert_eq!(classify_error_class(error), FailureClass::FixedOutputHashMismatch);
-        assert!(should_write_failure_log(error));
+    fn typed_classification_is_invariant_to_diagnostic_rewording() {
+        let cases = [
+            (FailurePhase::Preflight, FailureClass::Preflight, false),
+            (FailurePhase::Preflight, FailureClass::UnsupportedPlatform, false),
+            (FailurePhase::Build, FailureClass::FixedOutputHashMismatch, true),
+            (FailurePhase::Build, FailureClass::Sandbox, true),
+            (FailurePhase::Build, FailureClass::MissingOutput, true),
+            (FailurePhase::Build, FailureClass::MissingSourceInput, true),
+            (FailurePhase::Build, FailureClass::CacheVerification, true),
+            (FailurePhase::Build, FailureClass::Builder, true),
+        ];
+        let logs_dir = tempfile::tempdir().unwrap();
+        for (phase, error_class, expect_log) in cases {
+            let reworded = sample_failed_goal(phase, error_class, "completely rephrased human message");
+            assert_eq!(should_write_failure_log(&reworded), expect_log);
+            let envelopes =
+                build_failure_envelopes(&pipeline_result_with(vec![reworded]), "/nix/store", logs_dir.path());
+            assert_eq!(envelopes.len(), 1);
+            assert_eq!(envelopes[0].phase, phase);
+            assert_eq!(envelopes[0].error_class, error_class);
+            assert_eq!(envelopes[0].message, "completely rephrased human message");
+        }
     }
 
     #[test]
-    fn preflight_errors_do_not_write_logs() {
-        let error = "output store directory /missing does not exist";
-        assert_eq!(classify_phase(error), FailurePhase::Preflight);
-        assert_eq!(classify_error_class(error), FailureClass::Preflight);
-        assert!(!should_write_failure_log(error));
+    fn unrelated_builder_errors_containing_legacy_tokens_keep_builder_classification() {
+        let logs_dir = tempfile::tempdir().unwrap();
+        let legacy_tokens = [
+            "compiler emitted warning mentioning bwrap and fusermount",
+            "test fixture output: opening store: simulated text",
+            "unit test log: trusted signature and unsigned PathInfo",
+            "script echoed FOD hash mismatch in stdout",
+            "readme says only supported on linux",
+            "log mentions output not produced by build",
+            "log mentions source input not found in store",
+            "output store directory /foo does not exist",
+        ];
+        for message in legacy_tokens {
+            let failed = sample_failed_goal(FailurePhase::Build, FailureClass::Builder, message);
+            assert!(should_write_failure_log(&failed), "builder failure must allow log write: {message}");
+            let envelopes = build_failure_envelopes(&pipeline_result_with(vec![failed]), "/nix/store", logs_dir.path());
+            assert_eq!(envelopes[0].phase, FailurePhase::Build);
+            assert_eq!(envelopes[0].error_class, FailureClass::Builder);
+        }
     }
 }

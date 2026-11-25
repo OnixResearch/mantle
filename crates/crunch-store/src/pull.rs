@@ -481,7 +481,9 @@ pub async fn probe_http_cache_path(
     options: &PullOptions,
 ) -> Result<bool, Error> {
     assert!(!cache_url.as_str().is_empty(), "cache URL must not be empty");
-    assert!(!options.trusted_public_keys.is_empty() || options.trust_unsigned, "probe requires a trust set");
+    if options.trusted_public_keys.is_empty() {
+        assert!(options.trust_unsigned, "probe requires a trust set");
+    }
     let _source_lease = handle.admit_http_source(cache_url)?;
     validate_http_cache_url(cache_url)?;
     let client = build_http_pull_client()?;

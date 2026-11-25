@@ -448,6 +448,7 @@ pub fn consume_trellis_job(root: &Path, producer_export: &Path, source_revision:
 /// The paths a Trellis producer-job profile names for its own materials, plus
 /// the uninterpreted report, proof-card and evidence documents.
 fn trellis_job_material_paths(profile: &Value) -> Result<BTreeSet<String>, String> {
+    debug_assert!(profile.is_object());
     let mut paths = BTreeSet::new();
     paths.insert(text(profile, "/verus/receipt_path")?.to_owned());
     let sources = profile
@@ -469,6 +470,7 @@ fn trellis_job_material_paths(profile: &Value) -> Result<BTreeSet<String>, Strin
     paths.insert(TRELLIS_JOB_REPORT_PATH.to_owned());
     paths.insert(TRELLIS_JOB_PROOF_CARDS_PATH.to_owned());
     paths.insert(TRELLIS_JOB_EVIDENCE_PATH.to_owned());
+    debug_assert!(!paths.is_empty());
     Ok(paths)
 }
 

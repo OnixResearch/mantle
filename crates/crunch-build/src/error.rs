@@ -1,6 +1,88 @@
 //! Error types for the build pipeline.
 
 use nix_compat::store_path::StorePath;
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildFailurePhase {
+    Preflight,
+    Build,
+}
+
+impl BuildFailurePhase {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Preflight => "preflight",
+            Self::Build => "build",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildFailureClass {
+    Preflight,
+    FixedOutputHashMismatch,
+    Sandbox,
+    MissingOutput,
+    MissingSourceInput,
+    CacheVerification,
+    UnsupportedPlatform,
+    Builder,
+}
+
+impl BuildFailureClass {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Preflight => "preflight",
+            Self::FixedOutputHashMismatch => "fixed-output-hash-mismatch",
+            Self::Sandbox => "sandbox",
+            Self::MissingOutput => "missing-output",
+            Self::MissingSourceInput => "missing-source-input",
+            Self::CacheVerification => "cache-verification",
+            Self::UnsupportedPlatform => "unsupported-platform",
+            Self::Builder => "builder",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypedFodMismatch {
+    pub name: String,
+    pub expected_sri: String,
+    pub actual_sri: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuildFailureFacts {
+    pub phase: BuildFailurePhase,
+    pub error_class: BuildFailureClass,
+    pub fod_mismatch: Option<TypedFodMismatch>,
+}
+
+impl BuildFailureFacts {
+    pub const fn new(phase: BuildFailurePhase, error_class: BuildFailureClass) -> Self {
+        Self {
+            phase,
+            error_class,
+            fod_mismatch: None,
+        }
+    }
+
+    pub const fn builder() -> Self {
+        Self::new(BuildFailurePhase::Build, BuildFailureClass::Builder)
+    }
+
+    pub const fn preflight() -> Self {
+        Self::new(BuildFailurePhase::Preflight, BuildFailureClass::Preflight)
+    }
+
+    pub const fn unsupported_platform() -> Self {
+        Self::new(BuildFailurePhase::Preflight, BuildFailureClass::UnsupportedPlatform)
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -63,6 +145,9 @@ pub enum Error {
     #[error("sandbox error: {0}")]
     Sandbox(#[from] std::io::Error),
 
+    #[error("cache verification failed: {0}")]
+    CacheVerification(String),
+
     #[error("NAR calculation error: {0}")]
     NarCalculation(String),
 
@@ -71,6 +156,56 @@ pub enum Error {
 
     #[error("fetcher error: {0}")]
     Fetcher(#[from] crate::fetcher::FetchError),
+}
+
+impl Error {
+    pub fn failure_facts(&self) -> BuildFailureFacts {
+        match self {
+            Self::FodHashMismatch {
+                name,
+                expected_sri,
+                actual_sri,
+            } => BuildFailureFacts {
+                phase: BuildFailurePhase::Build,
+                error_class: BuildFailureClass::FixedOutputHashMismatch,
+                fod_mismatch: Some(TypedFodMismatch {
+                    name: name.strip_suffix(".drv").unwrap_or(name).to_string(),
+                    expected_sri: expected_sri.clone(),
+                    actual_sri: actual_sri.clone(),
+                }),
+            },
+            Self::Fetcher(crate::fetcher::FetchError::HashMismatch { name, expected, actual }) => BuildFailureFacts {
+                phase: BuildFailurePhase::Build,
+                error_class: BuildFailureClass::FixedOutputHashMismatch,
+                fod_mismatch: Some(TypedFodMismatch {
+                    name: name.strip_suffix(".drv").unwrap_or(name).to_string(),
+                    expected_sri: expected.clone(),
+                    actual_sri: actual.clone(),
+                }),
+            },
+            Self::Sandbox(_) => BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::Sandbox),
+            Self::OutputMissing { .. } => {
+                BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::MissingOutput)
+            }
+            Self::SourceNotFound { .. } => {
+                BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::MissingSourceInput)
+            }
+            Self::CacheVerification(_) => {
+                BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::CacheVerification)
+            }
+            Self::BuildFailed { .. }
+            | Self::FodFlatNotFile { .. }
+            | Self::FodFlatExecutable { .. }
+            | Self::DerivationNotFound { .. }
+            | Self::OutputNoPath { .. }
+            | Self::UnsafeEnvOverride { .. }
+            | Self::NetworkPolicyDenied { .. }
+            | Self::DeniedEnvironmentVariable { .. }
+            | Self::NarCalculation(_)
+            | Self::Store(_)
+            | Self::Fetcher(_) => BuildFailureFacts::builder(),
+        }
+    }
 }
 
 impl From<crate::NetworkPolicyDenied> for Error {
@@ -237,5 +372,68 @@ mod tests {
         fn assert_sync<T: Sync>() {}
         assert_send::<Error>();
         assert_sync::<Error>();
+    }
+
+    #[test]
+    fn failure_facts_classify_each_variant_without_inspecting_message_text() {
+        let fod = Error::FodHashMismatch {
+            name: "src".to_string(),
+            expected_sri: "sha256-aaa".to_string(),
+            actual_sri: "sha256-bbb".to_string(),
+        };
+        let fod_facts = fod.failure_facts();
+        assert_eq!(fod_facts.phase, BuildFailurePhase::Build);
+        assert_eq!(fod_facts.error_class, BuildFailureClass::FixedOutputHashMismatch);
+        assert_eq!(
+            fod_facts.fod_mismatch,
+            Some(TypedFodMismatch {
+                name: "src".to_string(),
+                expected_sri: "sha256-aaa".to_string(),
+                actual_sri: "sha256-bbb".to_string(),
+            })
+        );
+
+        let fetch_mismatch = Error::Fetcher(crate::fetcher::FetchError::HashMismatch {
+            name: "tarball".to_string(),
+            expected: "sha256-111".to_string(),
+            actual: "sha256-222".to_string(),
+        });
+        assert_eq!(fetch_mismatch.failure_facts().error_class, BuildFailureClass::FixedOutputHashMismatch);
+        assert!(fetch_mismatch.failure_facts().fod_mismatch.is_some());
+
+        let sandbox = Error::Sandbox(std::io::Error::other("rephrased launcher error without legacy token"));
+        assert_eq!(sandbox.failure_facts().phase, BuildFailurePhase::Build);
+        assert_eq!(sandbox.failure_facts().error_class, BuildFailureClass::Sandbox);
+
+        let missing_output = Error::OutputMissing {
+            output: "out".to_string(),
+        };
+        assert_eq!(missing_output.failure_facts().error_class, BuildFailureClass::MissingOutput);
+
+        let missing_source = Error::SourceNotFound {
+            path: dummy_store_path("src"),
+            store_dir: "/nix/store".to_string(),
+        };
+        assert_eq!(missing_source.failure_facts().error_class, BuildFailureClass::MissingSourceInput);
+
+        let cache_verify = Error::CacheVerification("rephrased signature error".to_string());
+        assert_eq!(cache_verify.failure_facts().error_class, BuildFailureClass::CacheVerification);
+
+        let misleading_builder = Error::BuildFailed {
+            name: "app".to_string(),
+            exit_code: "1".to_string(),
+            log: "bwrap fusermount trusted signature FOD hash mismatch opening store:".to_string(),
+        };
+        assert_eq!(misleading_builder.failure_facts().phase, BuildFailurePhase::Build);
+        assert_eq!(misleading_builder.failure_facts().error_class, BuildFailureClass::Builder);
+
+        let misleading_store = Error::Store("bwrap trusted signature FOD hash mismatch".to_string());
+        assert_eq!(misleading_store.failure_facts().phase, BuildFailurePhase::Build);
+        assert_eq!(misleading_store.failure_facts().error_class, BuildFailureClass::Builder);
+
+        let unsupported_platform = BuildFailureFacts::unsupported_platform();
+        assert_eq!(unsupported_platform.phase, BuildFailurePhase::Preflight);
+        assert_eq!(unsupported_platform.error_class, BuildFailureClass::UnsupportedPlatform);
+        assert!(unsupported_platform.fod_mismatch.is_none());
     }
 }

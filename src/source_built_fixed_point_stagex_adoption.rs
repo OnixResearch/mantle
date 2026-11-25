@@ -119,35 +119,48 @@ struct StagedOutput<'a> {
     digest: String,
 }
 
-fn digest_input(label: &str, digest: &str) -> Result<(), RunError> {
-    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
-        return Err(failure(format!("{label} must be a lowercase BLAKE3 hex digest")));
+struct DigestInput<'a> {
+    label: &'a str,
+    digest: &'a str,
+}
+
+fn digest_input(input: DigestInput<'_>) -> Result<(), RunError> {
+    if input.digest.len() != 64
+        || !input.digest.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(failure(format!("{} must be a lowercase BLAKE3 hex digest", input.label)));
     }
     Ok(())
+}
+
+struct ExportSpec {
+    role_name: &'static str,
+    logical_path: &'static str,
+    basename: &'static str,
 }
 
 fn export<'a>(
     stages: &'a [SourceBuiltStageEvidence],
     role: ProofOutputRole,
-    label: &'static str,
-    logical_path: &'static str,
-    basename: &'static str,
+    spec: ExportSpec,
 ) -> Result<VerifiedExport<'a>, RunError> {
+    debug_assert!(!spec.role_name.is_empty());
+    debug_assert!(!spec.logical_path.is_empty());
     let mut matching = stages.iter().filter(|stage| stage.output_role == role);
-    let stage = matching.next().ok_or_else(|| failure(format!("missing {label} canonical stage")))?;
-    if matching.next().is_some()
-        || stage.status != "complete"
-        || !stage.authority_violations.is_empty()
-        || !stage.fallback_events.is_empty()
-        || stage.producer_action_id.is_empty()
-        || stage.output_id.is_empty()
-    {
-        return Err(failure(format!("ambiguous or incomplete {label} canonical stage")));
+    let stage = matching.next().ok_or_else(|| failure(format!("missing {} canonical stage", spec.role_name)))?;
+    if matching.next().is_some() || stage.status != "complete" {
+        return Err(failure(format!("ambiguous or incomplete {} canonical stage", spec.role_name)));
+    }
+    if !stage.authority_violations.is_empty() || !stage.fallback_events.is_empty() {
+        return Err(failure(format!("ambiguous or incomplete {} canonical stage", spec.role_name)));
+    }
+    if stage.producer_action_id.is_empty() || stage.output_id.is_empty() {
+        return Err(failure(format!("ambiguous or incomplete {} canonical stage", spec.role_name)));
     }
     Ok(VerifiedExport {
-        role: label,
-        logical_path,
-        basename,
+        role: spec.role_name,
+        logical_path: spec.logical_path,
+        basename: spec.basename,
         source_relative_path: &stage.output_path,
         digest: &stage.output_digest_blake3,
     })
@@ -157,12 +170,14 @@ fn export<'a>(
 /// All existing ancestors must be real directories (not symlinks); the final
 /// component of an output/report or Snix state is required to be absent.
 fn fresh_target(path: &Path) -> Result<PathBuf, RunError> {
-    if !path.is_absolute()
-        || path.file_name().is_none()
-        || path.components().any(|part| matches!(part, Component::ParentDir | Component::CurDir))
-    {
+    if !path.is_absolute() || path.file_name().is_none() {
         return Err(failure(format!("target must be an absolute normalized path: {}", path.display())));
     }
+    if path.components().any(|part| matches!(part, Component::ParentDir | Component::CurDir)) {
+        return Err(failure(format!("target must be an absolute normalized path: {}", path.display())));
+    }
+    debug_assert!(path.is_absolute());
+    debug_assert!(path.file_name().is_some());
     let parent = path.parent().ok_or_else(|| failure("target has no parent"))?;
     let mut ancestor = PathBuf::from("/");
     for component in parent.components() {
@@ -278,7 +293,7 @@ fn open_tree_root(path: &Path) -> Result<Dir, RunError> {
 
 fn copy_tree(source: &Path, destination: &Path, disk_bound: u64) -> Result<(), RunError> {
     let source_dir = open_tree_root(source)?;
-    let limits = bounded_tree_core::TreeLimits::new(bounded_tree_core::LimitValues {
+    let tree_bounds = bounded_tree_core::TreeLimits::new(bounded_tree_core::LimitValues {
         entries: u64::from(SNAPSHOT_ENTRIES_MAX),
         depth: 128,
         path_bytes: 4096,
@@ -287,7 +302,7 @@ fn copy_tree(source: &Path, destination: &Path, disk_bound: u64) -> Result<(), R
         symlink_target_bytes: 4096,
     })
     .map_err(|error| failure(format!("admitting proof-bounded tree limits: {error:?}")))?;
-    let prepared = bounded_tree_cap::prepare(&source_dir, limits, SymlinkPolicy::PreserveInternal)
+    let prepared = bounded_tree_cap::prepare(&source_dir, tree_bounds, SymlinkPolicy::PreserveInternal)
         .map_err(|error| failure(format!("planning bounded copy {}: {error:?}", source.display())))?;
     private_directory(destination)?;
     let destination_dir = open_tree_root(destination)?;
@@ -321,6 +336,8 @@ fn require_regular(root: &Path, relative: &str) -> Result<(), RunError> {
 }
 
 fn transition_projection(snapshot: &Path, destination: &Path, disk_bound: u64) -> Result<String, RunError> {
+    debug_assert!(snapshot.is_absolute());
+    debug_assert!(disk_bound > 0);
     private_directory(destination)?;
     for required in STAGEX_TRANSITION_HANDOFF_REQUIRED_FILES {
         require_regular(snapshot, required)?;
@@ -361,6 +378,8 @@ fn provider_projection(
     expected_digest: &str,
     disk_bound: u64,
 ) -> Result<String, RunError> {
+    debug_assert!(!expected_digest.is_empty());
+    debug_assert!(disk_bound > 0);
     copy_tree(snapshot, destination, disk_bound)?;
     copy_mode(snapshot, destination)?;
     for required in [
@@ -419,9 +438,10 @@ fn bind_captured_metadata(
         receipt.get(EXTENSION_FIELD).cloned().ok_or_else(|| failure("captured v2 extension is missing"))?,
     )
     .map_err(|error| failure(format!("reading captured v2 extension: {error}")))?;
-    if extension.stage_evidence_path != STAGE_EVIDENCE_FILE
-        || extension.stage_evidence_digest_blake3 != stages_digest
-        || extension.plan_digest_blake3 != plan.plan_digest_blake3
+    if extension.stage_evidence_path != STAGE_EVIDENCE_FILE || extension.stage_evidence_digest_blake3 != stages_digest {
+        return Err(failure("captured receipt does not bind stage evidence and semantic plan"));
+    }
+    if extension.plan_digest_blake3 != plan.plan_digest_blake3
         || extension.source_authority_digest_blake3 != plan.source_authority_digest_blake3
     {
         return Err(failure("captured receipt does not bind stage evidence and semantic plan"));
@@ -433,8 +453,14 @@ fn verify_authority(
     options: &StagexAdoptionOptions<'_>,
     proof_root: &Path,
 ) -> Result<(SourceBuiltFixedPointPlan, Vec<SourceBuiltStageEvidence>, String), RunError> {
-    digest_input("expected plan", options.expected_plan_blake3)?;
-    digest_input("expected receipt bytes", options.expected_receipt_bytes_blake3)?;
+    digest_input(DigestInput {
+        label: "expected plan",
+        digest: options.expected_plan_blake3,
+    })?;
+    digest_input(DigestInput {
+        label: "expected receipt bytes",
+        digest: options.expected_receipt_bytes_blake3,
+    })?;
     let (receipt, receipt_digest) = read_bound_json::<serde_json::Value>(proof_root, FINAL_RECEIPT_FILE)?;
     if receipt_digest != options.expected_receipt_bytes_blake3 {
         return Err(failure("raw proof receipt bytes differ from caller expectation"));
@@ -443,6 +469,8 @@ fn verify_authority(
     if plan.plan_digest_blake3 != options.expected_plan_blake3 || plan.logical_store_prefix != PREFIX {
         return Err(failure("semantic plan or logical store prefix differs from caller expectation"));
     }
+    debug_assert_eq!(receipt_digest, options.expected_receipt_bytes_blake3);
+    debug_assert_eq!(plan.plan_digest_blake3, options.expected_plan_blake3);
     let (stages, stages_digest) = read_bound_json::<Vec<SourceBuiltStageEvidence>>(proof_root, STAGE_EVIDENCE_FILE)?;
     bind_captured_metadata(&receipt, &plan, &stages_digest)?;
     verify_source_built_fixed_point_receipt(proof_root, &proof_root.join(FINAL_RECEIPT_FILE))?;
@@ -462,20 +490,18 @@ fn stage_exports<'a>(
     stages: &'a [SourceBuiltStageEvidence],
     disk_bound: u64,
 ) -> Result<[StagedOutput<'a>; 2], RunError> {
-    let transition = export(
-        stages,
-        ProofOutputRole::StagexTransition,
-        "stagex-transition",
-        STAGEX_TRANSITION_LOGICAL_PATH,
-        STAGEX_TRANSITION_STORE_BASENAME,
-    )?;
-    let provider = export(
-        stages,
-        ProofOutputRole::StagexProvider,
-        "stagex-provider",
-        STAGEX_PROVIDER_LOGICAL_PATH,
-        STAGEX_PROVIDER_STORE_BASENAME,
-    )?;
+    debug_assert!(proof_root.is_absolute());
+    debug_assert!(output_dir.is_absolute());
+    let transition = export(stages, ProofOutputRole::StagexTransition, ExportSpec {
+        role_name: "stagex-transition",
+        logical_path: STAGEX_TRANSITION_LOGICAL_PATH,
+        basename: STAGEX_TRANSITION_STORE_BASENAME,
+    })?;
+    let provider = export(stages, ProofOutputRole::StagexProvider, ExportSpec {
+        role_name: "stagex-provider",
+        logical_path: STAGEX_PROVIDER_LOGICAL_PATH,
+        basename: STAGEX_PROVIDER_STORE_BASENAME,
+    })?;
     // Reconciled producer/output references, not an arbitrary caller-selected tree.
     let transition_source = evidence_path(proof_root, transition.source_relative_path)?;
     let provider_source = evidence_path(proof_root, provider.source_relative_path)?;
@@ -518,12 +544,17 @@ async fn readback_one(
 ) -> Result<StagexAdoptedOutput, RunError> {
     let parsed = StorePath::from_absolute_path_with_prefix(item.export.logical_path.as_bytes(), PREFIX)
         .map_err(|error| failure(format!("parsing reserved store path: {error}")))?;
+    debug_assert_eq!(item.export.logical_path, parsed.to_absolute_path_with_prefix(PREFIX));
+    debug_assert!(!item.digest.is_empty());
     let info = lookup
         .find(&parsed)
         .await
         .map_err(|error| failure(format!("reading back {} PathInfo: {error}", item.export.role)))?
         .ok_or_else(|| failure(format!("missing {} signed PathInfo", item.export.role)))?;
-    if info.store_path != parsed || info.signatures.is_empty() || info.nar_size == 0 || !info.references.is_empty() {
+    if info.store_path != parsed || info.signatures.is_empty() {
+        return Err(failure(format!("{} signed local PathInfo identity is invalid", item.export.role)));
+    }
+    if info.nar_size == 0 || !info.references.is_empty() {
         return Err(failure(format!("{} signed local PathInfo identity is invalid", item.export.role)));
     }
     let fingerprint = fingerprint_with_store_dir(
@@ -573,6 +604,8 @@ fn publish_signed<'a>(
     keypair: &crunch_build::signing::KeyPair,
     stage: impl FnOnce() -> Result<[StagedOutput<'a>; 2], RunError>,
 ) -> Result<[StagexAdoptedOutput; 2], RunError> {
+    debug_assert!(state_dir.is_absolute());
+    debug_assert!(output_dir.is_absolute());
     let guard = StoreMutationGuard::acquire_wait(state_dir)
         .map_err(|error| failure(format!("acquiring adoption mutation guard: {error}")))?;
     let runtime =
@@ -609,22 +642,33 @@ fn publish_signed<'a>(
     })
 }
 
-fn write_success_report(report_path: &Path, report: &StagexAdoptionReport) -> Result<(), RunError> {
-    let bytes = serde_json::to_vec_pretty(report).map_err(|error| failure(format!("serializing report: {error}")))?;
-    let report_parent = report_path.parent().ok_or_else(|| failure("report has no parent"))?;
+fn write_success_report(output_path: &Path, summary: &StagexAdoptionReport) -> Result<(), RunError> {
+    let bytes = serde_json::to_vec_pretty(summary).map_err(|error| failure(format!("serializing report: {error}")))?;
+    let output_parent = output_path.parent().ok_or_else(|| failure("report has no parent"))?;
     let mut pending = tempfile::Builder::new()
         .prefix(".stagex-adoption-")
-        .tempfile_in(report_parent)
+        .tempfile_in(output_parent)
         .map_err(|error| failure(format!("creating temporary report: {error}")))?;
     pending
         .write_all(&bytes)
         .and_then(|()| pending.write_all(b"\n"))
         .and_then(|()| pending.as_file().sync_all())
         .map_err(|error| failure(format!("writing temporary report: {error}")))?;
-    pending.persist_noclobber(report_path).map_err(|error| {
-        failure(format!("publishing create-new success report {}: {}", report_path.display(), error.error))
+    pending.persist_noclobber(output_path).map_err(|error| {
+        failure(format!("publishing create-new success report {}: {}", output_path.display(), error.error))
     })?;
     Ok(())
+}
+
+fn all_disjoint(paths: &[&Path]) -> bool {
+    for (index, left) in paths.iter().enumerate() {
+        for right in &paths[index.saturating_add(1)..] {
+            if !disjoint(left, right) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// Verified adoption does not claim a new fixed point, compiler correctness,
@@ -639,18 +683,14 @@ pub fn adopt_source_built_stagex(options: &StagexAdoptionOptions<'_>) -> Result<
     {
         return Err(failure("proof root is not a directory"));
     }
+    debug_assert!(proof_root.is_dir());
     let output_dir = fresh_target(options.output_dir)?;
     let state_dir = fresh_state_target(options.state_dir, options.backend)?;
-    let report_path = fresh_target(options.report)?;
-    if !disjoint(&proof_root, &output_dir)
-        || !disjoint(&proof_root, &state_dir)
-        || !disjoint(&proof_root, &report_path)
-        || !disjoint(&output_dir, &state_dir)
-        || !disjoint(&output_dir, &report_path)
-        || !disjoint(&state_dir, &report_path)
-    {
+    let output_json_path = fresh_target(options.report)?;
+    if !all_disjoint(&[&proof_root, &output_dir, &state_dir, &output_json_path]) {
         return Err(failure("proof, output, state and report locations must be disjoint"));
     }
+    debug_assert_ne!(output_dir, state_dir);
     let (plan, stages, receipt_digest) = verify_authority(options, &proof_root)?;
     let (keypair, _) = crate::signing_key::load_existing_signing_keypair(Some(options.signing_key), &state_dir)?;
     strict_store_config(&state_dir, &output_dir, options.backend)
@@ -664,7 +704,7 @@ pub fn adopt_source_built_stagex(options: &StagexAdoptionOptions<'_>) -> Result<
     let outputs = publish_signed(&state_dir, &output_dir, options.backend, &keypair, || {
         stage_exports(&proof_root, &state_dir, &output_dir, &stages, plan.resource_bounds.disk_bytes_max)
     })?;
-    let report = StagexAdoptionReport {
+    let outcome = StagexAdoptionReport {
         schema: SCHEMA.into(),
         adopted: true,
         proof_root,
@@ -680,8 +720,8 @@ pub fn adopt_source_built_stagex(options: &StagexAdoptionOptions<'_>) -> Result<
         outputs,
         non_claims: NON_CLAIMS,
     };
-    write_success_report(&report_path, &report)?;
-    Ok(report)
+    write_success_report(&output_json_path, &outcome)?;
+    Ok(outcome)
 }
 
 // r[verify bootstrap_inventory.cold_stagex_native_row_adoption]

@@ -40,7 +40,11 @@ use tokio::task::JoinSet;
 use tracing::debug;
 use tracing::info;
 
+use crate::BuildFailureClass;
+use crate::BuildFailureFacts;
+use crate::BuildFailurePhase;
 use crate::Error;
+use crate::TypedFodMismatch;
 use crate::causal_trace::CausalTraceCollector;
 use crate::dynamic::DynamicAdmissionError;
 use crate::dynamic::DynamicAdmissionLimits;
@@ -313,6 +317,12 @@ pub struct FailedGoal {
     pub drv_key: String,
     /// Derivation that caused this root failure.
     pub origin_drv_key: String,
+    /// Lifecycle phase where the originating failure occurred.
+    pub phase: BuildFailurePhase,
+    /// Typed failure class preserved from the originating failure.
+    pub error_class: BuildFailureClass,
+    /// Structured FOD hash mismatch payload when `error_class` is `FixedOutputHashMismatch`.
+    pub fod_mismatch: Option<TypedFodMismatch>,
     /// Human-readable error message at the selected root.
     pub error: String,
     /// Original error from the derivation that caused the root failure.
@@ -1900,8 +1910,8 @@ impl Worker {
 
             // A complete derivation is realized as-is; expanding its build-only
             // inputs would schedule work no realized path needs.
-            let expand_deps = root || !self.satisfied_drvs.contains(&key);
-            if expand_deps {
+            let should_expand_deps = root || !self.satisfied_drvs.contains(&key);
+            if should_expand_deps {
                 for dep_sp in &dep_drv_paths {
                     if !self.registry.contains(&dep_sp.to_absolute_path()) {
                         queue.push_back((dep_sp.clone(), false));
@@ -1909,7 +1919,7 @@ impl Worker {
                 }
             }
 
-            created.push((key, if expand_deps { dep_drv_paths } else { Vec::new() }));
+            created.push((key, if should_expand_deps { dep_drv_paths } else { Vec::new() }));
         }
 
         debug_assert!(iterations <= goal_count_max);
@@ -2341,18 +2351,26 @@ impl Worker {
                 for key in goals {
                     match self.registry.get(&key).map(|goal| &goal.state) {
                         Some(GoalState::Waiting { .. } | GoalState::AwaitingDerivation) => {
+                            let cancel_facts = BuildFailureFacts::builder();
                             self.propagate_failure(
                                 &key,
                                 &key,
                                 &key,
                                 "cancelled build",
                                 "build cancelled after owned teardown",
+                                &cancel_facts,
                                 None,
                                 state.failed,
                             )?;
                         }
                         Some(GoalState::Ready | GoalState::Building) => {
-                            self.fail_goal(&key, "build cancelled after owned teardown", None, state.failed)?;
+                            self.fail_goal(
+                                &key,
+                                "build cancelled after owned teardown",
+                                BuildFailureFacts::builder(),
+                                None,
+                                state.failed,
+                            )?;
                         }
                         Some(GoalState::Done | GoalState::Failed) => {}
                         _ => return Err(Error::Store("cancelled goal has an unobserved scheduling state".into())),
@@ -3029,6 +3047,7 @@ impl Worker {
                 self.handle_build_completion(&drv_key, build_result, builder, known_paths, state).await
             }
             Ok((drv_key, Err(build_err))) => {
+                let failure_facts = build_err.failure_facts();
                 let mut err_msg = format!("{build_err}");
                 if let Some(prepared) = state.pending_meta.remove(&drv_key)
                     && let Err(report_error) = builder.record_failed_finish_gates(&prepared, &err_msg)
@@ -3036,7 +3055,7 @@ impl Worker {
                     err_msg.push_str(&format!("; finish-gate report unavailable: {report_error}"));
                 }
                 tracing::warn!(drv = %drv_key, err = %err_msg, "sandbox build failed");
-                self.fail_goal(&drv_key, &err_msg, None, state.failed)?;
+                self.fail_goal(&drv_key, &err_msg, failure_facts, None, state.failed)?;
                 if let Some(trace) = self.causal_trace.as_mut() {
                     trace.cleaned_up(&drv_key);
                 }
@@ -3074,9 +3093,10 @@ impl Worker {
         let outcome = match builder.finish_build(&prepared, build_result, known_paths).await {
             Ok(outcome) => outcome,
             Err(e) => {
+                let failure_facts = e.failure_facts();
                 let err_msg = format!("{e}");
                 tracing::warn!(drv = drv_key, err = %err_msg, "build failed, marking goal as failed");
-                self.fail_goal(drv_key, &err_msg, build_log.as_deref(), state.failed)?;
+                self.fail_goal(drv_key, &err_msg, failure_facts, build_log.as_deref(), state.failed)?;
                 if let Some(trace) = self.causal_trace.as_mut() {
                     trace.cleaned_up(drv_key);
                 }
@@ -3885,9 +3905,10 @@ impl Worker {
                 Ok(false)
             }
             Err(err) => {
+                let failure_facts = err.failure_facts();
                 let err_msg = format!("{err}");
                 tracing::warn!(drv = %drv_key, err = %err_msg, "prepare_build failed");
-                self.fail_goal(drv_key, &err_msg, None, state.failed)?;
+                self.fail_goal(drv_key, &err_msg, failure_facts, None, state.failed)?;
                 Ok(false)
             }
             Ok(PrepareResult::NeedsBuild {
@@ -3980,7 +4001,7 @@ impl Worker {
             let build_result = match _permit {
                 Ok(_p) if pool.is_some() => match (pool, pool_goal) {
                     (Some(dispatch), Some(goal)) => {
-                        let fallback_allowed = dispatch.allows_local_fallback();
+                        let is_fallback_allowed = dispatch.allows_local_fallback();
                         let fallback_cancellation = cancellation.clone();
                         let attempt = match cancellation {
                             Some(receiver) => dispatch.dispatch_cancellable(goal, receiver).await,
@@ -3988,7 +4009,7 @@ impl Worker {
                         };
                         match attempt {
                             Ok(result) => Ok(result),
-                            Err(error) if fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
+                            Err(error) if is_fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
                                 // The fallback is still an owned sandbox build:
                                 // watch cancellation reaches the sandbox and its
                                 // child teardown instead of waiting for the goal.
@@ -3996,14 +4017,14 @@ impl Worker {
                                     Some(receiver) => bs
                                         .do_build_cancellable(build_request, receiver)
                                         .await
-                                        .map_err(|error| Error::Store(format!("local fallback: {error}"))),
+                                        .map_err(|error| classify_build_service_error("local fallback", error)),
                                     None => bs
                                         .do_build(build_request)
                                         .await
-                                        .map_err(|error| Error::Store(format!("local fallback: {error}"))),
+                                        .map_err(|error| classify_build_service_error("local fallback", error)),
                                 }
                             }
-                            Err(error) => Err(Error::Store(format!("build: {error}"))),
+                            Err(error) => Err(classify_build_service_error("build", error)),
                         }
                     }
                     _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
@@ -4025,11 +4046,14 @@ impl Worker {
                                 // quarantine and releases it when teardown is
                                 // finally observed; the worker must not park a
                                 // JoinSet task forever waiting for that.
-                                Err(Error::Store(format!("build: {error}")))
+                                Err(classify_build_service_error("build", error))
                             }
                         }
                     }
-                    None => bs.do_build(build_request).await.map_err(|e| Error::Store(format!("build: {e}"))),
+                    None => bs
+                        .do_build(build_request)
+                        .await
+                        .map_err(|error| classify_build_service_error("build", error)),
                 },
                 Err(e) => Err(e),
             };
@@ -4071,8 +4095,9 @@ impl Worker {
 
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
-        self.waiter_notifications =
-            self.waiter_notifications.saturating_add(u32::try_from(waiters.len()).unwrap_or(u32::MAX));
+        let waiter_count =
+            u32::try_from(waiters.len()).map_err(|_| Error::Store(format!("waiter count overflow for {drv_key}")))?;
+        self.waiter_notifications = self.waiter_notifications.saturating_add(waiter_count);
         if let Some(trace) = self.causal_trace.as_mut() {
             trace.completed(drv_key, outcome.cached, None);
         }
@@ -4202,11 +4227,15 @@ impl Worker {
         if let Some(trace) = self.causal_trace.as_mut() {
             trace.failed(key, reason);
         }
+        let binding_facts = BuildFailureFacts::builder();
         self.record_goal_failure(
             is_root,
             FailedGoal {
                 drv_key: key.to_owned(),
                 origin_drv_key: key.to_owned(),
+                phase: binding_facts.phase,
+                error_class: binding_facts.error_class,
+                fod_mismatch: binding_facts.fod_mismatch.clone(),
                 error: reason.to_owned(),
                 origin_error: reason.to_owned(),
                 build_log: None,
@@ -4214,7 +4243,7 @@ impl Worker {
             failed,
         );
         for waiter in waiters {
-            self.propagate_failure(&waiter, key, key, &name, reason, None, failed)?;
+            self.propagate_failure(&waiter, key, key, &name, reason, &binding_facts, None, failed)?;
         }
         Ok(())
     }
@@ -4245,6 +4274,7 @@ impl Worker {
         &mut self,
         drv_key: &str,
         error_msg: &str,
+        failure_facts: BuildFailureFacts,
         build_log: Option<&str>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
@@ -4276,6 +4306,9 @@ impl Worker {
             FailedGoal {
                 drv_key: drv_key.to_string(),
                 origin_drv_key: drv_key.to_string(),
+                phase: failure_facts.phase,
+                error_class: failure_facts.error_class,
+                fod_mismatch: failure_facts.fod_mismatch.clone(),
                 error: error_msg.to_string(),
                 origin_error: error_msg.to_string(),
                 build_log: build_log.map(str::to_string),
@@ -4292,7 +4325,16 @@ impl Worker {
 
         // Propagate failure to waiters.
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, drv_key, drv_key, &drv_name, error_msg, build_log, failed)?;
+            self.propagate_failure(
+                waiter_key,
+                drv_key,
+                drv_key,
+                &drv_name,
+                error_msg,
+                &failure_facts,
+                build_log,
+                failed,
+            )?;
         }
 
         Ok(())
@@ -4306,6 +4348,7 @@ impl Worker {
         immediate_failed_dep_key: &str,
         failed_dep_name: &str,
         origin_error: &str,
+        failure_facts: &BuildFailureFacts,
         build_log: Option<&str>,
         failed: &mut Vec<FailedGoal>,
     ) -> Result<(), Error> {
@@ -4334,6 +4377,9 @@ impl Worker {
             FailedGoal {
                 drv_key: drv_key.to_string(),
                 origin_drv_key: origin_drv_key.to_string(),
+                phase: failure_facts.phase,
+                error_class: failure_facts.error_class,
+                fod_mismatch: failure_facts.fod_mismatch.clone(),
                 error: format!("dependency {failed_dep_name} failed"),
                 origin_error: origin_error.to_string(),
                 build_log: build_log.map(str::to_string),
@@ -4342,7 +4388,16 @@ impl Worker {
         );
 
         for waiter_key in &waiters {
-            self.propagate_failure(waiter_key, origin_drv_key, drv_key, &drv_name, origin_error, build_log, failed)?;
+            self.propagate_failure(
+                waiter_key,
+                origin_drv_key,
+                drv_key,
+                &drv_name,
+                origin_error,
+                failure_facts,
+                build_log,
+                failed,
+            )?;
         }
 
         Ok(())
@@ -4351,6 +4406,31 @@ impl Worker {
     /// Read-only access to the goal registry (for testing/inspection).
     pub fn registry(&self) -> &GoalRegistry {
         &self.registry
+    }
+}
+
+fn classify_build_service_error(prefix: &str, error: std::io::Error) -> Error {
+    debug_assert!(!prefix.is_empty());
+    debug_assert!(!error.to_string().is_empty());
+    if let Some(classified) = error
+        .get_ref()
+        .and_then(|inner| inner.downcast_ref::<snix_build::buildservice::ClassifiedBuildServiceError>())
+    {
+        return match classified.class {
+            snix_build::buildservice::SandboxFailureClass::SandboxStartup => {
+                Error::Sandbox(std::io::Error::new(error.kind(), format!("{prefix}: {}", classified.message)))
+            }
+            snix_build::buildservice::SandboxFailureClass::MissingOutputs => Error::OutputMissing {
+                output: format!("{prefix}: {}", classified.message),
+            },
+            snix_build::buildservice::SandboxFailureClass::Builder => {
+                Error::Store(format!("{prefix}: {}", classified.message))
+            }
+        };
+    }
+    match error.downcast::<crate::fetcher::FetchError>() {
+        Ok(fetch_error) => Error::Fetcher(fetch_error),
+        Err(other) => Error::Store(format!("{prefix}: {other}")),
     }
 }
 
@@ -4662,11 +4742,12 @@ mod tests {
 
     #[test]
     fn watch_preflight_transitive_goal_limit_keeps_the_admitted_root() {
-        let mut paths = DerivationRegistry::default();
-        let admitted = register_drv(&mut paths, "watch-bound-admitted.drv", &make_drv());
+        let mut initial_paths = DerivationRegistry::default();
+        let admitted = register_drv(&mut initial_paths, "watch-bound-admitted.drv", &make_drv());
         let mut worker = Worker::new(1);
-        worker.want(&admitted, &paths, true).unwrap();
-        let dependencies = (0..MAX_GOALS)
+        worker.want(&admitted, &initial_paths, true).unwrap();
+        let mut paths = DerivationRegistry::default();
+        let dependencies = (0..MAX_GOALS.saturating_sub(1))
             .map(|index| register_drv(&mut paths, &format!("watch-bound-{index:05}.drv"), &make_drv()))
             .collect::<Vec<_>>();
         let candidate = fake_sp("watch-bound-candidate.drv");
@@ -5048,9 +5129,15 @@ mod tests {
         w.ready_goals.remove(&leaf_key); // remove leaf from ready set
         w.registry.get_mut(&leaf_key).unwrap().mark_building().unwrap();
 
-        // Fail the leaf.
+        // Fail the leaf with typed FOD mismatch facts.
         let mut failed = Vec::new();
-        w.fail_goal(&leaf_key, "leaf build error", Some(BUILD_LOG), &mut failed).unwrap();
+        let leaf_error = Error::FodHashMismatch {
+            name: "leaf".to_string(),
+            expected_sri: "sha256-expected".to_string(),
+            actual_sri: "sha256-actual".to_string(),
+        };
+        w.fail_goal(&leaf_key, "leaf build error", leaf_error.failure_facts(), Some(BUILD_LOG), &mut failed)
+            .unwrap();
 
         // Leaf should be Failed.
         assert_eq!(w.registry.get(&leaf_key).unwrap().state, GoalState::Failed);
@@ -5062,9 +5149,19 @@ mod tests {
         // Top should be Failed (transitive dep failed).
         let top_key = top_sp.to_absolute_path();
         assert_eq!(w.registry.get(&top_key).unwrap().state, GoalState::Failed);
-        // Top is a root, so it should be in the failed list.
+        // Top is a root, so it should be in the failed list with preserved typed origin facts.
         let root_failure = failed.iter().find(|failure| failure.drv_key == top_key).unwrap();
         assert_eq!(root_failure.origin_drv_key, leaf_key);
+        assert_eq!(root_failure.phase, BuildFailurePhase::Build);
+        assert_eq!(root_failure.error_class, BuildFailureClass::FixedOutputHashMismatch);
+        assert_eq!(
+            root_failure.fod_mismatch,
+            Some(TypedFodMismatch {
+                name: "leaf".to_string(),
+                expected_sri: "sha256-expected".to_string(),
+                actual_sri: "sha256-actual".to_string(),
+            })
+        );
         assert_eq!(root_failure.error, "dependency mid.drv failed");
         assert_eq!(root_failure.origin_error, "leaf build error");
         assert_eq!(root_failure.build_log.as_deref(), Some(BUILD_LOG));
@@ -5094,7 +5191,7 @@ mod tests {
 
         // Fail bad. It has no waiters, so good (waiting on shared) should be unaffected.
         let mut failed = Vec::new();
-        w.fail_goal(&bad_key, "bad build error", None, &mut failed).unwrap();
+        w.fail_goal(&bad_key, "bad build error", BuildFailureFacts::builder(), None, &mut failed).unwrap();
 
         assert_eq!(w.registry.get(&bad_key).unwrap().state, GoalState::Failed);
         // good is still Waiting on shared, not failed.
@@ -5964,7 +6061,9 @@ mod tests {
         assert!(!worker.ready_goals.contains_key(&consumer_key));
         worker.ready_goals.remove(&root_key);
         worker.registry.get_mut(&root_key).unwrap().mark_building().unwrap();
-        worker.fail_goal(&root_key, "root build denied", None, &mut failed).unwrap();
+        worker
+            .fail_goal(&root_key, "root build denied", BuildFailureFacts::builder(), None, &mut failed)
+            .unwrap();
         assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Failed);
         let row = &worker.binding_reports()[0];
         assert_eq!(row.failure_reason.as_deref(), Some("plan-output-root-failed"));
@@ -5984,7 +6083,9 @@ mod tests {
         worker.ready_goals.remove(&producer_key);
         worker.registry.get_mut(&producer_key).unwrap().mark_building().unwrap();
         let mut failed = Vec::new();
-        worker.fail_goal(&producer_key, "producer failed", None, &mut failed).unwrap();
+        worker
+            .fail_goal(&producer_key, "producer failed", BuildFailureFacts::builder(), None, &mut failed)
+            .unwrap();
         assert_eq!(worker.registry.get(&consumer.to_absolute_path()).unwrap().state, GoalState::Failed);
         assert_eq!(worker.binding_reports()[0].failure_reason.as_deref(), Some("plan-output-producer-failed"));
     }
@@ -6000,7 +6101,9 @@ mod tests {
         let producer_key = producer.to_absolute_path();
         worker.ready_goals.remove(&producer_key);
         worker.registry.get_mut(&producer_key).unwrap().mark_building().unwrap();
-        worker.fail_goal(&producer_key, "producer failed", None, &mut Vec::new()).unwrap();
+        worker
+            .fail_goal(&producer_key, "producer failed", BuildFailureFacts::builder(), None, &mut Vec::new())
+            .unwrap();
         worker.want(&consumer, &kp, true).unwrap();
         let consumer_key = consumer.to_absolute_path();
         assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Ready);
@@ -9348,5 +9451,124 @@ mod tests {
 
         assert_eq!(result.outcomes.len(), 1, "one root should succeed");
         assert_eq!(result.failed.len(), 1, "one root should fail");
+    }
+
+    struct TypedErrorBuildService {
+        make_error: fn() -> std::io::Error,
+    }
+
+    #[async_trait::async_trait]
+    impl snix_build::buildservice::BuildService for TypedErrorBuildService {
+        async fn do_build(
+            &self,
+            _request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            Err((self.make_error)())
+        }
+    }
+
+    #[tokio::test]
+    async fn classify_build_service_error_and_worker_preserve_typed_facts() {
+        use snix_build::buildservice::SandboxFailureClass;
+        use snix_build::buildservice::classified_io_error;
+
+        struct TypedErrorCase {
+            label: &'static str,
+            make_error: fn() -> std::io::Error,
+            expected_class: BuildFailureClass,
+            expect_fod: bool,
+        }
+
+        let cases = [
+            TypedErrorCase {
+                label: "sandbox-startup",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::NotFound,
+                        SandboxFailureClass::SandboxStartup,
+                        "rephrased launcher missing without legacy token",
+                    )
+                },
+                expected_class: BuildFailureClass::Sandbox,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "missing-outputs",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::Other,
+                        SandboxFailureClass::MissingOutputs,
+                        "rephrased absent artifact without legacy phrase",
+                    )
+                },
+                expected_class: BuildFailureClass::MissingOutput,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "classified-builder-with-legacy-tokens",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::Other,
+                        SandboxFailureClass::Builder,
+                        "bwrap fusermount trusted signature FOD hash mismatch opening store:",
+                    )
+                },
+                expected_class: BuildFailureClass::Builder,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "fetch-hash-mismatch",
+                make_error: || {
+                    std::io::Error::other(crate::fetcher::FetchError::HashMismatch {
+                        name: "src-archive".to_string(),
+                        expected: "sha256-aaa".to_string(),
+                        actual: "sha256-bbb".to_string(),
+                    })
+                },
+                expected_class: BuildFailureClass::FixedOutputHashMismatch,
+                expect_fod: true,
+            },
+            TypedErrorCase {
+                label: "untyped-io-with-legacy-tokens",
+                make_error: || std::io::Error::other("bwrap trusted signature FOD hash mismatch"),
+                expected_class: BuildFailureClass::Builder,
+                expect_fod: false,
+            },
+        ];
+
+        for case in &cases {
+            let label = case.label;
+            let facts = classify_build_service_error("build", (case.make_error)()).failure_facts();
+            assert_eq!(facts.phase, BuildFailurePhase::Build, "{label}");
+            assert_eq!(facts.error_class, case.expected_class, "{label}");
+            assert_eq!(facts.fod_mismatch.is_some(), case.expect_fod, "{label}");
+
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let mut builder = Builder::new(
+                bs,
+                ds,
+                TypedErrorBuildService {
+                    make_error: case.make_error,
+                },
+                test_pis(),
+                PathBuf::from("/nix/store"),
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                true,
+                false,
+            );
+            let mut kp = DerivationRegistry::default();
+            let (root, _) = build_and_register(&format!("typed-err-{label}"), &[], &mut kp);
+            let mut w = Worker::new(1);
+            w.want(&root, &kp, true).unwrap();
+            let result = w.run(&mut builder, &mut kp).await.unwrap();
+            assert_eq!(result.failed.len(), 1, "{label}");
+            let failure = &result.failed[0];
+            assert_eq!(failure.phase, BuildFailurePhase::Build, "{label}");
+            assert_eq!(failure.error_class, case.expected_class, "{label}");
+            assert_eq!(failure.fod_mismatch.is_some(), case.expect_fod, "{label}");
+        }
     }
 }

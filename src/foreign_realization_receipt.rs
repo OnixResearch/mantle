@@ -807,6 +807,9 @@ mod tests {
         crunch_build::FailedGoal {
             drv_key: ROOT_DRV.to_string(),
             origin_drv_key: ORIGIN_DRV.to_string(),
+            phase: crunch_build::BuildFailurePhase::Build,
+            error_class: crunch_build::BuildFailureClass::MissingOutput,
+            fod_mismatch: None,
             error: "dependency failed".to_string(),
             origin_error: FAILURE_MESSAGE.to_string(),
             build_log: None,

@@ -109,12 +109,16 @@ pub struct GlobalSurfaceEvidence {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GlobalWitnessPinnedInputs {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_u64", skip_serializing_if = "Option::is_none")]
     pub start_epoch_seconds: Option<u64>,
     #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
     pub entropy_seed: Option<String>,
     #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
     pub schedule_seed: Option<String>,
+}
+
+fn no_u64() -> Option<u64> {
+    None
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,8 +150,12 @@ pub struct GlobalWitnessEvidence {
     pub trust_status: GlobalWitnessTrustStatus,
     #[serde(default = "empty_strings")]
     pub output_digest_set_blake3: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_execution_machine", skip_serializing_if = "Option::is_none")]
     pub execution_machine: Option<GlobalWitnessExecutionMachine>,
+}
+
+fn no_execution_machine() -> Option<GlobalWitnessExecutionMachine> {
+    None
 }
 
 fn default_legacy_witness_metadata() -> String {
@@ -501,7 +509,7 @@ fn evaluate_global_surfaces(
     blockers.reserve(collection_capacity_count(MAX_GLOBAL_BLOCKER_COUNT)?.saturating_sub(blockers.len()));
     let mut evidence_digests_blake3 = BTreeSet::new();
     let mut witness_identities = BTreeSet::new();
-    let mut any_surface_matched_only_under_pinned_machine = false;
+    let mut is_any_surface_matched_only_under_pinned_machine = false;
     let included_surface_ids =
         universe.included_surfaces.iter().map(|surface| surface.id.clone()).collect::<BTreeSet<_>>();
     debug_assert!(surfaces.capacity() >= universe.included_surfaces.len());
@@ -515,7 +523,7 @@ fn evaluate_global_surfaces(
             digests,
         })?;
         if evaluated_surface.non_claims.iter().any(|claim| claim == NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE) {
-            any_surface_matched_only_under_pinned_machine = true;
+            is_any_surface_matched_only_under_pinned_machine = true;
         }
         for digest in collect_surface_report_digests(evidence) {
             evidence_digests_blake3.insert(digest);
@@ -532,7 +540,7 @@ fn evaluate_global_surfaces(
         blockers,
         evidence_digests_blake3,
         witness_identities,
-        any_surface_matched_only_under_pinned_machine,
+        any_surface_matched_only_under_pinned_machine: is_any_surface_matched_only_under_pinned_machine,
     })
 }
 
@@ -800,6 +808,8 @@ fn evaluate_missing_surface(surface: &GlobalBuildSurface) -> SurfaceEvidenceEval
 }
 
 fn build_surface_report(surface: &GlobalBuildSurface, evaluation: SurfaceEvidenceEvaluation) -> GlobalSurfaceReport {
+    debug_assert!(!surface.id.is_empty());
+    debug_assert!(!surface.target_system.is_empty());
     let mut non_claims = surface_non_claims();
     if evaluation.witness.matched_only_under_pinned_machine {
         non_claims.push(NON_CLAIM_MATCHED_UNDER_PINNED_MACHINE.to_string());
@@ -952,6 +962,8 @@ fn evaluate_witness_matrix(
     evidence: &GlobalSurfaceEvidence,
     policy: &GlobalReproducibilityPolicy,
 ) -> Result<SurfaceWitnessEvaluation, ReleaseEvidenceError> {
+    debug_assert!(!surface.id.is_empty());
+    debug_assert!(!evidence.surface_id.is_empty());
     let mut accumulator = WitnessAccumulator::new(evidence.witnesses.len());
     let mut witnesses = evidence.witnesses.clone();
     witnesses.sort_by(|left, right| left.identity.cmp(&right.identity));
@@ -1061,7 +1073,7 @@ impl WitnessAccumulator {
     }
 
     fn into_evaluation(self) -> SurfaceWitnessEvaluation {
-        let matched_only_under_pinned_machine =
+        let is_matched_only_under_pinned_machine =
             self.accepted_pinned_count > ZERO_COUNT && self.accepted_native_count == ZERO_COUNT;
         SurfaceWitnessEvaluation {
             accepted_witness_identities: self.identities.into_iter().collect(),
@@ -1070,7 +1082,7 @@ impl WitnessAccumulator {
             covered_perturbation_axes: self.axes.into_iter().collect(),
             witness_counts: self.counts,
             blockers: self.blockers,
-            matched_only_under_pinned_machine,
+            matched_only_under_pinned_machine: is_matched_only_under_pinned_machine,
         }
     }
 }
@@ -1084,6 +1096,8 @@ fn pinned_machine_host_class(machine: &GlobalWitnessExecutionMachine) -> String 
 
 pub fn neutralized_by_pinned_input(axis: &str, pinned: &GlobalWitnessPinnedInputs) -> Option<&'static str> {
     let normalized = axis.trim().to_ascii_lowercase();
+    debug_assert!(normalized.len() <= axis.len());
+    debug_assert_eq!(normalized.trim(), normalized);
     if pinned.start_epoch_seconds.is_some()
         && (matches!(
             normalized.as_str(),

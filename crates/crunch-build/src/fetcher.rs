@@ -408,9 +408,13 @@ fn hash_reader_bounded(
     let mut buffer = vec![0u8; FLAT_HASH_BUFFER_BYTES];
     let mut total_bytes: u64 = 0;
 
-    loop {
+    let max_iterations = limit_bytes.saturating_add(1_024);
+    for _ in 0..max_iterations {
         let read_bytes = match reader.read(&mut buffer) {
-            Ok(0) => break,
+            Ok(0) => {
+                debug_assert!(total_bytes <= limit_bytes, "hashed bytes must stay within limit");
+                return Ok(hasher.finalize());
+            }
             Ok(count) => count,
             Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(FetchError::Io(error)),
@@ -426,8 +430,7 @@ fn hash_reader_bounded(
         total_bytes = next_total;
     }
 
-    debug_assert!(total_bytes <= limit_bytes, "hashed bytes must stay within limit");
-    Ok(hasher.finalize())
+    Err(FetchError::Io(io::Error::other("hash reader exceeded iteration bound")))
 }
 
 pub fn verify_recursive_hash(out_path: &Path, expected: &NixHash, name: &str) -> Result<(), FetchError> {
@@ -577,18 +580,18 @@ fn fetch_agent(policy: FetchTimeoutPolicy) -> ureq::Agent {
     // The transport's idle timeout is the only read deadline it reliably
     // enforces, so cap it by the total: a stalled read then wakes no later than
     // the total budget and our copy loop attributes and reports it.
-    let transport_idle = policy.body_idle.min(policy.total);
     ureq::Agent::config_builder()
         .timeout_resolve(Some(policy.connect))
         .timeout_connect(Some(policy.connect))
         .timeout_recv_response(Some(policy.response_headers))
-        .timeout_recv_body(Some(transport_idle))
+        .timeout_recv_body(Some(policy.body_idle.min(policy.total)))
         .build()
         .new_agent()
 }
 
 /// Classify a transport failure without inspecting rendered text.
 fn http_transport_error(url: &str, error: ureq::Error) -> FetchError {
+    assert!(!url.is_empty(), "http transport error requires a non-empty URL");
     let phase = match &error {
         ureq::Error::Timeout(ureq::Timeout::Resolve) => Some(FetchTimeoutPhase::Resolve),
         ureq::Error::Timeout(ureq::Timeout::Connect) => Some(FetchTimeoutPhase::Connect),
@@ -598,6 +601,7 @@ fn http_transport_error(url: &str, error: ureq::Error) -> FetchError {
         ureq::Error::Timeout(_) => Some(FetchTimeoutPhase::Other),
         _ => None,
     };
+    debug_assert_eq!(phase.is_some(), matches!(error, ureq::Error::Timeout(_)));
     match phase {
         Some(phase) => FetchError::Timeout {
             url: url.to_string(),
@@ -627,8 +631,8 @@ fn copy_bounded(
     limit_bytes: u64,
     resource: &str,
 ) -> Result<u64, FetchError> {
-    let mut limited = reader.take(limit_bytes.saturating_add(1));
-    let copied = io::copy(&mut limited, writer)?;
+    let mut bounded_reader = reader.take(limit_bytes.saturating_add(1));
+    let copied = io::copy(&mut bounded_reader, writer)?;
     if copied > limit_bytes {
         return Err(limit_exceeded(resource, limit_bytes));
     }
@@ -661,13 +665,17 @@ impl<'a> LimitedWriter<'a> {
 
 impl Write for LimitedWriter<'_> {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        let requested = u64::try_from(buffer.len()).unwrap_or(u64::MAX);
+        let Ok(requested) = u64::try_from(buffer.len()) else {
+            self.exceeded = true;
+            return Err(io::Error::other("decompressed write buffer overflow"));
+        };
         if self.written_bytes.saturating_add(requested) > self.limit_bytes {
             self.exceeded = true;
             return Err(io::Error::other("decompressed byte budget exceeded"));
         }
         let written = self.inner.write(buffer)?;
-        self.written_bytes = self.written_bytes.saturating_add(u64::try_from(written).unwrap_or(u64::MAX));
+        let written_u64 = u64::try_from(written).map_err(|_| io::Error::other("written byte count overflow"))?;
+        self.written_bytes = self.written_bytes.saturating_add(written_u64);
         Ok(written)
     }
 
@@ -728,11 +736,25 @@ fn fetch_flat_once_with_limit(
     policy: FetchTimeoutPolicy,
     limit_bytes: u64,
 ) -> Result<(), FetchError> {
-    let started = std::time::Instant::now();
+    fetch_flat_once_with_clock(request, policy, limit_bytes, std::time::Instant::now)
+}
+
+fn fetch_flat_once_with_clock(
+    request: FetchOnceRequest<'_>,
+    policy: FetchTimeoutPolicy,
+    limit_bytes: u64,
+    read_clock: fn() -> std::time::Instant,
+) -> Result<(), FetchError> {
+    let started = read_clock();
     let reader: Box<dyn Read + Send> = open_url_reader_with(request.url, policy)?;
     let mut bounded_reader = reader.take(limit_bytes.saturating_add(1));
     let mut file = std::fs::File::create(request.out)?;
-    let bytes_written = copy_with_body_deadlines(&mut bounded_reader, &mut file, request.url, policy, started)?;
+    let bytes_written = copy_with_body_deadlines(&mut bounded_reader, &mut file, BodyCopyOptions {
+        url: request.url,
+        policy,
+        started,
+        read_clock,
+    })?;
     if bytes_written > limit_bytes {
         return Err(limit_exceeded("flat download", limit_bytes));
     }
@@ -742,6 +764,13 @@ fn fetch_flat_once_with_limit(
 /// Grace for transport timer granularity when attributing a wake-up to the idle
 /// budget rather than to an unrelated socket error.
 const FETCH_DEADLINE_GRACE_MS: u64 = 100;
+
+struct BodyCopyOptions<'a> {
+    url: &'a str,
+    policy: FetchTimeoutPolicy,
+    started: std::time::Instant,
+    read_clock: fn() -> std::time::Instant,
+}
 
 /// Copy the body while enforcing the idle and total budgets ourselves.
 ///
@@ -753,19 +782,19 @@ const FETCH_DEADLINE_GRACE_MS: u64 = 100;
 fn copy_with_body_deadlines(
     reader: &mut impl Read,
     file: &mut std::fs::File,
-    url: &str,
-    policy: FetchTimeoutPolicy,
-    started: std::time::Instant,
+    options: BodyCopyOptions<'_>,
 ) -> Result<u64, FetchError> {
-    assert!(!url.is_empty(), "body copy requires the fetch url for diagnostics");
+    assert!(!options.url.is_empty(), "body copy requires the fetch url for diagnostics");
+    assert!(options.policy.total > std::time::Duration::ZERO, "total fetch timeout must be positive");
     let mut written: u64 = 0;
-    let mut last_progress = std::time::Instant::now();
+    let mut last_progress = (options.read_clock)();
     let mut buffer = [0_u8; 64 * 1024];
     let grace = std::time::Duration::from_millis(FETCH_DEADLINE_GRACE_MS);
-    loop {
-        if started.elapsed() >= policy.total {
+    let max_iterations = MAX_DOWNLOAD_BYTES.saturating_add(1_024);
+    for _ in 0..max_iterations {
+        if (options.read_clock)().saturating_duration_since(options.started) >= options.policy.total {
             return Err(FetchError::Timeout {
-                url: url.to_string(),
+                url: options.url.to_string(),
                 phase: FetchTimeoutPhase::BodyTotal,
             });
         }
@@ -776,25 +805,26 @@ fn copy_with_body_deadlines(
                 written = written
                     .checked_add(count as u64)
                     .ok_or_else(|| FetchError::Io(io::Error::other("fetch byte count overflow")))?;
-                last_progress = std::time::Instant::now();
+                last_progress = (options.read_clock)();
             }
             Err(error) => {
-                let stalled = last_progress.elapsed();
-                let socket_closed = matches!(
+                let current_instant = (options.read_clock)();
+                let stalled = current_instant.saturating_duration_since(last_progress);
+                let is_socket_closed = matches!(
                     error.kind(),
                     io::ErrorKind::ConnectionReset
                         | io::ErrorKind::ConnectionAborted
                         | io::ErrorKind::UnexpectedEof
                         | io::ErrorKind::BrokenPipe
                 );
-                return Err(if started.elapsed() >= policy.total {
+                return Err(if current_instant.saturating_duration_since(options.started) >= options.policy.total {
                     FetchError::Timeout {
-                        url: url.to_string(),
+                        url: options.url.to_string(),
                         phase: FetchTimeoutPhase::BodyTotal,
                     }
-                } else if !socket_closed && stalled.saturating_add(grace) >= policy.body_idle {
+                } else if !is_socket_closed && stalled.saturating_add(grace) >= options.policy.body_idle {
                     FetchError::Timeout {
-                        url: url.to_string(),
+                        url: options.url.to_string(),
                         phase: FetchTimeoutPhase::BodyIdle,
                     }
                 } else {
@@ -803,6 +833,7 @@ fn copy_with_body_deadlines(
             }
         }
     }
+    Err(FetchError::Io(io::Error::other("body copy exceeded iteration bound")))
 }
 
 /// Download a tarball, decompress, and extract to a directory.
@@ -856,9 +887,9 @@ pub fn unpack_archive_file(url: &str, archive_path: &Path, out: &str) -> Result<
         .to_str()
         .ok_or_else(|| FetchError::InvalidBoundary("output-path-not-utf8".to_string()))?;
     let reader = std::fs::File::open(archive.as_path())?;
-    let limits = FetchLimits::default();
-    let result = decompress_reader_with_limits(url.as_str(), reader, limits)
-        .and_then(|decompressed| extract_tar_with_limits(decompressed, output, limits));
+    let fetch_bounds = FetchLimits::default();
+    let result = decompress_reader_with_limits(url.as_str(), reader, fetch_bounds)
+        .and_then(|decompressed| extract_tar_with_limits(decompressed, output, fetch_bounds));
     if result.is_err() {
         cleanup_fetch_output(output);
     }
@@ -893,6 +924,7 @@ where
 
 fn should_retry_fetch_error(error: &FetchError, attempt_number: u32) -> bool {
     assert!(attempt_number >= 1, "attempt numbers are one-based");
+    assert!(attempt_number <= FETCH_MAX_ATTEMPTS, "attempt number must stay within max attempts");
     if attempt_number >= FETCH_MAX_ATTEMPTS {
         return false;
     }
@@ -1098,6 +1130,10 @@ fn decompress_lzma_to_temp(
         writer.flush()?;
     }
     output.seek(SeekFrom::Start(0))?;
+    debug_assert!(
+        output.metadata().map(|meta| meta.len()).unwrap_or(0) <= limits.decompressed_archive_bytes,
+        "decompressed output must stay within archive budget"
+    );
     Ok(Box::new(output))
 }
 
@@ -1141,7 +1177,12 @@ fn extract_tar_with_limits<R: Read>(mut reader: R, out: &str, limits: FetchLimit
         let mut entry = entry_result.map_err(|e| FetchError::TarError(e.to_string()))?;
         let entry_path = entry.path().map_err(|e| FetchError::TarError(e.to_string()))?.into_owned();
         validate_entry_not_absolute(&entry_path)?;
-        extract_tar_entry(&mut entry, &entry_path, out_path, &prefix_to_strip, &mut deferred_hardlinks, &mut budget)?;
+        extract_tar_entry(&mut entry, &entry_path, &mut TarExtractionContext {
+            out_path,
+            prefix_to_strip: &prefix_to_strip,
+            deferred_hardlinks: &mut deferred_hardlinks,
+            budget: &mut budget,
+        })?;
     }
     replay_deferred_hardlinks(&deferred_hardlinks, &mut budget)?;
     Ok(())
@@ -1194,30 +1235,48 @@ fn detect_common_tar_prefix<R: Read + Seek>(reader: &mut R) -> Result<Option<std
     Ok(None)
 }
 
+struct TarExtractionContext<'a> {
+    out_path: &'a Path,
+    prefix_to_strip: &'a Option<std::path::PathBuf>,
+    deferred_hardlinks: &'a mut Vec<(std::path::PathBuf, std::path::PathBuf)>,
+    budget: &'a mut ExtractionBudget,
+}
+
 fn extract_tar_entry<R: Read>(
     entry: &mut tar::Entry<'_, R>,
     entry_path: &Path,
-    out_path: &Path,
-    prefix_to_strip: &Option<std::path::PathBuf>,
-    deferred_hardlinks: &mut Vec<(std::path::PathBuf, std::path::PathBuf)>,
-    budget: &mut ExtractionBudget,
+    context: &mut TarExtractionContext<'_>,
 ) -> Result<(), FetchError> {
-    let relative = strip_tar_prefix(entry_path, prefix_to_strip);
+    let relative = strip_tar_prefix(entry_path, context.prefix_to_strip);
     if relative.as_os_str().is_empty() || relative == Path::new(".") {
         return Ok(());
     }
     validate_relative_path(&relative)?;
     let entry_context = format!("tar entry path {}", relative.display());
-    let resolved_dest = resolve_entry_destination_path(out_path, &relative, &entry_context)?;
-    discard_shadowed_deferred_hardlinks(deferred_hardlinks, &resolved_dest);
-    debug_assert!(resolved_dest.starts_with(out_path), "dest {resolved_dest:?} escapes out_path {out_path:?}");
+    let resolved_dest = resolve_entry_destination_path(context.out_path, &relative, &entry_context)?;
+    discard_shadowed_deferred_hardlinks(context.deferred_hardlinks, &resolved_dest);
+    debug_assert!(
+        resolved_dest.starts_with(context.out_path),
+        "dest {resolved_dest:?} escapes out_path {:?}",
+        context.out_path
+    );
     match entry.header().entry_type() {
-        tar::EntryType::Regular | tar::EntryType::GNUSparse => write_regular_tar_entry(entry, &resolved_dest, budget),
-        tar::EntryType::Directory => prepare_directory_entry_dest(&resolved_dest),
-        tar::EntryType::Symlink => create_tar_symlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative),
-        tar::EntryType::Link => {
-            copy_tar_hardlink(entry, &resolved_dest, out_path, prefix_to_strip, &relative, deferred_hardlinks, budget)
+        tar::EntryType::Regular | tar::EntryType::GNUSparse => {
+            write_regular_tar_entry(entry, &resolved_dest, context.budget)
         }
+        tar::EntryType::Directory => prepare_directory_entry_dest(&resolved_dest),
+        tar::EntryType::Symlink => {
+            create_tar_symlink(entry, &resolved_dest, context.out_path, context.prefix_to_strip, &relative)
+        }
+        tar::EntryType::Link => copy_tar_hardlink(
+            entry,
+            &resolved_dest,
+            context.out_path,
+            context.prefix_to_strip,
+            &relative,
+            context.deferred_hardlinks,
+            context.budget,
+        ),
         _ => Ok(()),
     }
 }
@@ -1236,6 +1295,7 @@ fn write_regular_tar_entry<R: Read>(
     dest: &Path,
     budget: &mut ExtractionBudget,
 ) -> Result<(), FetchError> {
+    assert!(budget.limits.expanded_file_bytes > 0, "expanded file byte budget must be positive");
     let declared_bytes = entry.size();
     if declared_bytes > budget.limits.expanded_file_bytes {
         return Err(limit_exceeded("expanded file", budget.limits.expanded_file_bytes));
@@ -1252,6 +1312,7 @@ fn write_regular_tar_entry<R: Read>(
     if budget.expanded_total_bytes > budget.limits.expanded_total_bytes {
         return Err(limit_exceeded("expanded tree", budget.limits.expanded_total_bytes));
     }
+    debug_assert!(budget.expanded_total_bytes <= budget.limits.expanded_total_bytes);
 
     #[cfg(unix)]
     {
@@ -1314,6 +1375,7 @@ fn copy_existing_file_bounded(
     budget: &mut ExtractionBudget,
     resource: &str,
 ) -> Result<(), FetchError> {
+    assert!(!resource.is_empty(), "bounded copy resource label must not be empty");
     let mut input = std::fs::File::open(source)?;
     let declared_bytes = input.metadata()?.len();
     if declared_bytes > budget.limits.expanded_file_bytes {
@@ -1327,6 +1389,7 @@ fn copy_existing_file_bounded(
     let mut output = std::fs::File::create(dest)?;
     let copied = copy_bounded(&mut input, &mut output, declared_bytes, resource)?;
     budget.expanded_total_bytes = budget.expanded_total_bytes.saturating_add(copied);
+    debug_assert!(budget.expanded_total_bytes <= budget.limits.expanded_total_bytes);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

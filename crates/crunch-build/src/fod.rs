@@ -27,38 +27,8 @@ pub(crate) async fn verify_fod_hash(
     debug_assert!(!_output_name.is_empty(), "output_name must not be empty for FOD verification");
 
     match expected_ca {
-        CAHash::Flat(expected_hash) => {
-            let digest = match node {
-                Node::File {
-                    digest,
-                    executable: false,
-                    ..
-                } => digest,
-                Node::File { executable: true, .. } => {
-                    return Err(Error::FodFlatExecutable {
-                        name: drv_name.to_string(),
-                    });
-                }
-                _ => {
-                    return Err(Error::FodFlatNotFile {
-                        name: drv_name.to_string(),
-                    });
-                }
-            };
-
-            let actual = store
-                .hash_blob(digest, expected_hash.algo())
-                .await
-                .map_err(|error| Error::Store(format!("hashing fixed-output blob: {error}")))?;
-            if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
-                return Err(Error::FodHashMismatch {
-                    name: drv_name.to_string(),
-                    expected_sri: crate::fetcher::nix_hash_to_sri(expected_hash),
-                    actual_sri: crate::fetcher::nix_hash_to_sri(&actual),
-                });
-            }
-        }
-        CAHash::Nar(NixHash::Sha256(expected_digest)) => {
+        CAHash::Flat(expected_hash) => verify_flat_fod_hash(drv_name, expected_hash, node, store).await,
+        CAHash::Nar(NixHash::Sha256(expected_digest)) | CAHash::Text(expected_digest) => {
             if nar_sha256 != expected_digest {
                 let expected_h = NixHash::Sha256(*expected_digest);
                 let actual_h = NixHash::Sha256(*nar_sha256);
@@ -68,6 +38,7 @@ pub(crate) async fn verify_fod_hash(
                     actual_sri: crate::fetcher::nix_hash_to_sri(&actual_h),
                 });
             }
+            Ok(())
         }
         CAHash::Nar(expected_hash) => {
             let actual = store
@@ -81,18 +52,46 @@ pub(crate) async fn verify_fod_hash(
                     actual_sri: crate::fetcher::nix_hash_to_sri(&actual),
                 });
             }
+            Ok(())
         }
-        CAHash::Text(expected_digest) => {
-            if nar_sha256 != expected_digest {
-                let expected_h = NixHash::Sha256(*expected_digest);
-                let actual_h = NixHash::Sha256(*nar_sha256);
-                return Err(Error::FodHashMismatch {
-                    name: drv_name.to_string(),
-                    expected_sri: crate::fetcher::nix_hash_to_sri(&expected_h),
-                    actual_sri: crate::fetcher::nix_hash_to_sri(&actual_h),
-                });
-            }
+    }
+}
+
+async fn verify_flat_fod_hash(
+    drv_name: &str,
+    expected_hash: &NixHash,
+    node: &Node,
+    store: &crunch_store::BuildStore,
+) -> Result<(), Error> {
+    debug_assert!(!drv_name.is_empty(), "drv_name must not be empty for flat FOD verification");
+    let digest = match node {
+        Node::File {
+            digest,
+            executable: false,
+            ..
+        } => digest,
+        Node::File { executable: true, .. } => {
+            return Err(Error::FodFlatExecutable {
+                name: drv_name.to_string(),
+            });
         }
+        _ => {
+            return Err(Error::FodFlatNotFile {
+                name: drv_name.to_string(),
+            });
+        }
+    };
+
+    let actual = store
+        .hash_blob(digest, expected_hash.algo())
+        .await
+        .map_err(|error| Error::Store(format!("hashing fixed-output blob: {error}")))?;
+    if actual.digest_as_bytes() != expected_hash.digest_as_bytes() {
+        return Err(Error::FodHashMismatch {
+            name: drv_name.to_string(),
+            expected_sri: crate::fetcher::nix_hash_to_sri(expected_hash),
+            actual_sri: crate::fetcher::nix_hash_to_sri(&actual),
+        });
     }
     Ok(())
 }

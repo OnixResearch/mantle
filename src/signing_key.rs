@@ -135,21 +135,21 @@ pub(crate) fn read_private_key_file(
             .map_err(|error| RunError::Internal(format!("opening {label}: {error}")))?
     };
     let opened_metadata = file.metadata().map_err(|error| RunError::Internal(format!("checking {label}: {error}")))?;
-    let same_file = {
+    let is_same_file = {
         use std::os::unix::fs::MetadataExt;
         metadata.dev() == opened_metadata.dev()
             && metadata.ino() == opened_metadata.ino()
             && metadata.len() == opened_metadata.len()
     };
-    if !same_file {
+    if !is_same_file {
         return Err(RunError::Internal(format!("{label} changed before reading")));
     }
-    let capacity =
+    let file_size_bytes =
         usize::try_from(opened_metadata.len()).map_err(|_| RunError::Internal(format!("{label} is too large")))?;
-    let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(capacity));
+    let mut bytes = zeroize::Zeroizing::new(Vec::with_capacity(file_size_bytes));
     std::io::Read::read_to_end(&mut file, &mut bytes)
         .map_err(|error| RunError::Internal(format!("reading {label}: {error}")))?;
-    if bytes.len() != capacity {
+    if bytes.len() != file_size_bytes {
         return Err(RunError::Internal(format!("{label} size changed while reading")));
     }
     Ok(bytes)

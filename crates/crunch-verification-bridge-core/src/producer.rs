@@ -160,8 +160,8 @@ fn check_producer_job_rail(job: &Value, receipt: &Value, receipt_scope: &str) ->
 fn check_tool_graph(graph_bytes: &[u8], root_derivation: &str) -> Result<(), BridgeError> {
     let graph: Value = serde_json::from_slice(graph_bytes).map_err(BridgeError::ToolGraphJson)?;
     graph.as_object().ok_or(BridgeError::InvalidToolGraphShape)?;
-    let versioned = graph.get("version").is_some();
-    if versioned {
+    let is_versioned = graph.get("version").is_some();
+    if is_versioned {
         check_versioned_tool_graph(&graph, root_derivation)
     } else {
         check_legacy_tool_graph(&graph, root_derivation)

@@ -186,7 +186,10 @@ async fn bound_android_tool_cannot_execute_after_real_fixed_output_digest_drift(
     let mismatch = result
         .failed
         .iter()
-        .find_map(|failure| crunch_pipeline::parse_fod_mismatch_error(&failure.origin_error))
+        .find_map(|failure| {
+            assert_eq!(failure.error_class, crunch_build::BuildFailureClass::FixedOutputHashMismatch);
+            failure.fod_mismatch.as_ref()
+        })
         .unwrap_or_else(|| panic!("real fixed-output rejection missing in root-cause failures: {:?}", result.failed));
     let actual_sha256 = {
         use sha2::Digest;

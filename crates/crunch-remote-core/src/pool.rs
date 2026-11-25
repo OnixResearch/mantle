@@ -256,8 +256,9 @@ fn admit_endpoint_shape(endpoint: &PoolEndpoint) -> Result<(), PoolAdmissionErro
     if capabilities.features.len() > MAX_CAPABILITIES {
         return Err(PoolAdmissionError::CapabilityCountExceeded);
     }
-    let features_valid = capabilities.features.iter().all(|feature| is_valid_identifier(feature, MAX_CAPABILITY_BYTES));
-    if !features_valid {
+    let has_valid_features =
+        capabilities.features.iter().all(|feature| is_valid_identifier(feature, MAX_CAPABILITY_BYTES));
+    if !has_valid_features {
         return Err(PoolAdmissionError::UndeclaredCapabilities);
     }
     admit_endpoint_output_trust(endpoint)?;
@@ -317,8 +318,8 @@ fn admit_endpoint_credential(
 
 fn is_valid_identifier(value: &str, max_bytes: usize) -> bool {
     let is_within_bound = !value.is_empty() && value.len() <= max_bytes;
-    let has_no_whitespace = !value.contains(char::is_whitespace);
-    is_within_bound && has_no_whitespace
+    let has_whitespace = value.contains(char::is_whitespace);
+    is_within_bound && !has_whitespace
 }
 
 /// One worker's current declared and observed facts, supplied by the adapter.
@@ -438,8 +439,8 @@ fn fits_capabilities(worker: &WorkerFacts, requirement: &GoalRequirement) -> boo
 
 fn fits_capacity(worker: &WorkerFacts, requirement: &GoalRequirement) -> bool {
     let has_named = !requirement.requires_named_resources || !worker.named.is_constrained;
-    let has_capacity = crate::resource::reserve_capacity(worker.remaining, requirement.requested).is_ok();
-    let is_feasible = has_named && has_capacity;
+    let has_sufficient_resources = crate::resource::reserve_capacity(worker.remaining, requirement.requested).is_ok();
+    let is_feasible = has_named && has_sufficient_resources;
     debug_assert!(worker.worker_generation >= 1);
     debug_assert!(!worker.endpoint_name.is_empty());
     is_feasible

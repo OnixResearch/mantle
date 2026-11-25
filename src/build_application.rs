@@ -312,6 +312,9 @@ mod tests {
         result.failed.push(crunch_build::FailedGoal {
             drv_key: "/mantle/store/failed.drv".to_string(),
             origin_drv_key: "/mantle/store/failed.drv".to_string(),
+            phase: crunch_build::BuildFailurePhase::Build,
+            error_class: crunch_build::BuildFailureClass::Builder,
+            fod_mismatch: None,
             error: "dependency build failed".to_string(),
             origin_error: "dependency build failed".to_string(),
             build_log: None,

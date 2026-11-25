@@ -398,7 +398,7 @@ impl PoolGoalExecutor for RemotePoolGoalExecutor {
         let kill: RemoteChildKillSlot = Arc::new(Mutex::new(None));
         let cancel_kill = Arc::clone(&kill);
         let cancel_task = tokio::spawn(async move {
-            if cancellation.changed().await.is_err() {
+            if !*cancellation.borrow_and_update() && cancellation.changed().await.is_err() {
                 return;
             }
             // The runner publishes its process-group leader just after spawn;
@@ -490,19 +490,34 @@ impl RemotePoolGoalExecutor {
         .map_err(|error| pool_error(&error))?;
 
         let request_id = plan.client.request.request_id.clone();
-        let mut session = EffectSession::for_actor_attempt(
-            &request_id,
-            RemoteEffectBinding {
-                job_id: &attempt.job_id,
-                attempt_id: &attempt.attempt_id,
-                fence_generation: attempt.fence_generation,
-            },
-            EffectActor::Client,
-        )
-        .map_err(|reason| pool_error(&format!("effect-{reason:?}")))?;
-        let transcript =
-            crate::remote_build::run_stdio_remote_child_with_kill(&plan.command, &request_id, &mut session, kill)
-                .map_err(|error| pool_error(&error.to_string()))?;
+        let transport_request_id = request_id.clone();
+        let command = plan.command.clone();
+        let transport_attempt = attempt.clone();
+        let kill_slot = kill.cloned();
+        // Run the blocking child-exchange loop off Tokio worker threads so
+        // `cancel_task` is scheduled immediately instead of starving in the
+        // worker's LIFO slot while the child runs.
+        let transcript = tokio::task::spawn_blocking(move || {
+            let mut session = EffectSession::for_actor_attempt(
+                &transport_request_id,
+                RemoteEffectBinding {
+                    job_id: &transport_attempt.job_id,
+                    attempt_id: &transport_attempt.attempt_id,
+                    fence_generation: transport_attempt.fence_generation,
+                },
+                EffectActor::Client,
+            )
+            .map_err(|reason| pool_error(&format!("effect-{reason:?}")))?;
+            crate::remote_build::run_stdio_remote_child_with_kill(
+                &command,
+                &transport_request_id,
+                &mut session,
+                kill_slot.as_ref(),
+            )
+            .map_err(|error| pool_error(&error.to_string()))
+        })
+        .await
+        .map_err(|error| pool_error(&format!("remote-transport-task:{error}")))??;
         let admission =
             validate_remote_stdio_output_import(&plan.client.request, &plan.client.trusted_output_keys, &transcript)
                 .map_err(|error| pool_error(&error))?;

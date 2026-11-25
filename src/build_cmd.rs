@@ -1640,7 +1640,7 @@ pub(crate) fn write_failed_goal_log(
 ) -> Option<DiagnosticPersistenceFailure> {
     assert!(!logs_dir.as_os_str().is_empty(), "failure log directory must not be empty");
     assert!(!store_dir.is_empty(), "failure log store prefix must not be empty");
-    if !should_write_failure_log(&failed.error) {
+    if !should_write_failure_log(failed) {
         return None;
     }
     let drv_path = parse_drv_key(store_dir, &failed.drv_key)?;

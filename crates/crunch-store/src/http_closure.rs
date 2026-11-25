@@ -192,34 +192,32 @@ impl HttpClosurePlanBuilder {
         }
         roots.sort_by_key(ToString::to_string);
         roots.dedup_by(|left, right| left.digest() == right.digest());
-
-        let mut pending_order = BTreeSet::new();
-        let mut pending_by_digest = BTreeMap::new();
-        for root in &roots {
-            let root_digest = *root.digest();
-            let root_pending = PendingMember {
-                path: root.clone(),
-                depth: 0,
-            };
-            pending_order.insert((0, root_digest));
-            pending_by_digest.insert(root_digest, root_pending);
+        if roots.len() > limits.max_members as usize {
+            return Err(HttpClosurePlanError::MemberLimit {
+                maximum: limits.max_members,
+            });
         }
 
-        debug_assert_eq!(pending_order.len(), pending_by_digest.len());
-        debug_assert_eq!(pending_by_digest.len(), roots.len());
-        Ok(Self {
+        let mut builder = Self {
             cache_identity,
             trust_policy_blake3,
             store_dir,
-            roots,
+            roots: roots.clone(),
             limits,
-            pending_order,
-            pending_by_digest,
+            pending_order: BTreeSet::new(),
+            pending_by_digest: BTreeMap::new(),
             observed_by_digest: BTreeMap::new(),
             active_request: None,
             total_nar_bytes: 0,
             total_reference_count: 0,
-        })
+        };
+        for root in roots {
+            builder.insert_pending(root, 0)?;
+        }
+
+        debug_assert_eq!(builder.pending_order.len(), builder.pending_by_digest.len());
+        debug_assert_eq!(builder.pending_by_digest.len(), builder.roots.len());
+        Ok(builder)
     }
 
     pub fn take_next_request(&mut self) -> Result<Option<HttpClosureRequest>, HttpClosurePlanError> {
@@ -314,15 +312,14 @@ impl HttpClosurePlanBuilder {
             return Err(HttpClosurePlanError::IncompletePlan { pending_count });
         }
         let root_paths = self.roots.iter().map(ToString::to_string).collect::<BTreeSet<_>>();
-        let root_members = self
-            .roots
-            .iter()
-            .map(|root| {
-                self.observed_by_digest
-                    .get(root.digest())
-                    .unwrap_or_else(|| panic!("complete plan must contain seed {root}"))
-            })
-            .collect::<Vec<_>>();
+        let mut root_members = Vec::with_capacity(self.roots.len());
+        for root in &self.roots {
+            let member = self
+                .observed_by_digest
+                .get(root.digest())
+                .ok_or(HttpClosurePlanError::IncompletePlan { pending_count: 1 })?;
+            root_members.push(member);
+        }
         let mut members = self
             .observed_by_digest
             .values()

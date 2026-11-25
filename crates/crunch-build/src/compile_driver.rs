@@ -29,8 +29,12 @@ pub struct CompileDriverRuntime {
     pub admitted_builders: Vec<String>,
     /// Execution-only observation file, outside every derivation output.
     pub receipt_path: PathBuf,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default = "no_protected_build_runtime", skip_serializing_if = "Option::is_none")]
     pub protected_exec: Option<ProtectedBuildRuntime>,
+}
+
+fn no_protected_build_runtime() -> Option<ProtectedBuildRuntime> {
+    None
 }
 
 /// Host-side execution supervision; never mounted as a derivation input.

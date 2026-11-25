@@ -469,7 +469,11 @@ fn validate_receipt_contract(plan: &SourceBuiltFixedPointPlan) -> Result<(), Sou
     let mantle_source_digest = source_input_for_role(&plan.source_inputs, SourceAuthorityRole::MantleSource)?
         .digest_blake3
         .as_str();
-    let expected = receipt_contract(&plan.logical_store_prefix, mantle_source_digest, vendor_digest);
+    let expected = receipt_contract(ReceiptContractInputs {
+        logical_store_prefix: &plan.logical_store_prefix,
+        mantle_source_digest_blake3: mantle_source_digest,
+        vendor_blake3: vendor_digest,
+    });
     if contract != &expected {
         return Err(plan_error(
             SourceBuiltFixedPointPlanErrorKind::InvalidPlan,
@@ -674,18 +678,20 @@ fn policy_authority(role: ProofPolicyRole) -> StageAuthorityInput {
     StageAuthorityInput::Policy { role }
 }
 
-pub(super) fn receipt_contract(
-    logical_store_prefix: &str,
-    mantle_source_digest_blake3: &str,
-    vendor_blake3: &str,
-) -> SourceBuiltFixedPointReceiptContract {
+pub(super) struct ReceiptContractInputs<'a> {
+    pub(super) logical_store_prefix: &'a str,
+    pub(super) mantle_source_digest_blake3: &'a str,
+    pub(super) vendor_blake3: &'a str,
+}
+
+pub(super) fn receipt_contract(inputs: ReceiptContractInputs<'_>) -> SourceBuiltFixedPointReceiptContract {
     let contract = SourceBuiltFixedPointReceiptContract {
         schema: SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW.to_string(),
         workflow_version: SOURCE_BUILT_FIXED_POINT_PROOF_WORKFLOW.to_string(),
         selected_provider_kind: SOURCE_BUILT_FIXED_POINT_PROVIDER_KIND.to_string(),
-        source_blake3: mantle_source_digest_blake3.to_string(),
-        vendor_blake3: vendor_blake3.to_string(),
-        logical_store_prefix: logical_store_prefix.to_string(),
+        source_blake3: inputs.mantle_source_digest_blake3.to_string(),
+        vendor_blake3: inputs.vendor_blake3.to_string(),
+        logical_store_prefix: inputs.logical_store_prefix.to_string(),
         effect_policy_version: BUILD_EFFECT_POLICY_VERSION.to_string(),
         run_ids: vec!["stage1".to_string(), "stage2".to_string()],
         derivation_identity_source: "cargo-free-native-topology-plan".to_string(),

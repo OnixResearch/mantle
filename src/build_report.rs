@@ -1320,6 +1320,13 @@ mod tests {
             failed: vec![crunch_build::FailedGoal {
                 drv_key: drv_key.clone(),
                 origin_drv_key: drv_key.clone(),
+                phase: crunch_build::BuildFailurePhase::Build,
+                error_class: crunch_build::BuildFailureClass::FixedOutputHashMismatch,
+                fod_mismatch: Some(crunch_build::TypedFodMismatch {
+                    name: "demo".to_string(),
+                    expected_sri: "sha256-a".to_string(),
+                    actual_sri: "sha256-b".to_string(),
+                }),
                 error: "FOD hash mismatch for demo: expected sha256-a, got sha256-b".to_string(),
                 origin_error: "FOD hash mismatch for demo: expected sha256-a, got sha256-b".to_string(),
                 build_log: None,
@@ -1404,6 +1411,9 @@ mod tests {
             failed: vec![crunch_build::FailedGoal {
                 drv_key: drv_key.clone(),
                 origin_drv_key: drv_key.clone(),
+                phase: crunch_build::BuildFailurePhase::Preflight,
+                error_class: crunch_build::BuildFailureClass::Preflight,
+                fod_mismatch: None,
                 error: "strict mode does not permit in-memory PathInfo fallback: broken redb".to_string(),
                 origin_error: "strict mode does not permit in-memory PathInfo fallback: broken redb".to_string(),
                 build_log: None,
@@ -1544,6 +1554,8 @@ mod tests {
                 capability: None,
                 policy_basis: Some("ordinary derivation network access is denied by default".to_string()),
                 audit_class: None,
+                dns_policy: None,
+                dns_nameservers: None,
                 fixed_output: None,
                 diagnostic: None,
             }],

@@ -10231,7 +10231,10 @@ let Derivation = import "derivation.ncl" in
         let mismatch = drifted
             .failed
             .iter()
-            .find_map(|failure| crunch_pipeline::parse_fod_mismatch_error(&failure.origin_error))
+            .find_map(|failure| {
+                assert_eq!(failure.error_class, crunch_build::BuildFailureClass::FixedOutputHashMismatch);
+                failure.fod_mismatch.as_ref()
+            })
             .unwrap_or_else(|| panic!("missing fixed-output drift reason: {:?}", drifted.failed));
         let observed_sri =
             format!("sha256-{}", base64::engine::general_purpose::STANDARD.encode(sha2::Sha256::digest(DRIFTED)));

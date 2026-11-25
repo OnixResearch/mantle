@@ -34,6 +34,11 @@ pub use crunch_build::BuildDeterminismControl;
 pub use crunch_build::BuildDeterminismNormalizationReport;
 pub use crunch_build::BuildEnvironmentRejection;
 pub use crunch_build::BuildEnvironmentReport;
+use crunch_build::BuildFailureClass;
+pub use crunch_build::BuildFailureClass as PipelineFailureClass;
+pub use crunch_build::BuildFailureFacts;
+use crunch_build::BuildFailurePhase;
+pub use crunch_build::BuildFailurePhase as PipelineFailurePhase;
 pub use crunch_build::BuildNetworkPolicyReport;
 use crunch_build::BuildOutcome;
 pub use crunch_build::BuildOutputDivergenceDiagnostic;
@@ -63,6 +68,7 @@ use crunch_build::RemoteBuildFallbackPolicy;
 use crunch_build::RemoteFirstBuildService;
 pub use crunch_build::SEARCH_PATH_DIGEST_ALGORITHM;
 pub use crunch_build::SchedulingPolicy;
+pub use crunch_build::TypedFodMismatch;
 use crunch_build::Worker;
 use crunch_build::WorkerResult;
 use crunch_build::causal_trace::Trace;
@@ -127,9 +133,13 @@ const PRIVATE_BUILD_WORK_ROOT_ENV: &str = "MANTLE_BUILD_WORK_ROOT";
 /// by the current user with no group or other permission bits.
 pub fn private_build_work_root(state_dir: &std::path::Path, category: &str) -> std::io::Result<PathBuf> {
     assert!(!category.is_empty(), "work-root category must not be empty");
-    assert!(!category.contains('/') && !category.contains('\\'), "work-root category must be one path component");
+    assert!(!category.contains('/'), "work-root category must be one path component");
+    assert!(!category.contains('\\'), "work-root category must be one path component");
     let path = build_work_root_path(state_dir, category);
-    let root = path.parent().expect("work root has a parent").to_path_buf();
+    let Some(parent) = path.parent() else {
+        return Err(std::io::Error::other(format!("work root has no parent: {}", path.display())));
+    };
+    let root = parent.to_path_buf();
     match std::fs::symlink_metadata(&root) {
         Ok(_) => admit_private_work_directory(&root, "build work root")?,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -145,7 +155,8 @@ pub fn private_build_work_root(state_dir: &std::path::Path, category: &str) -> s
 /// Selected sandbox work-root path without creating or admitting it.
 pub fn build_work_root_path(state_dir: &std::path::Path, category: &str) -> PathBuf {
     assert!(!category.is_empty(), "work-root category must not be empty");
-    assert!(!category.contains('/') && !category.contains('\\'), "work-root category must be one path component");
+    assert!(!category.contains('/'), "work-root category must be one path component");
+    assert!(!category.contains('\\'), "work-root category must be one path component");
     let root = std::env::var_os(PRIVATE_BUILD_WORK_ROOT_ENV)
         .map(PathBuf::from)
         .unwrap_or_else(|| state_dir.join(PRIVATE_BUILD_WORK_ROOT_NAME));
@@ -672,6 +683,42 @@ async fn run_worker_stream<BServ: snix_build::buildservice::BuildService + 'stat
 }
 
 #[cfg(target_os = "linux")]
+struct LinuxBuildResultContext<'a> {
+    config: &'a BuildConfig,
+    root_registry: &'a crunch_store::RootRegistry,
+    worker_result: crunch_build::WorkerResult,
+    eval_stream: EvalStreamResult,
+    pipeline_evidence: PipelineRunEvidence,
+    pool_goal_observations: Vec<crunch_build::distributed::PoolGoalObservation>,
+    source_generation_paths: Vec<StorePath<String>>,
+    is_cancelled: bool,
+}
+
+#[cfg(target_os = "linux")]
+async fn finish_linux_build_result(context: LinuxBuildResultContext<'_>) -> Result<PipelineResult, Error> {
+    let result = finish_pipeline_result(
+        &context.config.store_dir,
+        context.config.hermeticity_mode,
+        context.worker_result,
+        context.eval_stream,
+        context.pipeline_evidence,
+        context.pool_goal_observations,
+    );
+    if !context.is_cancelled {
+        register_managed_generation(
+            context.config.root_registration.as_ref(),
+            context.config.root_retention_source,
+            context.root_registry,
+            &result.outcomes,
+            &context.source_generation_paths,
+            result.failed.is_empty(),
+        )
+        .await?;
+    }
+    Ok(result)
+}
+
+#[cfg(target_os = "linux")]
 async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, Error> {
     let config = request.config;
     debug_assert!(!config.store_dir.is_empty());
@@ -715,36 +762,25 @@ async fn build_linux(request: LinuxBuildRequest<'_>) -> Result<PipelineResult, E
         worker_control: EvalWorkerControl::default(),
     });
     let (worker_run, eval_stream) = tokio::join!(worker_run, eval_stream);
-    let worker_result = match worker_run {
-        Ok(result) => result,
-        Err(err) => return Err(Error::Build(format!("{err}"))),
-    };
+    let worker_result = worker_run.map_err(|err| Error::Build(format!("{err}")))?;
     let eval_stream = eval_stream?;
     capture_causal_trace(&mut worker, request.causal_trace_slot)?;
     let source_generation_paths = builder.source_generation_paths();
     let pipeline_evidence =
         collect_pipeline_evidence(&mut builder, workspace_evidence_sink, request.hermeticity_audit_events)?;
     let pool_goal_observations = builder.pool_dispatch().map(|dispatch| dispatch.observations()).unwrap_or_default();
-    let result = finish_pipeline_result(
-        &config.store_dir,
-        config.hermeticity_mode,
+    let is_cancelled = request.owned_cancellation && cancellation.is_requested();
+    finish_linux_build_result(LinuxBuildResultContext {
+        config,
+        root_registry: &root_registry,
         worker_result,
         eval_stream,
         pipeline_evidence,
         pool_goal_observations,
-    );
-    if !request.owned_cancellation || !cancellation.is_requested() {
-        register_managed_generation(
-            config.root_registration.as_ref(),
-            config.root_retention_source,
-            &root_registry,
-            &result.outcomes,
-            &source_generation_paths,
-            result.failed.is_empty(),
-        )
-        .await?;
-    }
-    Ok(result)
+        source_generation_paths,
+        is_cancelled,
+    })
+    .await
 }
 
 pub async fn build_registered_derivations(
@@ -983,6 +1019,97 @@ fn create_pipeline_builder(
 }
 
 #[cfg(target_os = "linux")]
+struct LinuxBuilderServiceConfig {
+    runtime: Option<crunch_build::compile_driver::CompileDriverRuntime>,
+    wait_runtime: Option<crunch_rustc_wrapper::waits::RuntimeOptions>,
+    is_runtime_forbidden: bool,
+    local_work_root: PathBuf,
+    remote_work_root: PathBuf,
+    max_jobs: u32,
+}
+
+#[cfg(target_os = "linux")]
+fn create_rust_wait_execution_service(
+    build_service_store: &crunch_store::BuildServiceStore,
+    service_config: LinuxBuilderServiceConfig,
+    wait_runtime: crunch_rustc_wrapper::waits::RuntimeOptions,
+) -> Result<impl snix_build::buildservice::BuildService + use<>, Error> {
+    use crunch_build::compile_driver::CompileDriverBuildService;
+    use crunch_build::rust_waits::RustWaitBuildService;
+    let runtime = service_config.runtime;
+    let max_jobs = service_config.max_jobs;
+    if let Some(runtime) = &runtime {
+        crunch_build::compile_driver::reject_inherited_runtime_environment()
+            .and_then(|()| runtime.validate())
+            .map_err(|error| Error::Build(error.to_string()))?;
+    }
+    let store = build_service_store.clone();
+    let factory = move |socket: Option<PathBuf>| {
+        let local = store.bubblewrap_build_service_with_runtime(
+            service_config.local_work_root.clone(),
+            crunch_store::LocalBuildRuntime {
+                compile_cache_socket: runtime.as_ref().map(|runtime| runtime.host_socket.clone()),
+                rust_wait_socket: socket,
+                command_factory: runtime.as_ref().and_then(|runtime| runtime.command_factory()),
+                max_concurrent_builds: Some(max_jobs),
+            },
+        )?;
+        CompileDriverBuildService::new(local, runtime.clone())
+    };
+    RustWaitBuildService::new(factory, wait_runtime).map_err(|error| Error::Build(error.to_string()))
+}
+
+#[cfg(target_os = "linux")]
+fn create_linux_execution_service(
+    build_service_store: &crunch_store::BuildServiceStore,
+    mut service_config: LinuxBuilderServiceConfig,
+) -> Result<impl snix_build::buildservice::BuildService + use<>, Error> {
+    use crunch_build::compile_driver::CompileDriverBuildService;
+    use crunch_build::compile_driver::CompileDriverExecutionService;
+    use crunch_build::rust_waits::RustWaitExecutionService;
+    let max_jobs = service_config.max_jobs;
+    if let Some(wait_runtime) = service_config.wait_runtime.take() {
+        return create_rust_wait_execution_service(build_service_store, service_config, wait_runtime)
+            .map(RustWaitExecutionService::Observed);
+    }
+    if let Some(runtime) = service_config.runtime {
+        if service_config.is_runtime_forbidden {
+            return Err(Error::Build("compile driver runtime requires non-proof local execution".into()));
+        }
+        crunch_build::compile_driver::reject_inherited_runtime_environment()
+            .map_err(|error| Error::Build(error.to_string()))?;
+        runtime.validate().map_err(|error| Error::Build(error.to_string()))?;
+        let local = build_service_store
+            .bubblewrap_build_service_with_runtime(service_config.local_work_root, crunch_store::LocalBuildRuntime {
+                compile_cache_socket: Some(runtime.host_socket.clone()),
+                rust_wait_socket: None,
+                command_factory: runtime.command_factory(),
+                max_concurrent_builds: Some(max_jobs),
+            })
+            .map_err(|error| Error::Build(format!("compile driver socket: {error}")))?;
+        return CompileDriverBuildService::new(local, Some(runtime))
+            .map(|service| RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Enabled(service)))
+            .map_err(|error| Error::Build(error.to_string()));
+    }
+    let profile = crunch_build::RealizerProfileFacts {
+        name: "local-sandbox".to_string(),
+        version: 1,
+        capabilities: Vec::new(),
+        parameters: std::collections::BTreeMap::new(),
+    };
+    let local_bwrap = build_service_store
+        .bubblewrap_build_service_with_concurrency(service_config.local_work_root, None, max_jobs)
+        .map_err(|error| Error::Build(format!("local sandbox concurrency policy: {error}")))?;
+    let remote_bwrap = build_service_store
+        .bubblewrap_build_service_with_concurrency(service_config.remote_work_root, None, max_jobs)
+        .map_err(|error| Error::Build(format!("remote sandbox concurrency policy: {error}")))?;
+    let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
+    Ok(RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Default(
+        RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure),
+    )))
+}
+
+#[cfg(target_os = "linux")]
 fn create_pipeline_builder_with_source_policy(
     config: &BuildConfig,
     store: crunch_store::StoreHandle,
@@ -996,80 +1123,21 @@ fn create_pipeline_builder_with_source_policy(
     }
     let runtime = config.compile_driver_runtime.clone();
     let wait_runtime = config.rust_wait_runtime.clone();
-    let runtime_forbidden = config.remote_enabled || config.hermeticity_mode == HermeticityMode::Strict;
+    let is_runtime_forbidden = config.remote_enabled || config.hermeticity_mode == HermeticityMode::Strict;
     let local_work_root = private_build_work_root(&config.state_dir, "sandbox-local")
         .map_err(|error| Error::Internal(format!("create local sandbox work root: {error}")))?;
     let remote_work_root = private_build_work_root(&config.state_dir, "sandbox-remote")
         .map_err(|error| Error::Internal(format!("create remote sandbox work root: {error}")))?;
     let max_jobs = config.max_jobs;
     create_pipeline_builder_with_sandbox(config, store, source_policy, move |build_service_store| {
-        use crunch_build::compile_driver::CompileDriverBuildService;
-        use crunch_build::compile_driver::CompileDriverExecutionService;
-        use crunch_build::rust_waits::RustWaitBuildService;
-        use crunch_build::rust_waits::RustWaitExecutionService;
-        if let Some(wait_runtime) = wait_runtime {
-            if let Some(runtime) = &runtime {
-                crunch_build::compile_driver::reject_inherited_runtime_environment()
-                    .and_then(|()| runtime.validate())
-                    .map_err(|error| Error::Build(error.to_string()))?;
-            }
-            let store = build_service_store.clone();
-            let local_work_root = local_work_root.clone();
-            let factory = move |socket: Option<PathBuf>| {
-                let local = store.bubblewrap_build_service_with_runtime(
-                    local_work_root.clone(),
-                    crunch_store::LocalBuildRuntime {
-                        compile_cache_socket: runtime.as_ref().map(|runtime| runtime.host_socket.clone()),
-                        rust_wait_socket: socket,
-                        command_factory: runtime.as_ref().and_then(|runtime| runtime.command_factory()),
-                        max_concurrent_builds: Some(max_jobs),
-                    },
-                )?;
-                CompileDriverBuildService::new(local, runtime.clone())
-            };
-            return RustWaitBuildService::new(factory, wait_runtime)
-                .map(RustWaitExecutionService::Observed)
-                .map_err(|error| Error::Build(error.to_string()));
-        }
-        if let Some(runtime) = runtime {
-            if runtime_forbidden {
-                return Err(Error::Build("compile driver runtime requires non-proof local execution".into()));
-            }
-            crunch_build::compile_driver::reject_inherited_runtime_environment()
-                .map_err(|error| Error::Build(error.to_string()))?;
-            runtime.validate().map_err(|error| Error::Build(error.to_string()))?;
-            let local = build_service_store
-                .bubblewrap_build_service_with_runtime(local_work_root.clone(), crunch_store::LocalBuildRuntime {
-                    compile_cache_socket: Some(runtime.host_socket.clone()),
-                    rust_wait_socket: None,
-                    command_factory: runtime.command_factory(),
-                    max_concurrent_builds: Some(max_jobs),
-                })
-                .map_err(|error| Error::Build(format!("compile driver socket: {error}")))?;
-            return CompileDriverBuildService::new(local, Some(runtime))
-                .map(|service| RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Enabled(service)))
-                .map_err(|error| Error::Build(error.to_string()));
-        }
-        let workdir = remote_work_root;
-        // Keep remote dispatch inside the lazy scheduler so dedupe, waiter
-        // notification, job bounds, fallback, and terminal propagation stay shared.
-        // r[impl remote_builds.production_scheduler_realization]
-        let profile = crunch_build::RealizerProfileFacts {
-            name: "local-sandbox".to_string(),
-            version: 1,
-            capabilities: Vec::new(),
-            parameters: std::collections::BTreeMap::new(),
-        };
-        let local_bwrap = build_service_store
-            .bubblewrap_build_service_with_concurrency(local_work_root.clone(), None, max_jobs)
-            .map_err(|error| Error::Build(format!("local sandbox concurrency policy: {error}")))?;
-        let remote_bwrap = build_service_store
-            .bubblewrap_build_service_with_concurrency(workdir, None, max_jobs)
-            .map_err(|error| Error::Build(format!("remote sandbox concurrency policy: {error}")))?;
-        let remote_realizer = LocalBuildServiceRealizer::new(remote_bwrap, profile);
-        Ok(RustWaitExecutionService::Ordinary(CompileDriverExecutionService::Default(
-            RemoteFirstBuildService::new(remote_realizer, local_bwrap, RemoteBuildFallbackPolicy::OnRemoteFailure),
-        )))
+        create_linux_execution_service(build_service_store, LinuxBuilderServiceConfig {
+            runtime,
+            wait_runtime,
+            is_runtime_forbidden,
+            local_work_root,
+            remote_work_root,
+            max_jobs,
+        })
     })
 }
 
@@ -1210,6 +1278,9 @@ fn finish_pipeline_result(
         worker_result.failed.push(FailedGoal {
             drv_key: eval_failure_key(&eval_failure.label),
             origin_drv_key: eval_failure_key(&eval_failure.label),
+            phase: BuildFailurePhase::Build,
+            error_class: BuildFailureClass::Builder,
+            fod_mismatch: None,
             error: eval_failure.error.clone(),
             origin_error: eval_failure.error.clone(),
             build_log: None,
@@ -1366,6 +1437,9 @@ fn build_preflight_failure(
         .map(|(_, drv_path)| FailedGoal {
             drv_key: drv_path.to_absolute_path_with_prefix(&config.store_dir),
             origin_drv_key: drv_path.to_absolute_path_with_prefix(&config.store_dir),
+            phase: BuildFailurePhase::Preflight,
+            error_class: BuildFailureClass::Preflight,
+            fod_mismatch: None,
             error: error.clone(),
             origin_error: error.clone(),
             build_log: None,
@@ -1424,7 +1498,16 @@ fn normalized_failed_drv_key(drv_key: &str, store_dir: &str) -> String {
 }
 
 fn collect_fod_mismatches(failed: &[FailedGoal]) -> Vec<FodMismatch> {
-    failed.iter().filter_map(|failed_goal| parse_fod_mismatch_error(&failed_goal.error)).collect()
+    failed
+        .iter()
+        .filter_map(|failed_goal| {
+            failed_goal.fod_mismatch.as_ref().map(|mismatch| FodMismatch {
+                name: mismatch.name.clone(),
+                expected_sri: mismatch.expected_sri.clone(),
+                actual_sri: mismatch.actual_sri.clone(),
+            })
+        })
+        .collect()
 }
 
 pub fn drv_key_for(store_dir: &str, drv_path: &StorePath<String>) -> String {
@@ -1668,6 +1751,9 @@ mod tests {
         let mut failed = vec![FailedGoal {
             drv_key: drv_path.to_absolute_path(),
             origin_drv_key: drv_path.to_absolute_path(),
+            phase: BuildFailurePhase::Build,
+            error_class: BuildFailureClass::Builder,
+            fod_mismatch: None,
             error: "boom".to_string(),
             origin_error: "boom".to_string(),
             build_log: None,

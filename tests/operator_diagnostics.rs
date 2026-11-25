@@ -1028,3 +1028,80 @@ fn operator_contract_exports_sorted_public_clap_paths() {
     assert!(!paths.iter().any(|path| path.contains("__operator-contract")));
     assert!(!paths.iter().any(|path| path.split_whitespace().any(|part| part == "help")));
 }
+
+#[test]
+fn build_json_sandbox_startup_failure_reports_sandbox_class() {
+    let root = TempDir::new().unwrap();
+    let store_dir = root.path().join("store");
+    let state_dir = root.path().join("state");
+    let ncl_file = root.path().join("sandbox-startup.ncl");
+    fs::create_dir_all(&store_dir).unwrap();
+    fs::create_dir_all(&state_dir).unwrap();
+    write_shell_derivation_ncl(&ncl_file);
+
+    let output = crunch()
+        .arg("--json")
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("build")
+        .arg("--no-substitute")
+        .arg(&ncl_file)
+        .env("CRUNCH_NO_FUSE", "1")
+        .env("SNIX_BUILD_BWRAP", root.path().join("nonexistent-bwrap"))
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "missing bwrap must fail");
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let failure = &json["failed"][0];
+    assert_eq!(failure["phase"], "build");
+    assert_eq!(failure["error_class"], "sandbox");
+    let saved_log_path = failure["saved_log_path"].as_str().expect("saved_log_path");
+    assert!(Path::new(saved_log_path).exists(), "saved log path must exist");
+}
+
+#[test]
+fn build_json_builder_failure_with_legacy_tokens_keeps_builder_class() {
+    let root = TempDir::new().unwrap();
+    let tool_dir = root.path().join("tools");
+    let store_dir = root.path().join("store");
+    let state_dir = root.path().join("state");
+    let ncl_file = root.path().join("builder-legacy-tokens.ncl");
+    fs::create_dir_all(&tool_dir).unwrap();
+    fs::create_dir_all(&store_dir).unwrap();
+    fs::create_dir_all(&state_dir).unwrap();
+    write_executable(
+        &tool_dir,
+        "fake-bwrap",
+        "#!/bin/sh\necho \"bwrap fusermount trusted signature FOD hash mismatch opening store:\" >&2\nexit 1\n",
+    );
+    write_shell_derivation_ncl(&ncl_file);
+
+    let output = crunch()
+        .arg("--json")
+        .arg("--state-dir")
+        .arg(&state_dir)
+        .arg("--store")
+        .arg(&store_dir)
+        .arg("build")
+        .arg("--no-substitute")
+        .arg(&ncl_file)
+        .env("CRUNCH_NO_FUSE", "1")
+        .env("SNIX_BUILD_BWRAP", tool_dir.join("fake-bwrap"))
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "builder nonzero exit must fail");
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let failure = &json["failed"][0];
+    assert_eq!(failure["phase"], "build");
+    assert_eq!(failure["error_class"], "builder");
+    let saved_log_path = failure["saved_log_path"].as_str().expect("saved_log_path");
+    assert!(Path::new(saved_log_path).exists(), "saved log path must exist");
+}

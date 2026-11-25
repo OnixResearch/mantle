@@ -757,13 +757,13 @@ const TRELLIS_JOB_REPORT_SCHEMA: &str = "trellis-verus-producer-report/v1";
 pub fn observe_trellis_job(request: ObservationRequest) -> Result<ObservedHandoff, BridgeError> {
     let mut checked =
         observe_trellis_job_inner(&request.inputs, &request.profile, &request.receipt, &request.materials)?;
-    let report_bytes = trellis_job_report_bytes(&request.materials)?;
-    let report = document(report_bytes)?;
-    if text(&report, "/schema_version")? != TRELLIS_JOB_REPORT_SCHEMA {
+    let trellis_bytes = trellis_job_report_bytes(&request.materials)?;
+    let trellis_doc = document(trellis_bytes)?;
+    if text(&trellis_doc, "/schema_version")? != TRELLIS_JOB_REPORT_SCHEMA {
         return Err(BridgeError::UnsupportedTrellisProducerReport);
     }
     let receipt_identity = digest(&request.receipt);
-    let report_identity = digest(report_bytes);
+    let trellis_digest = digest(trellis_bytes);
     checked.push(TRELLIS_JOB_REPORT_PATH.to_string());
     for path in [TRELLIS_JOB_PROOF_CARDS_PATH, TRELLIS_JOB_EVIDENCE_PATH] {
         if !request.materials.iter().any(|row| row.path == path) {
@@ -774,9 +774,9 @@ pub fn observe_trellis_job(request: ObservationRequest) -> Result<ObservedHandof
     let mut observation = finish(request.inputs, &request.receipt, "Trellis", checked)?;
     observation.association_identity = trellis_job_association_identity(TrellisJobAssociation {
         observation_identity: &observation.association_identity,
-        report_identity: &report_identity,
+        report_identity: &trellis_digest,
     })?;
-    observation.external_report_identity = Some(report_identity);
+    observation.external_report_identity = Some(trellis_digest);
     debug_assert!(!receipt_identity.is_empty());
     debug_assert!(observation.proof_acceptance == "not-evaluated-by-mantle");
     Ok(ObservedHandoff {
@@ -834,7 +834,16 @@ fn observe_trellis_job_inner(
     let source_path = check_trellis_job_source(inputs, &profile, materials)?;
     check_trellis_options_contract(inputs, &profile)?;
     let mut checked = alloc::vec![source_path.to_string()];
-    check_trellis_job_source_bindings(materials, &profile, &receipt, source_path, inputs, &mut checked)?;
+    check_trellis_job_source_bindings(
+        TrellisJobSourceBindingCheck {
+            materials,
+            profile: &profile,
+            receipt: &receipt,
+            source_path,
+            inputs,
+        },
+        &mut checked,
+    )?;
     check_trellis_job_artifacts(materials, &profile, &receipt, receipt_bytes, &mut checked)?;
     debug_assert!(!source_path.is_empty());
     debug_assert!(checked.iter().all(|path| is_relative_path(path)));
@@ -877,18 +886,28 @@ fn check_trellis_job_source<'a>(
     Ok(source_path)
 }
 
+struct TrellisJobSourceBindingCheck<'a> {
+    materials: &'a [Material],
+    profile: &'a Value,
+    receipt: &'a Value,
+    source_path: &'a str,
+    inputs: &'a PackagingInputs,
+}
+
+struct ReceiptSourceBinding<'a> {
+    path: &'a str,
+    identity: &'a str,
+}
+
 /// Every profile source path must be an exact material, every receipt source
 /// binding must match a profile source path by digest and path suffix, and the
 /// selected source path must be bound with the packaging source identity.
 fn check_trellis_job_source_bindings(
-    materials: &[Material],
-    profile: &Value,
-    receipt: &Value,
-    source_path: &str,
-    inputs: &PackagingInputs,
+    check: TrellisJobSourceBindingCheck<'_>,
     checked: &mut Vec<String>,
 ) -> Result<(), BridgeError> {
-    let paths = profile
+    let paths = check
+        .profile
         .get("consumer")
         .and_then(|consumer| consumer.get("source"))
         .and_then(|source| source.get("paths"))
@@ -899,27 +918,28 @@ fn check_trellis_job_source_bindings(
     }
     for row in paths {
         let path = text(row, "/path")?;
-        material(materials, path, Expected(text(row, "/identity")?))?;
+        material(check.materials, path, Expected(text(row, "/identity")?))?;
         checked.push(path.to_string());
     }
-    let rows = receipt
+    let rows = check
+        .receipt
         .get("source_bindings")
         .and_then(Value::as_array)
         .ok_or(BridgeError::MissingTrellisSourceBindings)?;
     if rows.is_empty() || rows.len() > MAX_MATERIALS {
         return Err(BridgeError::TrellisSourceBindingCountBound);
     }
-    let mut binds_source = false;
+    let mut has_bound_source = false;
     for row in rows {
         let path = text(row, "/path")?;
         let identity = text(row, "/blake3")?;
-        let profile_source = find_bound_profile_source(paths, path, identity)?;
-        if text(profile_source, "/path")? == source_path {
-            equal(identity, Expected(&inputs.source_identity), "receipt source binding")?;
-            binds_source = true;
+        let profile_source = find_bound_profile_source(paths, ReceiptSourceBinding { path, identity })?;
+        if text(profile_source, "/path")? == check.source_path {
+            equal(identity, Expected(&check.inputs.source_identity), "receipt source binding")?;
+            has_bound_source = true;
         }
     }
-    if !binds_source {
+    if !has_bound_source {
         return Err(BridgeError::MissingProfileSource);
     }
     debug_assert!(rows.len() <= MAX_MATERIALS);
@@ -930,14 +950,17 @@ fn check_trellis_job_source_bindings(
 /// Finds the profile source path one receipt binding names: the digest is the
 /// binding's authority and the path must be the same file (the receipt binds
 /// the repository-relative path, the profile the output-relative copy).
-fn find_bound_profile_source<'a>(paths: &'a [Value], path: &str, identity: &str) -> Result<&'a Value, BridgeError> {
-    let suffix = format!("/{path}");
+fn find_bound_profile_source<'a>(
+    paths: &'a [Value],
+    binding: ReceiptSourceBinding<'_>,
+) -> Result<&'a Value, BridgeError> {
+    let suffix = format!("/{}", binding.path);
     for row in paths {
         let profile_path = text(row, "/path")?;
-        if profile_path != path && !profile_path.ends_with(&suffix) {
+        if profile_path != binding.path && !profile_path.ends_with(&suffix) {
             continue;
         }
-        if digest_equal(text(row, "/identity")?, Expected(identity), "receipt source binding").is_ok() {
+        if digest_equal(text(row, "/identity")?, Expected(binding.identity), "receipt source binding").is_ok() {
             return Ok(row);
         }
     }

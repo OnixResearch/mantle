@@ -80,7 +80,9 @@ fn recorded_action_ref_for_parent(parent: &crate::registry::RegistryEntry, store
         return Ok(action_ref.clone());
     }
     if parent.derivation.environment.contains_key(crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY) {
-        return Err(Error::Store("ca-realisation-untrusted: bound parent has no signed action identity".to_owned()));
+        return Err(Error::CacheVerification(
+            "ca-realisation-untrusted: bound parent has no signed action identity".to_owned(),
+        ));
     }
     let resolved = parent.resolved_derivation.as_deref().unwrap_or(parent.derivation.as_ref());
     Ok(action_ref_for_derivation(resolved, store_dir))
@@ -315,12 +317,12 @@ fn collect_pool_closure(
     registry: &DerivationRegistry,
     store_dir: &str,
 ) -> Vec<crate::distributed::PoolClosureEntry> {
-    use crate::distributed::MAX_POOL_GOAL_CLOSURE_BYTES;
     use crate::distributed::MAX_POOL_GOAL_CLOSURE_ENTRIES;
+    debug_assert!(!store_dir.is_empty());
     let mut collected: Vec<(String, std::sync::Arc<Derivation>)> = Vec::new();
     let mut seen = BTreeSet::new();
     let mut pending = vec![root_path.clone()];
-    let mut root_taken = false;
+    let mut is_root_taken = false;
     while let Some(path) = pending.pop() {
         if collected.len() >= MAX_POOL_GOAL_CLOSURE_ENTRIES {
             break;
@@ -332,8 +334,8 @@ fn collect_pool_closure(
         // The dispatched goal's own prepared derivation is authoritative for the
         // root entry: a content-addressed root is unresolved there while the
         // registry may already hold a resolved form.
-        let derivation = if path == *root_path && !root_taken {
-            root_taken = true;
+        let derivation = if path == *root_path && !is_root_taken {
+            is_root_taken = true;
             std::sync::Arc::new(root.clone())
         } else {
             match registry.get_by_drv_path(&absolute) {
@@ -348,11 +350,26 @@ fn collect_pool_closure(
         }
         collected.push((absolute, derivation));
     }
+    debug_assert!(collected.len() <= MAX_POOL_GOAL_CLOSURE_ENTRIES);
+    build_pool_closure_entries(&collected, registry, store_dir)
+}
+
+fn build_pool_closure_entries(
+    collected: &[(String, std::sync::Arc<Derivation>)],
+    registry: &DerivationRegistry,
+    store_dir: &str,
+) -> Vec<crate::distributed::PoolClosureEntry> {
+    use crate::distributed::MAX_POOL_CLOSURE_OUTPUTS;
+    use crate::distributed::MAX_POOL_GOAL_CLOSURE_BYTES;
+    use crate::distributed::MAX_POOL_GOAL_CLOSURE_ENTRIES;
     // Compute derivation-modulo hashes from the closure itself with the client
     // store prefix, so the receiver recomputes the same identities.
     let mut hdm_by_path = std::collections::BTreeMap::new();
     let mut json_by_path = std::collections::BTreeMap::new();
-    for (path, derivation) in &collected {
+    for (path, derivation) in collected {
+        if json_by_path.len() >= MAX_POOL_GOAL_CLOSURE_ENTRIES {
+            break;
+        }
         let Ok(json) = serde_json::to_string(derivation.as_ref()) else {
             continue;
         };
@@ -367,7 +384,7 @@ fn collect_pool_closure(
     hdm_by_path.extend(hdm_memo.into_inner());
     let mut entries = Vec::with_capacity(collected.len());
     let mut total_bytes = 0_usize;
-    for (path, derivation) in &collected {
+    for (path, derivation) in collected {
         let (Some(json), Some(hdm)) = (json_by_path.get(path), hdm_by_path.get(path)) else {
             continue;
         };
@@ -379,6 +396,9 @@ fn collect_pool_closure(
         for (output_name, output) in &derivation.outputs {
             if output.path.is_some() {
                 continue;
+            }
+            if outputs.len() >= MAX_POOL_CLOSURE_OUTPUTS {
+                break;
             }
             let Some(resolved) = registry.get_output_path(path, output_name) else {
                 continue;
@@ -839,7 +859,7 @@ where BServ: BuildService + 'static
         };
         let candidates = collection.candidates;
         let plan = plan_strong_reuse(request, candidates.clone())
-            .map_err(|error| Error::Store(format!("ca-realisation-untrusted: {}", error.code())))?;
+            .map_err(|error| Error::CacheVerification(format!("ca-realisation-untrusted: {}", error.code())))?;
         let admitted_paths = candidates
             .iter()
             .filter(|candidate| {
@@ -868,20 +888,20 @@ where BServ: BuildService + 'static
                 None,
                 collection.diagnostics,
             ));
-            return Err(Error::Store("ca-realisation-conflict: signed CA outputs disagree".to_string()));
+            return Err(Error::CacheVerification("ca-realisation-conflict: signed CA outputs disagree".to_string()));
         }
         let Some(selected) = plan.selected_result_ref else {
-            let reason = if candidates.is_empty() {
-                "ca-input-unrealized"
-            } else {
-                "ca-realisation-untrusted"
-            };
-            return Err(Error::Store(format!("{reason}: no admitted signed CA action result")));
+            if candidates.is_empty() {
+                return Err(Error::Store("ca-input-unrealized: no admitted signed CA action result".to_string()));
+            }
+            return Err(Error::CacheVerification(
+                "ca-realisation-untrusted: no admitted signed CA action result".to_string(),
+            ));
         };
         let probe = collection
             .probes_by_result_ref
             .get(&selected)
-            .ok_or_else(|| Error::Store("ca-realisation-untrusted: PathInfo unavailable".to_string()))?;
+            .ok_or_else(|| Error::CacheVerification("ca-realisation-untrusted: PathInfo unavailable".to_string()))?;
         if probe.outputs.len() > ca_input_resolution::MAX_CA_INPUT_OUTPUTS {
             return Err(Error::Store("ca-resolution-limit: admitted output count exceeds bound".to_string()));
         }
@@ -898,7 +918,7 @@ where BServ: BuildService + 'static
             }
             .ok_or_else(|| Error::Store(format!("ca-input-unrealized: missing {output_name}")))?;
             if recorded != &path_info.store_path {
-                return Err(Error::Store(format!(
+                return Err(Error::CacheVerification(format!(
                     "ca-realisation-untrusted: {output_name} path disagrees with completed goal"
                 )));
             }
@@ -944,8 +964,9 @@ where BServ: BuildService + 'static
                     .environment
                     .get(output_name)
                     .ok_or_else(|| Error::Store(format!("ca-input-unrealized: provisional {output_name}")))?;
-                let provisional = String::from_utf8(provisional.to_vec())
-                    .map_err(|_| Error::Store("ca-realisation-untrusted: non-UTF8 provisional path".to_string()))?;
+                let provisional = String::from_utf8(provisional.to_vec()).map_err(|_| {
+                    Error::CacheVerification("ca-realisation-untrusted: non-UTF8 provisional path".to_string())
+                })?;
                 if admitted.len() >= ca_input_resolution::MAX_CA_INPUT_OUTPUTS {
                     return Err(Error::Store(
                         "ca-resolution-limit: admitted input output count exceeds bound".to_string(),
@@ -1001,7 +1022,12 @@ where BServ: BuildService + 'static
         let (admitted, remaining_hdms) = self.collect_resolvable_input_facts(&derivation, known_paths).await?;
         let resolved =
             resolve_ca_inputs(derivation.clone(), drv_path, &admitted, &remaining_hdms, self.store.store_dir())
-                .map_err(|failure| Error::Store(failure.to_string()))?;
+                .map_err(|failure| match failure {
+                    ca_input_resolution::ResolutionFailure::Untrusted
+                    | ca_input_resolution::ResolutionFailure::Conflict => Error::CacheVerification(failure.to_string()),
+                    ca_input_resolution::ResolutionFailure::Unrealized
+                    | ca_input_resolution::ResolutionFailure::Limit => Error::Store(failure.to_string()),
+                })?;
         let derivation_ref = resolved.derivation.as_ref();
         let drv_absolute = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
         known_paths.record_resolved_derivation(&drv_absolute, resolved.derivation.clone(), resolved.path.clone())?;
@@ -1997,7 +2023,7 @@ where BServ: BuildService + 'static
             policy: trust_policy_for_action(&policy_refs, &self.trusted_keys),
         };
         let plan = plan_strong_reuse(request, collection.candidates)
-            .map_err(|error| Error::Store(error.code().to_string()))?;
+            .map_err(|error| Error::CacheVerification(error.code().to_string()))?;
         let selected_source = plan
             .selected_result_ref
             .as_ref()
@@ -2025,7 +2051,7 @@ where BServ: BuildService + 'static
                 }
                 return Ok(None);
             }
-            return Err(Error::Store(format!("{conflict}: strong shared action-result reuse rejected")));
+            return Err(Error::CacheVerification(format!("{conflict}: strong shared action-result reuse rejected")));
         }
         if selected_result_ref.is_none() {
             return Ok(None);
@@ -2129,7 +2155,7 @@ where BServ: BuildService + 'static
         ) {
             Ok(signed) => signed,
             Err(error) if is_realisation_required => {
-                return Err(Error::Store(format!("ca-realisation-untrusted: {error}")));
+                return Err(Error::CacheVerification(format!("ca-realisation-untrusted: {error}")));
             }
             Err(error) => {
                 tracing::warn!(error = %error, "shared action-result record construction failed");
@@ -2139,7 +2165,7 @@ where BServ: BuildService + 'static
         let diagnostics = match self.action_results.publish_local(&signed).await {
             Ok(_) => Vec::new(),
             Err(error) if is_realisation_required => {
-                return Err(Error::Store(format!("ca-realisation-untrusted: {error}")));
+                return Err(Error::CacheVerification(format!("ca-realisation-untrusted: {error}")));
             }
             Err(error) => {
                 tracing::warn!(result_ref = %signed.record.result_ref, error = %error, "shared action-result publication failed");
@@ -2164,11 +2190,12 @@ where BServ: BuildService + 'static
         is_root: bool,
     ) -> Result<Option<CacheCheckHit>, Error> {
         self.store.set_remote_admission_trust(self.trusted_keys.clone(), self.trust_unsigned);
-        let cached = self
-            .store
-            .check_cache(drv_path, derivation, is_root, self.root_retention_source)
-            .await
-            .map_err(|e| Error::Store(format!("{e}")))?;
+        let cached = self.store.check_cache(drv_path, derivation, is_root, self.root_retention_source).await.map_err(
+            |error| match error {
+                crunch_store::Error::Cache(message) => Error::CacheVerification(message),
+                other => Error::Store(format!("{other}")),
+            },
+        )?;
 
         let Some(cached_infos) = cached else {
             return Ok(None);
@@ -4082,7 +4109,11 @@ mod tests {
         assert_eq!(same_grandchild, grandchild);
         let result = builder.build_all_report(&[same_grandchild], &mut second, 1).await.unwrap();
         assert!(
-            result.failed.iter().any(|failure| failure.origin_error.contains("ca-realisation-untrusted")),
+            result.failed.iter().any(|failure| {
+                failure.origin_error.contains("ca-realisation-untrusted")
+                    && failure.error_class == crate::BuildFailureClass::CacheVerification
+                    && failure.phase == crate::BuildFailurePhase::Build
+            }),
             "the forged child record must fail closed: {:?}",
             result.failed
         );
@@ -4160,7 +4191,11 @@ mod tests {
         let child_path = register_ca_dependent("conflicting-consumer", &parent_path, &mut first_registry);
         let result = first.build_all_report(&[child_path], &mut first_registry, 1).await.unwrap();
         assert!(
-            result.failed.iter().any(|failure| failure.origin_error.contains("ca-realisation-conflict")),
+            result.failed.iter().any(|failure| {
+                failure.origin_error.contains("ca-realisation-conflict")
+                    && failure.error_class == crate::BuildFailureClass::CacheVerification
+                    && failure.phase == crate::BuildFailurePhase::Build
+            }),
             "the CA-dependent goal must fail closed: {:?}",
             result.failed
         );
@@ -6395,6 +6430,8 @@ mod tests {
                 assert!(
                     result.failed.iter().any(|failure| {
                         failure.origin_error.contains("ca-realisation-untrusted: action-result-publication-create-dir:")
+                            && failure.error_class == crate::BuildFailureClass::CacheVerification
+                            && failure.phase == crate::BuildFailurePhase::Build
                     }),
                     "{:?}",
                     result.failed

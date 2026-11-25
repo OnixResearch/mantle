@@ -1370,9 +1370,11 @@ impl PoolDispatch {
     #[must_use]
     pub fn with_session_limit(mut self, max_concurrency: u32) -> Self {
         assert!(max_concurrency >= 1, "pool session concurrency must be positive");
-        self.session_limit = Some(std::sync::Arc::new(tokio::sync::Semaphore::new(
-            usize::try_from(max_concurrency).unwrap_or(usize::MAX),
-        )));
+        let permits = match usize::try_from(max_concurrency) {
+            Ok(count) => count,
+            Err(_) => tokio::sync::Semaphore::MAX_PERMITS,
+        };
+        self.session_limit = Some(std::sync::Arc::new(tokio::sync::Semaphore::new(permits)));
         self
     }
 
@@ -1407,6 +1409,7 @@ impl PoolDispatch {
         goal: PreparedPoolGoal,
         cancellation: Option<tokio::sync::watch::Receiver<bool>>,
     ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+        assert!(!self.endpoints.is_empty(), "remote pool must contain at least one endpoint");
         validate_remote_build_service_request(&goal.request).map_err(remote_dispatch_io_error)?;
         let _session_permit = match &self.session_limit {
             Some(limit) => Some(match cancellation.as_ref() {
@@ -1453,7 +1456,12 @@ impl PoolDispatch {
                 match attempt {
                     Ok(result) => return Ok(result),
                     Err(error) if pool_endpoint_busy(&error) => {
-                        index = (index + 1) % self.endpoints.len();
+                        let next_index = index.saturating_add(1);
+                        index = if next_index >= self.endpoints.len() {
+                            0
+                        } else {
+                            next_index
+                        };
                     }
                     Err(error) => return Err(error),
                 }
@@ -1609,7 +1617,7 @@ impl PreparedPoolGoal {
         }
         validate_pool_closure(&facts.closure)?;
         let placement_key_blake3 = blake3::hash(facts.action_ref.as_bytes()).to_hex().to_string();
-        let capability_count = facts.required_features.len() + facts.semantic_accelerator_classes.len();
+        let capability_count = facts.required_features.len().saturating_add(facts.semantic_accelerator_classes.len());
         if capability_count > MAX_POOL_GOAL_CAPABILITIES {
             return Err(PreparedPoolGoalError::TooManyCapabilities);
         }
@@ -1660,7 +1668,10 @@ fn validate_pool_closure(closure: &[PoolClosureEntry]) -> Result<(), PreparedPoo
                 .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
         let has_bytes =
             !entry.derivation_json.is_empty() && entry.derivation_json.len() <= MAX_POOL_GOAL_DERIVATION_BYTES;
-        if !has_path || !has_hdm || !has_bytes || !seen.insert(entry.drv_path.as_str()) {
+        if !has_path || !has_hdm {
+            return Err(PreparedPoolGoalError::InvalidClosure);
+        }
+        if !has_bytes || !seen.insert(entry.drv_path.as_str()) {
             return Err(PreparedPoolGoalError::InvalidClosure);
         }
         if entry.outputs.len() > MAX_POOL_CLOSURE_OUTPUTS {

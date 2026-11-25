@@ -84,7 +84,11 @@ pub(crate) fn plan_source_built_fixed_point(
     let vendor_digest = source_input_for_role(&input.source_inputs, SourceAuthorityRole::VendorInputs)?
         .digest_blake3
         .as_str();
-    let source_contract = receipt_contract(&input.logical_store_prefix, mantle_source_digest, vendor_digest);
+    let source_contract = receipt_contract(crate::source_built_fixed_point::ReceiptContractInputs {
+        logical_store_prefix: &input.logical_store_prefix,
+        mantle_source_digest_blake3: mantle_source_digest,
+        vendor_blake3: vendor_digest,
+    });
     let mut plan = SourceBuiltFixedPointPlan {
         schema: SOURCE_BUILT_FIXED_POINT_PLAN_SCHEMA.to_string(),
         proof_id: input.proof_id,

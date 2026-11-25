@@ -23,6 +23,49 @@ pub use crate::bwrap::watch_cancel::UnobservedWatchSandbox;
 pub use dummy::DummyBuildService;
 pub use from_addr::from_addr;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SandboxFailureClass {
+    SandboxStartup,
+    MissingOutputs,
+    Builder,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassifiedBuildServiceError {
+    pub class: SandboxFailureClass,
+    pub message: String,
+}
+
+impl std::fmt::Display for ClassifiedBuildServiceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ClassifiedBuildServiceError {}
+
+pub fn classified_io_error(
+    kind: std::io::ErrorKind,
+    class: SandboxFailureClass,
+    message: impl Into<String>,
+) -> std::io::Error {
+    std::io::Error::new(
+        kind,
+        ClassifiedBuildServiceError {
+            class,
+            message: message.into(),
+        },
+    )
+}
+
+pub fn wrap_classified_io_error(error: std::io::Error, class: SandboxFailureClass) -> std::io::Error {
+    if error.get_ref().is_some_and(|inner| inner.is::<ClassifiedBuildServiceError>()) {
+        return error;
+    }
+    let kind = error.kind();
+    classified_io_error(kind, class, error.to_string())
+}
+
 #[async_trait]
 pub trait BuildService: Send + Sync {
     /// TODO: document

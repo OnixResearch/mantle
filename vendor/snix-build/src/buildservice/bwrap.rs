@@ -537,7 +537,8 @@ where
         let build_name_str = build_name.to_string();
         let debug_failure_workspace_root = std::env::var_os("CRUNCH_DEBUG_FAILURE_WORKSPACE_ROOT").map(PathBuf::from);
         let failure_workspace_root = self.failure_workspace_root.as_deref().or(debug_failure_workspace_root.as_deref());
-        let sandbox_dir = create_ephemeral_dir(&self.workdir, &format!("{build_name_str}-"))?;
+        let sandbox_dir = create_ephemeral_dir(&self.workdir, &format!("{build_name_str}-"))
+            .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?;
         let sandbox_dir = if cancellation.is_some() {
             SandboxWorkspace::Watch(std::sync::Arc::new(crate::bwrap::watch_cancel::WatchWorkspace::new(sandbox_dir)))
         } else {
@@ -550,24 +551,38 @@ where
 
         let blob_service = self.blob_service.clone();
         let directory_service = self.directory_service.clone();
-        let mut workspace_mounts = workspace_mounts(sandbox_dir.path(), request.workspace.as_ref())?;
+        let mut workspace_mounts = workspace_mounts(sandbox_dir.path(), request.workspace.as_ref())
+            .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?;
         if self.rust_wait_socket.is_some() && workspace_mounts.iter().any(|mount| {
             mount.guest_path.starts_with("/run/mantle") || Path::new("/run/mantle").starts_with(&mount.guest_path)
         }) {
-            return Err(std::io::Error::other("workspace overlaps Rust wait runtime socket"));
+            return Err(super::classified_io_error(
+                std::io::ErrorKind::Other,
+                super::SandboxFailureClass::SandboxStartup,
+                "workspace overlaps Rust wait runtime socket",
+            ));
         }
         if let Some(host_socket) = &self.compile_socket {
             if workspace_mounts.iter().any(|mount| {
                 mount.guest_path.starts_with("/run/mantle") || Path::new("/run/mantle").starts_with(&mount.guest_path)
             }) {
-                return Err(std::io::Error::other("workspace overlaps compile runtime socket"));
+                return Err(super::classified_io_error(
+                    std::io::ErrorKind::Other,
+                    super::SandboxFailureClass::SandboxStartup,
+                    "workspace overlaps compile runtime socket",
+                ));
             }
-            if let Some(mount) = compile_socket_mount(host_socket)? {
+            if let Some(mount) = compile_socket_mount(host_socket)
+                .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?
+            {
                 workspace_mounts.push(mount);
             }
         }
         if let Some(host_socket) = &self.rust_wait_socket {
-            workspace_mounts.push(rust_wait_socket_mount(host_socket)?);
+            workspace_mounts.push(
+                rust_wait_socket_mount(host_socket)
+                    .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?,
+            );
         }
 
         let spec = SandboxSpec::builder()
@@ -619,7 +634,8 @@ where
             )
             .build();
 
-        let sandbox = Bwrap::initialize(spec)?;
+        let sandbox = Bwrap::initialize(spec)
+            .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?;
         let sandbox = match &self.command_factory {
             Some(factory) => sandbox.with_command_factory(Arc::clone(factory)),
             None => sandbox,
@@ -632,9 +648,15 @@ where
                     watch_permit.take().expect("admitted watch build retains its permit"),
                     sandbox_dir.watch_guard().expect("watch build owns a workspace"),
                 );
-                sandbox.run_cancellable(receiver.clone(), lease).await?
+                sandbox
+                    .run_cancellable(receiver.clone(), lease)
+                    .await
+                    .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?
             }
-            None => sandbox.run().await?,
+            None => sandbox
+                .run()
+                .await
+                .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?,
         };
         if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
             return Err(watch_cancelled());
@@ -664,14 +686,22 @@ where
                 format!("nonzero exit code: {}\n{}", outcome.output().status, log)
             };
             retain_failed_sandbox(sandbox_dir.into_tempdir(), failure_workspace_root, &build_name_str);
-            return Err(std::io::Error::other(msg));
+            return Err(super::classified_io_error(
+                std::io::ErrorKind::Other,
+                super::SandboxFailureClass::Builder,
+                msg,
+            ));
         }
 
         let outputs: Vec<_> = request.outputs.iter().filter_map(|o| outcome.find_path(o)).collect();
         if outputs.len() != request.outputs.len() {
             warn!("Not all outputs produced");
             retain_failed_sandbox(sandbox_dir.into_tempdir(), failure_workspace_root, &build_name_str);
-            return Err(std::io::Error::other("Not all outputs produced".to_string()));
+            return Err(super::classified_io_error(
+                std::io::ErrorKind::Other,
+                super::SandboxFailureClass::MissingOutputs,
+                "Not all outputs produced",
+            ));
         }
         let patterns = ReferencePattern::new(request.refscan_needles);
         let outputs = futures::future::try_join_all(outputs.into_iter().enumerate().map(|(i, host_output_path)| {
@@ -684,8 +714,9 @@ where
                     node: ingest_path(&self.blob_service, &self.directory_service, host_output_path, Some(&scanner))
                         .await
                         .map_err(|e| {
-                            std::io::Error::new(
+                            super::classified_io_error(
                                 std::io::ErrorKind::InvalidData,
+                                super::SandboxFailureClass::SandboxStartup,
                                 format!("Unable to ingest output: {e}"),
                             )
                         })?,

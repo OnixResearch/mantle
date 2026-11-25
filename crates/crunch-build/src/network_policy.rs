@@ -195,14 +195,14 @@ fn compatibility_plan(
             DENY_BY_DEFAULT_DIAGNOSTIC,
         ));
     }
-    let (dns_policy, dns_config) = resolve_sandbox_dns_policy(
+    let (dns_policy, dns_config) = resolve_sandbox_dns_policy(SandboxDnsPolicyContext {
         derivation,
-        &action_name,
-        &capability,
-        &policy_basis,
-        &audit_class,
+        action_name: &action_name,
+        capability: &capability,
+        policy_basis: &policy_basis,
+        audit_class: &audit_class,
         host_resolv_conf_path,
-    )?;
+    })?;
     let dns_nameservers = dns_config.nameservers.iter().map(ToString::to_string).collect();
     Ok(BuildNetworkPolicyPlan {
         allow_network: true,
@@ -222,33 +222,39 @@ fn compatibility_plan(
     })
 }
 
+struct SandboxDnsPolicyContext<'a> {
+    derivation: &'a Derivation,
+    action_name: &'a str,
+    capability: &'a str,
+    policy_basis: &'a str,
+    audit_class: &'a str,
+    host_resolv_conf_path: &'a Path,
+}
+
 fn resolve_sandbox_dns_policy(
-    derivation: &Derivation,
-    action_name: &str,
-    capability: &str,
-    policy_basis: &str,
-    audit_class: &str,
-    host_resolv_conf_path: &Path,
+    context: SandboxDnsPolicyContext<'_>,
 ) -> Result<(String, SandboxDnsConfig), NetworkPolicyDenied> {
+    assert!(!context.action_name.is_empty(), "DNS policy action name must not be empty");
+    assert!(!context.capability.is_empty(), "DNS policy capability must not be empty");
     let deny = |diagnostic: &str| {
         denied_with_scope(
-            action_name.to_string(),
-            Some(capability.to_string()),
-            Some(policy_basis.to_string()),
-            Some(audit_class.to_string()),
+            context.action_name.to_string(),
+            Some(context.capability.to_string()),
+            Some(context.policy_basis.to_string()),
+            Some(context.audit_class.to_string()),
             diagnostic,
         )
     };
-    let Some(dns_policy) = env_string(derivation, ENV_NETWORK_DNS_POLICY)? else {
+    let Some(dns_policy) = env_string(context.derivation, ENV_NETWORK_DNS_POLICY)? else {
         return Err(deny(MISSING_DNS_POLICY_DIAGNOSTIC));
     };
     match dns_policy.as_str() {
         NETWORK_DNS_POLICY_EXPLICIT => {
-            let Some(raw_nameservers) = env_string(derivation, ENV_NETWORK_DNS_NAMESERVERS)? else {
+            let Some(raw_nameservers) = env_string(context.derivation, ENV_NETWORK_DNS_NAMESERVERS)? else {
                 return Err(deny("explicit DNS policy requires __mantle_network_dns_nameservers"));
             };
             let nameservers = parse_nameserver_list(&raw_nameservers).map_err(|error| deny(&error))?;
-            let search_domains = match env_string(derivation, ENV_NETWORK_DNS_SEARCH)? {
+            let search_domains = match env_string(context.derivation, ENV_NETWORK_DNS_SEARCH)? {
                 Some(raw_search) => parse_token_list(&raw_search),
                 None => Vec::new(),
             };
@@ -256,13 +262,13 @@ fn resolve_sandbox_dns_policy(
             Ok((dns_policy, config))
         }
         NETWORK_DNS_POLICY_HOST_SNAPSHOT => {
-            if env_string(derivation, ENV_NETWORK_DNS_NAMESERVERS)?.is_some()
-                || env_string(derivation, ENV_NETWORK_DNS_SEARCH)?.is_some()
+            if env_string(context.derivation, ENV_NETWORK_DNS_NAMESERVERS)?.is_some()
+                || env_string(context.derivation, ENV_NETWORK_DNS_SEARCH)?.is_some()
             {
                 return Err(deny("host-snapshot DNS policy forbids explicit nameserver or search overrides"));
             }
             let config =
-                SandboxDnsConfig::from_host_resolv_conf(host_resolv_conf_path).map_err(|error| deny(&error))?;
+                SandboxDnsConfig::from_host_resolv_conf(context.host_resolv_conf_path).map_err(|error| deny(&error))?;
             Ok((dns_policy, config))
         }
         _ => Err(deny(UNSUPPORTED_DNS_POLICY_DIAGNOSTIC)),

@@ -1549,9 +1549,11 @@ mod tests {
         std::fs::create_dir_all(&state_dir).unwrap();
         let root = StorePath::<String>::from_name_and_digest_fixed("realize-log-preflight.drv", [11u8; 20]).unwrap();
         let mut result = empty_registered_build_result();
-        result
-            .failed_roots
-            .push(failed_goal_with_error(&root, "opening store: pathinfo fallback missing", None, None));
+        let mut preflight_failed =
+            failed_goal_with_error(&root, "opening store: pathinfo fallback missing", None, None);
+        preflight_failed.phase = crunch_build::BuildFailurePhase::Preflight;
+        preflight_failed.error_class = crunch_build::BuildFailureClass::Preflight;
+        result.failed_roots.push(preflight_failed);
 
         let failures = write_realization_logs(&state_dir, "/nix/store", &result);
 
@@ -1625,6 +1627,9 @@ mod tests {
         crunch_build::FailedGoal {
             origin_drv_key,
             drv_key,
+            phase: crunch_build::BuildFailurePhase::Build,
+            error_class: crunch_build::BuildFailureClass::Builder,
+            fod_mismatch: None,
             error: error.to_string(),
             origin_error,
             build_log: build_log.map(str::to_owned),
