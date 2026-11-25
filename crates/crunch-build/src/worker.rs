@@ -1552,6 +1552,59 @@ pub struct Worker {
     streaming_cancellation: Option<watch::Receiver<bool>>,
     /// Waiters woken by completed goals in this run.
     waiter_notifications: u32,
+    /// Union of output names demanded for each tracked goal.
+    goal_demands: HashMap<String, BTreeSet<String>>,
+    /// Output names satisfied by the most recent completed outcome of a Done goal.
+    satisfied_outputs: HashMap<String, BTreeSet<String>>,
+}
+
+fn format_available_outputs(derivation: &Derivation) -> String {
+    let available: Vec<&str> = derivation.outputs.keys().map(String::as_str).collect();
+    available.join(", ")
+}
+
+fn validate_output_selection(
+    drv_name: &str,
+    derivation: &Derivation,
+    outputs: Option<&BTreeSet<String>>,
+) -> Result<BTreeSet<String>, Error> {
+    assert!(!drv_name.is_empty(), "derivation name must not be empty");
+    let Some(selected) = outputs else {
+        return Ok(derivation.outputs.keys().cloned().collect());
+    };
+    if selected.is_empty() {
+        return Err(Error::InvalidOutputSelection {
+            drv_name: drv_name.to_string(),
+            output: "<empty>".to_string(),
+            available: format_available_outputs(derivation),
+        });
+    }
+    for output_name in selected {
+        if !derivation.outputs.contains_key(output_name) {
+            return Err(Error::InvalidOutputSelection {
+                drv_name: drv_name.to_string(),
+                output: output_name.clone(),
+                available: format_available_outputs(derivation),
+            });
+        }
+    }
+    debug_assert!(selected.iter().all(|name| derivation.outputs.contains_key(name)));
+    Ok(selected.clone())
+}
+
+fn upsert_build_outcome(list: &mut Vec<BuildOutcome>, mut outcome: BuildOutcome) {
+    if let Some(existing) = list.iter_mut().find(|row| row.drv_path == outcome.drv_path) {
+        for (name, path_info) in &existing.outputs {
+            outcome.outputs.entry(name.clone()).or_insert_with(|| path_info.clone());
+        }
+        for (name, report) in &existing.substitutions {
+            outcome.substitutions.entry(name.clone()).or_insert_with(|| report.clone());
+        }
+        outcome.cached = existing.cached && outcome.cached;
+        *existing = outcome;
+    } else {
+        list.push(outcome);
+    }
 }
 
 fn redacted_goal_identity(goal_key: &str) -> String {
@@ -1602,6 +1655,8 @@ impl Worker {
             is_watch_active: false,
             streaming_cancellation: None,
             waiter_notifications: 0,
+            goal_demands: HashMap::new(),
+            satisfied_outputs: HashMap::new(),
         })
     }
 
@@ -1800,9 +1855,24 @@ impl Worker {
         known_paths: &DerivationRegistry,
         is_root: bool,
     ) -> Result<(), Error> {
-        // Pass 1: BFS to create all goals. Collect (key, dep_paths)
-        // for each newly created goal, in creation order.
-        let created = self.create_goals_bfs(drv_path, known_paths, is_root)?;
+        self.want_outputs(drv_path, known_paths, is_root, None)
+    }
+
+    /// Lazily create a goal for a derivation with explicit output demand.
+    ///
+    /// `outputs`: `None` demands all declared outputs; `Some(set)` demands
+    /// only the named outputs (rejecting empty sets or unknown output names).
+    /// Unions new demand into existing goals and reopens `Done` goals whose
+    /// satisfied outputs do not cover the widened demand.
+    pub fn want_outputs(
+        &mut self,
+        drv_path: &StorePath<String>,
+        known_paths: &DerivationRegistry,
+        is_root: bool,
+        outputs: Option<BTreeSet<String>>,
+    ) -> Result<(), Error> {
+        // Pass 1: BFS to create/reopen goals and coalesce demands.
+        let created = self.create_goals_bfs(drv_path, known_paths, is_root, outputs)?;
         if let Some(trace) = self.causal_trace.as_mut() {
             if is_root {
                 trace.root_required(&drv_path.to_absolute_path());
@@ -1814,50 +1884,183 @@ impl Worker {
             }
         }
 
-        // Pass 2: Wire deps and inspect, in creation order (leaves
-        // first since BFS processes deps before dependents).
+        // Pass 2: Wire deps and inspect, in creation/reopen order.
         for (key, dep_drv_paths) in &created {
-            self.resolve_binding_states(key, known_paths);
+            self.resolve_binding_states(key, known_paths)?;
             self.wire_deps_and_inspect(key, dep_drv_paths)?;
         }
 
         Ok(())
     }
 
-    /// BFS pass: create Goal structs for a root and all its transitive
-    /// deps. Returns `(key, dep_paths)` for each newly created goal.
+    fn resolve_initial_demand(
+        &self,
+        drv_path: &StorePath<String>,
+        known_paths: &DerivationRegistry,
+        outputs: Option<BTreeSet<String>>,
+    ) -> Result<BTreeSet<String>, Error> {
+        let key = drv_path.to_absolute_path();
+        let drv_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+        if let Some(entry) = known_paths.get_by_drv_path(&drv_abs) {
+            return validate_output_selection(drv_path.name(), &entry.derivation, outputs.as_ref());
+        }
+        if let Some(goal) = self.registry.get(&key) {
+            if let Some(derivation) = goal.derivation.as_deref() {
+                return validate_output_selection(drv_path.name(), derivation, outputs.as_ref());
+            }
+            if let Some(selected) = outputs {
+                if selected.is_empty() {
+                    return Err(Error::InvalidOutputSelection {
+                        drv_name: drv_path.name().to_string(),
+                        output: "<empty>".to_string(),
+                        available: String::new(),
+                    });
+                }
+                return Ok(selected);
+            }
+            return Ok(BTreeSet::new());
+        }
+        Err(Error::DerivationNotFound { path: drv_path.clone() })
+    }
+
+    fn validate_and_enqueue_deps(
+        &self,
+        derivation: &Derivation,
+        known_paths: &DerivationRegistry,
+        queue: &mut VecDeque<StorePath<String>>,
+        queued_demands: &mut HashMap<String, BTreeSet<String>>,
+    ) -> Result<(), Error> {
+        for (dep_sp, dep_outputs) in &derivation.input_derivations {
+            let dep_key = dep_sp.to_absolute_path();
+            let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+            if let Some(goal) = self.registry.get(&dep_key) {
+                if let Some(dep_drv) = goal.derivation.as_deref() {
+                    let _ = validate_output_selection(dep_sp.name(), dep_drv, Some(dep_outputs))?;
+                }
+            } else if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
+                let _ = validate_output_selection(dep_sp.name(), &entry.derivation, Some(dep_outputs))?;
+            } else {
+                return Err(Error::DerivationNotFound { path: dep_sp.clone() });
+            }
+
+            let is_missing_from_registry = !self.registry.contains(&dep_key);
+            let needs_more_demand =
+                self.goal_demands.get(&dep_key).is_none_or(|existing| !dep_outputs.is_subset(existing));
+            let is_done_missing_output = self.registry.get(&dep_key).is_some_and(|goal| {
+                goal.state == GoalState::Done
+                    && self.satisfied_outputs.get(&dep_key).is_none_or(|satisfied| !dep_outputs.is_subset(satisfied))
+            });
+            if is_missing_from_registry || needs_more_demand || is_done_missing_output {
+                let is_new_in_queue = !queued_demands.contains_key(&dep_key);
+                queued_demands.entry(dep_key).or_default().extend(dep_outputs.iter().cloned());
+                if is_new_in_queue {
+                    queue.push_back(dep_sp.clone());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// BFS pass: create or reopen Goal structs and propagate demanded outputs.
+    /// Returns `(key, dep_paths)` for each goal requiring Pass 2 inspection.
     fn create_goals_bfs(
         &mut self,
         drv_path: &StorePath<String>,
         known_paths: &DerivationRegistry,
         is_root: bool,
+        outputs: Option<BTreeSet<String>>,
     ) -> Result<Vec<CreatedGoal>, Error> {
-        let mut queue: VecDeque<(StorePath<String>, bool)> = VecDeque::new();
-        queue.push_back((drv_path.clone(), is_root));
+        let initial_demand = self.resolve_initial_demand(drv_path, known_paths, outputs)?;
+        let initial_key = drv_path.to_absolute_path();
 
-        let mut created: Vec<CreatedGoal> = Vec::with_capacity(64);
-        // Tiger Style: fixed iteration limit.
-        let goal_count_max: u32 = MAX_GOALS;
+        let mut queue: VecDeque<StorePath<String>> = VecDeque::new();
+        let mut queued_roots: BTreeSet<String> = BTreeSet::new();
+        let mut queued_demands: HashMap<String, BTreeSet<String>> = HashMap::new();
+        if is_root {
+            queued_roots.insert(initial_key.clone());
+        }
+        queued_demands.insert(initial_key, initial_demand);
+        queue.push_back(drv_path.clone());
+
+        let mut to_inspect: Vec<CreatedGoal> = Vec::with_capacity(64);
+        let mut to_inspect_keys: BTreeSet<String> = BTreeSet::new();
+        // Tiger Style: fixed iteration limit (allows diamond demand widening).
+        let goal_count_max: u32 = MAX_GOALS.saturating_mul(4);
         let mut iterations: u32 = 0;
 
-        while let Some((sp, root)) = queue.pop_front() {
+        while let Some(sp) = queue.pop_front() {
             iterations = iterations.saturating_add(1);
             if iterations > goal_count_max {
                 return Err(Error::Store(format!("want() BFS exceeded iteration limit ({goal_count_max})")));
             }
 
             let key = sp.to_absolute_path();
+            let is_root_goal = queued_roots.remove(&key);
+            let req_outputs = queued_demands.remove(&key).unwrap_or_default();
 
-            // Already tracked — just upgrade to root if needed.
-            if let Some(goal) = self.registry.get_mut(&key) {
-                if root && !goal.is_root {
-                    goal.is_root = true;
-                    // A dispatched goal exports at completion. A finished goal still
-                    // needs its root export and exactly one root result.
-                    if matches!(goal.state, GoalState::Done | GoalState::Failed) {
-                        self.late_roots.insert(key.clone());
+            if self.registry.contains(&key) {
+                let mut reopen_deps: Option<Derivation> = None;
+                let mut upgraded_pending_deps: Option<Derivation> = None;
+                {
+                    let goal = self
+                        .registry
+                        .get_mut(&key)
+                        .ok_or_else(|| Error::Store(format!("goal disappeared during BFS: {key}")))?;
+                    let is_upgraded_root = is_root_goal && !goal.is_root;
+                    if is_upgraded_root {
+                        goal.is_root = true;
+                        self.pressure_dirty_goals.insert(key.clone());
                     }
-                    self.pressure_dirty_goals.insert(key);
+                    let demands = self.goal_demands.entry(key.clone()).or_default();
+                    demands.extend(req_outputs);
+
+                    match goal.state {
+                        GoalState::Done => {
+                            let is_already_satisfied =
+                                self.satisfied_outputs.get(&key).is_some_and(|satisfied| demands.is_subset(satisfied));
+                            if is_already_satisfied {
+                                if is_upgraded_root {
+                                    self.late_roots.insert(key.clone());
+                                }
+                            } else {
+                                goal.reopen_for_demand()?;
+                                reopen_deps = goal.derivation.as_deref().cloned();
+                                self.satisfied_outputs.remove(&key);
+                                self.late_roots.remove(&key);
+                                self.satisfied_drvs.remove(&key);
+                                self.pressure_dirty_goals.insert(key.clone());
+                            }
+                        }
+                        GoalState::Failed => {
+                            if is_upgraded_root {
+                                self.late_roots.insert(key.clone());
+                            }
+                        }
+                        GoalState::Pending => {
+                            if is_upgraded_root && self.satisfied_drvs.contains(&key) {
+                                upgraded_pending_deps = goal.derivation.as_deref().cloned();
+                            }
+                        }
+                        GoalState::AwaitingDerivation
+                        | GoalState::Waiting { .. }
+                        | GoalState::Ready
+                        | GoalState::Building => {}
+                    }
+                }
+                if let Some(derivation) = reopen_deps {
+                    let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
+                    self.validate_and_enqueue_deps(&derivation, known_paths, &mut queue, &mut queued_demands)?;
+                    if to_inspect_keys.insert(key.clone()) {
+                        to_inspect.push((key, dep_drv_paths));
+                    }
+                } else if let Some(derivation) = upgraded_pending_deps {
+                    let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
+                    self.validate_and_enqueue_deps(&derivation, known_paths, &mut queue, &mut queued_demands)?;
+                    if let Some(entry) = to_inspect.iter_mut().find(|(existing_key, _)| existing_key == &key) {
+                        entry.1 = dep_drv_paths;
+                    } else if to_inspect_keys.insert(key.clone()) {
+                        to_inspect.push((key, dep_drv_paths));
+                    }
                 }
                 continue;
             }
@@ -1868,6 +2071,11 @@ impl Worker {
                 .get_by_drv_path(&drv_abs)
                 .ok_or_else(|| Error::DerivationNotFound { path: sp.clone() })?;
             let derivation = entry.derivation.clone();
+            let validated_req = if req_outputs.is_empty() {
+                validate_output_selection(sp.name(), &derivation, None)?
+            } else {
+                validate_output_selection(sp.name(), &derivation, Some(&req_outputs))?
+            };
             let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
             if let Some(raw_bindings) = derivation.environment.get(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
                 let records = decode_binding_records(raw_bindings.as_ref(), known_paths.store_dir())
@@ -1900,61 +2108,96 @@ impl Worker {
                 self.plan_output_bindings.insert(key.clone(), bindings);
             }
 
-            let goal = if root {
-                Goal::new_root(sp.clone(), derivation)
+            let goal = if is_root_goal {
+                Goal::new_root(sp.clone(), derivation.clone())
             } else {
-                Goal::new(sp, derivation)
+                Goal::new(sp, derivation.clone())
             };
             self.registry.insert(key.clone(), goal)?;
             self.pressure_dirty_goals.insert(key.clone());
+            self.goal_demands.insert(key.clone(), validated_req);
 
             // A complete derivation is realized as-is; expanding its build-only
             // inputs would schedule work no realized path needs.
-            let should_expand_deps = root || !self.satisfied_drvs.contains(&key);
+            let should_expand_deps = is_root_goal || !self.satisfied_drvs.contains(&key);
             if should_expand_deps {
-                for dep_sp in &dep_drv_paths {
-                    if !self.registry.contains(&dep_sp.to_absolute_path()) {
-                        queue.push_back((dep_sp.clone(), false));
-                    }
-                }
+                self.validate_and_enqueue_deps(&derivation, known_paths, &mut queue, &mut queued_demands)?;
             }
 
-            created.push((key, if should_expand_deps { dep_drv_paths } else { Vec::new() }));
+            if to_inspect_keys.insert(key.clone()) {
+                to_inspect.push((key, if should_expand_deps { dep_drv_paths } else { Vec::new() }));
+            }
         }
 
         debug_assert!(iterations <= goal_count_max);
-        Ok(created)
+        Ok(to_inspect)
     }
 
-    fn resolve_binding_states(&mut self, key: &str, known_paths: &DerivationRegistry) {
+    fn resolve_binding_plan_roots(&mut self, key: &str) {
+        let Some(bindings) = self.plan_output_bindings.get_mut(key) else {
+            return;
+        };
+        for binding in bindings {
+            if binding.failure.is_some() || binding.realized_path.is_some() || binding.root.is_some() {
+                continue;
+            }
+            let producer_key = binding.record.producer_drv_path.to_absolute_path();
+            match self
+                .native_plan_binding_facts
+                .get(&(producer_key.clone(), binding.record.plan_output.as_str().to_owned()))
+            {
+                Some(NativePlanBindingFact::Accepted { plan, registered_units }) => {
+                    binding.plan_digest = Some(plan.digest().to_owned());
+                    match bind_accepted_plan_root(&binding.record, plan, registered_units) {
+                        Ok(root) => binding.root = Some(root),
+                        Err(failure) => binding.failure = Some(failure),
+                    }
+                }
+                Some(NativePlanBindingFact::Rejected) => {
+                    binding.failure = Some(PlanOutputBindingFailureKind::PlanRejected);
+                }
+                None if self.registry.get(&producer_key).is_some_and(|goal| goal.state == GoalState::Failed) => {
+                    binding.failure = Some(PlanOutputBindingFailureKind::ProducerFailed);
+                }
+                None => {}
+            }
+        }
+    }
+
+    fn widen_binding_root_demands(&mut self, key: &str, known_paths: &DerivationRegistry) -> Result<(), Error> {
+        let Some(bindings) = self.plan_output_bindings.get(key) else {
+            return Ok(());
+        };
+        let mut pending_roots: Vec<(StorePath<String>, String)> = Vec::with_capacity(bindings.len());
+        for binding in bindings {
+            if binding.failure.is_some() || binding.realized_path.is_some() {
+                continue;
+            }
+            let Some(root) = &binding.root else {
+                continue;
+            };
+            let root_key = root.drv_path.to_absolute_path();
+            if root_key != key && self.registry.contains(&root_key) {
+                pending_roots.push((root.drv_path.clone(), root.output.as_str().to_owned()));
+            }
+        }
+        for (root_drv_path, output_name) in pending_roots {
+            let created =
+                self.create_goals_bfs(&root_drv_path, known_paths, false, Some(BTreeSet::from([output_name])))?;
+            for (reopened_key, dep_drv_paths) in &created {
+                self.wire_deps_and_inspect(reopened_key, dep_drv_paths)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_binding_realized_paths(&mut self, key: &str, known_paths: &DerivationRegistry) {
         let Some(bindings) = self.plan_output_bindings.get_mut(key) else {
             return;
         };
         for binding in bindings {
             if binding.failure.is_some() || binding.realized_path.is_some() {
                 continue;
-            }
-            if binding.root.is_none() {
-                let producer_key = binding.record.producer_drv_path.to_absolute_path();
-                match self
-                    .native_plan_binding_facts
-                    .get(&(producer_key.clone(), binding.record.plan_output.as_str().to_owned()))
-                {
-                    Some(NativePlanBindingFact::Accepted { plan, registered_units }) => {
-                        binding.plan_digest = Some(plan.digest().to_owned());
-                        match bind_accepted_plan_root(&binding.record, plan, registered_units) {
-                            Ok(root) => binding.root = Some(root),
-                            Err(failure) => binding.failure = Some(failure),
-                        }
-                    }
-                    Some(NativePlanBindingFact::Rejected) => {
-                        binding.failure = Some(PlanOutputBindingFailureKind::PlanRejected);
-                    }
-                    None if self.registry.get(&producer_key).is_some_and(|goal| goal.state == GoalState::Failed) => {
-                        binding.failure = Some(PlanOutputBindingFailureKind::ProducerFailed);
-                    }
-                    None => continue,
-                }
             }
             if let Some(root) = &binding.root {
                 let root_key = root.drv_path.to_absolute_path();
@@ -1977,6 +2220,13 @@ impl Worker {
                 }
             }
         }
+    }
+
+    fn resolve_binding_states(&mut self, key: &str, known_paths: &DerivationRegistry) -> Result<(), Error> {
+        self.resolve_binding_plan_roots(key);
+        self.widen_binding_root_demands(key, known_paths)?;
+        self.resolve_binding_realized_paths(key, known_paths);
+        Ok(())
     }
 
     fn binding_failure(&self, key: &str) -> Option<PlanOutputBindingFailureKind> {
@@ -2074,15 +2324,18 @@ impl Worker {
         Ok(Some(claim))
     }
 
-    fn final_binding_reports(&mut self, known_paths: &DerivationRegistry) -> Vec<NativePlanOutputBindingReport> {
+    fn final_binding_reports(
+        &mut self,
+        known_paths: &DerivationRegistry,
+    ) -> Result<Vec<NativePlanOutputBindingReport>, Error> {
         if self.plan_output_bindings.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let consumers: Vec<String> = self.plan_output_bindings.keys().cloned().collect();
         for consumer in consumers {
-            self.resolve_binding_states(&consumer, known_paths);
+            self.resolve_binding_states(&consumer, known_paths)?;
         }
-        self.binding_reports()
+        Ok(self.binding_reports())
     }
     /// Wire waiter edges for a goal's deps and inspect (Pending →
     /// Waiting/Ready). All deps must already exist in the registry.
@@ -2184,7 +2437,17 @@ impl Worker {
                     "worker finished"
                 );
                 let priority_decisions = std::mem::take(&mut self.priority_decisions);
-                let binding_rows = self.final_binding_reports(known_paths);
+                let binding_rows = self.final_binding_reports(known_paths)?;
+                outcomes.retain(|outcome| {
+                    self.registry
+                        .get(&outcome.drv_path.to_absolute_path())
+                        .is_some_and(|goal| goal.state == GoalState::Done)
+                });
+                all_outcomes.retain(|outcome| {
+                    self.registry
+                        .get(&outcome.drv_path.to_absolute_path())
+                        .is_some_and(|goal| goal.state == GoalState::Done)
+                });
                 return Ok(finish_worker_result(
                     outcomes,
                     all_outcomes,
@@ -2394,7 +2657,17 @@ impl Worker {
             "worker streaming finished"
         );
         let priority_decisions = std::mem::take(&mut self.priority_decisions);
-        let binding_rows = self.final_binding_reports(known_paths);
+        let binding_rows = self.final_binding_reports(known_paths)?;
+        outcomes.retain(|outcome| {
+            self.registry
+                .get(&outcome.drv_path.to_absolute_path())
+                .is_some_and(|goal| goal.state == GoalState::Done)
+        });
+        all_outcomes.retain(|outcome| {
+            self.registry
+                .get(&outcome.drv_path.to_absolute_path())
+                .is_some_and(|goal| goal.state == GoalState::Done)
+        });
         Ok(finish_worker_result(
             outcomes,
             all_outcomes,
@@ -2466,7 +2739,7 @@ impl Worker {
         }
         self.build_cancellations = None;
         self.is_watch_active = false;
-        let bindings = self.final_binding_reports(known_paths);
+        let bindings = self.final_binding_reports(known_paths)?;
         Ok(finish_worker_result(
             outcomes,
             all_outcomes,
@@ -2555,12 +2828,16 @@ impl Worker {
                     return Err(Error::Store("plan-output-invalid: empty watched binding list".to_string()));
                 }
             }
-            queue.extend(
-                derivation
-                    .input_derivations
-                    .keys()
-                    .map(|dependency| dependency.to_absolute_path_with_prefix(prefix)),
-            );
+            for (dependency, selected_outputs) in &derivation.input_derivations {
+                let dep_path = dependency.to_absolute_path_with_prefix(prefix);
+                let dep_derivation = incoming
+                    .get(&dep_path)
+                    .map(|entry| &entry.2)
+                    .or_else(|| known_paths.get_by_drv_path(&dep_path).map(|entry| entry.derivation.as_ref()))
+                    .ok_or_else(|| Error::Store(format!("watch incoming derivation missing: {dep_path}")))?;
+                let _ = validate_output_selection(dependency.name(), dep_derivation, Some(selected_outputs))?;
+                queue.push_back(dep_path);
+            }
         }
         Ok(())
     }
@@ -2617,6 +2894,8 @@ impl Worker {
         self.late_roots.retain(|key| !keys.contains(key));
         self.dependency_failures.retain(|key, _| !keys.contains(key));
         self.dependency_failure_logs.retain(|key, _| !keys.contains(key));
+        self.goal_demands.retain(|key, _| !keys.contains(key));
+        self.satisfied_outputs.retain(|key, _| !keys.contains(key));
         self.pressure_dirty_goals.extend(self.registry.iter().map(|(key, _)| key.to_owned()));
         self.watch_retain_metadata(builder, known_paths)?;
         Ok(())
@@ -2787,7 +3066,11 @@ impl Worker {
                     let outcomes = state
                         .all_outcomes
                         .iter()
-                        .filter(|outcome| roots.contains(&outcome.drv_path.to_absolute_path()))
+                        .filter(|outcome| {
+                            let key = outcome.drv_path.to_absolute_path();
+                            roots.contains(&key)
+                                && self.registry.get(&key).is_some_and(|goal| goal.state == GoalState::Done)
+                        })
                         .cloned()
                         .collect();
                     let failed: Vec<FailedGoal> =
@@ -3171,12 +3454,22 @@ impl Worker {
             .map(|(key, _)| key.clone())
             .collect();
         for consumer in &consumers {
-            self.resolve_binding_states(consumer, known_paths);
+            self.resolve_binding_states(consumer, known_paths)?;
             self.attach_binding_roots(consumer)?;
         }
 
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
             .await?;
+
+        let is_demand_satisfied = self
+            .goal_demands
+            .get(drv_key)
+            .is_none_or(|demanded| demanded.iter().all(|name| outcome.outputs.contains_key(name)));
+        if !is_demand_satisfied {
+            return Err(Error::Store(format!("completed outcome for {drv_key} is missing demanded outputs")));
+        }
+        let satisfied: BTreeSet<String> = outcome.outputs.keys().cloned().collect();
+        self.satisfied_outputs.insert(drv_key.to_owned(), satisfied);
 
         self.complete_goal(drv_key, outcome, state.outcomes, state.all_outcomes, state.failed)?;
         for consumer in consumers {
@@ -3621,8 +3914,14 @@ impl Worker {
         } else {
             register_v1_dynamic_plan_units(&accepted, known_paths)?
         };
-        for root_drv_path in &registered.root_drv_paths {
-            self.want(root_drv_path, known_paths, true)?;
+        let units_by_id: BTreeMap<&UnitId, &DynamicUnit> =
+            accepted.plan.units().iter().map(|unit| (&unit.id, unit)).collect();
+        for (root_unit_id, root_drv_path) in accepted.plan.roots().iter().zip(&registered.root_drv_paths) {
+            let requested =
+                units_by_id.get(root_unit_id).filter(|unit| !unit.requested_outputs.is_empty()).map(|unit| {
+                    unit.requested_outputs.iter().map(|output| output.as_str().to_owned()).collect::<BTreeSet<_>>()
+                });
+            self.want_outputs(root_drv_path, known_paths, true, requested)?;
         }
         debug_assert!(registered.unit_drv_paths.len() >= accepted.plan.roots().len());
         self.native_plan_binding_facts.insert(
@@ -3742,17 +4041,17 @@ impl Worker {
                 .registry
                 .get_mut(awaiting_key)
                 .ok_or_else(|| Error::Store(format!("worker: awaiting goal not found: {awaiting_key}")))?;
+            let drv_name = goal.drv_path.name().to_owned();
             goal.set_derivation(dyn_drv.derivation.clone())?;
+            let validated_demand =
+                validate_output_selection(&drv_name, &dyn_drv.derivation, self.goal_demands.get(awaiting_key))?;
+            self.goal_demands.insert(awaiting_key.clone(), validated_demand);
             let dep_drv_paths: Vec<StorePath<String>> = dyn_drv.derivation.input_derivations.keys().cloned().collect();
-            for dep_sp in &dep_drv_paths {
+            for (dep_sp, dep_outputs) in &dyn_drv.derivation.input_derivations {
                 let dep_key = dep_sp.to_absolute_path();
-                if !self.registry.contains(&dep_key) {
-                    let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
-                    if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
-                        let dep_goal = crate::goal::Goal::new(dep_sp.clone(), entry.derivation.clone());
-                        self.registry.insert(dep_key.clone(), dep_goal)?;
-                        self.pressure_dirty_goals.insert(dep_key.clone());
-                    }
+                let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+                if known_paths.get_by_drv_path(&dep_abs).is_some() || self.registry.contains(&dep_key) {
+                    self.want_outputs(dep_sp, known_paths, false, Some(dep_outputs.clone()))?;
                 }
             }
             if let Some(trace) = self.causal_trace.as_mut() {
@@ -3810,7 +4109,7 @@ impl Worker {
             let Some(drv_key) = self.select_next_ready_goal()? else {
                 break;
             };
-            self.resolve_binding_states(&drv_key, known_paths);
+            self.resolve_binding_states(&drv_key, known_paths)?;
             let mut bound_paths = Vec::new();
             if let Some(bindings) = self.plan_output_bindings.get(&drv_key) {
                 if let Some(failure) = bindings.iter().find_map(|binding| binding.failure) {
@@ -3854,7 +4153,19 @@ impl Worker {
             if let Some(trace) = self.causal_trace.as_mut() {
                 trace.cache_checked(&drv_key);
             }
-            let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root, &bound_paths).await;
+            let demanded_outputs = self.goal_demands.get(&drv_key);
+            let prepare_result = builder
+                .prepare_build_with_demand(
+                    crate::orchestrate::PrepareBuildInput {
+                        drv_path: &drv_path,
+                        derivation,
+                        is_root,
+                        bound_plan_outputs: &bound_paths,
+                        demanded_outputs,
+                    },
+                    known_paths,
+                )
+                .await;
             if self.streaming_cancelled() {
                 break;
             }
@@ -4109,9 +4420,9 @@ impl Worker {
             trace.completed(drv_key, outcome.cached, None);
         }
 
-        all_outcomes.push(outcome.clone());
+        upsert_build_outcome(all_outcomes, outcome.clone());
         if is_root {
-            outcomes.push(outcome);
+            upsert_build_outcome(outcomes, outcome);
         }
 
         debug!(drv = drv_key, waiters = waiters.len(), "goal completed");
@@ -4291,6 +4602,7 @@ impl Worker {
             .ok_or_else(|| Error::Store(format!("failing unknown goal: {drv_key}")))?;
 
         goal.mark_build_failed()?;
+        self.satisfied_outputs.remove(drv_key);
 
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
@@ -6038,7 +6350,7 @@ mod tests {
                 registered_units: BTreeMap::from([(UnitId::new("unit.main").unwrap(), root.clone())]),
             },
         );
-        worker.resolve_binding_states(&consumer_key, &kp);
+        worker.resolve_binding_states(&consumer_key, &kp).unwrap();
         worker.attach_binding_roots(&consumer_key).unwrap();
         assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Waiting { remaining_deps: 2 });
         assert!(worker.registry.get(&consumer_key).unwrap().waitees.contains(&root_key));
@@ -6143,7 +6455,7 @@ mod tests {
                     registered_units: BTreeMap::new(),
                 },
             );
-            worker.resolve_binding_states(&consumer_key, &kp);
+            worker.resolve_binding_states(&consumer_key, &kp).unwrap();
             let row = &worker.binding_reports()[0];
             assert_eq!(row.failure_reason.as_deref(), Some(expected));
             assert!(row.root_drv_path.is_none());
@@ -10219,5 +10531,591 @@ mod tests {
             summary_a.iter().all(|(_, cached, _)| !cached),
             "untrusted cached leaf must be rejected and rebuilt under every policy"
         );
+    }
+
+    async fn put_signed_worker_path_info(
+        bs: &MemoryBlobService,
+        pis: &dyn PathInfoService,
+        store_path: StorePath<String>,
+        drv_path: &StorePath<String>,
+        references: Vec<StorePath<String>>,
+    ) {
+        let payload = format!("signed-worker-{}", store_path.name());
+        let node = put_test_blob(bs, payload.as_bytes()).await;
+        let mut info = snix_store::path_info::PathInfo {
+            store_path,
+            node,
+            references,
+            nar_size: payload.len() as u64,
+            nar_sha256: [13u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo_with_store_dir(
+            &mut info,
+            &test_keypair().signing_key,
+            nix_compat::store_path::STORE_DIR,
+        );
+        pis.put(info).await.unwrap();
+    }
+
+    fn signed_worker_builder<S: BuildService + 'static>(
+        blobs: MemoryBlobService,
+        service: S,
+        pis: Arc<dyn PathInfoService>,
+        output_dir: &std::path::Path,
+    ) -> Builder<S> {
+        Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            service,
+            pis,
+            output_dir.to_path_buf(),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        )
+    }
+
+    #[tokio::test]
+    async fn selected_output_reuses_trusted_out_when_unused_dev_missing() {
+        // Cold run: builds sdk + consumer (2 calls).
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut kp = DerivationRegistry::default();
+            let (sdk, _) = crate::test_support::build_and_register_multi("sdk-cold", &["out", "dev"], &[], &mut kp);
+            let (consumer, _) =
+                crate::test_support::build_and_register_multi("consumer-cold", &["out"], &[(sdk, "out")], &mut kp);
+
+            let mut worker = Worker::new(1);
+            worker.want(&consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(calls.lock().unwrap().len(), 2, "cold run executes sdk and consumer");
+        }
+
+        // Warm run: ONLY signed sdk:out cached (sdk:dev absent) -> 0 producer builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (sdk, sdk_drv) =
+                crate::test_support::build_and_register_multi("sdk-warm", &["out", "dev"], &[], &mut kp);
+            let (consumer, _) = crate::test_support::build_and_register_multi(
+                "consumer-warm",
+                &["out"],
+                &[(sdk.clone(), "out")],
+                &mut kp,
+            );
+
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis.clone(), temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            let sdk_outcome = result.all_outcomes.iter().find(|o| o.drv_path == sdk).unwrap();
+            assert!(sdk_outcome.cached, "sdk:out should be reused with dev absent");
+            assert!(sdk_outcome.outputs.contains_key("out"));
+            assert!(!sdk_outcome.outputs.contains_key("dev"));
+            let recorded = calls.lock().unwrap();
+            assert_eq!(recorded.len(), 1, "only consumer should execute: {recorded:?}");
+            assert!(
+                recorded[0].iter().any(|arg| arg.contains("consumer-warm")),
+                "expected consumer-warm in args: {recorded:?}"
+            );
+        }
+
+        // Contrast: unqualified root want(&sdk, ..., true) still requires ALL outputs and rebuilds when dev
+        // absent.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (sdk, sdk_drv) =
+                crate::test_support::build_and_register_multi("sdk-unqual", &["out", "dev"], &[], &mut kp);
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&sdk, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert!(!result.outcomes[0].cached);
+            assert_eq!(calls.lock().unwrap().len(), 1, "unqualified root must rebuild when dev is absent");
+        }
+    }
+
+    #[tokio::test]
+    async fn concurrent_consumers_union_demand_for_out_and_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-concurrent", &["out", "dev"], &[], &mut kp);
+        let (consumer_out, _) =
+            crate::test_support::build_and_register_multi("consumer-out", &["out"], &[(sdk.clone(), "out")], &mut kp);
+        let (consumer_dev, _) =
+            crate::test_support::build_and_register_multi("consumer-dev", &["out"], &[(sdk.clone(), "dev")], &mut kp);
+
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+        let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+        let mut worker = Worker::new(2);
+        worker.want(&consumer_out, &kp, true).unwrap();
+        worker.want(&consumer_dev, &kp, true).unwrap();
+        assert_eq!(
+            worker.goal_demands.get(&sdk.to_absolute_path()),
+            Some(&BTreeSet::from(["out".to_string(), "dev".to_string()]))
+        );
+
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.outcomes.len(), 2);
+        let sdk_outcome = result.all_outcomes.iter().find(|o| o.drv_path == sdk).unwrap();
+        assert!(!sdk_outcome.cached, "combined out+dev demand must miss when dev is absent");
+        assert!(sdk_outcome.outputs.contains_key("out"));
+        assert!(sdk_outcome.outputs.contains_key("dev"));
+        assert_eq!(calls.lock().unwrap().len(), 3, "sdk executes once, both consumers execute once");
+    }
+
+    #[tokio::test]
+    async fn sequential_want_before_run_widens_demand_to_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-sequential", &["out", "dev"], &[], &mut kp);
+        let (consumer_out, _) = crate::test_support::build_and_register_multi(
+            "seq-consumer-out",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut kp,
+        );
+
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+        let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+        let mut worker = Worker::new(1);
+        worker.want(&consumer_out, &kp, true).unwrap();
+        assert_eq!(worker.goal_demands.get(&sdk.to_absolute_path()), Some(&BTreeSet::from(["out".to_string()])));
+        worker.want_outputs(&sdk, &kp, true, Some(BTreeSet::from(["dev".to_string()]))).unwrap();
+        assert_eq!(
+            worker.goal_demands.get(&sdk.to_absolute_path()),
+            Some(&BTreeSet::from(["out".to_string(), "dev".to_string()]))
+        );
+
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.outcomes.len(), 2);
+        assert_eq!(calls.lock().unwrap().len(), 2, "sdk builds once + consumer_out builds once");
+    }
+
+    #[tokio::test]
+    async fn streaming_late_consumer_widens_done_goal_from_out_to_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let gated_service = LateRootGatedBuildService {
+            mock,
+            gated_name: "stream-consumer-out",
+            release: release.clone(),
+        };
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) = crate::test_support::build_and_register_multi("sdk-stream", &["out", "dev"], &[], &mut kp);
+        let (consumer_out, consumer_out_drv) = crate::test_support::build_and_register_multi(
+            "stream-consumer-out",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut kp,
+        );
+        let (consumer_dev, consumer_dev_drv) = crate::test_support::build_and_register_multi(
+            "stream-consumer-dev",
+            &["out"],
+            &[(sdk.clone(), "dev")],
+            &mut kp,
+        );
+
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+        let mut builder = signed_worker_builder(bs, gated_service, pis, temp.path());
+        let mut worker = Worker::new(2);
+        let (tx, mut rx) = mpsc::channel(8);
+
+        let sdk_hdm = kp.get_hdm_by_drv_path(&sdk.to_absolute_path()).unwrap();
+        let out_hdm = kp.get_hdm_by_drv_path(&consumer_out.to_absolute_path()).unwrap();
+        let dev_hdm = kp.get_hdm_by_drv_path(&consumer_dev.to_absolute_path()).unwrap();
+
+        tx.send(EvalMessage {
+            label: "consumer-out".into(),
+            drv_path: consumer_out.clone(),
+            new_entries: vec![
+                (sdk.clone(), sdk_hdm, sdk_drv, false, vec![], None),
+                (consumer_out.clone(), out_hdm, consumer_out_drv, false, vec![], None),
+            ],
+        })
+        .await
+        .unwrap();
+
+        let mut pending_tx = Some(tx);
+        let dev_msg = EvalMessage {
+            label: "consumer-dev".into(),
+            drv_path: consumer_dev.clone(),
+            new_entries: vec![(consumer_dev.clone(), dev_hdm, consumer_dev_drv, false, vec![], None)],
+        };
+        let sdk_done_notified = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let sdk_done_flag = sdk_done_notified.clone();
+        let sdk_key = sdk.to_absolute_path();
+        let mut observer = move |reg: &GoalRegistry| {
+            if !sdk_done_flag.load(std::sync::atomic::Ordering::SeqCst)
+                && reg.get(&sdk_key).is_some_and(|g| g.state == GoalState::Done)
+            {
+                sdk_done_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                if let Some(sender) = pending_tx.take() {
+                    sender.try_send(dev_msg.clone()).unwrap();
+                }
+                release.notify_one();
+            }
+        };
+
+        let result = worker.run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut observer)).await.unwrap();
+        assert!(sdk_done_notified.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.outcomes.len(), 2);
+        let sdk_outcomes: Vec<_> = result.all_outcomes.iter().filter(|o| o.drv_path == sdk).collect();
+        assert_eq!(sdk_outcomes.len(), 1, "reopened sdk outcome must be upserted without duplicates");
+        assert!(!sdk_outcomes[0].cached, "reopened sdk rebuilt to produce dev");
+        assert!(sdk_outcomes[0].outputs.contains_key("out"));
+        assert!(sdk_outcomes[0].outputs.contains_key("dev"));
+        assert_eq!(calls.lock().unwrap().len(), 3, "consumer_out + reopened sdk + consumer_dev");
+    }
+
+    #[tokio::test]
+    async fn watch_late_generation_widens_retained_done_goal_to_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(tmp_ds()),
+            CancellableWatchMock {
+                mock,
+                calls: calls.clone(),
+            },
+            pis.clone(),
+            temp.path().to_path_buf(),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let mut build_kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-watch", &["out", "dev"], &[], &mut build_kp);
+        let (consumer_out, consumer_out_drv) = crate::test_support::build_and_register_multi(
+            "watch-consumer-out",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut build_kp,
+        );
+        let (consumer_dev, consumer_dev_drv) = crate::test_support::build_and_register_multi(
+            "watch-consumer-dev",
+            &["out"],
+            &[(sdk.clone(), "dev")],
+            &mut build_kp,
+        );
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        let sdk_dev = sdk_drv.outputs["dev"].path.clone().unwrap();
+        put_signed_worker_path_info(&blobs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+        assert!(pis.get(*sdk_dev.digest()).await.unwrap().is_none(), "dev must initially be absent");
+
+        let sdk_hdm = build_kp.get_hdm_by_drv_path(&sdk.to_absolute_path()).unwrap();
+        let out_hdm = build_kp.get_hdm_by_drv_path(&consumer_out.to_absolute_path()).unwrap();
+        let dev_hdm = build_kp.get_hdm_by_drv_path(&consumer_dev.to_absolute_path()).unwrap();
+
+        let mut watch_paths = DerivationRegistry::default();
+        let (tx, mut updates) = mpsc::channel(4);
+        let (events_tx, mut events) = mpsc::channel(8);
+        tx.send(WatchWorkerUpdate {
+            generation: 1,
+            roots: vec![EvalMessage {
+                label: "watch-out".into(),
+                drv_path: consumer_out.clone(),
+                new_entries: vec![
+                    (sdk.clone(), sdk_hdm, sdk_drv, false, vec![], None),
+                    (consumer_out.clone(), out_hdm, consumer_out_drv, false, vec![], None),
+                ],
+            }],
+        })
+        .await
+        .unwrap();
+
+        let calls_observer = calls.clone();
+        let consumer_out_gen2 = consumer_out.clone();
+        let consumer_dev_gen2 = consumer_dev.clone();
+        let mut worker = Worker::new(1);
+        let controller = async move {
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit.send(()).unwrap(),
+                other => panic!("unexpected gen 1 event: {other:?}"),
+            }
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::Settled {
+                    generation: 1,
+                    outcomes,
+                    failed,
+                    ..
+                }) => {
+                    assert!(failed.is_empty(), "{failed:?}");
+                    assert_eq!(outcomes.len(), 1);
+                }
+                other => panic!("unexpected gen 1 settled: {other:?}"),
+            }
+            assert_eq!(calls_observer.load(std::sync::atomic::Ordering::Relaxed), 1, "gen 1 skips sdk build");
+
+            tx.send(WatchWorkerUpdate {
+                generation: 2,
+                roots: vec![
+                    EvalMessage {
+                        label: "watch-out".into(),
+                        drv_path: consumer_out_gen2,
+                        new_entries: vec![],
+                    },
+                    EvalMessage {
+                        label: "watch-dev".into(),
+                        drv_path: consumer_dev_gen2.clone(),
+                        new_entries: vec![(consumer_dev_gen2, dev_hdm, consumer_dev_drv, false, vec![], None)],
+                    },
+                ],
+            })
+            .await
+            .unwrap();
+
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                other => panic!("unexpected gen 2 event: {other:?}"),
+            }
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::Settled {
+                    generation: 2,
+                    outcomes,
+                    failed,
+                    ..
+                }) => {
+                    assert!(failed.is_empty(), "{failed:?}");
+                    assert_eq!(outcomes.len(), 2);
+                }
+                other => panic!("unexpected gen 2 settled: {other:?}"),
+            }
+            drop(tx);
+        };
+        let (result, ()) =
+            tokio::join!(worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx), controller,);
+        let result = result.unwrap();
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::Relaxed),
+            3,
+            "gen1 consumer_out + gen2 reopened sdk + gen2 consumer_dev"
+        );
+        assert!(
+            pis.get(*sdk_dev.digest()).await.unwrap().is_some(),
+            "reopened sdk in gen 2 must produce and persist dev output"
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_output_selection_rejected_at_worker_boundaries() {
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-invalid-sel", &["out", "dev"], &[], &mut kp);
+        let (bad_consumer, bad_consumer_drv) = crate::test_support::build_and_register_multi(
+            "bad-consumer",
+            &["out"],
+            &[(sdk.clone(), "headers")],
+            &mut kp,
+        );
+
+        let mut worker = Worker::new(1);
+        let err_direct =
+            worker.want_outputs(&sdk, &kp, false, Some(BTreeSet::from(["headers".to_string()]))).unwrap_err();
+        let msg_direct = err_direct.to_string();
+        assert!(matches!(err_direct, Error::InvalidOutputSelection { .. }), "{err_direct:?}");
+        assert!(msg_direct.contains("headers"), "{msg_direct}");
+        assert!(msg_direct.contains("out"), "{msg_direct}");
+        assert!(msg_direct.contains("dev"), "{msg_direct}");
+
+        let err_empty = worker.want_outputs(&sdk, &kp, false, Some(BTreeSet::new())).unwrap_err();
+        assert!(matches!(err_empty, Error::InvalidOutputSelection { .. }), "{err_empty:?}");
+
+        let err_edge = worker.want(&bad_consumer, &kp, true).unwrap_err();
+        let msg_edge = err_edge.to_string();
+        assert!(matches!(err_edge, Error::InvalidOutputSelection { .. }), "{err_edge:?}");
+        assert!(msg_edge.contains("headers"), "{msg_edge}");
+        assert!(msg_edge.contains("out"), "{msg_edge}");
+        assert!(msg_edge.contains("dev"), "{msg_edge}");
+
+        // Watch preflight also rejects invalid output selections cleanly with WatchWorkerEvent::Rejected.
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+        let bad_demand = BTreeSet::from(["headers".to_string()]);
+        let err_prepare = match builder
+            .prepare_build_with_demand(
+                crate::orchestrate::PrepareBuildInput {
+                    drv_path: &sdk,
+                    derivation: Arc::new(sdk_drv.clone()),
+                    is_root: true,
+                    bound_plan_outputs: &[],
+                    demanded_outputs: Some(&bad_demand),
+                },
+                &mut kp,
+            )
+            .await
+        {
+            Ok(_) => panic!("prepare_build_with_demand must reject unknown output"),
+            Err(error) => error,
+        };
+        assert!(matches!(err_prepare, Error::InvalidOutputSelection { .. }), "{err_prepare:?}");
+
+        let sdk_hdm = kp.get_hdm_by_drv_path(&sdk.to_absolute_path()).unwrap();
+        let bad_hdm = kp.get_hdm_by_drv_path(&bad_consumer.to_absolute_path()).unwrap();
+        let mut watch_paths = DerivationRegistry::default();
+        let (tx, mut updates) = mpsc::channel(4);
+        let (events_tx, mut events) = mpsc::channel(4);
+        tx.send(WatchWorkerUpdate {
+            generation: 9,
+            roots: vec![EvalMessage {
+                label: "bad-watch".into(),
+                drv_path: bad_consumer.clone(),
+                new_entries: vec![
+                    (sdk, sdk_hdm, sdk_drv, false, vec![], None),
+                    (bad_consumer, bad_hdm, bad_consumer_drv, false, vec![], None),
+                ],
+            }],
+        })
+        .await
+        .unwrap();
+        drop(tx);
+        let mut watch_worker = Worker::new(1);
+        let (watch_res, event) = tokio::join!(
+            watch_worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx),
+            events.recv(),
+        );
+        watch_res.unwrap();
+        assert!(matches!(event, Some(WatchWorkerEvent::Rejected { generation: 9 })), "{event:?}");
+        assert_eq!(calls.lock().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn multi_output_sdk_ncl_fixture_coverage() {
+        // Mirrors examples/projects/multi-output-sdk/mantle-project.ncl:
+        // sdk_package has ["out", "dev", "doc", "debug"];
+        // runtime_consumer selects "out"; development_consumer selects "dev".
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-package", &["out", "dev", "doc", "debug"], &[], &mut kp);
+        let (runtime_consumer, _) = crate::test_support::build_and_register_multi(
+            "runtime-consumer",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut kp,
+        );
+        let (development_consumer, _) = crate::test_support::build_and_register_multi(
+            "development-consumer",
+            &["out"],
+            &[(sdk.clone(), "dev")],
+            &mut kp,
+        );
+
+        // Cold run: builds sdk + runtime_consumer + development_consumer (3 executions).
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(2);
+            worker.want(&runtime_consumer, &kp, true).unwrap();
+            worker.want(&development_consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(result.outcomes.len(), 2);
+            assert_eq!(calls.lock().unwrap().len(), 3);
+        }
+
+        // Warm run 1: ONLY sdk:out cached (dev, doc, debug absent) -> runtime_consumer hits 0 producer
+        // builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&runtime_consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(calls.lock().unwrap().len(), 1, "only runtime_consumer executes");
+        }
+
+        // Warm run 2: sdk:out + sdk:dev cached (doc, debug absent) -> both consumers reuse sdk with 0
+        // producer builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            let sdk_dev = sdk_drv.outputs["dev"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_dev, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(2);
+            worker.want(&runtime_consumer, &kp, true).unwrap();
+            worker.want(&development_consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            let sdk_outcome = result.all_outcomes.iter().find(|o| o.drv_path == sdk).unwrap();
+            assert!(sdk_outcome.cached);
+            assert_eq!(calls.lock().unwrap().len(), 2, "only runtime_consumer + development_consumer execute");
+        }
     }
 }

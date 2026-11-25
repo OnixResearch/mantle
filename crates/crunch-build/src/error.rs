@@ -118,6 +118,13 @@ pub enum Error {
     #[error("output has no store path: {output} in {drv_name}")]
     OutputNoPath { output: String, drv_name: String },
 
+    #[error("invalid output selection: derivation '{drv_name}' has no output '{output}' (available: {available})")]
+    InvalidOutputSelection {
+        drv_name: String,
+        output: String,
+        available: String,
+    },
+
     #[error("unsafe sandbox environment override for {key}: {sandbox_value:?} -> {derivation_value:?}")]
     UnsafeEnvOverride {
         key: String,
@@ -193,6 +200,7 @@ impl Error {
             Self::CacheVerification(_) => {
                 BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::CacheVerification)
             }
+            Self::InvalidOutputSelection { .. } => BuildFailureFacts::preflight(),
             Self::BuildFailed { .. }
             | Self::FodFlatNotFile { .. }
             | Self::FodFlatExecutable { .. }
