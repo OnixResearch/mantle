@@ -6,12 +6,24 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::io::Read as _;
+use std::io::Write as _;
+use std::net::TcpListener;
+use std::net::TcpStream;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering as AtomicOrdering;
+use std::thread::JoinHandle;
 
 use async_trait::async_trait;
+use futures::StreamExt as _;
 use nix_compat::derivation::Derivation;
 use nix_compat::derivation::Output;
+use nix_compat::narinfo::Signature;
 use nix_compat::narinfo::VerifyingKey;
 use nix_compat::store_path::StorePath;
 use snix_build::buildservice::BuildOutput;
@@ -24,6 +36,8 @@ use snix_castore::blobservice::MemoryBlobService;
 use snix_castore::directoryservice::DirectoryService;
 use snix_castore::directoryservice::RedbDirectoryService;
 use snix_castore::directoryservice::RedbDirectoryServiceConfig;
+use snix_store::path_info::PathInfo;
+use snix_store::pathinfoservice;
 use snix_store::pathinfoservice::LruPathInfoService;
 use snix_store::pathinfoservice::PathInfoService;
 use tokio::io::AsyncWriteExt;
@@ -290,8 +304,6 @@ pub struct DrvProducingMockBuildService {
     drv_outputs: HashMap<String, Vec<u8>>,
 }
 
-use std::collections::HashMap;
-
 impl DrvProducingMockBuildService {
     pub fn new(
         blob_service: MemoryBlobService,
@@ -411,4 +423,205 @@ impl BuildService for FailingMockBuildService {
             timing: None,
         })
     }
+}
+
+pub struct PanicBuildService;
+
+#[async_trait]
+impl BuildService for PanicBuildService {
+    async fn do_build(&self, _request: BuildRequest) -> std::io::Result<BuildResult> {
+        panic!("BuildService must NOT be called when preflight hits");
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct CountingPathInfoService {
+    entries: Arc<Mutex<HashMap<[u8; 20], PathInfo>>>,
+    get_counts: Arc<Mutex<HashMap<[u8; 20], u32>>>,
+}
+
+impl CountingPathInfoService {
+    pub fn get_count(&self, path: &StorePath<String>) -> u32 {
+        self.get_counts.lock().unwrap().get(path.digest()).copied().unwrap_or(0)
+    }
+}
+
+#[async_trait]
+impl PathInfoService for CountingPathInfoService {
+    async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
+        let mut counts = self.get_counts.lock().unwrap();
+        let next_count = counts.get(&digest).copied().unwrap_or(0).saturating_add(1);
+        counts.insert(digest, next_count);
+        drop(counts);
+        Ok(self.entries.lock().unwrap().get(&digest).cloned())
+    }
+
+    async fn put(&self, path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
+        self.entries.lock().unwrap().insert(*path_info.store_path.digest(), path_info.clone());
+        Ok(path_info)
+    }
+
+    fn list(&self) -> futures::stream::BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
+        let entries: Vec<_> = self.entries.lock().unwrap().values().cloned().collect();
+        futures::stream::iter(entries.into_iter().map(Ok)).boxed()
+    }
+}
+
+pub struct SequencePathInfoService {
+    queues: Arc<Mutex<HashMap<[u8; 20], VecDeque<PathInfo>>>>,
+}
+
+impl SequencePathInfoService {
+    pub fn new() -> Self {
+        Self {
+            queues: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn push(&self, path_info: PathInfo) {
+        self.queues.lock().unwrap().entry(*path_info.store_path.digest()).or_default().push_back(path_info);
+    }
+}
+
+#[async_trait]
+impl PathInfoService for SequencePathInfoService {
+    async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
+        let mut guard = self.queues.lock().unwrap();
+        let Some(queue) = guard.get_mut(&digest) else {
+            return Ok(None);
+        };
+        if queue.len() > 1 {
+            Ok(queue.pop_front())
+        } else {
+            Ok(queue.front().cloned())
+        }
+    }
+
+    async fn put(&self, path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
+        self.push(path_info.clone());
+        Ok(path_info)
+    }
+
+    fn list(&self) -> futures::stream::BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
+        let entries: Vec<_> = self.queues.lock().unwrap().values().flat_map(|queue| queue.iter().cloned()).collect();
+        futures::stream::iter(entries.into_iter().map(Ok)).boxed()
+    }
+}
+
+pub fn corrupt_signature_bytes(path_info: &mut PathInfo) {
+    assert!(!path_info.signatures.is_empty(), "signature must exist before corruption");
+    let bad_bytes = [0u8; 64];
+    let bad_sig_str = format!("{}:{}", path_info.signatures[0].name(), data_encoding::BASE64.encode(&bad_bytes));
+    path_info.signatures[0] = Signature::<String>::parse(&bad_sig_str).unwrap();
+}
+
+const STATIC_HTTP_READ_CAPACITY_BYTES: usize = 16_384;
+const STATIC_HTTP_MAX_FILES: usize = 64;
+const STATIC_HTTP_POLL_MS: u64 = 5;
+
+pub struct StaticHttpServer {
+    pub base_url: String,
+    stop: Arc<AtomicBool>,
+    pub requests: Arc<Mutex<Vec<String>>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl StaticHttpServer {
+    pub fn start(files: BTreeMap<String, Vec<u8>>) -> Self {
+        assert!(!files.is_empty());
+        assert!(files.len() <= STATIC_HTTP_MAX_FILES);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let thread_stop = stop.clone();
+        let thread_requests = requests.clone();
+        let thread = std::thread::spawn(move || {
+            while !thread_stop.load(AtomicOrdering::SeqCst) {
+                match listener.accept() {
+                    Ok((stream, _)) => serve_static_http_request(stream, &files, &thread_requests),
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(STATIC_HTTP_POLL_MS));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        Self {
+            base_url: format!("http://{address}"),
+            stop,
+            requests,
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for StaticHttpServer {
+    fn drop(&mut self) {
+        self.stop.store(true, AtomicOrdering::SeqCst);
+        let _ = TcpStream::connect(self.base_url.trim_start_matches("http://"));
+        if let Some(thread) = self.thread.take() {
+            thread.join().unwrap();
+        }
+    }
+}
+
+fn serve_static_http_request(
+    mut stream: TcpStream,
+    files: &BTreeMap<String, Vec<u8>>,
+    requests: &Arc<Mutex<Vec<String>>>,
+) {
+    let mut request = [0u8; STATIC_HTTP_READ_CAPACITY_BYTES];
+    let bytes_read = stream.read(&mut request).unwrap_or(0);
+    let request_text = String::from_utf8_lossy(&request[..bytes_read]);
+    let path = request_text
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("/")
+        .split('?')
+        .next()
+        .unwrap_or("/")
+        .to_string();
+    requests.lock().unwrap().push(path.clone());
+    let (status, body) =
+        files.get(&path).map(|body| ("200 OK", body.as_slice())).unwrap_or(("404 Not Found", b"missing"));
+    let response = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+    stream.write_all(response.as_bytes()).unwrap();
+    stream.write_all(body).unwrap();
+}
+
+pub fn collect_static_http_files(root: &Path) -> BTreeMap<String, Vec<u8>> {
+    let mut files = BTreeMap::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(path) = pending.pop() {
+        for entry in std::fs::read_dir(&path).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                pending.push(entry.path());
+                continue;
+            }
+            let relative = entry.path().strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+            files.insert(format!("/{relative}"), std::fs::read(entry.path()).unwrap());
+            assert!(files.len() <= STATIC_HTTP_MAX_FILES);
+        }
+    }
+    files
+}
+
+pub fn write_http_action_result_sidecars(
+    cache_dir: &Path,
+    index: &crunch_action_result_core::ActionResultIndex,
+    signed: &crunch_action_result_core::SignedActionResultRecord,
+) {
+    let action_digest = index.action_ref.strip_prefix(crunch_action_result_core::ACTION_REF_PREFIX).unwrap();
+    let result_digest =
+        signed.record.result_ref.strip_prefix(crunch_action_result_core::ACTION_RESULT_REF_PREFIX).unwrap();
+    let index_path = cache_dir.join("action-results/v1/indexes").join(format!("{action_digest}.json"));
+    let record_path = cache_dir.join("action-results/v1/records").join(format!("{result_digest}.json"));
+    std::fs::create_dir_all(index_path.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(record_path.parent().unwrap()).unwrap();
+    std::fs::write(index_path, crunch_action_result_core::canonical_index_bytes(index).unwrap()).unwrap();
+    std::fs::write(record_path, crunch_action_result_core::canonical_signed_record_bytes(signed).unwrap()).unwrap();
 }

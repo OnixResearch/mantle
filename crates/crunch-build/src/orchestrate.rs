@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -179,6 +180,13 @@ pub(crate) struct PrepareBuildInput<'a> {
     pub(crate) demanded_outputs: Option<&'a BTreeSet<String>>,
 }
 
+pub(crate) struct PreflightRootInput<'a> {
+    pub(crate) drv_path: &'a StorePath<String>,
+    pub(crate) derivation: Arc<Derivation>,
+    pub(crate) demanded_outputs: Option<&'a BTreeSet<String>>,
+    pub(crate) cancellation: Option<&'a tokio::sync::watch::Receiver<bool>>,
+}
+
 struct CacheCheckHit {
     infos: BTreeMap<String, PathInfo>,
     substitutions: BTreeMap<String, OutputSubstitutionReport>,
@@ -273,6 +281,118 @@ fn is_demand_projection_eligible(input: DemandProjectionInput<'_>) -> bool {
         return false;
     }
     entry.dynamic_admission_identity.is_none()
+}
+
+fn is_preflight_eligible_entry_base(entry: &crate::registry::RegistryEntry) -> bool {
+    assert!(!entry.drv_path.name().is_empty(), "registry entry drv_path must have a name");
+    debug_assert!(
+        entry.resolved_drv_path.as_ref().is_none_or(|resolved| !resolved.name().is_empty()),
+        "resolved drv_path must have a name"
+    );
+    if entry.derivation.outputs.is_empty() {
+        return false;
+    }
+    if entry.content_addressed {
+        return false;
+    }
+    if !entry.dynamic_plan_outputs.is_empty() {
+        return false;
+    }
+    if entry.dynamic_admission_identity.is_some() {
+        return false;
+    }
+    if entry.derivation.environment.contains_key(crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+        return false;
+    }
+    if entry.derivation.outputs.values().any(|output| output.path.is_none()) {
+        return false;
+    }
+    if entry.derivation.outputs.values().any(is_drv_output_path) {
+        return false;
+    }
+    if entry.resolved_drv_path.as_ref().is_some_and(|resolved| resolved != &entry.drv_path) {
+        return false;
+    }
+    matches!(derivation_uses_mutable_workspace(entry.derivation.as_ref()), Ok(false))
+}
+
+fn enqueue_preflight_deps(
+    derivation: &Derivation,
+    known_paths: &DerivationRegistry,
+    visited: &mut BTreeSet<String>,
+    queue: &mut VecDeque<StorePath<String>>,
+    max_entries: usize,
+) -> bool {
+    assert!(max_entries > 0, "max_entries must be positive");
+    assert!(!known_paths.store_dir().is_empty(), "registry store_dir must not be empty");
+    for (dep_sp, dep_outputs) in &derivation.input_derivations {
+        let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+        let Some(dep_entry) = known_paths.get_by_drv_path(&dep_abs) else {
+            return false;
+        };
+        if validate_demanded_outputs(dep_sp.name(), &dep_entry.derivation, Some(dep_outputs)).is_err() {
+            return false;
+        }
+        if !visited.insert(dep_abs) {
+            continue;
+        }
+        if visited.len() > max_entries {
+            return false;
+        }
+        queue.push_back(dep_sp.clone());
+    }
+    debug_assert!(visited.len() <= max_entries);
+    true
+}
+
+pub(crate) fn is_preflight_eligible_root(drv_path: &StorePath<String>, known_paths: &DerivationRegistry) -> bool {
+    assert!(!drv_path.name().is_empty(), "root derivation name must not be empty");
+    assert!(!known_paths.store_dir().is_empty(), "registry store_dir must not be empty");
+    let root_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+    let Some(root_entry) = known_paths.get_by_drv_path(&root_abs) else {
+        return false;
+    };
+    if root_entry.derivation.input_derivations.is_empty() {
+        return false;
+    }
+    if !is_preflight_eligible_entry_base(root_entry) {
+        return false;
+    }
+    if !root_entry.derivation.outputs.values().all(is_input_addressed_output) {
+        return false;
+    }
+
+    let Ok(max_entries) = usize::try_from(crate::registry::MAX_ENTRIES) else {
+        return false;
+    };
+    let mut visited: BTreeSet<String> = BTreeSet::from([root_abs]);
+    let mut queue: VecDeque<StorePath<String>> = VecDeque::new();
+    if !enqueue_preflight_deps(root_entry.derivation.as_ref(), known_paths, &mut visited, &mut queue, max_entries) {
+        return false;
+    }
+
+    for _ in 0..crate::registry::MAX_ENTRIES {
+        let Some(current_sp) = queue.pop_front() else {
+            debug_assert!(visited.len() <= max_entries);
+            return true;
+        };
+        let current_abs = current_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+        let Some(entry) = known_paths.get_by_drv_path(&current_abs) else {
+            return false;
+        };
+        if !is_preflight_eligible_entry_base(entry) {
+            return false;
+        }
+        if !enqueue_preflight_deps(entry.derivation.as_ref(), known_paths, &mut visited, &mut queue, max_entries) {
+            return false;
+        }
+    }
+
+    queue.is_empty()
+}
+
+fn is_preflight_cancelled(cancellation: Option<&tokio::sync::watch::Receiver<bool>>) -> bool {
+    cancellation.is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err())
 }
 
 fn projected_derivation_for_outputs(derivation: &Derivation, selected: &BTreeSet<String>) -> Derivation {
@@ -2478,16 +2598,24 @@ where BServ: BuildService + 'static
                 return Ok(None);
             };
 
+            let mut batch_substitution_by_output: BTreeMap<String, OutputSubstitutionReport> = cached_infos
+                .iter()
+                .filter_map(|(output_name, path_info)| {
+                    self.store
+                        .take_output_substitution_report(&path_info.store_path)
+                        .map(|report| (output_name.clone(), report))
+                })
+                .collect();
+
             let mut newly_added = Vec::with_capacity(cached_infos.len());
             for (output_name, path_info) in cached_infos {
                 if infos.len() >= derivation.outputs.len() {
                     return Err(Error::Store("cached output count exceeds derivation outputs".to_string()));
                 }
                 if !self.verify_single_path_info_signature(drv_path, &output_name, &path_info) {
-                    drop(self.store.take_output_substitution_report(&path_info.store_path));
                     return Ok(None);
                 }
-                if let Some(substitution_record) = self.store.take_output_substitution_report(&path_info.store_path)
+                if let Some(substitution_record) = batch_substitution_by_output.remove(&output_name)
                     && substitutions.len() < derivation.outputs.len()
                 {
                     substitutions.insert(output_name.clone(), substitution_record);
@@ -2620,10 +2748,11 @@ where BServ: BuildService + 'static
         drv_path: &StorePath<String>,
         derivation: &Derivation,
         hit: &CacheCheckHit,
+        is_remote_root_forced: bool,
     ) -> Result<(), Error> {
         assert!(!hit.infos.is_empty(), "cache hit must contain at least one output to export");
         for (output_name, path_info) in &hit.infos {
-            let root_source = if hit.substitutions.contains_key(output_name) {
+            let root_source = if is_remote_root_forced || hit.substitutions.contains_key(output_name) {
                 self.root_retention_source.map(GcRootSource::for_remote_result)
             } else {
                 self.root_retention_source
@@ -2682,9 +2811,102 @@ where BServ: BuildService + 'static
             return Ok(None);
         }
         if request.is_root {
-            self.export_verified_cache_hit_roots(request.drv_path, request.derivation, &hit).await?;
+            self.export_verified_cache_hit_roots(request.drv_path, request.derivation, &hit, false).await?;
         }
         Ok(Some(hit))
+    }
+
+    fn downgrade_preflight_action_result_report(&mut self, prior_action_results_count: usize) {
+        let Some(report) = self.action_result_reports.get_mut(prior_action_results_count) else {
+            return;
+        };
+        report.disposition = ACTION_RESULT_DISPOSITION_MISS.to_string();
+        report.selected_result_ref = None;
+        report.diagnostics.push("preflight-runtime-closure-incomplete".to_string());
+    }
+
+    /// Authenticate and materialize a preflight-eligible root and its runtime
+    /// closure before expanding build-only dependencies.
+    pub(crate) async fn preflight_cached_root(
+        &mut self,
+        input: PreflightRootInput<'_>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<Option<BuildOutcome>, Error> {
+        let PreflightRootInput {
+            drv_path,
+            derivation,
+            demanded_outputs,
+            cancellation,
+        } = input;
+        let drv_name = drv_path.name().to_string();
+        assert!(!drv_name.is_empty(), "preflight derivation name must not be empty");
+        assert!(!derivation.outputs.is_empty(), "preflight derivation must declare outputs");
+        validate_demanded_outputs(&drv_name, derivation.as_ref(), demanded_outputs)?;
+        if is_preflight_cancelled(cancellation) {
+            return Ok(None);
+        }
+
+        self.store.set_remote_admission_trust(self.trusted_keys.clone(), self.trust_unsigned);
+        let action_ref = action_ref_for_derivation(derivation.as_ref(), self.store.store_dir());
+        let prior_action_results_count = self.action_result_reports.len();
+        if let Some(mut shared_hit) = self
+            .check_shared_action_result(
+                SharedActionLookup {
+                    drv_path,
+                    derivation: derivation.as_ref(),
+                    original_drv_path: drv_path,
+                    action_ref: &action_ref,
+                    is_root: false,
+                },
+                known_paths,
+            )
+            .await?
+        {
+            if self.verify_projected_runtime_closure(drv_path, derivation.as_ref(), &mut shared_hit).await? {
+                if is_preflight_cancelled(cancellation) {
+                    return Ok(None);
+                }
+                self.export_verified_cache_hit_roots(drv_path, derivation.as_ref(), &shared_hit, true).await?;
+                return Ok(Some(BuildOutcome {
+                    drv_path: drv_path.clone(),
+                    outputs: shared_hit.infos,
+                    substitutions: shared_hit.substitutions,
+                    cached: true,
+                    log: None,
+                    sandbox_timing: None,
+                }));
+            }
+            self.downgrade_preflight_action_result_report(prior_action_results_count);
+        }
+
+        if is_preflight_cancelled(cancellation) {
+            return Ok(None);
+        }
+        let Some(cached_hit) = self
+            .check_cache(CacheCheckRequest {
+                drv_path,
+                derivation: derivation.as_ref(),
+                is_root: false,
+                is_demand_projection_eligible: true,
+                demanded_outputs,
+            })
+            .await?
+        else {
+            return Ok(None);
+        };
+        if is_preflight_cancelled(cancellation) {
+            return Ok(None);
+        }
+        self.export_verified_cache_hit_roots(drv_path, derivation.as_ref(), &cached_hit, false).await?;
+        self.record_cached_output_paths(drv_path, derivation.as_ref(), &cached_hit.infos, known_paths)?;
+        Ok(Some(BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: cached_hit.infos,
+            substitutions: cached_hit.substitutions,
+            cached: true,
+            log: None,
+            sandbox_timing: None,
+        }))
     }
 
     fn record_cached_output_paths(
@@ -8129,6 +8351,293 @@ mod tests {
             let reports = builder.take_action_result_reports();
             assert_eq!(reports[0].disposition, ACTION_RESULT_DISPOSITION_MISS);
             assert!(matches!(prepared, PrepareResult::Done(_)));
+        }
+    }
+
+    #[test]
+    fn preflight_eligibility_allows_ia_and_fod_ancestors_but_rejects_ca_dynamic_bound_and_mutable() {
+        let mut kp = DerivationRegistry::default();
+
+        // Leaf IA root -> ineligible (leave leaves on eager path).
+        let (leaf_ia, _) = build_and_register("preflight-leaf-ia", &[], &mut kp);
+        assert!(!is_preflight_eligible_root(&leaf_ia, &kp));
+
+        // FOD ancestor (path.is_some() + ca_hash.is_some()).
+        let fod_out = StorePath::from_name_and_digest_fixed("fod-ancestor-out", [41u8; 20]).unwrap();
+        let fod_hash = nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([7u8; 32]));
+        let fod_drv = Derivation {
+            arguments: vec![],
+            builder: "builtin:fetchurl".to_string(),
+            environment: BTreeMap::from([
+                ("name".to_string(), "fod-ancestor".into()),
+                ("out".to_string(), fod_out.to_absolute_path().into()),
+            ]),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_string(), nix_compat::derivation::Output {
+                path: Some(fod_out),
+                ca_hash: Some(fod_hash),
+            })]),
+            system: "x86_64-linux".to_string(),
+        };
+        let fod_hdm = fod_drv.hash_derivation_modulo(|_| [0u8; 32]);
+        let fod_path = fod_drv.calculate_derivation_path("fod-ancestor").unwrap();
+        kp.insert(fod_path.clone(), fod_hdm, fod_drv, false, None);
+        assert!(!is_preflight_eligible_root(&fod_path, &kp));
+
+        // FOD root with non-empty input_derivations -> ineligible on root.
+        let (fod_dep, _) = build_and_register("fod-dep", &[], &mut kp);
+        let fod_root_out = StorePath::from_name_and_digest_fixed("fod-root-out", [42u8; 20]).unwrap();
+        let fod_root_drv = Derivation {
+            arguments: vec![],
+            builder: "builtin:fetchurl".to_string(),
+            environment: BTreeMap::from([
+                ("name".to_string(), "fod-root".into()),
+                ("out".to_string(), fod_root_out.to_absolute_path().into()),
+            ]),
+            input_derivations: BTreeMap::from([(fod_dep, BTreeSet::from(["out".to_string()]))]),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_string(), nix_compat::derivation::Output {
+                path: Some(fod_root_out),
+                ca_hash: Some(nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([8u8; 32]))),
+            })]),
+            system: "x86_64-linux".to_string(),
+        };
+        let fod_root_hdm =
+            fod_root_drv.hash_derivation_modulo(|p| kp.get_hdm_by_drv_path(&p.to_absolute_path()).unwrap());
+        let fod_root_path = fod_root_drv.calculate_derivation_path("fod-root").unwrap();
+        kp.insert(fod_root_path.clone(), fod_root_hdm, fod_root_drv, false, None);
+        assert!(!is_preflight_eligible_root(&fod_root_path, &kp));
+
+        // Ordinary IA root depending on FOD ancestor + IA dep -> eligible!
+        let (ia_mid, _) = build_and_register("ia-mid", &[(fod_path, "out")], &mut kp);
+        let (ia_root, _) = build_and_register("ia-root", &[(ia_mid, "out")], &mut kp);
+        assert!(is_preflight_eligible_root(&ia_root, &kp));
+
+        // Missing transitive dep -> ineligible.
+        let missing_dep = StorePath::from_name_and_digest_fixed("missing-dep.drv", [43u8; 20]).unwrap();
+        kp.insert(missing_dep.clone(), [43u8; 32], leaf_ia_dummy_drv(), false, None);
+        let (missing_parent_root, _) = build_and_register("has-missing-dep", &[(missing_dep.clone(), "out")], &mut kp);
+        let mut live_without_dep = BTreeSet::from([missing_parent_root.to_absolute_path()]);
+        live_without_dep.insert(ia_root.to_absolute_path());
+        // Check directly with a fresh registry lacking `missing_dep`.
+        let mut partial_kp = DerivationRegistry::default();
+        let entry = kp.get_by_drv_path(&missing_parent_root.to_absolute_path()).unwrap();
+        partial_kp.insert(
+            missing_parent_root.clone(),
+            entry.hash_derivation_modulo,
+            entry.derivation.clone(),
+            false,
+            None,
+        );
+        assert!(!is_preflight_eligible_root(&missing_parent_root, &partial_kp));
+
+        // CA root and IA root with CA transitive dep -> ineligible.
+        let (ca_leaf, _) = build_and_register_ca("ca-leaf", &mut kp);
+        let ca_consumer = register_ca_dependent("ca-consumer", &ca_leaf, &mut kp);
+        assert!(!is_preflight_eligible_root(&ca_leaf, &kp));
+        assert!(!is_preflight_eligible_root(&ca_consumer, &kp));
+
+        // Dynamic plan producer (direct & transitive) -> ineligible.
+        let (dyn_prod, _) = build_and_register("dyn-prod", &[(leaf_ia.clone(), "out")], &mut kp);
+        kp.get_by_drv_path_mut(&dyn_prod.to_absolute_path()).unwrap().dynamic_plan_outputs = vec!["out".to_string()];
+        let (dyn_consumer, _) = build_and_register("dyn-consumer", &[(dyn_prod.clone(), "out")], &mut kp);
+        assert!(!is_preflight_eligible_root(&dyn_prod, &kp));
+        assert!(!is_preflight_eligible_root(&dyn_consumer, &kp));
+
+        // .drv output producer -> ineligible.
+        let (drv_prod, _) = build_and_register("drv-prod.drv", &[(leaf_ia.clone(), "out")], &mut kp);
+        let (drv_prod_consumer, _) = build_and_register("drv-prod-consumer", &[(drv_prod.clone(), "out")], &mut kp);
+        assert!(!is_preflight_eligible_root(&drv_prod, &kp));
+        assert!(!is_preflight_eligible_root(&drv_prod_consumer, &kp));
+
+        // Bound-plan consumer -> ineligible.
+        let mut bound_drv = leaf_ia_dummy_drv();
+        bound_drv.outputs.get_mut("out").unwrap().path = None;
+        bound_drv.environment.insert("out".to_string(), "".into());
+        bound_drv.input_derivations.insert(leaf_ia.clone(), BTreeSet::from(["out".to_string()]));
+        bound_drv
+            .environment
+            .insert(crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY.to_string(), "[]".into());
+        let bound_hdm = bound_drv.hash_derivation_modulo(|_| [1u8; 32]);
+        bound_drv.calculate_output_paths("bound-direct", &bound_hdm).unwrap();
+        let bound_path = bound_drv.calculate_derivation_path("bound-direct").unwrap();
+        kp.insert(bound_path.clone(), bound_hdm, bound_drv, false, None);
+        assert!(!is_preflight_eligible_root(&bound_path, &kp));
+
+        // Mutable workspace (direct & transitive) -> ineligible.
+        let mutable_policy = serde_json::to_string(&crate::WorkspacePolicy {
+            mode: crate::WorkspaceMode::MutableSession,
+            workspace_id: Some("sess-1".to_string()),
+            ..crate::WorkspacePolicy::default()
+        })
+        .unwrap();
+        let (mut_dep, _) = build_and_register_with_workspace("mutable-dep", &[], &mut kp, Some(mutable_policy));
+        let (mut_consumer, _) = build_and_register("mutable-consumer", &[(mut_dep, "out")], &mut kp);
+        assert!(!is_preflight_eligible_root(&mut_consumer, &kp));
+    }
+
+    fn leaf_ia_dummy_drv() -> Derivation {
+        let mut drv = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: BTreeMap::from([("name".to_string(), "dummy".into()), ("out".to_string(), "".into())]),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_string(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            })]),
+            system: "x86_64-linux".to_string(),
+        };
+        let hdm = drv.hash_derivation_modulo(|_| [0u8; 32]);
+        drv.calculate_output_paths("dummy", &hdm).unwrap();
+        drv
+    }
+
+    #[tokio::test]
+    async fn preflight_cached_root_verifies_runtime_closure_before_export_and_handles_batch_sig_rejection() {
+        use crunch_store::ActionResultStore as _;
+
+        // (a) Shared ActionResultRecord whose runtime closure member is missing must NOT export root
+        // and must downgrade ActionResultRuntimeReport to miss.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let state_dir = temp.path().join("state");
+            let output_dir = temp.path().join("store");
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (dep, _) = build_and_register("ar-closure-dep", &[], &mut kp);
+            let (root, root_drv) = build_and_register("ar-closure-root", &[(dep, "out")], &mut kp);
+            let root_out = root_drv.outputs["out"].path.clone().unwrap();
+            let missing_runtime_ref = make_source_path("missing-runtime-lib", 77);
+            let root_pi = put_signed_path_info(
+                &bs,
+                pis.as_ref(),
+                root_out.clone(),
+                &root,
+                vec![missing_runtime_ref],
+                &test_keypair(),
+            )
+            .await;
+
+            let record = signed_record_for_outputs(
+                &root_drv,
+                &BTreeMap::from([("out".to_owned(), root_pi)]),
+                nix_compat::store_path::STORE_DIR,
+                HermeticityMode::Practical,
+                &test_keypair(),
+            )
+            .unwrap();
+            crunch_store::LocalActionResultStore::new(&state_dir).publish(&record).await.unwrap();
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                PanicSandboxService,
+                pis,
+                output_dir.clone(),
+                Some(state_dir),
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let preflight = builder
+                .preflight_cached_root(
+                    PreflightRootInput {
+                        drv_path: &root,
+                        derivation: Arc::new(root_drv),
+                        demanded_outputs: None,
+                        cancellation: None,
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(preflight.is_none(), "incomplete runtime closure must miss preflight");
+            let exported_root_path = PathBuf::from(root_out.to_absolute_path_with_prefix(output_dir.to_str().unwrap()));
+            assert!(!exported_root_path.exists(), "root must not be exported before runtime closure verification");
+            let reports = builder.take_action_result_reports();
+            assert_eq!(reports[0].disposition, ACTION_RESULT_DISPOSITION_MISS);
+            assert!(reports[0].selected_result_ref.is_none());
+            assert!(reports[0].diagnostics.iter().any(|d| d == "preflight-runtime-closure-incomplete"));
+        }
+
+        // (b) Multi-output batch substitution where one output has a valid signature and a sibling
+        // in the same batch has a bad signature must drain all substitution reports without panicking
+        // on fallback re-check.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let local_pis = Arc::new(test_pis());
+            let remote_pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (dep, _) = build_and_register("batch-sig-dep", &[], &mut kp);
+            let (root, root_drv) = crate::test_support::build_and_register_multi(
+                "batch-sig-root",
+                &["aaa", "zzz"],
+                &[(dep, "out")],
+                &mut kp,
+            );
+
+            let aaa_path = root_drv.outputs["aaa"].path.clone().unwrap();
+            let zzz_path = root_drv.outputs["zzz"].path.clone().unwrap();
+            put_signed_path_info(&bs, remote_pis.as_ref(), aaa_path.clone(), &root, vec![], &test_keypair()).await;
+            let mut bad_zzz =
+                put_signed_path_info(&bs, remote_pis.as_ref(), zzz_path.clone(), &root, vec![], &test_keypair()).await;
+            corrupt_signature_bytes(&mut bad_zzz);
+            remote_pis.put(bad_zzz).await.unwrap();
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs.clone()),
+                Arc::new(ds),
+                PanicSandboxService,
+                local_pis,
+                temp.path().join("store"),
+                None,
+                Some(remote_pis.clone()),
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let first = builder
+                .preflight_cached_root(
+                    PreflightRootInput {
+                        drv_path: &root,
+                        derivation: Arc::new(root_drv.clone()),
+                        demanded_outputs: None,
+                        cancellation: None,
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(first.is_none());
+
+            // Now repair zzz signature in remote and re-run check_cache: must not trip
+            // StoreHandle's `debug_assert!(previous.is_none())` for aaa or zzz!
+            put_signed_path_info(&bs, remote_pis.as_ref(), zzz_path, &root, vec![], &test_keypair()).await;
+            let second = builder
+                .preflight_cached_root(
+                    PreflightRootInput {
+                        drv_path: &root,
+                        derivation: Arc::new(root_drv),
+                        demanded_outputs: None,
+                        cancellation: None,
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(second.is_some());
         }
     }
 }
