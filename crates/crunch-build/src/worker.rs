@@ -2005,6 +2005,10 @@ impl Worker {
             }
             let goal =
                 self.registry.get_mut(key).ok_or_else(|| Error::Store(format!("binding consumer missing: {key}")))?;
+            debug_assert!(
+                matches!(goal.state, GoalState::Waiting { .. } | GoalState::Failed),
+                "binding consumer {key} must be Waiting or Failed before attaching root {root_key}"
+            );
             if let GoalState::Waiting { remaining_deps } = &mut goal.state {
                 *remaining_deps = remaining_deps
                     .checked_add(1)
@@ -2685,6 +2689,7 @@ impl Worker {
                 return Err(Error::Store(format!("watch task lost without teardown proof: {error}")));
             }
         };
+        debug_assert!(stale.windows(2).all(|pair| pair[0] <= pair[1]), "watch_join stale list must be sorted");
         let is_stale = stale.binary_search(key).is_ok();
         if let Some(senders) = self.build_cancellations.as_mut() {
             senders.remove(key);
@@ -3047,11 +3052,13 @@ impl Worker {
                 self.handle_build_completion(&drv_key, build_result, builder, known_paths, state).await
             }
             Ok((drv_key, Err(build_err))) => {
+                let prepared = state
+                    .pending_meta
+                    .remove(&drv_key)
+                    .ok_or_else(|| Error::Store(format!("BUG: failed build has no pending metadata: {drv_key}")))?;
                 let failure_facts = build_err.failure_facts();
                 let mut err_msg = format!("{build_err}");
-                if let Some(prepared) = state.pending_meta.remove(&drv_key)
-                    && let Err(report_error) = builder.record_failed_finish_gates(&prepared, &err_msg)
-                {
+                if let Err(report_error) = builder.record_failed_finish_gates(&prepared, &err_msg) {
                     err_msg.push_str(&format!("; finish-gate report unavailable: {report_error}"));
                 }
                 tracing::warn!(drv = %drv_key, err = %err_msg, "sandbox build failed");
@@ -9570,5 +9577,647 @@ mod tests {
             assert_eq!(failure.error_class, case.expected_class, "{label}");
             assert_eq!(failure.fod_mismatch.is_some(), case.expect_fod, "{label}");
         }
+    }
+
+    #[derive(Clone, Copy)]
+    enum TraceFixtureMode {
+        Disabled,
+        Enabled,
+        Capped,
+    }
+
+    async fn run_causal_trace_fixture(mode: TraceFixtureMode) -> (WorkerResult, usize, Result<Option<()>, String>) {
+        let blobs = MemoryBlobService::default();
+        let pis = test_pis();
+        let mut kp = DerivationRegistry::default();
+        let (cached_leaf, cached_drv) = build_and_register("trace-cached-leaf", &[], &mut kp);
+        let cached_out = cached_drv.outputs["out"].path.clone().unwrap();
+        let cached_node = put_test_blob(&blobs, b"trace cached leaf").await;
+        let mut cached_info = PathInfo {
+            store_path: cached_out,
+            node: cached_node,
+            references: vec![],
+            nar_size: 17,
+            nar_sha256: [15u8; 32],
+            signatures: vec![],
+            deriver: Some(cached_leaf.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo(&mut cached_info, &test_keypair().signing_key);
+        pis.put(cached_info).await.unwrap();
+
+        let (built_leaf, _) = build_and_register("trace-built-leaf", &[], &mut kp);
+        let (root, _) = build_and_register("trace-root", &[(cached_leaf, "out"), (built_leaf, "out")], &mut kp);
+        let (mock, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::new(
+            blobs,
+            tmp_ds(),
+            mock,
+            pis,
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut worker = Worker::new(1);
+        match mode {
+            TraceFixtureMode::Disabled => {}
+            TraceFixtureMode::Enabled => worker.enable_causal_trace(kp.store_dir()),
+            TraceFixtureMode::Capped => {
+                worker.enable_causal_trace(kp.store_dir());
+                let trace = worker.causal_trace.as_mut().unwrap();
+                let prefill_count = mantle_causal_trace_core::MAX_ACTIONS.saturating_sub(6);
+                for idx in 0..prefill_count {
+                    trace.root_required(&format!("/nix/store/00000000000000000000000000000000-pad-{idx}.drv"));
+                }
+            }
+        }
+        worker.want(&root, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        let trace_status = worker.take_causal_trace().map(|opt| opt.map(|_| ())).map_err(|err| format!("{err:?}"));
+        let call_count = calls.lock().unwrap().len();
+        (result, call_count, trace_status)
+    }
+
+    #[tokio::test]
+    async fn causal_trace_enable_and_cap_never_alter_build_outcomes_or_reuse() {
+        let (disabled, disabled_calls, disabled_trace) = run_causal_trace_fixture(TraceFixtureMode::Disabled).await;
+        let (enabled, enabled_calls, enabled_trace) = run_causal_trace_fixture(TraceFixtureMode::Enabled).await;
+        let (capped, capped_calls, capped_trace) = run_causal_trace_fixture(TraceFixtureMode::Capped).await;
+
+        assert_eq!(disabled_trace, Ok(None));
+        assert_eq!(enabled_trace, Ok(Some(())));
+        assert!(capped_trace.is_err(), "saturated trace must fail without altering worker result: {capped_trace:?}");
+        assert_eq!(disabled_calls, 2);
+        assert_eq!(enabled_calls, disabled_calls);
+        assert_eq!(capped_calls, disabled_calls);
+        assert!(disabled.failed.is_empty());
+        assert!(enabled.failed.is_empty());
+        assert!(capped.failed.is_empty());
+        let summarize = |res: &WorkerResult| {
+            let mut summary: Vec<_> = res
+                .all_outcomes
+                .iter()
+                .map(|o| (o.drv_path.to_absolute_path(), o.cached, o.outputs.clone()))
+                .collect();
+            summary.sort_by(|left, right| left.0.cmp(&right.0));
+            summary
+        };
+        assert_eq!(summarize(&disabled), summarize(&enabled));
+        assert_eq!(summarize(&disabled), summarize(&capped));
+        assert_eq!(disabled.outcomes.len(), 1);
+        assert_eq!(enabled.outcomes[0].outputs, disabled.outcomes[0].outputs);
+        assert_eq!(capped.outcomes[0].outputs, disabled.outcomes[0].outputs);
+    }
+
+    #[tokio::test]
+    async fn cached_native_plan_producer_admits_plan_and_attaches_root_before_waking_consumer() {
+        // Case A: Cached accepted native dynamic-plan producer must admit units and
+        // attach generated root waits before waking a waiting static consumer.
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock_pre, calls_pre) = DrvProducingMockBuildService::new(
+            blobs.clone(),
+            StdHashMap::from([("cached-native-producer".to_owned(), valid_native_plan_bytes())]),
+        );
+        let mut builder_pre = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(ds.clone()),
+            mock_pre,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp_pre = DerivationRegistry::default();
+        let (producer_pre, _) = build_and_register_multi("cached-native-producer", &["out", "plan"], &[], &mut kp_pre);
+        let producer_pre_outcome = builder_pre.build(&producer_pre, &mut kp_pre).await.unwrap();
+        assert!(!producer_pre_outcome.cached);
+        assert_eq!(calls_pre.lock().unwrap().len(), 1);
+
+        let (mock, calls) = DrvProducingMockBuildService::new(blobs.clone(), StdHashMap::new());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(ds),
+            mock,
+            pis,
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("cached-native-producer", &["out", "plan"], &[], &mut kp);
+        assert_eq!(producer, producer_pre);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, placeholder) = register_bound_consumer(&mut kp, &producer);
+        let consumer_key = consumer.to_absolute_path();
+        let producer_key = producer.to_absolute_path();
+
+        let (tx, mut rx) = mpsc::channel(2);
+        tx.send(EvalMessage {
+            label: "consumer".to_owned(),
+            drv_path: consumer.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
+        drop(tx);
+
+        let mut observed_waiting_while_root_incomplete = false;
+        let mut observer = |goals: &GoalRegistry| {
+            let has_incomplete_dynamic_root = goals.iter().any(|(key, goal)| {
+                key != producer_key.as_str()
+                    && key != consumer_key.as_str()
+                    && !matches!(goal.state, GoalState::Done | GoalState::Failed)
+            });
+            if has_incomplete_dynamic_root && let Some(consumer_goal) = goals.get(&consumer_key) {
+                assert!(
+                    matches!(consumer_goal.state, GoalState::Waiting { .. }),
+                    "consumer must remain Waiting while dynamic root is incomplete, saw {:?}",
+                    consumer_goal.state
+                );
+                observed_waiting_while_root_incomplete = true;
+            }
+        };
+
+        let mut worker = Worker::new(2);
+        let result = worker.run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut observer)).await.unwrap();
+        assert!(observed_waiting_while_root_incomplete);
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.plan_output_bindings.len(), 1);
+        assert_eq!(result.plan_output_bindings[0].status, "bound");
+        let producer_outcome = result.all_outcomes.iter().find(|outcome| outcome.drv_path == producer).unwrap();
+        assert!(producer_outcome.cached, "producer must hit cache via PrepareResult::Done");
+        let actual = result.plan_output_bindings[0].output_path.as_ref().unwrap();
+        {
+            let recorded = calls.lock().unwrap();
+            assert_eq!(recorded.len(), 2, "only dynamic root and static consumer execute: {recorded:?}");
+            assert!(recorded[1].iter().any(|arg| arg == &format!("--bound={}", actual.to_absolute_path())));
+            assert!(!recorded[1].iter().any(|arg| arg.contains(&placeholder)));
+        }
+
+        // Case B: Cached invalid/rejected native dynamic-plan producer fails static consumer
+        // without dispatching any build.
+        let blobs_bad = MemoryBlobService::default();
+        let ds_bad = tmp_ds();
+        let pis_bad: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock_bad_pre, _) = DrvProducingMockBuildService::new(
+            blobs_bad.clone(),
+            StdHashMap::from([("cached-native-bad".to_owned(), b"{bad-cached-plan".to_vec())]),
+        );
+        let mut builder_bad_pre = Builder::with_state_dir(
+            Arc::new(blobs_bad.clone()),
+            Arc::new(ds_bad.clone()),
+            mock_bad_pre,
+            pis_bad.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp_bad_pre = DerivationRegistry::default();
+        let (bad_producer_pre, _) =
+            build_and_register_multi("cached-native-bad", &["out", "plan"], &[], &mut kp_bad_pre);
+        let _ = builder_bad_pre.build(&bad_producer_pre, &mut kp_bad_pre).await.unwrap();
+
+        let (mock_bad, calls_bad) = DrvProducingMockBuildService::new(blobs_bad.clone(), StdHashMap::new());
+        let mut builder_bad = Builder::with_state_dir(
+            Arc::new(blobs_bad),
+            Arc::new(ds_bad),
+            mock_bad,
+            pis_bad,
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp_bad = DerivationRegistry::default();
+        let (bad_producer, _) = build_and_register_multi("cached-native-bad", &["out", "plan"], &[], &mut kp_bad);
+        declare_native_plan_output(&mut kp_bad, &bad_producer, "plan");
+        let (bad_consumer, _) = register_bound_consumer(&mut kp_bad, &bad_producer);
+
+        let mut worker_bad = Worker::new(1);
+        worker_bad.want(&bad_consumer, &kp_bad, true).unwrap();
+        let bad_result = worker_bad.run(&mut builder_bad, &mut kp_bad).await.unwrap();
+        assert_eq!(bad_result.failed.len(), 1);
+        assert_eq!(bad_result.failed[0].drv_key, bad_consumer.to_absolute_path());
+        assert_eq!(bad_result.failed[0].error, "plan-output-plan-rejected");
+        assert!(calls_bad.lock().unwrap().is_empty(), "neither cached producer nor rejected consumer may run");
+    }
+
+    #[tokio::test]
+    async fn process_join_result_rejects_unowned_completion_without_admitting_output() {
+        let mut paths = DerivationRegistry::default();
+        let (drv_path, _) = build_and_register("unowned-join-completion", &[], &mut paths);
+        let key = drv_path.to_absolute_path();
+        let output = paths.get_output_path(&key, "out").unwrap();
+        let blobs = MemoryBlobService::default();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(tmp_ds()),
+            mock,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let node = put_test_blob(&blobs, b"unowned output").await;
+        let build_result = snix_build::buildservice::BuildResult {
+            outputs: vec![snix_build::buildservice::BuildOutput {
+                node,
+                output_needles: BTreeSet::new(),
+            }],
+            log: None,
+            timing: None,
+        };
+
+        let mut worker = Worker::new(1);
+        worker.want(&drv_path, &paths, true).unwrap();
+        worker.ready_goals.remove(&key);
+        worker.registry.get_mut(&key).unwrap().mark_building().unwrap();
+
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut native_dynamic_plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(1)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
+            completed_count: 0,
+        };
+
+        let ok_err = worker
+            .process_join_result(Ok((key.clone(), Ok(build_result))), &mut builder, &mut paths, &mut state)
+            .await
+            .unwrap_err();
+        assert!(ok_err.to_string().contains("no pending metadata"), "{ok_err}");
+        assert_eq!(worker.registry.get(&key).unwrap().state, GoalState::Building);
+        assert!(state.outcomes.is_empty());
+        assert!(state.all_outcomes.is_empty());
+        assert!(state.failed.is_empty());
+        assert!(pis.get(*output.digest()).await.unwrap().is_none());
+
+        let synthetic_fail = classify_build_service_error("build", std::io::Error::other("unowned error"));
+        let err_err = worker
+            .process_join_result(Ok((key.clone(), Err(synthetic_fail))), &mut builder, &mut paths, &mut state)
+            .await
+            .unwrap_err();
+        assert!(err_err.to_string().contains("no pending metadata"), "{err_err}");
+        assert_eq!(worker.registry.get(&key).unwrap().state, GoalState::Building);
+        assert!(state.failed.is_empty());
+    }
+
+    struct WatchReplacementBuildService {
+        mock: MockBuildService,
+        gated_marker: String,
+        started: mpsc::UnboundedSender<()>,
+        cancellation_observed: mpsc::UnboundedSender<()>,
+        release_teardown: watch::Receiver<bool>,
+    }
+
+    #[async_trait::async_trait]
+    impl BuildService for WatchReplacementBuildService {
+        async fn do_build(
+            &self,
+            _request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            Err(std::io::Error::other("watch replacement bypassed cancellable build service"))
+        }
+
+        async fn do_build_cancellable(
+            &self,
+            request: snix_build::buildservice::BuildRequest,
+            mut cancellation: watch::Receiver<bool>,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            let is_gated = request.command_args.iter().any(|arg| arg.contains(&self.gated_marker));
+            if is_gated {
+                self.started.send(()).map_err(std::io::Error::other)?;
+                while !*cancellation.borrow_and_update() {
+                    cancellation.changed().await.map_err(std::io::Error::other)?;
+                }
+                self.cancellation_observed.send(()).map_err(std::io::Error::other)?;
+                let mut release = self.release_teardown.clone();
+                while !*release.borrow_and_update() {
+                    release.changed().await.map_err(std::io::Error::other)?;
+                }
+            }
+            self.mock.do_build(request).await
+        }
+    }
+
+    #[tokio::test]
+    async fn watch_replacement_discards_late_success_from_retracted_root_and_completes_replacement() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let (started, mut started_rx) = mpsc::unbounded_channel();
+        let (cancellation_observed, mut cancelled_rx) = mpsc::unbounded_channel();
+        let (release_tx, release_teardown) = watch::channel(false);
+        let pis: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary("watch-replace-pis".into(), RedbPathInfoServiceConfig::default())
+                .unwrap(),
+        );
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            WatchReplacementBuildService {
+                mock,
+                gated_marker: "watch-replace-old".to_owned(),
+                started,
+                cancellation_observed,
+                release_teardown,
+            },
+            pis.clone(),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut paths = DerivationRegistry::default();
+        let (old_root, _) = build_and_register("watch-replace-old", &[], &mut paths);
+        let (new_root, new_drv) = build_and_register("watch-replace-new", &[], &mut paths);
+        let new_hdm = paths.get_hdm_by_drv_path(&new_root.to_absolute_path()).unwrap();
+        let old_out = paths.get_output_path(&old_root.to_absolute_path(), "out").unwrap();
+        let new_out = paths.get_output_path(&new_root.to_absolute_path(), "out").unwrap();
+
+        let (tx, mut updates) = mpsc::channel(4);
+        let (events_tx, mut events) = mpsc::channel(8);
+        let mut worker = Worker::new(1);
+        let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            tx.send(WatchWorkerUpdate {
+                generation: 1,
+                roots: vec![EvalMessage {
+                    label: "old".to_owned(),
+                    drv_path: old_root.clone(),
+                    new_entries: vec![],
+                }],
+            })
+            .await
+            .unwrap();
+            let run = worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx);
+            tokio::pin!(run);
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-1 candidate: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit.send(()).unwrap(),
+                    event => panic!("unexpected gen-1 candidate: {event:?}"),
+                }
+            }
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-1 start: {res:?}"),
+                started = started_rx.recv() => assert_eq!(started, Some(())),
+            }
+
+            // Replace gen-1 root with gen-2 root while gen-1 is running.
+            tx.send(WatchWorkerUpdate {
+                generation: 2,
+                roots: vec![EvalMessage {
+                    label: "new".to_owned(),
+                    drv_path: new_root.clone(),
+                    new_entries: vec![(new_root.clone(), new_hdm, new_drv, false, vec![], None)],
+                }],
+            })
+            .await
+            .unwrap();
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before cancellation observed: {res:?}"),
+                cancelled = cancelled_rx.recv() => assert_eq!(cancelled, Some(())),
+                ev = events.recv() => panic!("unexpected watch event instead of cancellation: {ev:?}"),
+            }
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before PendingCancellation: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::PendingCancellation { generation: 2, stale }) => {
+                        assert_eq!(stale, vec![old_root.to_absolute_path()]);
+                    }
+                    event => panic!("expected PendingCancellation for gen-2, got {event:?}"),
+                }
+            }
+            // Retracted gen-1 finishes with Ok(BuildResult) during teardown.
+            release_tx.send(true).unwrap();
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-2 CandidateReady: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                    event => panic!("unexpected gen-2 candidate: {event:?}"),
+                }
+            }
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-2 Settled: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 2,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty(), "{failed:?}");
+                        assert_eq!(outcomes.len(), 1);
+                        assert_eq!(outcomes[0].drv_path, new_root);
+                    }
+                    event => panic!("expected Settled for gen-2, got {event:?}"),
+                }
+            }
+            drop(tx);
+            run.await
+        })
+        .await
+        .expect("watch replacement regression exceeded cleanup guard")
+        .unwrap();
+        assert!(result.outcomes.iter().all(|o| o.drv_path == new_root));
+        assert!(result.all_outcomes.iter().all(|o| o.drv_path == new_root));
+        assert!(pis.get(*old_out.digest()).await.unwrap().is_none(), "retracted gen-1 published PathInfo");
+        assert!(pis.get(*new_out.digest()).await.unwrap().is_some(), "replacement gen-2 must publish PathInfo");
+    }
+
+    fn register_ca_leaf_for_worker_test(name: &str, kp: &mut DerivationRegistry) -> StorePath<String> {
+        let mut drv = nix_compat::derivation::Derivation {
+            arguments: vec!["-c".into(), format!("echo {name} > $out")],
+            builder: "/bin/sh".to_owned(),
+            environment: BTreeMap::from([
+                ("name".to_owned(), name.into()),
+                ("system".to_owned(), "x86_64-linux".into()),
+                ("builder".to_owned(), "/bin/sh".into()),
+                ("outputs".to_owned(), "out".into()),
+                ("out".to_owned(), "".into()),
+            ]),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_owned(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            })]),
+            system: "x86_64-linux".to_owned(),
+        };
+        let hdm = drv.hash_derivation_modulo(|_| panic!("CA leaf has no input derivations"));
+        drv.calculate_output_paths(name, &hdm).unwrap();
+        for output in drv.outputs.values_mut() {
+            output.path = None;
+        }
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
+        kp.insert(drv_path.clone(), hdm, drv, true, None);
+        drv_path
+    }
+
+    async fn run_policy_non_interference_fixture(
+        policy: SchedulingPolicy,
+        prefer_fast: bool,
+    ) -> (WorkerResult, Vec<Vec<String>>) {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis = test_pis();
+        let (mock, calls) = MockBuildService::new(blobs.clone());
+        let mut kp = DerivationRegistry::default();
+
+        // Untrusted cached leaf: signature belongs to a non-trusted key, so
+        // check_cache must reject it and rebuild regardless of scheduling order.
+        let (untrusted_leaf, untrusted_drv) = build_and_register("policy-untrusted-leaf", &[], &mut kp);
+        let untrusted_out = untrusted_drv.outputs["out"].path.clone().unwrap();
+        let untrusted_node = put_test_blob(&blobs, b"untrusted-leaf-stale").await;
+        let wrong_secret = ed25519_dalek::SigningKey::from_bytes(&[55u8; 32]);
+        let wrong_key = nix_compat::narinfo::SigningKey::new("rogue-signer".to_owned(), wrong_secret);
+        let mut untrusted_info = PathInfo {
+            store_path: untrusted_out,
+            node: untrusted_node,
+            references: vec![],
+            nar_size: 20,
+            nar_sha256: [17u8; 32],
+            signatures: vec![],
+            deriver: Some(untrusted_leaf.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo(&mut untrusted_info, &wrong_key);
+        pis.put(untrusted_info).await.unwrap();
+
+        let ca_leaf = register_ca_leaf_for_worker_test("policy-ca-leaf", &mut kp);
+        let (fast_root, _) = build_and_register("policy-fast-root", &[], &mut kp);
+        let (pressure_left, _) = build_and_register(
+            "policy-pressure-left",
+            &[(untrusted_leaf.clone(), "out"), (ca_leaf.clone(), "out")],
+            &mut kp,
+        );
+        let (pressure_right, _) =
+            build_and_register("policy-pressure-right", &[(untrusted_leaf, "out"), (ca_leaf, "out")], &mut kp);
+
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(ds),
+            mock,
+            Arc::new(pis),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut worker = Worker::with_scheduling_policy(1, policy).unwrap();
+        worker.want(&fast_root, &kp, true).unwrap();
+        worker.want(&pressure_left, &kp, true).unwrap();
+        worker.want(&pressure_right, &kp, true).unwrap();
+        if prefer_fast {
+            let preference = crate::scheduling::normalize_eligible_preference(
+                crate::scheduling::HardEligibilityFacts::ELIGIBLE,
+                crate::scheduling::ResourceFitClass::Exact,
+                crate::scheduling::ContentLocalityClass::FullyPresent,
+                crate::scheduling::TransferCostClass::None,
+            )
+            .unwrap();
+            worker
+                .set_goal_scheduling_preference(
+                    &fast_root.to_absolute_path(),
+                    OperatorPolicyClass::Ordinary,
+                    preference,
+                )
+                .unwrap();
+        }
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        let recorded = calls.lock().unwrap().clone();
+        (result, recorded)
+    }
+
+    #[tokio::test]
+    async fn scheduling_policy_changes_dispatch_order_without_altering_outcomes_or_cache_admission() {
+        let default_policy = SchedulingPolicy::default();
+        let locality_first_policy = SchedulingPolicy {
+            preference_order: vec![
+                crate::scheduling::PreferenceField::LocalityTransfer,
+                crate::scheduling::PreferenceField::ResourceFit,
+                crate::scheduling::PreferenceField::KnownGraph,
+            ],
+            ..SchedulingPolicy::default()
+        };
+
+        let (res_a, calls_a) = run_policy_non_interference_fixture(default_policy, false).await;
+        let (res_b, calls_b) = run_policy_non_interference_fixture(locality_first_policy, true).await;
+
+        assert!(res_a.failed.is_empty(), "{:?}", res_a.failed);
+        assert!(res_b.failed.is_empty(), "{:?}", res_b.failed);
+        assert_ne!(
+            res_a.priority_decisions[0].selected_goal_key_blake3, res_b.priority_decisions[0].selected_goal_key_blake3,
+            "distinct scheduling policies must reorder initial dispatch"
+        );
+        assert_ne!(calls_a[0], calls_b[0]);
+        assert_eq!(calls_a.len(), 5);
+        assert_eq!(calls_b.len(), 5);
+
+        let summarize = |res: &WorkerResult| {
+            let mut summary: Vec<_> = res
+                .all_outcomes
+                .iter()
+                .map(|outcome| (outcome.drv_path.to_absolute_path(), outcome.cached, outcome.outputs.clone()))
+                .collect();
+            summary.sort_by(|left, right| left.0.cmp(&right.0));
+            summary
+        };
+        let summary_a = summarize(&res_a);
+        let summary_b = summarize(&res_b);
+        assert_eq!(summary_a, summary_b);
+        assert!(
+            summary_a.iter().all(|(_, cached, _)| !cached),
+            "untrusted cached leaf must be rejected and rebuilt under every policy"
+        );
     }
 }

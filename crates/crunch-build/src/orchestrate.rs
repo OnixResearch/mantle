@@ -388,10 +388,13 @@ fn build_pool_closure_entries(
         let (Some(json), Some(hdm)) = (json_by_path.get(path), hdm_by_path.get(path)) else {
             continue;
         };
-        total_bytes = total_bytes.saturating_add(json.len());
-        if total_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
+        let Some(next_bytes) = total_bytes.checked_add(json.len()) else {
+            break;
+        };
+        if next_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
             break;
         }
+        total_bytes = next_bytes;
         let mut outputs = Vec::new();
         for (output_name, output) in &derivation.outputs {
             if output.path.is_some() {
@@ -6466,5 +6469,458 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn make_sized_pool_closure_derivation(
+        index: usize,
+        payload_len: usize,
+        fixed_output: bool,
+        registry: &mut DerivationRegistry,
+    ) -> (String, Arc<Derivation>, usize) {
+        let name = format!("pool-closure-{index:02}");
+        let (_, mut drv) = build_and_register(&name, &[], registry);
+        for output in drv.outputs.values_mut() {
+            output.path = None;
+            if fixed_output {
+                output.ca_hash =
+                    Some(nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([0u8; 32])));
+            }
+        }
+        drv.environment.insert("out".to_owned(), bstr::BString::from(""));
+        drv.arguments[1] = format!("echo {name} {} > $out", "a".repeat(payload_len));
+        let hdm = drv.hash_derivation_modulo(|parent| {
+            registry.get_hdm_by_drv_path(&parent.to_absolute_path()).expect("parent should be in registry")
+        });
+        drv.calculate_output_paths(&name, &hdm).unwrap();
+        let drv_path = drv.calculate_derivation_path(&name).unwrap();
+        let abs = drv_path.to_absolute_path();
+        let json_len = serde_json::to_string(&drv).unwrap().len();
+        registry.insert(drv_path, hdm, drv.clone(), false, None);
+        (abs, Arc::new(drv), json_len)
+    }
+
+    #[test]
+    fn build_pool_closure_entries_bounds_total_bytes_at_limit() {
+        use crate::distributed::MAX_POOL_GOAL_CLOSURE_BYTES;
+
+        let prefix_count = 64_usize;
+        let prefix_payload_len = 1_032_000_usize;
+
+        for (target_offset, expect_all_65) in [
+            (MAX_POOL_GOAL_CLOSURE_BYTES - 1, true),
+            (MAX_POOL_GOAL_CLOSURE_BYTES, true),
+            (MAX_POOL_GOAL_CLOSURE_BYTES + 1, false),
+        ] {
+            let mut registry = DerivationRegistry::default();
+            let mut collected = Vec::with_capacity(prefix_count + 1);
+            let mut prefix_bytes = 0_usize;
+            for idx in 0..prefix_count {
+                let (abs, drv, json_len) =
+                    make_sized_pool_closure_derivation(idx, prefix_payload_len, false, &mut registry);
+                prefix_bytes += json_len;
+                collected.push((abs, drv));
+            }
+            let mut base_64_registry = DerivationRegistry::default();
+            let (_, _, base_len_64) = make_sized_pool_closure_derivation(prefix_count, 0, true, &mut base_64_registry);
+            let remaining = target_offset.checked_sub(prefix_bytes).unwrap();
+            let last_payload = remaining.checked_sub(base_len_64).unwrap();
+            let (last_abs, last_drv, last_json_len) =
+                make_sized_pool_closure_derivation(prefix_count, last_payload, true, &mut registry);
+            assert_eq!(prefix_bytes + last_json_len, target_offset);
+            collected.push((last_abs, last_drv));
+
+            let entries = build_pool_closure_entries(&collected, &registry, nix_compat::store_path::STORE_DIR);
+            let emitted_bytes: usize = entries.iter().map(|entry| entry.derivation_json.len()).sum();
+            assert!(emitted_bytes <= MAX_POOL_GOAL_CLOSURE_BYTES);
+            if expect_all_65 {
+                assert_eq!(entries.len(), prefix_count + 1);
+                assert_eq!(emitted_bytes, target_offset);
+            } else {
+                assert_eq!(entries.len(), prefix_count);
+                assert_eq!(emitted_bytes, prefix_bytes);
+            }
+        }
+    }
+
+    struct SequencePathInfoService {
+        queues: Arc<Mutex<HashMap<[u8; 20], std::collections::VecDeque<PathInfo>>>>,
+    }
+
+    impl SequencePathInfoService {
+        fn new() -> Self {
+            Self {
+                queues: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+
+        fn push(&self, path_info: PathInfo) {
+            self.queues.lock().unwrap().entry(*path_info.store_path.digest()).or_default().push_back(path_info);
+        }
+    }
+
+    #[async_trait]
+    impl PathInfoService for SequencePathInfoService {
+        async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
+            let mut guard = self.queues.lock().unwrap();
+            let Some(queue) = guard.get_mut(&digest) else {
+                return Ok(None);
+            };
+            if queue.len() > 1 {
+                Ok(queue.pop_front())
+            } else {
+                Ok(queue.front().cloned())
+            }
+        }
+
+        async fn put(&self, path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
+            self.push(path_info.clone());
+            Ok(path_info)
+        }
+
+        fn list(&self) -> futures::stream::BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
+            let entries: Vec<_> =
+                self.queues.lock().unwrap().values().flat_map(|queue| queue.iter().cloned()).collect();
+            futures::stream::iter(entries.into_iter().map(Ok)).boxed()
+        }
+    }
+
+    async fn register_signed_source_in_store(
+        blobs: &MemoryBlobService,
+        pis: &Arc<dyn PathInfoService>,
+        path: &StorePath<String>,
+        bytes: &[u8],
+    ) {
+        let node = put_blob(blobs, bytes).await;
+        let mut info = PathInfo {
+            store_path: path.clone(),
+            node,
+            references: vec![],
+            nar_size: u64::try_from(bytes.len()).unwrap(),
+            nar_sha256: [3u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        sign_with_test_key(&mut info);
+        pis.put(info).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bound_plan_consumer_changed_realized_root_recomputes_action_ref_and_misses_cache() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis = Arc::new(test_pis()) as Arc<dyn PathInfoService>;
+        let (service, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(ds.clone()),
+            service,
+            pis.clone(),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let root_a = make_source_path("bound-root-a", 71);
+        let root_b = make_source_path("bound-root-b", 72);
+        register_signed_source_in_store(&blobs, &pis, &root_a, b"root-a").await;
+        register_signed_source_in_store(&blobs, &pis, &root_b, b"root-b").await;
+
+        let mut registry = DerivationRegistry::default();
+        let (consumer_path, consumer_drv) = build_and_register("bound-consumer-swap", &[], &mut registry);
+        let consumer_arc = Arc::new(consumer_drv.clone());
+        let consumer_abs = consumer_path.to_absolute_path();
+        let binding_a = vec![("p".to_owned(), root_a)];
+        let binding_b = vec![("p".to_owned(), root_b)];
+
+        let (prepared_a, req_a) = match builder
+            .prepare_build(&consumer_path, consumer_arc.clone(), &mut registry, true, &binding_a)
+            .await
+            .unwrap()
+        {
+            PrepareResult::NeedsBuild {
+                prepared,
+                build_request,
+            } => (prepared, build_request),
+            PrepareResult::Done(_) => panic!("initial bound consumer must build"),
+        };
+        let ref_a = registry.get_by_drv_path(&consumer_abs).unwrap().resolved_action_ref.clone().unwrap();
+        let expected_ref_a =
+            action_ref_for_bound_roots(&consumer_drv, &binding_a, nix_compat::store_path::STORE_DIR).unwrap();
+        assert_eq!(ref_a, expected_ref_a);
+        let build_res_a = builder.build_service().do_build(*req_a).await.unwrap();
+        let outcome_a = builder.finish_build(&prepared_a, build_res_a, &mut registry).await.unwrap();
+        assert!(!outcome_a.cached);
+        builder.take_action_result_reports();
+
+        // Same binding_a hits shared action result.
+        let hit_a = builder
+            .prepare_build(&consumer_path, consumer_arc.clone(), &mut registry, true, &binding_a)
+            .await
+            .unwrap();
+        assert!(matches!(hit_a, PrepareResult::Done(ref outcome) if outcome.cached));
+        builder.take_action_result_reports();
+
+        // Swapping binding_a -> binding_b keeps evaluated drv_path unchanged, recomputes
+        // action_ref, bypasses check_cache despite PathInfo existing, and misses.
+        let miss_b =
+            builder.prepare_build(&consumer_path, consumer_arc, &mut registry, true, &binding_b).await.unwrap();
+        assert!(
+            matches!(miss_b, PrepareResult::NeedsBuild { .. }),
+            "swapped bound_plan_outputs must miss shared and local cache"
+        );
+        let ref_b = registry.get_by_drv_path(&consumer_abs).unwrap().resolved_action_ref.clone().unwrap();
+        let expected_ref_b =
+            action_ref_for_bound_roots(&consumer_drv, &binding_b, nix_compat::store_path::STORE_DIR).unwrap();
+        assert_eq!(ref_b, expected_ref_b);
+        assert_ne!(ref_a, ref_b);
+        let reports = builder.take_action_result_reports();
+        assert!(reports.iter().any(|report| report.action_ref == ref_b && report.disposition == "miss"));
+        assert_eq!(calls.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn admit_resolved_input_realisation_rejects_path_disagreement_with_completed_ca_parent() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let (service, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            service,
+            Arc::new(test_pis()),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut registry = DerivationRegistry::default();
+        let (parent_path, _) = build_and_register_ca("ca-parent-disagree", &mut registry);
+        let _ = builder.build(&parent_path, &mut registry).await.unwrap();
+        let child_path = register_ca_dependent("ca-child-disagree", &parent_path, &mut registry);
+        let child_drv = registry.get_by_drv_path(&child_path.to_absolute_path()).unwrap().derivation.clone();
+
+        let wrong_path = make_source_path("disagreed-ca-out", 73);
+        registry
+            .get_by_drv_path_mut(&parent_path.to_absolute_path())
+            .unwrap()
+            .resolved_outputs
+            .insert("out".to_owned(), wrong_path);
+
+        let err = match builder.prepare_build(&child_path, child_drv, &mut registry, true, &[]).await {
+            Ok(_) => panic!("disagreeing resolved parent output path must fail closed"),
+            Err(error) => error,
+        };
+        assert!(matches!(err, Error::CacheVerification(_)), "expected CacheVerification, got: {err:?}");
+        assert!(err.to_string().contains("path disagrees with completed goal"), "unexpected error: {err}");
+        assert_eq!(calls.lock().unwrap().len(), 1, "dependent must not execute after disagreement");
+    }
+
+    #[tokio::test]
+    async fn indexed_shared_action_result_with_missing_blob_or_untrusted_pathinfo_is_rejected() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs_full = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis_trusted = Arc::new(test_pis()) as Arc<dyn PathInfoService>;
+        let mut registry = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("indexed-incomplete", &[], &mut registry);
+        let (service1, _) = MockBuildService::new(blobs_full.clone());
+        let mut builder1 = Builder::with_state_dir(
+            Arc::new(blobs_full.clone()),
+            Arc::new(ds.clone()),
+            service1,
+            pis_trusted.clone(),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let built = builder1.build(&drv_path, &mut registry).await.unwrap();
+        let out_info = built.outputs["out"].clone();
+
+        // Case A: ActionResultIndex + SignedActionResultRecord exist, PathInfo exists,
+        // but castore blob is missing from BlobService.
+        let empty_blobs = MemoryBlobService::default();
+        let (service2, calls2) = MockBuildService::new(empty_blobs.clone());
+        let mut builder_missing_blob = Builder::with_state_dir(
+            Arc::new(empty_blobs),
+            Arc::new(ds.clone()),
+            service2,
+            pis_trusted,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut reg2 = DerivationRegistry::default();
+        let (drv_path2, drv2) = build_and_register("indexed-incomplete", &[], &mut reg2);
+        assert_eq!(drv_path2, drv_path);
+        let prep_missing =
+            builder_missing_blob.prepare_build(&drv_path2, Arc::new(drv2), &mut reg2, true, &[]).await.unwrap();
+        assert!(matches!(prep_missing, PrepareResult::NeedsBuild { .. }));
+        assert_eq!(calls2.lock().unwrap().len(), 0);
+        let reports_missing = builder_missing_blob.take_action_result_reports();
+        assert!(reports_missing.iter().any(|report| {
+            report.phase == "discovery"
+                && report.disposition == "miss"
+                && !report.candidate_decisions.is_empty()
+                && report.candidate_decisions.iter().all(|decision| !decision.admitted)
+        }));
+
+        // Case B: Blob exists, ActionResultIndex + SignedActionResultRecord exist,
+        // but PathInfo carries an untrusted signer's signature.
+        let pis_untrusted = Arc::new(test_pis()) as Arc<dyn PathInfoService>;
+        let wrong_secret = ed25519_dalek::SigningKey::from_bytes(&[42u8; 32]);
+        let wrong_key = nix_compat::narinfo::SigningKey::new("untrusted-signer".to_owned(), wrong_secret);
+        let mut untrusted_info = out_info;
+        untrusted_info.signatures.clear();
+        crate::signing::sign_pathinfo(&mut untrusted_info, &wrong_key);
+        pis_untrusted.put(untrusted_info).await.unwrap();
+
+        let (service3, calls3) = MockBuildService::new(blobs_full.clone());
+        let mut builder_untrusted_pi = Builder::with_state_dir(
+            Arc::new(blobs_full),
+            Arc::new(ds),
+            service3,
+            pis_untrusted,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut reg3 = DerivationRegistry::default();
+        let (_, _) = build_and_register("indexed-incomplete", &[], &mut reg3);
+        let prep_untrusted =
+            builder_untrusted_pi.prepare_build(&drv_path, Arc::new(drv), &mut reg3, true, &[]).await.unwrap();
+        assert!(matches!(prep_untrusted, PrepareResult::NeedsBuild { .. }));
+        assert_eq!(calls3.lock().unwrap().len(), 0);
+        let reports_untrusted = builder_untrusted_pi.take_action_result_reports();
+        assert!(reports_untrusted.iter().any(|report| {
+            report.phase == "discovery"
+                && report.candidate_decisions.iter().any(|decision| {
+                    !decision.admitted
+                        && decision.diagnostics.iter().any(|diag| diag == "action-result-pathinfo-signature-untrusted")
+                })
+        }));
+    }
+
+    #[tokio::test]
+    async fn ia_conflicting_signed_action_results_fail_closed() {
+        use crunch_store::ActionResultStore as _;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let keypair = test_keypair();
+        let mut registry = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("ia-conflict-target", &[], &mut registry);
+        let out_path = drv.outputs["out"].path.clone().unwrap();
+
+        let node_a = put_blob(&blobs, b"ia-candidate-a").await;
+        let mut info_a = PathInfo {
+            store_path: out_path.clone(),
+            node: node_a,
+            references: vec![],
+            nar_size: 14,
+            nar_sha256: [11u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        sign_with_test_key(&mut info_a);
+
+        let node_b = put_blob(&blobs, b"ia-candidate-b-different").await;
+        let mut info_b = PathInfo {
+            store_path: out_path,
+            node: node_b,
+            references: vec![],
+            nar_size: 24,
+            nar_sha256: [12u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        sign_with_test_key(&mut info_b);
+
+        let record_a = signed_record_for_outputs(
+            &drv,
+            &BTreeMap::from([("out".to_owned(), info_a.clone())]),
+            nix_compat::store_path::STORE_DIR,
+            HermeticityMode::Practical,
+            &keypair,
+        )
+        .unwrap();
+        let record_b = signed_record_for_outputs(
+            &drv,
+            &BTreeMap::from([("out".to_owned(), info_b.clone())]),
+            nix_compat::store_path::STORE_DIR,
+            HermeticityMode::Practical,
+            &keypair,
+        )
+        .unwrap();
+
+        let local = crunch_store::LocalActionResultStore::new(state_dir.path());
+        local.publish(&record_a).await.unwrap();
+        local.publish(&record_b).await.unwrap();
+        let action_ref = action_ref_for_derivation(&drv, nix_compat::store_path::STORE_DIR);
+        let lookup = local.lookup(&action_ref).await.unwrap();
+        assert_eq!(lookup.records.len(), 2);
+
+        let seq_pis = Arc::new(SequencePathInfoService::new());
+        for rec in &lookup.records {
+            if rec.record.result_ref == record_a.record.result_ref {
+                seq_pis.push(info_a.clone());
+            } else {
+                seq_pis.push(info_b.clone());
+            }
+        }
+
+        let (service, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(ds),
+            service,
+            seq_pis,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            keypair,
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let err = match builder.prepare_build(&drv_path, Arc::new(drv), &mut registry, true, &[]).await {
+            Ok(_) => panic!("conflicting IA signed action results must fail closed"),
+            Err(error) => error,
+        };
+        assert!(matches!(err, Error::CacheVerification(_)), "expected CacheVerification, got: {err:?}");
+        assert!(err.to_string().contains("conflicting-action-results"), "unexpected error: {err}");
+        assert_eq!(calls.lock().unwrap().len(), 0, "conflicting IA reuse must never execute");
     }
 }
