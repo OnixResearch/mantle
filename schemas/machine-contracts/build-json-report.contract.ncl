@@ -587,7 +587,7 @@ let is_failure = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["drv_key","error_class","message","phase","root","saved_log_path"]) (std.record.fields (value))
   && (std.record.has_field "drv_key" (value) && (((std.is_string (std.record.get "drv_key" (value))
   && C.IsSafeReference (std.record.get "drv_key" (value))))))
-  && (std.record.has_field "error_class" (value) && ((std.array.elem (std.record.get "error_class" (value)) ["preflight","fixed-output-hash-mismatch","sandbox","missing-output","missing-source-input","cache-verification","unsupported-platform","builder"]
+  && (std.record.has_field "error_class" (value) && ((std.array.elem (std.record.get "error_class" (value)) ["preflight","fixed-output-hash-mismatch","sandbox","wall-timeout","silence-timeout","resource-budget","resource-enforcement-unavailable","missing-output","missing-source-input","cache-verification","unsupported-platform","builder"]
   && (std.is_string (std.record.get "error_class" (value))))))
   && (std.record.has_field "message" (value) && (((std.is_string (std.record.get "message" (value))
   && C.IsRedactionSafe (std.record.get "message" (value))))))

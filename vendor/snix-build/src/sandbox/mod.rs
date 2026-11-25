@@ -194,6 +194,12 @@ impl InputsProvider {
         (self.provider)(path.as_ref())
     }
 
+    /// Consume this provider and return an owned [`InputsGuard`] whose lifetime
+    /// can be transferred to a spawned sandbox supervisor.
+    pub fn into_guard(mut self, path: impl AsRef<Path>) -> std::io::Result<Box<dyn InputsGuard>> {
+        (self.provider)(path.as_ref())
+    }
+
     pub fn inputs_dir(&self) -> &Path {
         &self.inputs_dir
     }

@@ -200,8 +200,8 @@ let Registry = {
       ],
       "freshness_strategy"= "BLAKE3 binds the full report projection and all directly serialized owner modules",
       "freshness"= {
-        "schema_blake3"= "c71a0790b0bfc662f4b2d325b141d4d5234b80545fdd7789e580f46d43d3b1da",
-        "contract_blake3"= "f56b173ea1e31c94a8f70bc3ef0b4b976096e78420092b71782784f246db943a",
+        "schema_blake3"= "37dcd15904c13506fc13fa6724bfbdc73e6f4948dd35620fe545b01e075988b8",
+        "contract_blake3"= "d013c1216908c2a3c7bb8cdf06ffb9f1ae43163fad048550cae32e311750f918",
         "prelude_blake3"= "d48a9410c5f120d10c5d815d1c3386358ca92342c6ce9c58c62401db0e97f55e",
         "fixture_set_blake3"= "bac4f2848f29aec6fceda1177e6a5089e4b39a9a809963b6eaf9bd24f918fde1",
         "producer_identity_blake3"= "57b291116d3e02a9b65d9e1e8f72ea3b57d7979428f2affa9ce43b161489d956",

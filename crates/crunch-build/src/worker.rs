@@ -4807,14 +4807,32 @@ impl Worker {
                                 // watch cancellation reaches the sandbox and its
                                 // child teardown instead of waiting for the goal.
                                 match fallback_cancellation {
-                                    Some(receiver) => bs
-                                        .do_build_cancellable(build_request, receiver)
-                                        .await
-                                        .map_err(|error| classify_build_service_error("local fallback", error)),
-                                    None => bs
-                                        .do_build(build_request)
-                                        .await
-                                        .map_err(|error| classify_build_service_error("local fallback", error)),
+                                    Some(receiver) => {
+                                        match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
+                                            .catch_unwind()
+                                            .await
+                                        {
+                                            Err(_) => Err(Error::Store(
+                                                "local fallback build service panicked; goal failed while owned child teardown remains supervised"
+                                                    .to_string(),
+                                            )),
+                                            Ok(Ok(result)) => Ok(result),
+                                            Ok(Err(error)) => Err(classify_build_service_error("local fallback", error)),
+                                        }
+                                    }
+                                    None => {
+                                        match std::panic::AssertUnwindSafe(bs.do_build(build_request))
+                                            .catch_unwind()
+                                            .await
+                                        {
+                                            Err(_) => Err(Error::Store(
+                                                "local fallback build service panicked; goal failed while owned child teardown remains supervised"
+                                                    .to_string(),
+                                            )),
+                                            Ok(Ok(result)) => Ok(result),
+                                            Ok(Err(error)) => Err(classify_build_service_error("local fallback", error)),
+                                        }
+                                    }
                                 }
                             }
                             Err(error) => Err(classify_build_service_error("build", error)),
@@ -4843,10 +4861,17 @@ impl Worker {
                             }
                         }
                     }
-                    None => bs
-                        .do_build(build_request)
+                    None => match std::panic::AssertUnwindSafe(bs.do_build(build_request))
+                        .catch_unwind()
                         .await
-                        .map_err(|error| classify_build_service_error("build", error)),
+                    {
+                        Err(_) => Err(Error::Store(
+                            "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains supervised"
+                                .to_string(),
+                        )),
+                        Ok(Ok(result)) => Ok(result),
+                        Ok(Err(error)) => Err(classify_build_service_error("build", error)),
+                    },
                 },
                 Err(e) => Err(e),
             };
@@ -5219,6 +5244,18 @@ fn classify_build_service_error(prefix: &str, error: std::io::Error) -> Error {
             },
             snix_build::buildservice::SandboxFailureClass::Builder => {
                 Error::Store(format!("{prefix}: {}", classified.message))
+            }
+            snix_build::buildservice::SandboxFailureClass::WallDeadlineExceeded => {
+                Error::SandboxWallTimeout(format!("{prefix}: {}", classified.message))
+            }
+            snix_build::buildservice::SandboxFailureClass::SilenceBudgetExceeded => {
+                Error::SandboxSilenceTimeout(format!("{prefix}: {}", classified.message))
+            }
+            snix_build::buildservice::SandboxFailureClass::ResourceBudgetExceeded => {
+                Error::SandboxResourceBudget(format!("{prefix}: {}", classified.message))
+            }
+            snix_build::buildservice::SandboxFailureClass::ResourceEnforcementUnavailable => {
+                Error::SandboxResourceEnforcementUnavailable(format!("{prefix}: {}", classified.message))
             }
         };
     }
@@ -7165,6 +7202,258 @@ pub(crate) mod tests {
         assert_eq!(ordinary_calls.lock().unwrap().len(), 0, "ordinary service must not run");
         assert_eq!(calls_a.lock().unwrap().len(), 0, "unselected endpoint must not run");
         assert_eq!(calls_b.lock().unwrap().len(), 1, "selected endpoint runs the goal");
+    }
+
+    #[tokio::test]
+    async fn pool_dispatch_with_local_fallback_runs_local_service_and_classifies_tight_budget() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        struct NoFitSelector;
+        impl crate::distributed::PoolGoalSelector for NoFitSelector {
+            fn select(
+                &self,
+                _goal: &crate::distributed::PreparedPoolGoal,
+                _endpoint_ids: &[String],
+            ) -> Result<usize, crate::distributed::PoolSelectionError> {
+                Err(crate::distributed::PoolSelectionError::NoFit)
+            }
+        }
+
+        struct TightBudgetWatchService {
+            calls: Arc<AtomicUsize>,
+            cancellable_calls: Arc<AtomicUsize>,
+        }
+        #[async_trait::async_trait]
+        impl BuildService for TightBudgetWatchService {
+            async fn do_build(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                self.calls.fetch_add(1, Ordering::Relaxed);
+                Err(snix_build::buildservice::classified_io_error(
+                    std::io::ErrorKind::TimedOut,
+                    snix_build::buildservice::SandboxFailureClass::WallDeadlineExceeded,
+                    "one-shot tight budget fallback elapsed",
+                ))
+            }
+
+            async fn do_build_cancellable(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+                _cancellation: watch::Receiver<bool>,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                self.cancellable_calls.fetch_add(1, Ordering::Relaxed);
+                Err(snix_build::buildservice::classified_io_error(
+                    std::io::ErrorKind::TimedOut,
+                    snix_build::buildservice::SandboxFailureClass::WallDeadlineExceeded,
+                    "watch tight budget fallback elapsed",
+                ))
+            }
+        }
+
+        let make_dispatch = |fallback: bool, bs: MemoryBlobService| {
+            let (endpoint, ep_calls) = MockBuildService::new(bs);
+            let dispatch = std::sync::Arc::new(
+                crate::distributed::PoolDispatch::new(
+                    vec![crate::distributed::PoolEndpointService::new(
+                        "worker-a",
+                        std::sync::Arc::new(crate::distributed::BuildServiceExecutor::new(endpoint))
+                            as std::sync::Arc<dyn crate::distributed::PoolGoalExecutor>,
+                    )],
+                    std::sync::Arc::new(NoFitSelector),
+                )
+                .unwrap()
+                .with_local_fallback(fallback),
+            );
+            (dispatch, ep_calls)
+        };
+
+        // 1. with_local_fallback(true) + NoFit -> runs local MockBuildService.
+        let bs = MemoryBlobService::default();
+        let (local_mock, local_calls) = MockBuildService::new(bs.clone());
+        let (dispatch_ok, ep_calls_ok) = make_dispatch(true, bs.clone());
+        let mut builder_ok = Builder::new(
+            bs.clone(),
+            tmp_ds(),
+            local_mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch_ok);
+        let mut kp = DerivationRegistry::default();
+        let (sp1, _) = build_and_register("fallback-ok", &[], &mut kp);
+        let mut w1 = Worker::new(1);
+        w1.want(&sp1, &kp, true).unwrap();
+        let res1 = w1.run(&mut builder_ok, &mut kp).await.unwrap();
+        assert_eq!(res1.outcomes.len(), 1);
+        assert!(res1.failed.is_empty());
+        assert_eq!(ep_calls_ok.lock().unwrap().len(), 0);
+        assert_eq!(local_calls.lock().unwrap().len(), 1);
+
+        // 2. with_local_fallback(false) + NoFit -> fails with remote-pool, 0 local calls.
+        let (local_no, local_no_calls) = MockBuildService::new(bs.clone());
+        let (dispatch_no, _) = make_dispatch(false, bs.clone());
+        let mut builder_no = Builder::new(
+            bs.clone(),
+            tmp_ds(),
+            local_no,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch_no);
+        let (sp2, _) = build_and_register("fallback-disallowed", &[], &mut kp);
+        let mut w2 = Worker::new(1);
+        w2.want(&sp2, &kp, true).unwrap();
+        let res2 = w2.run(&mut builder_no, &mut kp).await.unwrap();
+        assert_eq!(res2.failed.len(), 1);
+        assert!(res2.failed[0].error.contains("remote-pool"));
+        assert_eq!(local_no_calls.lock().unwrap().len(), 0);
+
+        // 3. with_local_fallback(true) + WallDeadlineExceeded in both one-shot and watch modes ->
+        //    WallTimeout.
+        let oneshot_calls = Arc::new(AtomicUsize::new(0));
+        let watch_calls = Arc::new(AtomicUsize::new(0));
+        let (dispatch_tb, _) = make_dispatch(true, bs.clone());
+        let mut builder_tb = Builder::new(
+            bs,
+            tmp_ds(),
+            TightBudgetWatchService {
+                calls: oneshot_calls.clone(),
+                cancellable_calls: watch_calls.clone(),
+            },
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch_tb);
+        let (sp3, _) = build_and_register("fallback-oneshot-wall", &[], &mut kp);
+        let mut w3 = Worker::new(1);
+        w3.want(&sp3, &kp, true).unwrap();
+        let res3 = w3.run(&mut builder_tb, &mut kp).await.unwrap();
+        assert_eq!(res3.failed.len(), 1);
+        assert_eq!(res3.failed[0].error_class, BuildFailureClass::WallTimeout);
+        assert_eq!(oneshot_calls.load(Ordering::Relaxed), 1);
+
+        let (sp4, _) = build_and_register("fallback-watch-wall", &[], &mut kp);
+        let (tx, mut rx) = mpsc::channel(1);
+        tx.send(EvalMessage {
+            label: sp4.name().to_string(),
+            drv_path: sp4,
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
+        drop(tx);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let mut w4 = Worker::new(1);
+        let res4 = w4.run_streaming_cancellable(&mut builder_tb, &mut kp, &mut rx, None, cancel_rx).await.unwrap();
+        assert_eq!(res4.failed.len(), 1);
+        assert_eq!(res4.failed[0].error_class, BuildFailureClass::WallTimeout);
+        assert_eq!(watch_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn pool_dispatch_local_fallback_enforces_real_bubblewrap_wall_deadline() {
+        if !crate::test_support::real_bwrap_and_shell_available() {
+            eprintln!("skipping: real bwrap and static sandbox shell unavailable");
+            return;
+        }
+        struct NoFitSelector;
+        impl crate::distributed::PoolGoalSelector for NoFitSelector {
+            fn select(
+                &self,
+                _goal: &crate::distributed::PreparedPoolGoal,
+                _endpoint_ids: &[String],
+            ) -> Result<usize, crate::distributed::PoolSelectionError> {
+                Err(crate::distributed::PoolSelectionError::NoFit)
+            }
+        }
+
+        let workdir = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let mut policy = crate::LocalExecutionPolicy::standard();
+        policy.wall_deadline = crate::LocalWallDeadlinePolicy::Bounded { wall_deadline_secs: 1 };
+        let bwrap =
+            snix_build::buildservice::BubblewrapBuildService::new(workdir.path().to_path_buf(), bs.clone(), ds.clone())
+                .with_execution_policy(policy.to_snix_execution_policy().unwrap())
+                .unwrap();
+
+        let (endpoint, _) = MockBuildService::new(bs.clone());
+        let dispatch = std::sync::Arc::new(
+            crate::distributed::PoolDispatch::new(
+                vec![crate::distributed::PoolEndpointService::new(
+                    "worker-a",
+                    std::sync::Arc::new(crate::distributed::BuildServiceExecutor::new(endpoint))
+                        as std::sync::Arc<dyn crate::distributed::PoolGoalExecutor>,
+                )],
+                std::sync::Arc::new(NoFitSelector),
+            )
+            .unwrap()
+            .with_local_fallback(true),
+        );
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            bwrap,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch);
+
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: None,
+            ca_hash: None,
+        });
+        let mut environment = std::collections::BTreeMap::new();
+        environment.insert("name".to_string(), "real-bwrap-fallback-timeout".into());
+        environment.insert("system".to_string(), "x86_64-linux".into());
+        environment.insert("builder".to_string(), "/bin/sh".into());
+        environment.insert("out".to_string(), "".into());
+        let mut drv = nix_compat::derivation::Derivation {
+            arguments: vec![
+                "-c".into(),
+                "/bin/busybox sleep 5; /bin/busybox echo late > $out".into(),
+            ],
+            builder: "/bin/sh".to_string(),
+            environment,
+            input_derivations: std::collections::BTreeMap::new(),
+            input_sources: std::collections::BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+        let mut kp = DerivationRegistry::default();
+        let hdm = drv.hash_derivation_modulo(|_| panic!("leaf derivation"));
+        drv.calculate_output_paths("real-bwrap-fallback-timeout", &hdm).unwrap();
+        let sp = drv.calculate_derivation_path("real-bwrap-fallback-timeout").unwrap();
+        kp.insert(sp.clone(), hdm, drv, false, None);
+
+        let mut worker = Worker::new(1);
+        worker.want(&sp, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert_eq!(result.failed.len(), 1);
+        assert_eq!(result.failed[0].error_class, BuildFailureClass::WallTimeout);
     }
 
     #[tokio::test]
@@ -10308,6 +10597,54 @@ pub(crate) mod tests {
                     )
                 },
                 expected_class: BuildFailureClass::Builder,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "wall-deadline-exceeded",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::TimedOut,
+                        SandboxFailureClass::WallDeadlineExceeded,
+                        "wall deadline elapsed",
+                    )
+                },
+                expected_class: BuildFailureClass::WallTimeout,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "silence-budget-exceeded",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::TimedOut,
+                        SandboxFailureClass::SilenceBudgetExceeded,
+                        "silence budget elapsed",
+                    )
+                },
+                expected_class: BuildFailureClass::SilenceTimeout,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "resource-budget-exceeded",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::Other,
+                        SandboxFailureClass::ResourceBudgetExceeded,
+                        "cgroup oom kill",
+                    )
+                },
+                expected_class: BuildFailureClass::ResourceBudget,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "resource-enforcement-unavailable",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::Other,
+                        SandboxFailureClass::ResourceEnforcementUnavailable,
+                        "missing delegated cgroup",
+                    )
+                },
+                expected_class: BuildFailureClass::ResourceEnforcementUnavailable,
                 expect_fod: false,
             },
             TypedErrorCase {

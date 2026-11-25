@@ -1514,3 +1514,39 @@ impl BuildService for DeterministicFakeBuildService {
         self.execute_request(request, true, cancelled_during_run).await
     }
 }
+
+pub fn real_bwrap_and_shell_available() -> bool {
+    let bwrap_bin = std::env::var_os("SNIX_BUILD_BWRAP").unwrap_or_else(|| std::ffi::OsString::from("bwrap"));
+    let bwrap_ok = std::process::Command::new(bwrap_bin)
+        .args(["--ro-bind", "/", "/", "--", "/bin/true"])
+        .output()
+        .is_ok_and(|output| output.status.success());
+    if !bwrap_ok {
+        return false;
+    }
+    if let Some(shell) = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL")
+        && shell != "/bin/sh"
+        && Path::new(&shell).is_file()
+    {
+        return true;
+    }
+    if let Some(compile_default) = option_env!("SNIX_BUILD_SANDBOX_SHELL")
+        && !compile_default.is_empty()
+        && compile_default != "/bin/sh"
+        && Path::new(compile_default).is_file()
+    {
+        return true;
+    }
+    if ["/run/current-system/sw/bin/busybox-static", "/bin/busybox.static"]
+        .iter()
+        .any(|candidate| Path::new(candidate).is_file())
+    {
+        return true;
+    }
+    std::fs::read_dir("/nix/store").ok().is_some_and(|entries| {
+        entries.flatten().take(200_000).any(|entry| {
+            entry.file_name().to_string_lossy().contains("busybox-static")
+                && entry.path().join("bin").join("busybox").is_file()
+        })
+    })
+}

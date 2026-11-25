@@ -15,12 +15,12 @@ use snix_castore::import::fs::ingest_path;
 use snix_castore::refscan::ReferencePattern;
 use snix_castore::refscan::ReferenceScanner;
 use tokio::io::AsyncReadExt;
+use tokio::sync::watch;
 use tracing::Span;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
-use tokio::sync::watch;
 use uuid::Uuid;
 
 use super::BuildService;
@@ -62,15 +62,13 @@ fn sandbox_shell() -> String {
 }
 
 fn choose_sandbox_shell(env_shell: Option<&str>, compile_default: &str, discovered_static: Option<&Path>) -> String {
-    if let Some(shell_path) = env_shell {
-        if shell_path != SANDBOX_SHELL_PLACEHOLDER {
-            return shell_path.to_string();
-        }
+    if let Some(shell_path) = env_shell
+        && shell_path != SANDBOX_SHELL_PLACEHOLDER
+    {
+        return shell_path.to_string();
     }
-    if compile_default != SANDBOX_SHELL_PLACEHOLDER {
-        if compile_default_shell_exists(compile_default) {
-            return compile_default.to_string();
-        }
+    if compile_default != SANDBOX_SHELL_PLACEHOLDER && compile_default_shell_exists(compile_default) {
+        return compile_default.to_string();
     }
     if let Some(shell_path) = discovered_static {
         return shell_path.display().to_string();
@@ -164,7 +162,9 @@ fn compile_socket_mount(host_socket: &Path) -> std::io::Result<Option<SandboxMou
             guest_path: PathBuf::from("/run/mantle/compile-cache.sock"),
             read_only: true,
         })),
-        Ok(_) => Err(std::io::Error::other("compile runtime endpoint must be a Unix socket, not a file, directory, or symlink")),
+        Ok(_) => Err(std::io::Error::other(
+            "compile runtime endpoint must be a Unix socket, not a file, directory, or symlink",
+        )),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error),
     }
@@ -173,7 +173,9 @@ fn compile_socket_mount(host_socket: &Path) -> std::io::Result<Option<SandboxMou
 fn rust_wait_socket_mount(host_socket: &Path) -> std::io::Result<SandboxMount> {
     use std::os::unix::fs::FileTypeExt as _;
     if !std::fs::symlink_metadata(host_socket)?.file_type().is_socket() {
-        return Err(std::io::Error::other("Rust wait endpoint must be a Unix socket, not a file, directory, or symlink"));
+        return Err(std::io::Error::other(
+            "Rust wait endpoint must be a Unix socket, not a file, directory, or symlink",
+        ));
     }
     Ok(SandboxMount {
         host_path: host_socket.to_path_buf(),
@@ -315,36 +317,9 @@ where
     worker.join().map_err(|_| std::io::Error::other(MATERIALIZATION_WORKER_PANIC))?
 }
 
-/// Watch supervisors share this guard until their child is stopped; one-shot
-/// builds retain the original, unshared temporary directory ownership.
-enum SandboxWorkspace {
-    OneShot(tempfile::TempDir),
-    Watch(std::sync::Arc<crate::bwrap::watch_cancel::WatchWorkspace>),
-}
-
-impl SandboxWorkspace {
-    fn path(&self) -> &Path {
-        match self {
-            Self::OneShot(dir) => dir.path(),
-            Self::Watch(dir) => dir.path(),
-        }
-    }
-
-    fn watch_guard(&self) -> Option<std::sync::Arc<crate::bwrap::watch_cancel::WatchWorkspace>> {
-        match self {
-            Self::OneShot(_) => None,
-            Self::Watch(dir) => Some(std::sync::Arc::clone(dir)),
-        }
-    }
-
-    fn into_tempdir(self) -> tempfile::TempDir {
-        match self {
-            Self::OneShot(dir) => dir,
-            Self::Watch(dir) => std::sync::Arc::try_unwrap(dir)
-                .expect("watch supervisor finished before retaining failed workspace").into_tempdir(),
-        }
-    }
-}
+/// Unified workspace guard shared with the sandbox supervisor until PID1,
+/// start-gate, and cgroup teardown complete.
+type SupervisedWorkspace = std::sync::Arc<crate::bwrap::watch_cancel::WatchWorkspace>;
 
 /// Default local sandbox concurrency when callers do not supply a job policy.
 pub const DEFAULT_CONCURRENT_SANDBOX_BUILDS: u32 = 2;
@@ -374,10 +349,7 @@ impl SandboxConcurrencyPolicy {
 
     pub fn effective_permits(&self) -> std::io::Result<u32> {
         if self.requested_jobs == 0 {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidInput,
-                "sandbox job limit must be at least 1",
-            ));
+            return Err(std::io::Error::new(ErrorKind::InvalidInput, "sandbox job limit must be at least 1"));
         }
         if self.fd_budget < ESTIMATED_FDS_PER_SANDBOX {
             return Err(std::io::Error::new(
@@ -417,6 +389,12 @@ pub struct BubblewrapBuildService<BS, DS> {
     max_concurrent_builds: u32,
     // semaphore to track number of concurrently running builds under job + FD policy.
     concurrent_builds: std::sync::Arc<tokio::sync::Semaphore>,
+    /// Local execution deadlines and staged capability-aware resource policy.
+    execution_policy: super::SandboxExecutionPolicy,
+    /// Optional external supervisor graceful-shutdown trigger.
+    shutdown_signal: Option<watch::Receiver<bool>>,
+    /// Most recent attempt's cgroup/resource enforcement facts.
+    last_enforcement_facts: std::sync::Arc<std::sync::Mutex<Option<super::SandboxResourceEnforcementFacts>>>,
     #[cfg(test)]
     watch_fault: Option<WatchFault>,
 }
@@ -438,9 +416,35 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
             concurrent_builds: std::sync::Arc::new(tokio::sync::Semaphore::new(
                 DEFAULT_CONCURRENT_SANDBOX_BUILDS as usize,
             )),
+            execution_policy: super::SandboxExecutionPolicy::standard(),
+            shutdown_signal: None,
+            last_enforcement_facts: std::sync::Arc::new(std::sync::Mutex::new(None)),
             #[cfg(test)]
             watch_fault: None,
         }
+    }
+
+    /// Configure local execution deadlines and staged resource enforcement policy.
+    pub fn with_execution_policy(mut self, policy: super::SandboxExecutionPolicy) -> std::io::Result<Self> {
+        policy.validate()?;
+        self.execution_policy = policy;
+        Ok(self)
+    }
+
+    /// Return the configured local execution policy.
+    pub fn execution_policy(&self) -> &super::SandboxExecutionPolicy {
+        &self.execution_policy
+    }
+
+    /// Attach an external supervisor graceful-shutdown signal.
+    pub fn with_shutdown_signal(mut self, shutdown_signal: watch::Receiver<bool>) -> Self {
+        self.shutdown_signal = Some(shutdown_signal);
+        self
+    }
+
+    /// Return the resource enforcement facts recorded for the latest local attempt.
+    pub fn last_enforcement_facts(&self) -> Option<super::SandboxResourceEnforcementFacts> {
+        self.last_enforcement_facts.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
     }
 
     /// Size local sandbox concurrency from the resolved job policy under the
@@ -468,7 +472,9 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
         if !host_socket.is_absolute()
             || host_socket.as_os_str().as_encoded_bytes().len() > 107
             || host_socket.as_os_str().as_encoded_bytes().contains(&0)
-            || host_socket.components().any(|c| matches!(c, std::path::Component::CurDir | std::path::Component::ParentDir))
+            || host_socket
+                .components()
+                .any(|c| matches!(c, std::path::Component::CurDir | std::path::Component::ParentDir))
         {
             return Err(std::io::Error::other("compile socket path must be a bounded clean absolute path"));
         }
@@ -483,7 +489,9 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
         if !host_socket.is_absolute()
             || host_socket.as_os_str().as_encoded_bytes().len() > 107
             || host_socket.as_os_str().as_encoded_bytes().contains(&0)
-            || host_socket.components().any(|c| matches!(c, std::path::Component::CurDir | std::path::Component::ParentDir))
+            || host_socket
+                .components()
+                .any(|c| matches!(c, std::path::Component::CurDir | std::path::Component::ParentDir))
         {
             return Err(std::io::Error::other("Rust wait socket path must be a bounded clean absolute path"));
         }
@@ -511,17 +519,19 @@ where
     DS: DirectoryService + Clone + 'static,
 {
     #[instrument(skip_all, err)]
-    async fn do_build_inner(&self, request: BuildRequest, cancellation: Option<watch::Receiver<bool>>) -> std::io::Result<BuildResult> {
-        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
+    async fn do_build_inner(
+        &self,
+        request: BuildRequest,
+        cancellation: Option<watch::Receiver<bool>>,
+    ) -> std::io::Result<BuildResult> {
+        if is_watch_triggered(cancellation.as_ref()) || is_watch_triggered(self.shutdown_signal.as_ref()) {
             return Err(watch_cancelled());
         }
         let admission_started = std::time::Instant::now();
-        let _one_shot_permit = if cancellation.is_none() { Some(self.concurrent_builds.acquire().await.unwrap()) } else { None };
-        let mut watch_permit = if cancellation.is_some() {
-            Some(std::sync::Arc::clone(&self.concurrent_builds).acquire_owned().await.unwrap())
-        } else {
-            None
-        };
+        let permit = std::sync::Arc::clone(&self.concurrent_builds)
+            .acquire_owned()
+            .await
+            .map_err(|error| std::io::Error::other(format!("sandbox concurrency semaphore closed: {error}")))?;
         let admission_wait_ms = u64::try_from(admission_started.elapsed().as_millis()).unwrap_or(u64::MAX);
         tracing::info!(
             admission_wait_ms,
@@ -529,7 +539,8 @@ where
             "local sandbox admission acquired"
         );
         let execution_started = std::time::Instant::now();
-        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
+        if is_watch_triggered(cancellation.as_ref()) || is_watch_triggered(self.shutdown_signal.as_ref()) {
+            drop(permit);
             return Err(watch_cancelled());
         }
 
@@ -539,11 +550,8 @@ where
         let failure_workspace_root = self.failure_workspace_root.as_deref().or(debug_failure_workspace_root.as_deref());
         let sandbox_dir = create_ephemeral_dir(&self.workdir, &format!("{build_name_str}-"))
             .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?;
-        let sandbox_dir = if cancellation.is_some() {
-            SandboxWorkspace::Watch(std::sync::Arc::new(crate::bwrap::watch_cancel::WatchWorkspace::new(sandbox_dir)))
-        } else {
-            SandboxWorkspace::OneShot(sandbox_dir)
-        };
+        let sandbox_dir: SupervisedWorkspace =
+            std::sync::Arc::new(crate::bwrap::watch_cancel::WatchWorkspace::new(sandbox_dir));
         info!(build_name = %build_name_str, sandbox_path = %sandbox_dir.path().display(), "Starting bwrap build");
 
         let span = Span::current();
@@ -553,9 +561,11 @@ where
         let directory_service = self.directory_service.clone();
         let mut workspace_mounts = workspace_mounts(sandbox_dir.path(), request.workspace.as_ref())
             .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?;
-        if self.rust_wait_socket.is_some() && workspace_mounts.iter().any(|mount| {
-            mount.guest_path.starts_with("/run/mantle") || Path::new("/run/mantle").starts_with(&mount.guest_path)
-        }) {
+        if self.rust_wait_socket.is_some()
+            && workspace_mounts.iter().any(|mount| {
+                mount.guest_path.starts_with("/run/mantle") || Path::new("/run/mantle").starts_with(&mount.guest_path)
+            })
+        {
             return Err(super::classified_io_error(
                 std::io::ErrorKind::Other,
                 super::SandboxFailureClass::SandboxStartup,
@@ -580,8 +590,9 @@ where
         }
         if let Some(host_socket) = &self.rust_wait_socket {
             workspace_mounts.push(
-                rust_wait_socket_mount(host_socket)
-                    .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?,
+                rust_wait_socket_mount(host_socket).map_err(|error| {
+                    super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup)
+                })?,
             );
         }
 
@@ -639,26 +650,19 @@ where
         let sandbox = match &self.command_factory {
             Some(factory) => sandbox.with_command_factory(Arc::clone(factory)),
             None => sandbox,
-        };
+        }
+        .with_execution_policy(self.execution_policy.clone())
+        .with_shutdown_signal(self.shutdown_signal.clone())
+        .with_helper_sockets(self.compile_socket.clone(), self.rust_wait_socket.clone())
+        .with_enforcement_facts_sink(Some(Arc::clone(&self.last_enforcement_facts)));
         #[cfg(test)]
-        let sandbox = sandbox.with_test_watch_fault(self.watch_fault);
-        let outcome = match cancellation.as_ref() {
-            Some(receiver) => {
-                let lease = crate::bwrap::watch_cancel::WatchLease::new(
-                    watch_permit.take().expect("admitted watch build retains its permit"),
-                    sandbox_dir.watch_guard().expect("watch build owns a workspace"),
-                );
-                sandbox
-                    .run_cancellable(receiver.clone(), lease)
-                    .await
-                    .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?
-            }
-            None => sandbox
-                .run()
-                .await
-                .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?,
-        };
-        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
+        let sandbox = sandbox.with_test_watch_fault(self.watch_fault.filter(|_| cancellation.is_some()));
+        let lease = crate::bwrap::watch_cancel::WatchLease::new(permit, Arc::clone(&sandbox_dir));
+        let outcome = sandbox
+            .run_supervised(cancellation.clone(), lease)
+            .await
+            .map_err(|error| super::wrap_classified_io_error(error, super::SandboxFailureClass::SandboxStartup))?;
+        if is_watch_triggered(cancellation.as_ref()) || is_watch_triggered(self.shutdown_signal.as_ref()) {
             return Err(watch_cancelled());
         }
 
@@ -685,7 +689,10 @@ where
             } else {
                 format!("nonzero exit code: {}\n{}", outcome.output().status, log)
             };
-            retain_failed_sandbox(sandbox_dir.into_tempdir(), failure_workspace_root, &build_name_str);
+            let tempdir = std::sync::Arc::try_unwrap(sandbox_dir)
+                .expect("supervisor finished before retaining failed workspace")
+                .into_tempdir();
+            retain_failed_sandbox(tempdir, failure_workspace_root, &build_name_str);
             return Err(super::classified_io_error(
                 std::io::ErrorKind::Other,
                 super::SandboxFailureClass::Builder,
@@ -696,7 +703,10 @@ where
         let outputs: Vec<_> = request.outputs.iter().filter_map(|o| outcome.find_path(o)).collect();
         if outputs.len() != request.outputs.len() {
             warn!("Not all outputs produced");
-            retain_failed_sandbox(sandbox_dir.into_tempdir(), failure_workspace_root, &build_name_str);
+            let tempdir = std::sync::Arc::try_unwrap(sandbox_dir)
+                .expect("supervisor finished before retaining failed workspace")
+                .into_tempdir();
+            retain_failed_sandbox(tempdir, failure_workspace_root, &build_name_str);
             return Err(super::classified_io_error(
                 std::io::ErrorKind::Other,
                 super::SandboxFailureClass::MissingOutputs,
@@ -732,7 +742,7 @@ where
             }
         }))
         .await?;
-        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow()) {
+        if is_watch_triggered(cancellation.as_ref()) || is_watch_triggered(self.shutdown_signal.as_ref()) {
             return Err(watch_cancelled());
         }
         // Capture stdout+stderr for the log (even on success)
@@ -747,7 +757,7 @@ where
             log.push_str(&String::from_utf8_lossy(&outcome.output().stderr));
         }
 
-        if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow()) {
+        if is_watch_triggered(cancellation.as_ref()) || is_watch_triggered(self.shutdown_signal.as_ref()) {
             return Err(watch_cancelled());
         }
         let execution_ms = u64::try_from(execution_started.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -766,6 +776,10 @@ where
             }),
         })
     }
+}
+
+fn is_watch_triggered(receiver: Option<&watch::Receiver<bool>>) -> bool {
+    receiver.is_some_and(|r| *r.borrow() || r.has_changed().is_err())
 }
 
 fn watch_cancelled() -> std::io::Error {
@@ -876,28 +890,31 @@ mod tests {
         let _compile_listener = UnixListener::bind(&compile).unwrap();
         let _wait_listener = UnixListener::bind(&waits).unwrap();
         for (compile_enabled, waits_enabled) in [(false, false), (true, false), (false, true), (true, true)] {
-            let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
+            let mut service =
+                BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
             if compile_enabled {
                 service = service.with_compile_socket(compile.clone()).unwrap();
             }
             if waits_enabled {
                 service = service.with_rust_wait_socket(waits.clone()).unwrap();
             }
-            let mut request = BuildRequest::default();
-            request.working_dir = PathBuf::from("build");
-            request.scratch_paths = vec![PathBuf::from("build"), PathBuf::from("nix/store")];
-            request.inputs_dir = PathBuf::from("nix/store");
-            request.outputs = vec![PathBuf::from("nix/store/runtime-result")];
-            request.constraints.insert(BuildConstraints::ProvideBinSh);
-            request.command_args = vec![
-                "/bin/sh".to_string(),
-                "-c".to_string(),
-                format!(
-                    "test {}-S /run/mantle/compile-cache.sock && test {}-S /run/mantle/rust-waits.sock && echo runtime-sockets-visible && echo done > /nix/store/runtime-result",
-                    if compile_enabled { "" } else { "! " },
-                    if waits_enabled { "" } else { "! " },
-                ),
-            ];
+            let request = BuildRequest {
+                working_dir: PathBuf::from("build"),
+                scratch_paths: vec![PathBuf::from("build"), PathBuf::from("nix/store")],
+                inputs_dir: PathBuf::from("nix/store"),
+                outputs: vec![PathBuf::from("nix/store/runtime-result")],
+                constraints: std::iter::once(BuildConstraints::ProvideBinSh).collect(),
+                command_args: vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    format!(
+                        "test {}-S /run/mantle/compile-cache.sock && test {}-S /run/mantle/rust-waits.sock && echo runtime-sockets-visible && echo done > /nix/store/runtime-result",
+                        if compile_enabled { "" } else { "! " },
+                        if waits_enabled { "" } else { "! " },
+                    ),
+                ],
+                ..Default::default()
+            };
             let result = service.do_build(request).await.unwrap();
             assert_eq!(result.log.as_deref(), Some("runtime-sockets-visible\n"));
         }
@@ -1128,22 +1145,23 @@ mod tests {
     }
 
     fn watch_build_request(marker_host: &Path) -> BuildRequest {
-        let mut request = BuildRequest::default();
-        request.working_dir = PathBuf::from("build");
-        request.scratch_paths = vec![PathBuf::from("build"), PathBuf::from("nix/store")];
-        request.inputs_dir = PathBuf::from("nix/store");
-        request.outputs = vec![PathBuf::from("nix/store/watch-result")];
-        request.constraints.insert(BuildConstraints::ProvideBinSh);
-        request.command_args = vec![
-            "/bin/sh".to_string(),
-            "-c".to_string(),
-            "/bin/busybox setsid /bin/sh -c '/bin/busybox echo escaped > /build/markers/escaped; /bin/busybox sleep 2; /bin/busybox echo late > /build/markers/late' & /bin/busybox echo started > /build/markers/started; wait; /bin/busybox echo done > /nix/store/watch-result".to_string(),
-        ];
         let mut workspace = workspace_request(crate::buildservice::StatefulWorkspaceMode::MutableSession);
         workspace.guest_path = PathBuf::from("/build/markers");
         workspace.runtime_host_path = Some(marker_host.to_path_buf());
-        request.workspace = Some(workspace);
-        request
+        BuildRequest {
+            working_dir: PathBuf::from("build"),
+            scratch_paths: vec![PathBuf::from("build"), PathBuf::from("nix/store")],
+            inputs_dir: PathBuf::from("nix/store"),
+            outputs: vec![PathBuf::from("nix/store/watch-result")],
+            constraints: std::iter::once(BuildConstraints::ProvideBinSh).collect(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "/bin/busybox setsid /bin/sh -c '/bin/busybox echo escaped > /build/markers/escaped; /bin/busybox sleep 2; /bin/busybox echo late > /build/markers/late' & /bin/busybox echo started > /build/markers/started; wait; /bin/busybox echo done > /nix/store/watch-result".to_string(),
+            ],
+            workspace: Some(workspace),
+            ..Default::default()
+        }
     }
 
     async fn await_watch_start(marker_host: &Path) {
@@ -1175,7 +1193,8 @@ mod tests {
     async fn queued_watch_cancellation_never_starts_a_sandbox() {
         let root = tempfile::tempdir().unwrap();
         let markers = tempfile::tempdir().unwrap();
-        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
+        let mut service =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
         service.concurrent_builds = std::sync::Arc::new(tokio::sync::Semaphore::new(0));
         let service = std::sync::Arc::new(service);
         let admitted = std::sync::Arc::clone(&service);
@@ -1185,7 +1204,11 @@ mod tests {
         tokio::task::yield_now().await;
         cancel_tx.send(true).unwrap();
         service.concurrent_builds.add_permits(1);
-        let error = tokio::time::timeout(std::time::Duration::from_secs(5), waiting).await.unwrap().unwrap().unwrap_err();
+        let error = tokio::time::timeout(std::time::Duration::from_secs(5), waiting)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap_err();
         assert_eq!(error.kind(), ErrorKind::Interrupted);
         assert!(!markers.path().join("started").exists(), "queued cancellation spawned a builder");
         assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "queued cancellation allocated a sandbox");
@@ -1195,7 +1218,8 @@ mod tests {
     async fn pidfd_preflight_failure_does_not_spawn_a_builder() {
         let root = tempfile::tempdir().unwrap();
         let markers = tempfile::tempdir().unwrap();
-        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
+        let mut service =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
         service.watch_fault = Some(WatchFault::PidfdUnavailable);
         let (_keep_sender, cancel_rx) = watch::channel(false);
         let error = service.do_build_cancellable(watch_build_request(markers.path()), cancel_rx).await.unwrap_err();
@@ -1209,16 +1233,25 @@ mod tests {
         assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
         let root = tempfile::tempdir().unwrap();
         let markers = tempfile::tempdir().unwrap();
-        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
+        let mut service =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
         service.watch_fault = Some(WatchFault::ExitBeforePid1);
         let (_keep_sender, cancel_rx) = watch::channel(false);
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             service.do_build_cancellable(watch_build_request(markers.path()), cancel_rx),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("exited before watch PID1 ownership"), "early failure was not classified: {error}");
-        assert!(error.to_string().contains("Unknown option --invalid-bwrap-watch-early-exit"), "real bwrap parse failure was lost: {error}");
+        assert!(
+            error.to_string().contains("exited before watch PID1 ownership"),
+            "early failure was not classified: {error}"
+        );
+        assert!(
+            error.to_string().contains("Unknown option --invalid-bwrap-watch-early-exit"),
+            "real bwrap parse failure was lost: {error}"
+        );
         assert_eq!(service.concurrent_builds.available_permits(), 2, "terminal startup held admission");
         assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "terminal startup leaked workspace");
         assert!(!markers.path().join("started").exists(), "invalid bubblewrap started a builder");
@@ -1230,14 +1263,21 @@ mod tests {
         assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
         let root = tempfile::tempdir().unwrap();
         let markers = tempfile::tempdir().unwrap();
-        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
+        let mut service =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
         service.watch_fault = Some(WatchFault::PanicAfterPid1);
         let (_keep_sender, cancel_rx) = watch::channel(false);
         let error = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             service.do_build_cancellable(watch_build_request(markers.path()), cancel_rx),
-        ).await.unwrap().unwrap_err();
-        assert!(error.to_string().contains("supervisor failed after owned teardown"), "panic escaped teardown: {error}");
+        )
+        .await
+        .unwrap()
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("supervisor failed after owned teardown"),
+            "panic escaped teardown: {error}"
+        );
         assert_eq!(service.concurrent_builds.available_permits(), 2, "supervisor panic retained admission");
         assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "supervisor panic leaked workspace");
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
@@ -1250,7 +1290,8 @@ mod tests {
         assert!(Path::new(&sandbox_shell()).is_file(), "real BuildService needs a static shell");
         let root = tempfile::tempdir().unwrap();
         let markers = tempfile::tempdir().unwrap();
-        let mut service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
+        let mut service =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
         service.watch_fault = Some(WatchFault::PanicAfterAbort);
         let service = std::sync::Arc::new(service);
         let observing = std::sync::Arc::clone(&service);
@@ -1259,7 +1300,8 @@ mod tests {
         let build = tokio::spawn(async move { service.do_build_cancellable(request, cancel_rx).await });
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
-            let owned = std::fs::read_dir(root.path()).unwrap()
+            let owned = std::fs::read_dir(root.path())
+                .unwrap()
                 .filter_map(Result::ok)
                 .any(|entry| entry.path().join("watch-pid1-owned").is_file());
             if owned {
@@ -1271,10 +1313,11 @@ mod tests {
         assert_eq!(observing.concurrent_builds.available_permits(), 1, "fault never admitted a sandbox");
         build.abort();
         assert!(build.await.unwrap_err().is_cancelled());
-        let _permit = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            observing.concurrent_builds.acquire_many(2),
-        ).await.unwrap().unwrap();
+        let _permit =
+            tokio::time::timeout(std::time::Duration::from_secs(5), observing.concurrent_builds.acquire_many(2))
+                .await
+                .unwrap()
+                .unwrap();
         assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "aborted panic leaked workspace");
         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
         assert!(!markers.path().join("started").exists(), "aborted supervisor panic released gate EOF");
@@ -1305,10 +1348,14 @@ mod tests {
         assert!(!sibling_markers.path().join("started").exists(), "sibling started while PID1 ownership was unknown");
         cancel_tx.send(true).unwrap();
         assert_eq!(observing.concurrent_builds.available_permits(), 0, "unobserved PID1 teardown released admission");
-        assert!(std::fs::read_dir(root.path()).unwrap().next().is_some(), "unobserved teardown removed the workspace");
+        assert!(
+            std::fs::read_dir(root.path()).unwrap().next().is_some(),
+            "unobserved teardown removed the workspace"
+        );
         let error = tokio::time::timeout(std::time::Duration::from_secs(5), build).await.unwrap().unwrap().unwrap_err();
         assert_eq!(error.kind(), ErrorKind::Interrupted, "delayed discovery released a retryable failure: {error}");
-        let sibling_result = tokio::time::timeout(std::time::Duration::from_secs(5), sibling).await.unwrap().unwrap().unwrap();
+        let sibling_result =
+            tokio::time::timeout(std::time::Duration::from_secs(5), sibling).await.unwrap().unwrap().unwrap();
         let Node::File { digest, .. } = &sibling_result.outputs[0].node else {
             panic!("sibling did not publish completed output");
         };
@@ -1396,9 +1443,7 @@ mod tests {
         assert_eq!(SandboxConcurrencyPolicy::for_jobs(2).effective_permits().unwrap(), 2);
         assert_eq!(SandboxConcurrencyPolicy::for_jobs(4).effective_permits().unwrap(), 4);
         assert_eq!(
-            SandboxConcurrencyPolicy::for_jobs(MAX_CONCURRENT_SANDBOX_BUILDS + 16)
-                .effective_permits()
-                .unwrap(),
+            SandboxConcurrencyPolicy::for_jobs(MAX_CONCURRENT_SANDBOX_BUILDS + 16).effective_permits().unwrap(),
             MAX_CONCURRENT_SANDBOX_BUILDS
         );
         assert_eq!(
@@ -1438,18 +1483,19 @@ mod tests {
         }
 
         let make_sleep_request = |id: u32| -> BuildRequest {
-            let mut request = BuildRequest::default();
-            request.working_dir = PathBuf::from("build");
-            request.scratch_paths = vec![PathBuf::from("build"), PathBuf::from("nix/store")];
-            request.inputs_dir = PathBuf::from("nix/store");
-            request.outputs = vec![PathBuf::from(format!("nix/store/out-{id}"))];
-            request.constraints.insert(BuildConstraints::ProvideBinSh);
-            request.command_args = vec![
-                "/bin/sh".to_string(),
-                "-c".to_string(),
-                format!("/bin/busybox sleep 1; /bin/busybox echo ok-{id} > /nix/store/out-{id}"),
-            ];
-            request
+            BuildRequest {
+                working_dir: PathBuf::from("build"),
+                scratch_paths: vec![PathBuf::from("build"), PathBuf::from("nix/store")],
+                inputs_dir: PathBuf::from("nix/store"),
+                outputs: vec![PathBuf::from(format!("nix/store/out-{id}"))],
+                constraints: std::iter::once(BuildConstraints::ProvideBinSh).collect(),
+                command_args: vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    format!("/bin/busybox sleep 1; /bin/busybox echo ok-{id} > /nix/store/out-{id}"),
+                ],
+                ..Default::default()
+            }
         };
 
         // 1. With --jobs 4, four independent 1-second sandboxes overlap concurrently.
@@ -1515,6 +1561,699 @@ mod tests {
         assert!(
             max_wait_ms >= 400,
             "FD-capped 2-slot queue must record distinct admission_wait_ms for queued builds, got max_wait_ms={max_wait_ms}"
+        );
+    }
+
+    fn shell_build_request(script: &str, outputs: &[&str]) -> BuildRequest {
+        BuildRequest {
+            working_dir: PathBuf::from("build"),
+            scratch_paths: vec![PathBuf::from("build"), PathBuf::from("nix/store")],
+            inputs_dir: PathBuf::from("nix/store"),
+            outputs: outputs.iter().map(PathBuf::from).collect(),
+            constraints: std::iter::once(BuildConstraints::ProvideBinSh).collect(),
+            command_args: vec!["/bin/sh".to_string(), "-c".to_string(), script.to_string()],
+            ..Default::default()
+        }
+    }
+
+    fn require_real_bwrap_and_shell() -> bool {
+        if !Path::new(&sandbox_shell()).is_file() {
+            eprintln!("skipping: static sandbox shell unavailable");
+            return false;
+        }
+        let bwrap_ok = std::process::Command::new(crate::bwrap::bwrap_program())
+            .args(["--ro-bind", "/", "/", "--", "/bin/true"])
+            .status()
+            .is_ok_and(|s| s.success());
+        if !bwrap_ok {
+            eprintln!("skipping: bwrap unavailable");
+            return false;
+        }
+        true
+    }
+
+    #[tokio::test]
+    async fn wall_deadline_kills_hung_sandbox_and_setsid_descendant_without_admitting_output() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let markers = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let mut policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        policy.wall_deadline = crate::buildservice::SandboxWallDeadline::Bounded { wall_deadline_ms: 250 };
+        let service = BubblewrapBuildService::new(root.path().to_path_buf(), blobs.clone(), tmp_ds())
+            .with_execution_policy(policy)
+            .unwrap();
+        let mut request = shell_build_request(
+            "/bin/busybox setsid /bin/sh -c '/bin/busybox sleep 1; /bin/busybox echo late > /build/markers/late' & /bin/busybox echo started > /build/markers/started; /bin/busybox printf 'partial-wall-output\\n' > /nix/store/wall-out; /bin/busybox sleep 30",
+            &["nix/store/wall-out"],
+        );
+        let partial_digest: snix_castore::B3Digest = blake3::hash(b"partial-wall-output\n").into();
+        let mut workspace = workspace_request(crate::buildservice::StatefulWorkspaceMode::MutableSession);
+        workspace.guest_path = PathBuf::from("/build/markers");
+        workspace.runtime_host_path = Some(markers.path().to_path_buf());
+        request.workspace = Some(workspace);
+
+        let err = service.do_build(request).await.unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::TimedOut);
+        let classified = err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .expect("wall deadline error must carry ClassifiedBuildServiceError");
+        assert_eq!(classified.class, crate::buildservice::SandboxFailureClass::WallDeadlineExceeded);
+        assert!(
+            !blobs.has(&partial_digest).await.unwrap(),
+            "wall timeout must not ingest pre-written partial output"
+        );
+        assert!(blobs.open_read(&partial_digest).await.unwrap().is_none());
+        assert_eq!(service.concurrent_builds.available_permits(), 2);
+        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "wall timeout leaked sandbox dir");
+        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+        assert!(!markers.path().join("late").exists(), "wall timeout left orphan setsid descendant");
+    }
+
+    #[tokio::test]
+    async fn silent_but_valid_process_passes_under_default_policy_while_silence_budget_kills_hang() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        // 1. Default policy disables silence budget so silent valid builds succeed.
+        let root_default = tempfile::tempdir().unwrap();
+        let blobs_default = MemoryBlobService::default();
+        let default_svc =
+            BubblewrapBuildService::new(root_default.path().to_path_buf(), blobs_default.clone(), tmp_ds());
+        assert_eq!(default_svc.execution_policy().silence_budget, crate::buildservice::SandboxSilenceBudget::Disabled);
+        let silent_req =
+            shell_build_request("/bin/busybox sleep 1; /bin/busybox echo silent-ok > /nix/store/silent-out", &[
+                "nix/store/silent-out",
+            ]);
+        let res = default_svc.do_build(silent_req).await.unwrap();
+        assert_eq!(res.outputs.len(), 1);
+
+        // 2. Explicit silence budget expires when output goes silent.
+        let root_silence = tempfile::tempdir().unwrap();
+        let mut policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        policy.wall_deadline = crate::buildservice::SandboxWallDeadline::Bounded {
+            wall_deadline_ms: 10_000,
+        };
+        policy.silence_budget = crate::buildservice::SandboxSilenceBudget::Bounded {
+            silence_timeout_ms: 300,
+        };
+        let silence_svc =
+            BubblewrapBuildService::new(root_silence.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_execution_policy(policy)
+                .unwrap();
+        let stalled_req = shell_build_request(
+            "/bin/busybox echo initial-byte; /bin/busybox sleep 10; /bin/busybox echo done > /nix/store/stalled-out",
+            &["nix/store/stalled-out"],
+        );
+        let err = silence_svc.do_build(stalled_req).await.unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::TimedOut);
+        let classified = err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .expect("silence timeout must carry ClassifiedBuildServiceError");
+        assert_eq!(classified.class, crate::buildservice::SandboxFailureClass::SilenceBudgetExceeded);
+    }
+
+    #[tokio::test]
+    async fn noisy_build_past_capture_truncation_keeps_resetting_silence_budget() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let mut policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        policy.wall_deadline = crate::buildservice::SandboxWallDeadline::Bounded {
+            wall_deadline_ms: 15_000,
+        };
+        policy.silence_budget = crate::buildservice::SandboxSilenceBudget::Bounded {
+            silence_timeout_ms: 450,
+        };
+        let service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(policy)
+            .unwrap();
+        // Emit >512 KiB (> 480 KiB truncation limit) in bursts spaced by 150ms (> 450ms total).
+        let script = "i=0; while [ \"$i\" -lt 5 ]; do /bin/busybox dd if=/dev/zero bs=131072 count=1 2>/dev/null | /bin/busybox tr '\\0' 'a'; /bin/busybox usleep 150000; i=$((i+1)); done; /bin/busybox echo noisy-ok > /nix/store/noisy-out";
+        let req = shell_build_request(script, &["nix/store/noisy-out"]);
+        let result = service
+            .do_build(req)
+            .await
+            .expect("noisy long-running build past truncation must not trigger silence timeout");
+        assert_eq!(result.outputs.len(), 1);
+        assert!(
+            result.log.as_deref().is_some_and(|l| l.contains("sandbox output truncated")),
+            "expected truncated log marker"
+        );
+    }
+
+    #[tokio::test]
+    async fn unlimited_wall_deadline_opt_out_completes_cleanly() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(crate::buildservice::SandboxExecutionPolicy::unlimited())
+            .unwrap();
+        let req = shell_build_request("/bin/busybox echo unlimited-ok > /nix/store/unlimited-out", &[
+            "nix/store/unlimited-out",
+        ]);
+        let result = service.do_build(req).await.unwrap();
+        assert_eq!(result.outputs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn dropping_one_shot_do_build_future_reaps_setsid_descendant_and_releases_permit() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let markers = tempfile::tempdir().unwrap();
+        let service = Arc::new(
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_max_concurrent_builds(1)
+                .unwrap(),
+        );
+        let svc_clone = Arc::clone(&service);
+        let request = watch_build_request(markers.path());
+        let build = tokio::spawn(async move { svc_clone.do_build(request).await });
+        await_watch_start(markers.path()).await;
+        build.abort();
+        assert!(build.await.unwrap_err().is_cancelled());
+
+        // Permit and workspace must be released after PID1 teardown.
+        let _permit = tokio::time::timeout(std::time::Duration::from_secs(5), service.concurrent_builds.acquire())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(std::fs::read_dir(root.path()).unwrap().next().is_none(), "aborted one-shot build leaked workspace");
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        assert!(!markers.path().join("late").exists(), "dropped one-shot future allowed escaped descendant output");
+    }
+
+    #[tokio::test]
+    async fn external_shutdown_grace_period_kills_sigterm_ignoring_leaking_descendant() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+        let markers = tempfile::tempdir().unwrap();
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let mut policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        policy.shutdown_grace_ms = 200;
+        let service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(policy)
+            .unwrap()
+            .with_shutdown_signal(shutdown_rx);
+
+        let mut request = shell_build_request(
+            "trap '' TERM; /bin/busybox setsid /bin/sh -c '/bin/busybox echo escaped > /build/markers/escaped; /bin/busybox sleep 2; /bin/busybox echo late > /build/markers/late' & /bin/busybox echo started > /build/markers/started; /bin/busybox sleep 10; /bin/busybox echo done > /nix/store/out",
+            &["nix/store/out"],
+        );
+        let mut workspace = workspace_request(crate::buildservice::StatefulWorkspaceMode::MutableSession);
+        workspace.guest_path = PathBuf::from("/build/markers");
+        workspace.runtime_host_path = Some(markers.path().to_path_buf());
+        request.workspace = Some(workspace);
+
+        let handle = tokio::spawn(async move { service.do_build(request).await });
+        await_watch_start(markers.path()).await;
+        shutdown_tx.send(true).unwrap();
+
+        let err = tokio::time::timeout(std::time::Duration::from_secs(5), handle).await.unwrap().unwrap().unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Interrupted);
+        tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
+        assert!(!markers.path().join("late").exists(), "leaking descendant survived finite shutdown grace");
+    }
+
+    #[tokio::test]
+    async fn resource_enforcement_negative_controls_report_unavailable_and_ignore_min_memory() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        // 1. BuildConstraints::MinMemory alone does NOT enable or fake hard cgroup enforcement.
+        let root = tempfile::tempdir().unwrap();
+        let service = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds());
+        let mut req = shell_build_request("/bin/busybox echo ok > /nix/store/out", &["nix/store/out"]);
+        req.constraints.insert(BuildConstraints::MinMemory(1024));
+        service.do_build(req).await.unwrap();
+        let facts = service.last_enforcement_facts().unwrap();
+        assert!(!facts.enforced_memory, "MinMemory constraint must never claim hard memory enforcement");
+
+        // 2. Non-cgroup2 directory fails closed under Required mode.
+        let fake_cg = tempfile::tempdir().unwrap();
+        let mut policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        policy.resources.cgroup_root = Some(fake_cg.path().to_path_buf());
+        policy.resources.memory_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        policy.resources.memory_limit_bytes = Some(32 * 1024 * 1024);
+        let strict_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(policy.clone())
+            .unwrap();
+        let err = strict_svc
+            .do_build(shell_build_request("/bin/busybox echo ok > /nix/store/out", &["nix/store/out"]))
+            .await
+            .unwrap_err();
+        let classified = err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .unwrap();
+        assert_eq!(classified.class, crate::buildservice::SandboxFailureClass::ResourceEnforcementUnavailable);
+
+        // 3. BestEffort with unavailable cgroup runs honestly without claiming enforcement.
+        policy.resources.memory_mode = crate::buildservice::SandboxEnforcementMode::BestEffort;
+        let best_effort_svc =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_execution_policy(policy)
+                .unwrap();
+        best_effort_svc
+            .do_build(shell_build_request("/bin/busybox echo ok > /nix/store/out", &["nix/store/out"]))
+            .await
+            .unwrap();
+        let be_facts = best_effort_svc.last_enforcement_facts().unwrap();
+        assert!(!be_facts.enforced_memory);
+        assert!(!be_facts.unavailable_reasons.is_empty());
+
+        // 4. Raw SSH session targeting delegated user service slice fails LCA check honestly.
+        if let Ok(self_cg) = std::fs::read_to_string("/proc/self/cgroup")
+            && let Some(rel) = self_cg.lines().find_map(|l| l.strip_prefix("0::"))
+            && rel.contains("/session-")
+        {
+            let euid = unsafe { nix::libc::geteuid() };
+            let user_svc_cg = PathBuf::from(format!("/sys/fs/cgroup/user.slice/user-{euid}.slice/user@{euid}.service"));
+            if user_svc_cg.is_dir() {
+                let mut lca_policy = crate::buildservice::SandboxExecutionPolicy::standard();
+                lca_policy.resources.cgroup_root = Some(user_svc_cg);
+                lca_policy.resources.memory_mode = crate::buildservice::SandboxEnforcementMode::Required;
+                lca_policy.resources.memory_limit_bytes = Some(32 * 1024 * 1024);
+                let lca_svc =
+                    BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                        .with_execution_policy(lca_policy)
+                        .unwrap();
+                let lca_err = lca_svc
+                    .do_build(shell_build_request("/bin/busybox echo ok > /nix/store/out", &["nix/store/out"]))
+                    .await
+                    .unwrap_err();
+                let lca_facts = lca_svc.last_enforcement_facts().unwrap();
+                assert!(lca_facts.unavailable_reasons.iter().any(|r| matches!(
+                    r,
+                    crate::buildservice::SandboxUnavailableReason::DelegationLcaNotWritable { .. }
+                )));
+                let classified = lca_err
+                    .get_ref()
+                    .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+                    .unwrap();
+                assert_eq!(classified.class, crate::buildservice::SandboxFailureClass::ResourceEnforcementUnavailable);
+            }
+        }
+    }
+
+    fn resolve_or_spawn_delegated_cgroup_root(test_fn_name: &str) -> Option<PathBuf> {
+        if let Some(path) = std::env::var_os("MANTLE_TEST_CGROUP_ROOT") {
+            return Some(PathBuf::from(path));
+        }
+        // If already running inside a delegated scope (with memory & pids), prepare child root.
+        if let Ok(self_cg) = std::fs::read_to_string("/proc/self/cgroup")
+            && let Some(rel) = self_cg.lines().find_map(|l| l.strip_prefix("0::"))
+        {
+            let cur_dir = PathBuf::from(format!("/sys/fs/cgroup{}", rel.trim()));
+            let controllers = std::fs::read_to_string(cur_dir.join("cgroup.controllers")).unwrap_or_default();
+            if controllers.contains("memory")
+                && controllers.contains("pids")
+                && !rel.contains("/session-")
+                && std::env::var_os("MANTLE_DELEGATED_CHILD").is_some()
+            {
+                let runner_dir = cur_dir.join("test-runner");
+                let sandbox_root = cur_dir.join("sandbox-root");
+                let _ = std::fs::create_dir(&runner_dir);
+                let _ = std::fs::create_dir(&sandbox_root);
+                let _ = std::fs::write(runner_dir.join("cgroup.procs"), std::process::id().to_string());
+                let _ = std::fs::write(cur_dir.join("cgroup.subtree_control"), "+memory +pids");
+                return Some(sandbox_root);
+            }
+        }
+        if std::env::var_os("MANTLE_DELEGATED_CHILD").is_some() {
+            return None;
+        }
+        // Re-exec this exact test inside systemd-run --user --scope --property=Delegate=yes.
+        let euid = unsafe { nix::libc::geteuid() };
+        let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(format!("/run/user/{euid}")));
+        if !runtime_dir.join("bus").exists() {
+            eprintln!("skipping delegated cgroup test: user systemd D-Bus unavailable");
+            return None;
+        }
+        let exe = std::env::current_exe().ok()?;
+        let mut cmd = std::process::Command::new("systemd-run");
+        cmd.env("XDG_RUNTIME_DIR", &runtime_dir)
+            .env("MANTLE_DELEGATED_CHILD", "1")
+            .args(["--user", "--scope", "--property=Delegate=yes", "--quiet", "--"])
+            .arg(exe)
+            .arg("--exact")
+            .arg(test_fn_name)
+            .arg("--nocapture");
+        if let Some(bwrap) = std::env::var_os("SNIX_BUILD_BWRAP") {
+            cmd.env("SNIX_BUILD_BWRAP", bwrap);
+        }
+        if let Some(shell) = std::env::var_os("SNIX_BUILD_SANDBOX_SHELL") {
+            cmd.env("SNIX_BUILD_SANDBOX_SHELL", shell);
+        }
+        if let Some(no_fuse) = std::env::var_os("CRUNCH_NO_FUSE") {
+            cmd.env("CRUNCH_NO_FUSE", no_fuse);
+        }
+        let output = match cmd.output() {
+            Ok(out) => out,
+            Err(err) => {
+                eprintln!("skipping delegated cgroup test: systemd-run failed to launch: {err}");
+                return None;
+            }
+        };
+        assert!(
+            output.status.success(),
+            "delegated cgroup test failed inside systemd-run:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        None
+    }
+
+    #[tokio::test]
+    async fn delegated_cgroup_hard_memory_limit_under_limit_oom_and_helper_scope_controls() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let Some(cg_root) = resolve_or_spawn_delegated_cgroup_root(
+            "buildservice::bwrap::tests::delegated_cgroup_hard_memory_limit_under_limit_oom_and_helper_scope_controls",
+        ) else {
+            return;
+        };
+
+        let root = tempfile::tempdir().unwrap();
+
+        // 1. Under-limit healthy control: allocates 2 MiB under 64 MiB hard cap, records membership &
+        //    limits.
+        let mut under_policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        under_policy.resources.cgroup_root = Some(cg_root.clone());
+        under_policy.resources.memory_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        under_policy.resources.memory_limit_bytes = Some(64 * 1024 * 1024);
+        under_policy.resources.swap_policy = crate::buildservice::SandboxSwapPolicy::Zero;
+        under_policy.resources.pids_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        under_policy.resources.pids_limit_count = Some(32);
+        let under_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(under_policy)
+            .unwrap();
+        let under_req = shell_build_request(
+            "/bin/busybox dd if=/dev/zero of=/tmp/small bs=1M count=2 2>/dev/null && /bin/busybox echo ok > /nix/store/under-out",
+            &["nix/store/under-out"],
+        );
+        under_svc.do_build(under_req).await.expect("under-limit control must pass");
+        let under_facts = under_svc.last_enforcement_facts().unwrap();
+        assert!(under_facts.enforced_memory);
+        assert!(under_facts.enforced_pids);
+        assert!(under_facts.populated_observed);
+        assert!(!under_facts.observed_member_pids.is_empty());
+        assert_eq!(
+            under_facts.effective_memory_max,
+            crate::buildservice::SandboxEffectiveLimit::Bytes(64 * 1024 * 1024)
+        );
+        assert_eq!(under_facts.effective_swap_max, crate::buildservice::SandboxEffectiveLimit::Bytes(0));
+        assert_eq!(under_facts.effective_oom_group, Some(true));
+        assert_eq!(under_facts.effective_pids_max, crate::buildservice::SandboxEffectiveLimit::Count(32));
+        assert_eq!(under_facts.oom_kill_count, 0);
+
+        // 2. Over-limit child/grandchild touching allocated pages -> OOM kill & ResourceBudgetExceeded.
+        let mut over_policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        over_policy.resources.cgroup_root = Some(cg_root.clone());
+        over_policy.resources.memory_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        over_policy.resources.memory_limit_bytes = Some(16 * 1024 * 1024);
+        over_policy.resources.swap_policy = crate::buildservice::SandboxSwapPolicy::Zero;
+        let over_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(over_policy.clone())
+            .unwrap();
+        let over_req = shell_build_request(
+            "/bin/busybox sh -c '/bin/busybox dd if=/dev/zero of=/tmp/memhog bs=1M count=40 2>/dev/null' && /bin/busybox echo unexpected > /nix/store/over-out",
+            &["nix/store/over-out"],
+        );
+        let err = over_svc.do_build(over_req).await.unwrap_err();
+        let classified = err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .expect("OOM must produce ClassifiedBuildServiceError");
+        assert_eq!(classified.class, crate::buildservice::SandboxFailureClass::ResourceBudgetExceeded);
+        let over_facts = over_svc.last_enforcement_facts().unwrap();
+        assert!(over_facts.oom_kill_count > 0, "expected kernel oom_kill > 0, got {over_facts:?}");
+        assert!(over_facts.memory_peak_bytes.is_some());
+
+        // 3. Helper daemon running outside enforced cgroup -> refused before payload start!
+        let sock_dir = tempfile::tempdir().unwrap();
+        let compile_sock = sock_dir.path().join("compile.sock");
+        let _listener = std::os::unix::net::UnixListener::bind(&compile_sock).unwrap();
+        let helper_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(over_policy)
+            .unwrap()
+            .with_compile_socket(compile_sock)
+            .unwrap();
+        let helper_err = helper_svc
+            .do_build(shell_build_request("/bin/busybox echo nope > /nix/store/out", &["nix/store/out"]))
+            .await
+            .unwrap_err();
+        let helper_classified = helper_err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .unwrap();
+        assert_eq!(helper_classified.class, crate::buildservice::SandboxFailureClass::ResourceEnforcementUnavailable);
+        let helper_facts = helper_svc.last_enforcement_facts().unwrap();
+        assert!(helper_facts.unavailable_reasons.iter().any(|r| matches!(
+            r,
+            crate::buildservice::SandboxUnavailableReason::HelperDaemonOutsideEnforcedScope { .. }
+        )));
+    }
+
+    #[tokio::test]
+    async fn delegated_cgroup_dgram_helper_scope_and_pids_limit_controls() {
+        use std::io::BufRead;
+        use std::io::BufReader;
+        use std::io::Read as _;
+        use std::io::Write as _;
+        use std::os::unix::net::UnixDatagram;
+        use std::process::Stdio;
+
+        if let Some(sock_path) = std::env::var_os("MANTLE_TEST_EXTERNAL_DGRAM_SOCKET") {
+            let _sock = UnixDatagram::bind(&sock_path).expect("external child must bind dgram socket");
+            println!("READY");
+            let _ = std::io::stdout().flush();
+            let mut stdin_buf = [0_u8; 16];
+            while let Ok(n) = std::io::stdin().read(&mut stdin_buf) {
+                if n == 0 {
+                    break;
+                }
+            }
+            return;
+        }
+
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let Some(cg_root) = resolve_or_spawn_delegated_cgroup_root(
+            "buildservice::bwrap::tests::delegated_cgroup_dgram_helper_scope_and_pids_limit_controls",
+        ) else {
+            return;
+        };
+
+        let root = tempfile::tempdir().unwrap();
+        let sock_dir = tempfile::tempdir().unwrap();
+        let in_proc_wait_sock = sock_dir.path().join("rust-waits.sock");
+        let _in_proc_sock = UnixDatagram::bind(&in_proc_wait_sock).unwrap();
+
+        // 1. In-process UnixDatagram + AllowInProcessPassiveDatagram -> passes & records outcome.
+        let mut allow_policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        allow_policy.resources.cgroup_root = Some(cg_root.clone());
+        allow_policy.resources.memory_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        allow_policy.resources.memory_limit_bytes = Some(64 * 1024 * 1024);
+        allow_policy.resources.swap_policy = crate::buildservice::SandboxSwapPolicy::Zero;
+        allow_policy.resources.pids_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        allow_policy.resources.pids_limit_count = Some(32);
+        allow_policy.resources.helper_scope_policy =
+            crate::buildservice::SandboxHelperScopePolicy::AllowInProcessPassiveDatagram;
+
+        let allow_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(allow_policy.clone())
+            .unwrap()
+            .with_rust_wait_socket(in_proc_wait_sock.clone())
+            .unwrap();
+        let ok_req = shell_build_request(
+            "test -S /run/mantle/rust-waits.sock && /bin/busybox echo ok > /nix/store/dgram-ok",
+            &["nix/store/dgram-ok"],
+        );
+        allow_svc
+            .do_build(ok_req)
+            .await
+            .expect("AllowInProcessPassiveDatagram must pass for in-process dgram");
+        let allow_facts = allow_svc.last_enforcement_facts().unwrap();
+        assert!(allow_facts.enforced_memory);
+        assert!(allow_facts.enforced_pids);
+        assert!(allow_facts.helper_checks.iter().any(|outcome| matches!(
+            outcome,
+            crate::buildservice::SandboxHelperScopeOutcome::InProcessPassiveDatagram { socket_kind }
+                if socket_kind == "rust-waits"
+        )));
+
+        // 2. In-process UnixDatagram + RequireContained -> refused before payload start.
+        let mut strict_policy = allow_policy.clone();
+        strict_policy.resources.helper_scope_policy = crate::buildservice::SandboxHelperScopePolicy::RequireContained;
+        let strict_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(strict_policy)
+            .unwrap()
+            .with_rust_wait_socket(in_proc_wait_sock)
+            .unwrap();
+        let strict_err = strict_svc
+            .do_build(shell_build_request("/bin/busybox echo nope > /nix/store/out", &["nix/store/out"]))
+            .await
+            .unwrap_err();
+        let strict_classified = strict_err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .unwrap();
+        assert_eq!(strict_classified.class, crate::buildservice::SandboxFailureClass::ResourceEnforcementUnavailable);
+        let strict_facts = strict_svc.last_enforcement_facts().unwrap();
+        assert!(!strict_facts.enforced_memory);
+        assert!(!strict_facts.enforced_pids);
+        assert!(strict_facts.unavailable_reasons.iter().any(|r| matches!(
+            r,
+            crate::buildservice::SandboxUnavailableReason::HelperDaemonOutsideEnforcedScope { socket_kind, .. }
+                if socket_kind == "rust-waits"
+        )));
+
+        // 3. External-process UnixDatagram + AllowInProcessPassiveDatagram -> refused.
+        let ext_wait_sock = sock_dir.path().join("external-waits.sock");
+        let exe = std::env::current_exe().unwrap();
+        let mut ext_child = std::process::Command::new(exe)
+            .env_remove("MANTLE_DELEGATED_CHILD")
+            .env_remove("MANTLE_TEST_CGROUP_ROOT")
+            .env("MANTLE_TEST_EXTERNAL_DGRAM_SOCKET", &ext_wait_sock)
+            .args([
+                "--exact",
+                "buildservice::bwrap::tests::delegated_cgroup_dgram_helper_scope_and_pids_limit_controls",
+                "--nocapture",
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut reader = BufReader::new(ext_child.stdout.take().unwrap());
+        let mut line = String::new();
+        let mut ready_seen = false;
+        for _ in 0..32 {
+            line.clear();
+            let n = reader.read_line(&mut line).unwrap();
+            assert!(n > 0, "external dgram helper exited before publishing READY");
+            if line.trim() == "READY" {
+                ready_seen = true;
+                break;
+            }
+        }
+        assert!(ready_seen, "external dgram helper did not publish READY within 32 stdout lines");
+
+        let ext_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(allow_policy)
+            .unwrap()
+            .with_rust_wait_socket(ext_wait_sock)
+            .unwrap();
+        let ext_err = ext_svc
+            .do_build(shell_build_request("/bin/busybox echo nope > /nix/store/out", &["nix/store/out"]))
+            .await
+            .unwrap_err();
+        let ext_classified = ext_err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .unwrap();
+        assert_eq!(ext_classified.class, crate::buildservice::SandboxFailureClass::ResourceEnforcementUnavailable);
+        let ext_facts = ext_svc.last_enforcement_facts().unwrap();
+        assert!(ext_facts.unavailable_reasons.iter().any(|r| matches!(
+            r,
+            crate::buildservice::SandboxUnavailableReason::HelperDaemonOutsideEnforcedScope { socket_kind, .. }
+                if socket_kind == "rust-waits"
+        )));
+        drop(ext_child.stdin.take());
+        assert!(ext_child.wait().unwrap().success());
+
+        // 4. pids.max = 6 exhaustion -> pids_max_events > 0 and ResourceBudgetExceeded.
+        let mut pids_policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        pids_policy.resources.cgroup_root = Some(cg_root.clone());
+        pids_policy.resources.memory_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        pids_policy.resources.memory_limit_bytes = Some(64 * 1024 * 1024);
+        pids_policy.resources.swap_policy = crate::buildservice::SandboxSwapPolicy::Zero;
+        pids_policy.resources.pids_mode = crate::buildservice::SandboxEnforcementMode::Required;
+        pids_policy.resources.pids_limit_count = Some(6);
+        let pids_svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(pids_policy.clone())
+            .unwrap();
+        let pids_req = shell_build_request(
+            "/bin/busybox sh -c '/bin/busybox sleep 1 & /bin/busybox sleep 1 & /bin/busybox sleep 1 & /bin/busybox sleep 1 & /bin/busybox sleep 1 & ( : ) || exit 1' && /bin/busybox echo unexpected > /nix/store/pids-out",
+            &["nix/store/pids-out"],
+        );
+        let pids_err = pids_svc.do_build(pids_req).await.unwrap_err();
+        let pids_classified = pids_err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<crate::buildservice::ClassifiedBuildServiceError>())
+            .expect("pids exhaustion must produce ClassifiedBuildServiceError");
+        assert_eq!(pids_classified.class, crate::buildservice::SandboxFailureClass::ResourceBudgetExceeded);
+        let pids_facts = pids_svc.last_enforcement_facts().unwrap();
+        assert!(pids_facts.pids_max_events > 0, "expected pids_max_events > 0, got {pids_facts:?}");
+        assert_eq!(pids_facts.effective_pids_max, crate::buildservice::SandboxEffectiveLimit::Count(6));
+
+        // 5. command.spawn() failure with cgroup enabled resets enforced_memory/enforced_pids to false and
+        //    leaves zero attempt directories.
+        struct BadSpawnFactory;
+        impl crate::bwrap::BwrapCommandFactory for BadSpawnFactory {
+            fn command(
+                &self,
+                _invocation: crate::bwrap::BwrapInvocation<'_>,
+            ) -> std::io::Result<tokio::process::Command> {
+                Ok(tokio::process::Command::new("/nonexistent/mantle-missing-bwrap"))
+            }
+        }
+        let spawn_fail_svc =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_execution_policy(pids_policy.clone())
+                .unwrap()
+                .with_command_factory(Arc::new(BadSpawnFactory));
+        let spawn_err = spawn_fail_svc
+            .do_build(shell_build_request("/bin/busybox echo ok > /nix/store/out", &["nix/store/out"]))
+            .await
+            .unwrap_err();
+        assert_eq!(spawn_err.kind(), ErrorKind::NotFound);
+        let spawn_facts = spawn_fail_svc.last_enforcement_facts().unwrap();
+        assert!(!spawn_facts.enforced_memory, "spawn failure must not claim memory enforcement");
+        assert!(!spawn_facts.enforced_pids, "spawn failure must not claim pids enforcement");
+
+        // 6. PanicAfterPid1 with delegated cgroup cleans up AttemptCgroup directory cleanly.
+        let mut panic_svc =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_execution_policy(pids_policy)
+                .unwrap();
+        panic_svc.watch_fault = Some(WatchFault::PanicAfterPid1);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let panic_err = panic_svc
+            .do_build_cancellable(
+                shell_build_request("/bin/busybox echo ok > /nix/store/out", &["nix/store/out"]),
+                cancel_rx,
+            )
+            .await
+            .unwrap_err();
+        assert!(panic_err.to_string().contains("watch supervisor failed"));
+        let panic_facts = panic_svc.last_enforcement_facts().unwrap();
+        assert!(!panic_facts.enforced_memory);
+        assert!(!panic_facts.enforced_pids);
+
+        let leftover_attempt_dirs: Vec<_> = std::fs::read_dir(&cg_root)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("mantle-sbx-"))
+            .collect();
+        assert!(
+            leftover_attempt_dirs.is_empty(),
+            "delegated cgroup root leaked attempt directories: {leftover_attempt_dirs:?}"
         );
     }
 }

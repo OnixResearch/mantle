@@ -26,6 +26,10 @@ pub enum BuildFailureClass {
     Preflight,
     FixedOutputHashMismatch,
     Sandbox,
+    WallTimeout,
+    SilenceTimeout,
+    ResourceBudget,
+    ResourceEnforcementUnavailable,
     MissingOutput,
     MissingSourceInput,
     CacheVerification,
@@ -39,6 +43,10 @@ impl BuildFailureClass {
             Self::Preflight => "preflight",
             Self::FixedOutputHashMismatch => "fixed-output-hash-mismatch",
             Self::Sandbox => "sandbox",
+            Self::WallTimeout => "wall-timeout",
+            Self::SilenceTimeout => "silence-timeout",
+            Self::ResourceBudget => "resource-budget",
+            Self::ResourceEnforcementUnavailable => "resource-enforcement-unavailable",
             Self::MissingOutput => "missing-output",
             Self::MissingSourceInput => "missing-source-input",
             Self::CacheVerification => "cache-verification",
@@ -152,6 +160,18 @@ pub enum Error {
     #[error("sandbox error: {0}")]
     Sandbox(#[from] std::io::Error),
 
+    #[error("sandbox wall-clock deadline exceeded: {0}")]
+    SandboxWallTimeout(String),
+
+    #[error("sandbox silence budget exceeded: {0}")]
+    SandboxSilenceTimeout(String),
+
+    #[error("sandbox resource budget exceeded: {0}")]
+    SandboxResourceBudget(String),
+
+    #[error("sandbox resource enforcement unavailable: {0}")]
+    SandboxResourceEnforcementUnavailable(String),
+
     #[error("cache verification failed: {0}")]
     CacheVerification(String),
 
@@ -191,6 +211,18 @@ impl Error {
                 }),
             },
             Self::Sandbox(_) => BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::Sandbox),
+            Self::SandboxWallTimeout(_) => {
+                BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::WallTimeout)
+            }
+            Self::SandboxSilenceTimeout(_) => {
+                BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::SilenceTimeout)
+            }
+            Self::SandboxResourceBudget(_) => {
+                BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::ResourceBudget)
+            }
+            Self::SandboxResourceEnforcementUnavailable(_) => {
+                BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::ResourceEnforcementUnavailable)
+            }
             Self::OutputMissing { .. } => {
                 BuildFailureFacts::new(BuildFailurePhase::Build, BuildFailureClass::MissingOutput)
             }
@@ -412,6 +444,27 @@ mod tests {
         let sandbox = Error::Sandbox(std::io::Error::other("rephrased launcher error without legacy token"));
         assert_eq!(sandbox.failure_facts().phase, BuildFailurePhase::Build);
         assert_eq!(sandbox.failure_facts().error_class, BuildFailureClass::Sandbox);
+
+        let wall_timeout = Error::SandboxWallTimeout("wall expired".to_string());
+        assert_eq!(wall_timeout.failure_facts().phase, BuildFailurePhase::Build);
+        assert_eq!(wall_timeout.failure_facts().error_class, BuildFailureClass::WallTimeout);
+        assert_eq!(wall_timeout.failure_facts().error_class.as_str(), "wall-timeout");
+
+        let silence_timeout = Error::SandboxSilenceTimeout("silence expired".to_string());
+        assert_eq!(silence_timeout.failure_facts().phase, BuildFailurePhase::Build);
+        assert_eq!(silence_timeout.failure_facts().error_class, BuildFailureClass::SilenceTimeout);
+        assert_eq!(silence_timeout.failure_facts().error_class.as_str(), "silence-timeout");
+
+        let resource_budget = Error::SandboxResourceBudget("oom kill".to_string());
+        assert_eq!(resource_budget.failure_facts().phase, BuildFailurePhase::Build);
+        assert_eq!(resource_budget.failure_facts().error_class, BuildFailureClass::ResourceBudget);
+        assert_eq!(resource_budget.failure_facts().error_class.as_str(), "resource-budget");
+
+        let resource_unavailable =
+            Error::SandboxResourceEnforcementUnavailable("missing cgroup delegation".to_string());
+        assert_eq!(resource_unavailable.failure_facts().phase, BuildFailurePhase::Build);
+        assert_eq!(resource_unavailable.failure_facts().error_class, BuildFailureClass::ResourceEnforcementUnavailable);
+        assert_eq!(resource_unavailable.failure_facts().error_class.as_str(), "resource-enforcement-unavailable");
 
         let missing_output = Error::OutputMissing {
             output: "out".to_string(),
