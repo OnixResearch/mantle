@@ -1,6 +1,6 @@
 {
   "schema": "mantle-operator-command-catalog-v1",
-  "identity_blake3": "1ff69868bca7c636abdcda3944312e918a7c6e2d02952037abeb91e190428843",
+  "identity_blake3": "b70cddde7dc726a9caf311ddd6f8da052bbe96f7ba80a4fa3132f44e62fefeae",
   "entries": [
     {
       "descriptor": {
@@ -11841,6 +11841,7 @@
           "--impure",
           "--jobs",
           "--json",
+          "--keep-cohorts",
           "--log-level",
           "--nix-compat",
           "--no-host-tools",
@@ -11856,6 +11857,7 @@
           "--proof-exec-events-max",
           "--proof-sandbox-shell",
           "--proof-source-records-max",
+          "--reclaim-attempts",
           "--remote-binding-config",
           "--rust-source-provider",
           "--rustc",
@@ -11908,6 +11910,7 @@
           "--impure",
           "--jobs",
           "--json",
+          "--keep-cohorts",
           "--log-level",
           "--nix-compat",
           "--no-host-tools",
@@ -11923,6 +11926,7 @@
           "--proof-exec-events-max",
           "--proof-sandbox-shell",
           "--proof-source-records-max",
+          "--reclaim-attempts",
           "--remote-binding-config",
           "--rust-source-provider",
           "--rustc",

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 #[cfg(test)]
 use std::ffi::OsString;
 use std::fs;
@@ -72,7 +73,6 @@ use crate::source_built_fixed_point_trust_report::FINAL_RECEIPT_FILE;
 use crate::source_bundle::SourceBuiltFixedPointProfileRecords;
 use crate::source_bundle::SourceRecord;
 use crate::source_bundle::assemble_source_bundle;
-use crate::source_bundle::materialize_source_record_payload;
 use crate::source_bundle::source_built_fixed_point_profile_records;
 use crate::stagex_provider::StagexProviderRequest;
 use crate::stagex_transition::StagexTransitionRequest;
@@ -203,6 +203,29 @@ struct OpenFileDescriptorLimitPlan {
     update_required: bool,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub(super) struct AttemptStorageMetrics {
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub(super) estimated_bytes: u64,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) bytes_written_by_stage: BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) bytes_shared_by_stage: BTreeMap<String, u64>,
+}
+
+fn is_zero_u64(value: &u64) -> bool {
+    *value == 0
+}
+
+impl AttemptStorageMetrics {
+    pub(super) fn record_stage(&mut self, stage: &str, stats: crate::source_bundle::SharedStoreWriteStats) {
+        let written = self.bytes_written_by_stage.entry(stage.to_string()).or_insert(0);
+        *written = written.saturating_add(stats.bytes_written);
+        let shared = self.bytes_shared_by_stage.entry(stage.to_string()).or_insert(0);
+        *shared = shared.saturating_add(stats.bytes_shared);
+    }
+}
+
 #[derive(Debug)]
 struct PreparedAttempt {
     final_dir: PathBuf,
@@ -219,6 +242,7 @@ struct PreparedAttempt {
     disk_available_bytes_before: u64,
     started_at: Instant,
     plan: SourceBuiltFixedPointPlan,
+    pub(super) storage_metrics: AttemptStorageMetrics,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -228,6 +252,8 @@ struct AttemptStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     plan_digest_blake3: Option<String>,
     blocker: Option<String>,
+    #[serde(flatten)]
+    storage_metrics: AttemptStorageMetrics,
 }
 
 #[derive(Debug, Deserialize)]
@@ -390,17 +416,24 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
             )));
         }
     };
-    write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_RUNNING, None)?;
+    write_attempt_status_with_metrics(
+        &prepared.staging_dir,
+        Some(&prepared.plan.plan_digest_blake3),
+        PROOF_STATUS_RUNNING,
+        None,
+        &prepared.storage_metrics,
+    )?;
     if options.dev_fast_fail
         && matches!(dev_fast_fail_check(&options, &prepared)?, FastFailDecision::ReportPriorSuccess { .. })
     {
         // Fast-fail: do not launch a fresh rebuild. Report the exact prior digest.
         let prior = last_published_source_digest(&options)?;
-        write_attempt_status(
+        write_attempt_status_with_metrics(
             &prepared.staging_dir,
             Some(&prepared.plan.plan_digest_blake3),
             PROOF_STATUS_COMPLETE,
             None,
+            &prepared.storage_metrics,
         )?;
         emit_fast_fail_notice(&options, &prepared, prior.as_deref());
         return Ok(());
@@ -409,11 +442,12 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
         Ok(development_only) => development_only,
         Err(error) => {
             let blocker = error.to_string();
-            write_attempt_status(
+            write_attempt_status_with_metrics(
                 &prepared.staging_dir,
                 Some(&prepared.plan.plan_digest_blake3),
                 PROOF_STATUS_FAILED,
                 Some(&blocker),
+                &prepared.storage_metrics,
             )?;
             return Err(RunError::Build(format!(
                 "source-built fixed-point proof failed closed: {blocker}; preserved_attempt={}",
@@ -421,7 +455,13 @@ pub(crate) fn cmd_source_built_fixed_point(options: SourceBuiltFixedPointOptions
             )));
         }
     };
-    write_attempt_status(&prepared.staging_dir, Some(&prepared.plan.plan_digest_blake3), PROOF_STATUS_COMPLETE, None)?;
+    write_attempt_status_with_metrics(
+        &prepared.staging_dir,
+        Some(&prepared.plan.plan_digest_blake3),
+        PROOF_STATUS_COMPLETE,
+        None,
+        &prepared.storage_metrics,
+    )?;
     if development_only {
         // Any development mode, including stage resume, is ineligible
         // for promoted cold receipts and both successful-proof aliases.
@@ -541,6 +581,46 @@ fn validate_disk_capacity(available_bytes: u64, required_bytes: u64) -> Result<(
     Ok(())
 }
 
+pub(super) fn shared_source_records_dir(output_dir: &Path) -> PathBuf {
+    let parent = output_dir.parent().filter(|candidate| !candidate.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    parent.join(crate::source_bundle::SHARED_SOURCE_RECORDS_DIR_NAME)
+}
+
+pub(crate) fn estimate_attempt_bytes(
+    profile: &crate::source_bundle::SourceBundleManifest,
+    shared_records_dir: &Path,
+) -> u64 {
+    let shared_trees_dir = shared_records_dir.join(crate::source_bundle::SHARED_TREES_DIR_NAME);
+    let mut seen_records = BTreeSet::new();
+    let mut estimate = 16_384u64;
+    for record in &profile.records {
+        if !seen_records.insert(record.content_blake3.as_str()) {
+            continue;
+        }
+        let record_file = shared_records_dir.join(format!("{}.json", record.content_blake3));
+        if !record_file.exists() {
+            let approx_json = record.payload_bytes.saturating_mul(4) / 3 + 512;
+            estimate = estimate.saturating_add(approx_json);
+        }
+        let tree_dir = shared_trees_dir.join(&record.content_blake3);
+        if !tree_dir.exists() {
+            estimate = estimate.saturating_add(record.payload_bytes);
+        }
+        estimate = estimate.saturating_add(512);
+    }
+    estimate
+}
+
+fn validate_estimated_attempt_preflight(
+    available_bytes: u64,
+    profile: &crate::source_bundle::SourceBundleManifest,
+    shared_records_dir: &Path,
+) -> Result<u64, RunError> {
+    let estimated_bytes = estimate_attempt_bytes(profile, shared_records_dir);
+    validate_disk_capacity(available_bytes, estimated_bytes)?;
+    Ok(estimated_bytes)
+}
+
 fn plan_open_file_descriptor_limit(
     current_soft_limit: u64,
     current_hard_limit: u64,
@@ -655,15 +735,29 @@ fn prepare_profile_attempt(
     let records = source_built_fixed_point_profile_records(profile)?;
     validate_profile_records(&records, options)?;
     let staging_dir = staging_path(options.output_dir)?;
+    let shared_records_dir = shared_source_records_dir(options.output_dir);
     let disk_available_bytes_before =
         fs2::available_space(options.output_dir.parent().expect("validated absolute output has an existing parent"))
             .map_err(|error| proof_error(format!("recording proof disk baseline: {error}")))?;
+    let mut storage_metrics = AttemptStorageMetrics {
+        estimated_bytes: validate_estimated_attempt_preflight(
+            disk_available_bytes_before,
+            profile,
+            &shared_records_dir,
+        )?,
+        ..AttemptStorageMetrics::default()
+    };
     create_private_attempt_dir(&staging_dir)?;
     let inputs_dir = staging_dir.join(INPUTS_DIR);
     fs::create_dir(&inputs_dir)
         .map_err(|error| proof_error(format!("creating proof inputs {}: {error}", inputs_dir.display())))?;
     let source_root = inputs_dir.join(SOURCE_ROOT_DIR);
-    materialize_source_record_payload(records.mantle_source, &source_root)?;
+    let stats = crate::source_bundle::materialize_source_record_payload_shared(
+        records.mantle_source,
+        &source_root,
+        Some(&shared_records_dir),
+    )?;
+    storage_metrics.record_stage("source-materialization", stats);
     let mantle_source_digest = hash_materialized_source(&source_root)?;
     // Cold authority roots must remain disjoint: inserting vendors into the
     // already-hashed Mantle source would invalidate its admitted tree identity.
@@ -673,14 +767,29 @@ fn prepare_profile_attempt(
     } else {
         inputs_dir.join(VENDOR_RELATIVE_PATH)
     };
-    materialize_source_record_payload(records.vendor_inputs, &vendor_root)?;
+    let stats = crate::source_bundle::materialize_source_record_payload_shared(
+        records.vendor_inputs,
+        &vendor_root,
+        Some(&shared_records_dir),
+    )?;
+    storage_metrics.record_stage("source-materialization", stats);
     let vendor_inputs_digest = hash_materialized_source(&vendor_root)?;
     let stagex_seed_root = inputs_dir.join(STAGEX_SEED_DIR);
-    materialize_source_record_payload(records.stagex_seed, &stagex_seed_root)?;
+    let stats = crate::source_bundle::materialize_source_record_payload_shared(
+        records.stagex_seed,
+        &stagex_seed_root,
+        Some(&shared_records_dir),
+    )?;
+    storage_metrics.record_stage("source-materialization", stats);
     let stagex_seed = sole_materialized_file(records.stagex_seed, &stagex_seed_root)?;
     let stagex_seed_digest = hash_materialized_source(&stagex_seed)?;
     let stagex_lineage_root = inputs_dir.join(STAGEX_LINEAGE_DIR);
-    materialize_source_record_payload(records.stagex_lineage, &stagex_lineage_root)?;
+    let stats = crate::source_bundle::materialize_source_record_payload_shared(
+        records.stagex_lineage,
+        &stagex_lineage_root,
+        Some(&shared_records_dir),
+    )?;
+    storage_metrics.record_stage("source-materialization", stats);
     let stagex_lineage = sole_materialized_file(records.stagex_lineage, &stagex_lineage_root)?;
     let observed_stagex_lineage_blake3 = crate::protected_exec::blake3_file_hex(&stagex_lineage)
         .map_err(|error| proof_error(format!("hashing StageX lineage {}: {error}", stagex_lineage.display())))?;
@@ -691,16 +800,31 @@ fn prepare_profile_attempt(
         )));
     }
     let stagex_source_bundle_root = inputs_dir.join(STAGEX_SOURCE_BUNDLE_DIR);
-    materialize_source_record_payload(records.stagex_source_bundle, &stagex_source_bundle_root)?;
+    let stats = crate::source_bundle::materialize_source_record_payload_shared(
+        records.stagex_source_bundle,
+        &stagex_source_bundle_root,
+        Some(&shared_records_dir),
+    )?;
+    storage_metrics.record_stage("source-materialization", stats);
     let stagex_source_bundle = sole_materialized_file(records.stagex_source_bundle, &stagex_source_bundle_root)?;
     let stagex_source_bundle_digest = hash_materialized_source(&stagex_source_bundle)?;
     let bound_stagex_manifest = crate::source_bundle::read_source_bundle(&stagex_source_bundle)
         .map_err(|error| proof_error(format!("validating StageX source bundle: {error}")))?;
     let rust_source_archive_dir = inputs_dir.join(RUST_SOURCE_DIR);
-    materialize_source_record_payload(records.rust_source_archive_set, &rust_source_archive_dir)?;
+    let stats = crate::source_bundle::materialize_source_record_payload_shared(
+        records.rust_source_archive_set,
+        &rust_source_archive_dir,
+        Some(&shared_records_dir),
+    )?;
+    storage_metrics.record_stage("source-materialization", stats);
     let rust_source_archive_set_digest = hash_materialized_source(&rust_source_archive_dir)?;
     let native_source_authority_root = inputs_dir.join(NATIVE_SOURCE_AUTHORITY_DIR);
-    materialize_source_record_payload(records.native_source_manifest, &native_source_authority_root)?;
+    let stats = crate::source_bundle::materialize_source_record_payload_shared(
+        records.native_source_manifest,
+        &native_source_authority_root,
+        Some(&shared_records_dir),
+    )?;
+    storage_metrics.record_stage("source-materialization", stats);
     let native_source_authority_manifest =
         sole_materialized_file(records.native_source_manifest, &native_source_authority_root)?;
     let bound_native_manifest = crate::source_bundle::read_source_bundle(&native_source_authority_manifest)?;
@@ -718,9 +842,29 @@ fn prepare_profile_attempt(
     // included bundles carry authenticated host-tool source records that the
     // declared native authority manifest alone does not contain; authoring must
     // see them without regenerating the retained profile.
-    crate::source_bundle::write_source_bundle(&native_source_authority_manifest, &combined_native_manifest)?;
+    let manifest_stats = crate::source_bundle::write_referenced_source_bundle(
+        &native_source_authority_manifest,
+        &shared_records_dir,
+        &combined_native_manifest,
+        true,
+    )?;
+    storage_metrics.record_stage("native-closure-manifest", manifest_stats);
     let native_source_manifest_digest = hash_materialized_source(&native_source_authority_manifest)?;
-    crate::source_bundle::write_source_bundle(&native_source_manifest, &combined_native_manifest)?;
+    if fs::hard_link(&native_source_authority_manifest, &native_source_manifest).is_err() {
+        let fallback_stats = crate::source_bundle::write_referenced_source_bundle(
+            &native_source_manifest,
+            &shared_records_dir,
+            &combined_native_manifest,
+            false,
+        )?;
+        storage_metrics.record_stage("native-closure-manifest", fallback_stats);
+    } else {
+        let linked_len = fs::metadata(&native_source_manifest).map(|m| m.len()).unwrap_or(0);
+        storage_metrics.record_stage("native-closure-manifest", crate::source_bundle::SharedStoreWriteStats {
+            bytes_written: 0,
+            bytes_shared: linked_len,
+        });
+    }
     let source_digests = MaterializedSourceDigests {
         stagex_seed: stagex_seed_digest,
         stagex_source_bundle: stagex_source_bundle_digest,
@@ -776,7 +920,13 @@ fn prepare_profile_attempt(
                 b"compiler cache mode: excluded; cache receipts are not proof\n",
             )?;
         }
-        crate::source_bundle::import_source_bundle(profile, &native_state_dir, true)?;
+        let (_, import_stats) = crate::source_bundle::import_source_bundle_shared(
+            profile,
+            &native_state_dir,
+            true,
+            Some(&shared_records_dir),
+        )?;
+        storage_metrics.record_stage("native-state-import", import_stats);
     }
     if options.dev_provider_cache.is_some() {
         seed_dev_store_snapshot(options, &plan, &native_store_dir, &native_state_dir)?;
@@ -796,6 +946,7 @@ fn prepare_profile_attempt(
         disk_available_bytes_before,
         started_at,
         plan,
+        storage_metrics,
     })
 }
 
@@ -2355,11 +2506,12 @@ fn publish_attempt(
         } else {
             &prepared.final_dir
         };
-        write_attempt_status(
+        write_attempt_status_with_metrics(
             status_root,
             Some(&prepared.plan.plan_digest_blake3),
             PROOF_STATUS_FAILED,
             Some(&blocker),
+            &prepared.storage_metrics,
         )?;
         return Err(RunError::Build(format!(
             "source-built fixed-point publication failed closed: {blocker}; preserved_attempt={}",
@@ -2597,12 +2749,16 @@ fn print_dev_completion(
             "status": "development-only",
             "output": prepared.staging_dir,
             "plan_digest_blake3": prepared.plan.plan_digest_blake3,
+            "estimated_bytes": prepared.storage_metrics.estimated_bytes,
+            "bytes_written_by_stage": prepared.storage_metrics.bytes_written_by_stage,
+            "bytes_shared_by_stage": prepared.storage_metrics.bytes_shared_by_stage,
             "notice": "development execution cannot authorize a promoted cold receipt or release alias",
         });
         println!("{}", serde_json::to_string_pretty(&value).map_err(|error| proof_error(error.to_string()))?);
     } else {
         eprintln!("Completed development run at {}", prepared.staging_dir.display());
         eprintln!("  plan_digest_blake3: {}", prepared.plan.plan_digest_blake3);
+        eprintln!("  estimated_bytes: {}", prepared.storage_metrics.estimated_bytes);
         eprintln!("  development-only: no promoted cold receipt, no release alias");
     }
     Ok(())
@@ -2616,12 +2772,16 @@ fn print_completion(options: &SourceBuiltFixedPointOptions<'_>, prepared: &Prepa
             "output": prepared.final_dir,
             "plan_digest_blake3": prepared.plan.plan_digest_blake3,
             "receipt": prepared.final_dir.join(FINAL_RECEIPT_FILE),
+            "estimated_bytes": prepared.storage_metrics.estimated_bytes,
+            "bytes_written_by_stage": prepared.storage_metrics.bytes_written_by_stage,
+            "bytes_shared_by_stage": prepared.storage_metrics.bytes_shared_by_stage,
         });
         println!("{}", serde_json::to_string_pretty(&value).map_err(|error| proof_error(error.to_string()))?);
     } else {
         eprintln!("Completed source-built Mantle fixed-point proof {}", prepared.final_dir.display());
         eprintln!("  plan_digest_blake3: {}", prepared.plan.plan_digest_blake3);
         eprintln!("  receipt: {}", prepared.final_dir.join(FINAL_RECEIPT_FILE).display());
+        eprintln!("  estimated_bytes: {}", prepared.storage_metrics.estimated_bytes);
     }
     Ok(())
 }
@@ -2721,12 +2881,29 @@ fn write_attempt_status(
     status: &'static str,
     blocker: Option<&str>,
 ) -> Result<(), RunError> {
+    write_attempt_status_with_metrics(
+        staging_dir,
+        plan_digest_blake3,
+        status,
+        blocker,
+        &AttemptStorageMetrics::default(),
+    )
+}
+
+fn write_attempt_status_with_metrics(
+    staging_dir: &Path,
+    plan_digest_blake3: Option<&str>,
+    status: &'static str,
+    blocker: Option<&str>,
+    storage_metrics: &AttemptStorageMetrics,
+) -> Result<(), RunError> {
     let path = staging_dir.join(ATTEMPT_STATUS_FILE);
     let value = AttemptStatus {
         schema: PROOF_STATUS_SCHEMA,
         status,
         plan_digest_blake3: plan_digest_blake3.map(ToString::to_string),
         blocker: blocker.map(ToString::to_string),
+        storage_metrics: storage_metrics.clone(),
     };
     let bytes = serde_json::to_vec_pretty(&value)
         .map_err(|error| proof_error(format!("serializing attempt status: {error}")))?;
@@ -2875,6 +3052,305 @@ fn build_failures_summary(failures: &[BuildJsonFailure]) -> String {
 
 fn proof_error(message: String) -> RunError {
     RunError::Build(format!("source-built fixed-point blocked: {message}"))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct ReclaimAttemptsReport {
+    schema: &'static str,
+    run_root: PathBuf,
+    keep_cohorts: usize,
+    kept_cohorts: Vec<PathBuf>,
+    kept_proofs: Vec<PathBuf>,
+    deleted_cohorts: Vec<PathBuf>,
+    deleted_staging: Vec<PathBuf>,
+    pruned_shared_records: usize,
+    pruned_shared_trees: usize,
+    reclaimed_bytes: u64,
+    non_claim: &'static str,
+}
+
+pub(crate) fn cmd_reclaim_attempts(run_root: &Path, keep_cohorts: usize, json: bool) -> Result<(), RunError> {
+    if !run_root.is_dir() {
+        return Err(proof_error(format!(
+            "reclaim run root does not exist or is not a directory: {}",
+            run_root.display()
+        )));
+    }
+    if keep_cohorts == 0 {
+        return Err(proof_error("--keep-cohorts must be at least 1".to_string()));
+    }
+    ensure_no_running_attempts(run_root)?;
+    let classified = classify_run_root_entries(run_root)?;
+    let staging_dirs = classified.staging_dirs;
+    let mut cohorts = classified.cohorts;
+    let kept_proofs = classified.proofs;
+    cohorts.sort_by(|left, right| left.modified.cmp(&right.modified).then_with(|| left.name.cmp(&right.name)));
+    let delete_count = cohorts.len().saturating_sub(keep_cohorts);
+    let mut kept_cohorts: Vec<PathBuf> = cohorts.iter().skip(delete_count).map(|item| item.path.clone()).collect();
+    kept_cohorts.sort();
+    let mut reclaimed_bytes = 0u64;
+    let mut deleted_cohorts = Vec::with_capacity(delete_count);
+    for cohort in cohorts.into_iter().take(delete_count) {
+        reclaimed_bytes = reclaimed_bytes.saturating_add(remove_dir_reclaiming_bytes(&cohort.path)?);
+        deleted_cohorts.push(cohort.path);
+    }
+    deleted_cohorts.sort();
+    let mut deleted_staging = Vec::with_capacity(staging_dirs.len());
+    for staging in staging_dirs {
+        reclaimed_bytes = reclaimed_bytes.saturating_add(remove_dir_reclaiming_bytes(&staging)?);
+        deleted_staging.push(staging);
+    }
+    deleted_staging.sort();
+    let (pruned_shared_records, pruned_shared_trees, shared_bytes) = prune_unreferenced_shared_store(run_root)?;
+    reclaimed_bytes = reclaimed_bytes.saturating_add(shared_bytes);
+    let report = ReclaimAttemptsReport {
+        schema: "mantle-source-built-reclaim-v1",
+        run_root: run_root.to_path_buf(),
+        keep_cohorts,
+        kept_cohorts,
+        kept_proofs,
+        deleted_cohorts,
+        deleted_staging,
+        pruned_shared_records,
+        pruned_shared_trees,
+        reclaimed_bytes,
+        non_claim: "reclaim output reports storage reclamation only; it certifies no build proof",
+    };
+    emit_reclaim_report(&report, json)
+}
+
+fn emit_reclaim_report(report: &ReclaimAttemptsReport, json: bool) -> Result<(), RunError> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(report).map_err(|error| proof_error(error.to_string()))?);
+        return Ok(());
+    }
+    println!(
+        "reclaimed_bytes={} deleted_cohorts={} deleted_staging={} pruned_shared_records={} pruned_shared_trees={}",
+        report.reclaimed_bytes,
+        report.deleted_cohorts.len(),
+        report.deleted_staging.len(),
+        report.pruned_shared_records,
+        report.pruned_shared_trees
+    );
+    Ok(())
+}
+
+struct CohortCandidate {
+    modified: std::time::SystemTime,
+    name: String,
+    path: PathBuf,
+}
+
+fn ensure_no_running_attempts(run_root: &Path) -> Result<(), RunError> {
+    for entry in read_dir_sorted_entries(run_root)? {
+        if entry.file_name() == Some(std::ffi::OsStr::new(crate::source_bundle::SHARED_SOURCE_RECORDS_DIR_NAME))
+            || !entry.is_dir()
+        {
+            continue;
+        }
+        check_attempt_not_running(&entry)?;
+        for child in read_dir_sorted_entries(&entry)? {
+            if child.is_dir() {
+                check_attempt_not_running(&child)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn check_attempt_not_running(dir: &Path) -> Result<(), RunError> {
+    let status_path = dir.join(ATTEMPT_STATUS_FILE);
+    if !status_path.is_file() {
+        return Ok(());
+    }
+    let bytes = fs::read(&status_path)
+        .map_err(|error| proof_error(format!("reading attempt status {}: {error}", status_path.display())))?;
+    let parsed: serde_json::Value = serde_json::from_slice(&bytes)
+        .map_err(|error| proof_error(format!("parsing attempt status {}: {error}", status_path.display())))?;
+    if parsed.get("status").and_then(serde_json::Value::as_str) == Some(PROOF_STATUS_RUNNING) {
+        return Err(proof_error(format!("refusing to reclaim while running attempt exists at {}", dir.display())));
+    }
+    Ok(())
+}
+
+struct ClassifiedRunRootEntries {
+    staging_dirs: Vec<PathBuf>,
+    cohorts: Vec<CohortCandidate>,
+    proofs: Vec<PathBuf>,
+}
+
+fn classify_run_root_entries(run_root: &Path) -> Result<ClassifiedRunRootEntries, RunError> {
+    let mut staging_dirs = Vec::new();
+    let mut cohorts = Vec::new();
+    let mut proofs = Vec::new();
+    for path in read_dir_sorted_entries(run_root)? {
+        let Some(name) = path.file_name().and_then(|value| value.to_str()).map(ToString::to_string) else {
+            continue;
+        };
+        if name == crate::source_bundle::SHARED_SOURCE_RECORDS_DIR_NAME || !path.is_dir() {
+            continue;
+        }
+        if name.contains(STAGING_SUFFIX) && !directory_contains_published_proof(&path)? {
+            staging_dirs.push(path);
+            continue;
+        }
+        if name.starts_with('.') {
+            continue;
+        }
+        if directory_contains_published_proof(&path)? {
+            proofs.push(path);
+            continue;
+        }
+        if path.join("source-program-preparation.json").is_file() || path.join("source-profile.json").is_file() {
+            let modified = fs::metadata(&path).and_then(|meta| meta.modified()).unwrap_or(std::time::UNIX_EPOCH);
+            cohorts.push(CohortCandidate { modified, name, path });
+        }
+    }
+    proofs.sort();
+    Ok(ClassifiedRunRootEntries {
+        staging_dirs,
+        cohorts,
+        proofs,
+    })
+}
+
+fn directory_contains_published_proof(dir: &Path) -> Result<bool, RunError> {
+    if dir.join(FINAL_RECEIPT_FILE).is_file() {
+        return Ok(true);
+    }
+    for child in read_dir_sorted_entries(dir)? {
+        if child.is_dir() && child.join(FINAL_RECEIPT_FILE).is_file() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn read_dir_sorted_entries(dir: &Path) -> Result<Vec<PathBuf>, RunError> {
+    let mut paths = Vec::new();
+    let entries =
+        fs::read_dir(dir).map_err(|error| proof_error(format!("reading directory {}: {error}", dir.display())))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| proof_error(format!("reading entry in {}: {error}", dir.display())))?;
+        let path = entry.path();
+        if fs::symlink_metadata(&path).map(|meta| !meta.file_type().is_symlink()).unwrap_or(false) {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn measure_path_bytes(path: &Path) -> Result<u64, RunError> {
+    let meta = fs::symlink_metadata(path)
+        .map_err(|error| proof_error(format!("reading metadata {}: {error}", path.display())))?;
+    if !meta.file_type().is_dir() {
+        return Ok(meta.len());
+    }
+    let mut total = 0u64;
+    for child in read_dir_sorted_entries(path)? {
+        total = total.saturating_add(measure_path_bytes(&child)?);
+    }
+    Ok(total)
+}
+
+fn remove_dir_reclaiming_bytes(dir: &Path) -> Result<u64, RunError> {
+    let bytes = measure_path_bytes(dir)?;
+    fs::remove_dir_all(dir)
+        .map_err(|error| proof_error(format!("removing reclaimed directory {}: {error}", dir.display())))?;
+    Ok(bytes)
+}
+
+fn prune_unreferenced_shared_store(run_root: &Path) -> Result<(usize, usize, u64), RunError> {
+    let shared_dir = run_root.join(crate::source_bundle::SHARED_SOURCE_RECORDS_DIR_NAME);
+    if !shared_dir.is_dir() {
+        return Ok((0, 0, 0));
+    }
+    let retained = collect_retained_record_digests(run_root)?;
+    let mut pruned_records = 0usize;
+    let mut pruned_trees = 0usize;
+    let mut reclaimed_bytes = 0u64;
+    for entry in read_dir_sorted_entries(&shared_dir)? {
+        let Some(name) = entry.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if name == crate::source_bundle::SHARED_TREES_DIR_NAME && entry.is_dir() {
+            for tree in read_dir_sorted_entries(&entry)? {
+                if let Some(digest) = tree.file_name().and_then(|value| value.to_str())
+                    && !digest.starts_with('.')
+                    && !retained.contains(digest)
+                    && tree.is_dir()
+                {
+                    reclaimed_bytes = reclaimed_bytes.saturating_add(remove_dir_reclaiming_bytes(&tree)?);
+                    pruned_trees += 1;
+                }
+            }
+            continue;
+        }
+        if let Some(digest) = name.strip_suffix(".json")
+            && !retained.contains(digest)
+            && entry.is_file()
+        {
+            reclaimed_bytes = reclaimed_bytes.saturating_add(measure_path_bytes(&entry)?);
+            fs::remove_file(&entry)
+                .map_err(|error| proof_error(format!("pruning shared source record {}: {error}", entry.display())))?;
+            pruned_records += 1;
+        }
+    }
+    Ok((pruned_records, pruned_trees, reclaimed_bytes))
+}
+
+fn collect_retained_record_digests(run_root: &Path) -> Result<BTreeSet<String>, RunError> {
+    let mut digests = BTreeSet::new();
+    let mut stack = vec![(run_root.to_path_buf(), 0usize)];
+    while let Some((dir, depth)) = stack.pop() {
+        if depth > 6 {
+            continue;
+        }
+        for entry in read_dir_sorted_entries(&dir)? {
+            let Some(name) = entry.file_name().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            if name == crate::source_bundle::SHARED_SOURCE_RECORDS_DIR_NAME {
+                continue;
+            }
+            if entry.is_dir() {
+                stack.push((entry, depth + 1));
+                continue;
+            }
+            if name.ends_with(".json") && entry.is_file() {
+                extract_manifest_record_digests(&entry, &mut digests);
+            }
+        }
+    }
+    Ok(digests)
+}
+
+fn extract_manifest_record_digests(path: &Path, digests: &mut BTreeSet<String>) {
+    #[derive(Deserialize)]
+    struct BundleDigestScan {
+        format: Option<String>,
+        #[serde(default)]
+        records: Vec<RecordDigestScan>,
+    }
+    #[derive(Deserialize)]
+    struct RecordDigestScan {
+        content_blake3: String,
+    }
+    let Ok(file) = fs::File::open(path) else {
+        return;
+    };
+    let Ok(parsed) = serde_json::from_reader::<_, BundleDigestScan>(std::io::BufReader::new(file)) else {
+        return;
+    };
+    if matches!(
+        parsed.format.as_deref(),
+        Some("mantle-source-bundle-v1") | Some(crate::source_bundle::SOURCE_BUNDLE_REF_FORMAT)
+    ) {
+        for record in parsed.records {
+            digests.insert(record.content_blake3);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -3115,6 +3591,7 @@ mod tests {
             disk_available_bytes_before: options.disk_bytes_max,
             started_at: Instant::now(),
             plan: test_plan(),
+            storage_metrics: AttemptStorageMetrics::default(),
         };
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime
@@ -3887,6 +4364,7 @@ mod tests {
             disk_available_bytes_before: 1,
             started_at: Instant::now(),
             plan: test_plan(),
+            storage_metrics: AttemptStorageMetrics::default(),
         }
     }
 
@@ -3972,6 +4450,171 @@ mod tests {
         std::fs::remove_file(temp.path().join(LATEST_SOURCE_BUILT_ALIAS)).unwrap();
         let absent = last_published_source_digest(&no_alias).unwrap();
         assert_eq!(absent, None);
+    }
+
+    #[test]
+    fn estimate_attempt_bytes_drops_when_shared_and_preflight_rejects_low_space() {
+        let temp = tempfile::tempdir().unwrap();
+        let payload = temp.path().join("fixture.txt");
+        fs::write(&payload, vec![b'a'; 8192]).unwrap();
+        let manifest = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                identity: "alpha".to_string(),
+                path: payload,
+                adapter: None,
+            }],
+            LOGICAL_STORE_PREFIX,
+        )
+        .unwrap();
+        let shared_dir = temp.path().join(crate::source_bundle::SHARED_SOURCE_RECORDS_DIR_NAME);
+        let cold_estimate = estimate_attempt_bytes(&manifest, &shared_dir);
+        assert!(cold_estimate > 8192);
+
+        let err = validate_estimated_attempt_preflight(cold_estimate - 1, &manifest, &shared_dir).unwrap_err();
+        assert!(err.to_string().contains("proof disk preflight requires"), "{err}");
+
+        crate::source_bundle::write_referenced_source_bundle(
+            &temp.path().join("bundle.json"),
+            &shared_dir,
+            &manifest,
+            false,
+        )
+        .unwrap();
+        crate::source_bundle::materialize_source_record_payload_shared(
+            &manifest.records[0],
+            &temp.path().join("mat"),
+            Some(&shared_dir),
+        )
+        .unwrap();
+
+        let warm_estimate = estimate_attempt_bytes(&manifest, &shared_dir);
+        assert!(warm_estimate < cold_estimate);
+        validate_estimated_attempt_preflight(warm_estimate, &manifest, &shared_dir).unwrap();
+    }
+
+    #[test]
+    fn attempt_status_records_per_stage_written_and_shared_bytes() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut metrics = AttemptStorageMetrics {
+            estimated_bytes: 40_960,
+            ..AttemptStorageMetrics::default()
+        };
+        metrics.record_stage("source-materialization", crate::source_bundle::SharedStoreWriteStats {
+            bytes_written: 1024,
+            bytes_shared: 8192,
+        });
+        metrics.record_stage("native-state-import", crate::source_bundle::SharedStoreWriteStats {
+            bytes_written: 256,
+            bytes_shared: 4096,
+        });
+        write_attempt_status_with_metrics(temp.path(), Some(DIGEST), PROOF_STATUS_COMPLETE, None, &metrics).unwrap();
+
+        let status: serde_json::Value =
+            serde_json::from_slice(&fs::read(temp.path().join(ATTEMPT_STATUS_FILE)).unwrap()).unwrap();
+        assert_eq!(status["estimated_bytes"], 40_960);
+        assert_eq!(status["bytes_written_by_stage"]["source-materialization"], 1024);
+        assert_eq!(status["bytes_shared_by_stage"]["source-materialization"], 8192);
+        assert_eq!(status["bytes_written_by_stage"]["native-state-import"], 256);
+        assert_eq!(status["bytes_shared_by_stage"]["native-state-import"], 4096);
+    }
+
+    #[test]
+    fn reclaim_attempts_deletes_superseded_and_staging_preserves_proofs_and_refuses_running() {
+        let temp = tempfile::tempdir().unwrap();
+        let run_root = temp.path();
+
+        let orphan_file = run_root.join("src-orphan.txt");
+        let live_file = run_root.join("src-live.txt");
+        fs::write(&orphan_file, b"orphan-source-payload").unwrap();
+        fs::write(&live_file, b"live-source-payload").unwrap();
+        let orphan_bundle = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                identity: "orphan".to_string(),
+                path: orphan_file,
+                adapter: None,
+            }],
+            LOGICAL_STORE_PREFIX,
+        )
+        .unwrap();
+        let live_bundle = crate::source_bundle::plan_source_bundle(
+            &[crate::source_bundle::SourceSpec {
+                kind: crate::source_bundle::SourceRecordKind::LocalPath,
+                identity: "live".to_string(),
+                path: live_file,
+                adapter: None,
+            }],
+            LOGICAL_STORE_PREFIX,
+        )
+        .unwrap();
+
+        let shared_dir = run_root.join(crate::source_bundle::SHARED_SOURCE_RECORDS_DIR_NAME);
+        let cohort_old = run_root.join("cohort-1");
+        let cohort_new = run_root.join("cohort-2");
+        fs::create_dir_all(&cohort_old).unwrap();
+        fs::create_dir_all(&cohort_new).unwrap();
+        crate::source_bundle::write_referenced_source_bundle(
+            &cohort_old.join("source-profile.json"),
+            &shared_dir,
+            &orphan_bundle,
+            false,
+        )
+        .unwrap();
+        crate::source_bundle::write_referenced_source_bundle(
+            &cohort_new.join("source-profile.json"),
+            &shared_dir,
+            &live_bundle,
+            false,
+        )
+        .unwrap();
+        crate::source_bundle::materialize_source_record_payload_shared(
+            &orphan_bundle.records[0],
+            &cohort_old.join("inputs/orphan"),
+            Some(&shared_dir),
+        )
+        .unwrap();
+        crate::source_bundle::materialize_source_record_payload_shared(
+            &live_bundle.records[0],
+            &cohort_new.join("inputs/live"),
+            Some(&shared_dir),
+        )
+        .unwrap();
+
+        let failed_staging = run_root.join(".proof-old.source-built-fixed-point-staging-101");
+        fs::create_dir_all(&failed_staging).unwrap();
+        write_attempt_status(&failed_staging, Some(DIGEST), PROOF_STATUS_FAILED, Some("failed")).unwrap();
+
+        let published_proof = run_root.join("proof-published");
+        fs::create_dir_all(&published_proof).unwrap();
+        fs::write(published_proof.join(FINAL_RECEIPT_FILE), b"{}\n").unwrap();
+        write_attempt_status(&published_proof, Some(DIGEST), PROOF_STATUS_COMPLETE, None).unwrap();
+
+        let running_staging = run_root.join(".proof-active.source-built-fixed-point-staging-202");
+        fs::create_dir_all(&running_staging).unwrap();
+        write_attempt_status(&running_staging, Some(DIGEST), PROOF_STATUS_RUNNING, None).unwrap();
+
+        let err = cmd_reclaim_attempts(run_root, 1, false).unwrap_err();
+        assert!(err.to_string().contains("running attempt"), "{err}");
+        assert!(cohort_old.exists());
+        assert!(failed_staging.exists());
+
+        write_attempt_status(&running_staging, Some(DIGEST), PROOF_STATUS_FAILED, Some("aborted")).unwrap();
+        cmd_reclaim_attempts(run_root, 1, false).unwrap();
+
+        assert!(!cohort_old.exists());
+        assert!(!failed_staging.exists());
+        assert!(!running_staging.exists());
+        assert!(cohort_new.is_dir());
+        assert!(published_proof.join(FINAL_RECEIPT_FILE).is_file());
+        assert!(published_proof.join(ATTEMPT_STATUS_FILE).is_file());
+
+        let orphan_digest = &orphan_bundle.records[0].content_blake3;
+        let live_digest = &live_bundle.records[0].content_blake3;
+        assert!(!shared_dir.join(format!("{orphan_digest}.json")).exists());
+        assert!(!shared_dir.join(crate::source_bundle::SHARED_TREES_DIR_NAME).join(orphan_digest).exists());
+        assert!(shared_dir.join(format!("{live_digest}.json")).is_file());
+        assert!(shared_dir.join(crate::source_bundle::SHARED_TREES_DIR_NAME).join(live_digest).is_dir());
     }
 
     fn write_executable(path: &Path) -> PathBuf {
