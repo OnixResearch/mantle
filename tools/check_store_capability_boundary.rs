@@ -70,7 +70,7 @@ const ADAPTER_ALLOWLIST: [&str; 1] = ["crunch-rust-cache"];
 /// Each entry is a maintainer declaration of a real composition root under
 /// ADR 0058, not a waiver of the raw-service or writable-authority guards.
 const HANDLE_CONSTRUCTION_ALLOWLIST: [&str; 16] = [
-    "src/main.rs",
+    "src/cli.rs",
     // Bootstrap owns a guarded raw-seed store and immediately splits it into
     // pipeline capabilities; it does not pass the broad handle to build code.
     "src/bootstrap.rs",

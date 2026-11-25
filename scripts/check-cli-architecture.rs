@@ -14,9 +14,11 @@ edition = "2024"
 //! runtime dependency checks. `--semantic --self-test` executes real compiler
 //! and Cargo fixtures. Neither rail claims arbitrary semantic/domain correctness.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// Contract sources that must stay free of host capability and CLI errors.
@@ -25,8 +27,11 @@ const CONTRACT_SOURCES: &str = "crates/mantle-application-contract/src";
 /// Presentation sources that must render typed values only.
 const PRESENTATION_SOURCES: &str = "src/presentation";
 
-/// Root sources whose authority must stay bounded.
-const ROOT_SOURCES: &str = "src/main.rs";
+/// Root CLI module whose authority must stay bounded.
+const ROOT_SOURCES: &str = "src/cli.rs";
+
+/// Thin binary entrypoints whose authority must also stay bounded.
+const ROOT_ENTRYPOINTS: &[&str] = &["src/main.rs", "src/bin/crunch.rs"];
 
 /// Every core and application crate's sources.
 const CORE_SOURCES: &str = "crates";
@@ -181,6 +186,10 @@ fn scan_repository(root: &Path) -> Result<Vec<String>, String> {
     violations.extend(scan_host_sources(&root.join(CONTRACT_SOURCES), "contract host authority")?);
     violations.extend(scan_directory(&root.join(PRESENTATION_SOURCES), PRESENTATION_FORBIDDEN, "presentation")?);
     violations.extend(scan_file(&root.join(ROOT_SOURCES), ROOT_FORBIDDEN, "root")?);
+    for entrypoint in ROOT_ENTRYPOINTS {
+        violations.extend(scan_file(&root.join(entrypoint), ROOT_FORBIDDEN, "root")?);
+    }
+    violations.extend(scan_duplicate_module_ownership(root)?);
     violations.extend(scan_core_sources(&root.join(CORE_SOURCES))?);
     violations.extend(scan_no_std_declaration(&root.join(CONTRACT_LIB))?);
     violations.extend(scan_contract_manifest(&root.join(CONTRACT_MANIFEST))?);
@@ -836,6 +845,239 @@ fn classified_roots(text: &str) -> Vec<String> {
     roots
 }
 
+struct DeclaredModule {
+    name: String,
+    line: usize,
+    candidates: Vec<PathBuf>,
+}
+
+fn is_rust_identifier(text: &str) -> bool {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == '_') && chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
+fn normalize_repo_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::Normal(part) => normalized.push(part),
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    normalized
+}
+
+fn external_modules_in_root(root: &Path, relative: &Path) -> Result<Vec<DeclaredModule>, String> {
+    let full = root.join(relative);
+    let text = fs::read_to_string(&full).map_err(|error| format!("reading {}: {error}", full.display()))?;
+    let tokens = source_tokens(&text);
+    let (production, _) = host_production_tokens(&tokens);
+    let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+    let stem = relative.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+    let module_dir = if matches!(stem, "lib" | "main") || parent == Path::new("src/bin") {
+        parent.to_path_buf()
+    } else {
+        parent.join(stem)
+    };
+
+    let mut declared = Vec::new();
+    let mut brace_depth = 0_usize;
+    let mut explicit_path: Option<&str> = None;
+    let mut index = 0;
+    while index < production.len() {
+        let tok = production[index];
+        if brace_depth == 0
+            && index >= 2
+            && production[index - 2].text == "#"
+            && production[index - 1].text == "["
+            && tok.text == "path"
+            && production.get(index + 1).is_some_and(|next| next.text == "=")
+        {
+            explicit_path = production
+                .get(index + 2)
+                .filter(|next| next.literal)
+                .map(|next| next.text.trim_matches('"'));
+        }
+        if brace_depth == 0
+            && !tok.literal
+            && tok.text == "mod"
+            && (index == 0 || production[index - 1].text != "#")
+            && let Some(name_tok) = production.get(index + 1)
+            && !name_tok.literal
+            && is_rust_identifier(name_tok.text)
+            && production.get(index + 2).is_some_and(|next| next.text == ";")
+        {
+            let candidates = if let Some(rel) = explicit_path.take() {
+                vec![normalize_repo_path(&parent.join(rel))]
+            } else {
+                vec![
+                    normalize_repo_path(&module_dir.join(format!("{}.rs", name_tok.text))),
+                    normalize_repo_path(&module_dir.join(name_tok.text).join("mod.rs")),
+                ]
+            };
+            declared.push(DeclaredModule {
+                name: name_tok.text.to_string(),
+                line: name_tok.line,
+                candidates,
+            });
+        }
+        match tok.text {
+            "{" => brace_depth += 1,
+            "}" => {
+                brace_depth = brace_depth.saturating_sub(1);
+                if brace_depth == 0 {
+                    explicit_path = None;
+                }
+            }
+            ";" if brace_depth == 0 => explicit_path = None,
+            _ => {}
+        }
+        index += 1;
+    }
+    Ok(declared)
+}
+
+fn strip_toml_comment(line: &str) -> &str {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    for (idx, ch) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if in_double && ch == '\\' {
+            escaped = true;
+            continue;
+        }
+        if ch == '"' && !in_single {
+            in_double = !in_double;
+        } else if ch == '\'' && !in_double {
+            in_single = !in_single;
+        } else if ch == '#' && !in_single && !in_double {
+            return &line[..idx];
+        }
+    }
+    line
+}
+
+fn parse_toml_string_field(line: &str, key: &str) -> Option<String> {
+    let (lhs, rhs) = line.split_once('=')?;
+    if lhs.trim() != key {
+        return None;
+    }
+    let val = rhs.trim();
+    let inner = val.strip_prefix('"')?.strip_suffix('"')?;
+    Some(inner.to_string())
+}
+
+fn scan_duplicate_bin_paths(root: &Path, violations: &mut Vec<String>) -> Result<(), String> {
+    let manifest_path = root.join("Cargo.toml");
+    let text =
+        fs::read_to_string(&manifest_path).map_err(|error| format!("reading {}: {error}", manifest_path.display()))?;
+    let mut in_bin = false;
+    let mut current_name: Option<String> = None;
+    let mut current_path: Option<(PathBuf, usize)> = None;
+    let mut bins: Vec<(String, PathBuf, usize)> = Vec::new();
+    for (idx, raw_line) in text.lines().enumerate() {
+        let line_no = idx + 1;
+        let line = strip_toml_comment(raw_line).trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with('[') {
+            if in_bin && let (Some(name), Some((path, path_line))) = (current_name.take(), current_path.take()) {
+                bins.push((name, path, path_line));
+            }
+            current_name = None;
+            current_path = None;
+            in_bin = line == "[[bin]]";
+            continue;
+        }
+        if !in_bin {
+            continue;
+        }
+        if let Some(name) = parse_toml_string_field(line, "name") {
+            current_name = Some(name);
+        } else if let Some(path) = parse_toml_string_field(line, "path") {
+            current_path = Some((normalize_repo_path(Path::new(&path)), line_no));
+        }
+    }
+    if in_bin && let (Some(name), Some((path, path_line))) = (current_name, current_path) {
+        bins.push((name, path, path_line));
+    }
+
+    let mut seen: BTreeMap<PathBuf, String> = BTreeMap::new();
+    for (bin_name, norm_path, line) in bins {
+        if let Some(first_name) = seen.get(&norm_path) {
+            violations.push(format!(
+                "module ownership boundary: Cargo.toml:{line}: duplicate [[bin]] path `{}` shared by `{first_name}` and `{bin_name}`",
+                norm_path.display()
+            ));
+        } else {
+            seen.insert(norm_path, bin_name);
+        }
+    }
+    Ok(())
+}
+
+fn scan_duplicate_module_ownership(root: &Path) -> Result<Vec<String>, String> {
+    let mut violations = Vec::new();
+    let mut roots = vec![PathBuf::from("src/lib.rs"), PathBuf::from("src/main.rs")];
+    let bin_dir = root.join("src/bin");
+    if bin_dir.is_dir() {
+        let mut bin_files = Vec::new();
+        for entry in fs::read_dir(&bin_dir).map_err(|error| format!("reading {}: {error}", bin_dir.display()))? {
+            let path = entry.map_err(|error| format!("reading entry: {error}"))?.path();
+            if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    bin_files.push(PathBuf::from("src/bin").join(name));
+                }
+            }
+        }
+        bin_files.sort();
+        roots.extend(bin_files);
+    }
+
+    let mut owner_by_name: BTreeMap<String, (String, usize)> = BTreeMap::new();
+    let mut owner_by_file: BTreeMap<PathBuf, (String, usize)> = BTreeMap::new();
+    for rel in roots {
+        let rel_str = rel.to_string_lossy().into_owned();
+        let modules = external_modules_in_root(root, &rel)?;
+        for module in modules {
+            if let Some((owner_file, owner_line)) = owner_by_name.get(&module.name) {
+                violations.push(format!(
+                    "module ownership boundary: {rel_str}:{}: duplicate external module `mod {};` already owned by {owner_file}:{owner_line}",
+                    module.line, module.name
+                ));
+            } else {
+                owner_by_name.insert(module.name.clone(), (rel_str.clone(), module.line));
+            }
+            for candidate in module.candidates {
+                if let Some((owner_file, owner_line)) = owner_by_file.get(&candidate) {
+                    violations.push(format!(
+                        "module ownership boundary: {rel_str}:{}: module file `{}` already owned by {owner_file}:{owner_line}",
+                        module.line,
+                        candidate.display()
+                    ));
+                } else {
+                    owner_by_file.insert(candidate, (rel_str.clone(), module.line));
+                }
+            }
+        }
+    }
+
+    scan_duplicate_bin_paths(root, &mut violations)?;
+    Ok(violations)
+}
+
 fn self_test() -> Result<(), String> {
     let root = env::temp_dir().join(format!("mantle-cli-arch-selftest-{}", std::process::id()));
     if root.exists() {
@@ -844,16 +1086,29 @@ fn self_test() -> Result<(), String> {
     let contract = root.join(CONTRACT_SOURCES);
     let presentation = root.join(PRESENTATION_SOURCES);
     let root_source = root.join(ROOT_SOURCES);
+    let src_dir = root.join("src");
+    let bin_dir = src_dir.join("bin");
     fs::create_dir_all(&contract).map_err(|error| format!("creating fixture: {error}"))?;
     fs::create_dir_all(&presentation).map_err(|error| format!("creating fixture: {error}"))?;
-    fs::create_dir_all(root_source.parent().expect("root parent"))
-        .map_err(|error| format!("creating fixture root: {error}"))?;
+    fs::create_dir_all(&bin_dir).map_err(|error| format!("creating fixture bin: {error}"))?;
 
     fs::write(contract.join("clean.rs"), "pub fn plan() -> u32 { 1 }\n")
         .map_err(|error| format!("fixture: {error}"))?;
     fs::write(presentation.join("clean.rs"), "pub fn render(value: u32) -> String { value.to_string() }\n")
         .map_err(|error| format!("fixture: {error}"))?;
-    fs::write(root_source.as_path(), "fn main() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    fs::write(root_source.as_path(), "pub fn main() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    fs::write(src_dir.join("shared.rs"), "pub fn shared() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    fs::write(src_dir.join("lib.rs"), "pub mod shared;\nmod cli;\npub use cli::main as cli_main;\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(src_dir.join("main.rs"), "fn main() -> std::process::ExitCode { mantle::cli_main() }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(bin_dir.join("crunch.rs"), "fn main() -> std::process::ExitCode { mantle::cli_main() }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"mantle\"\nversion = \"0.1.0\"\n\n[[bin]]\nname = \"mantle\"\npath = \"src/main.rs\"\n\n[[bin]]\nname = \"crunch\"\npath = \"src/bin/crunch.rs\"\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
     let core = root.join("crates/mantle-rust-plan-core/src");
     fs::create_dir_all(&core).map_err(|error| format!("creating fixture: {error}"))?;
     fs::write(core.join("lib.rs"), "pub fn plan() -> u32 { 1 }\n").map_err(|error| format!("fixture: {error}"))?;
@@ -1200,6 +1455,94 @@ fn self_test() -> Result<(), String> {
     let typed_core = scan_repository(&root)?;
     if !typed_core.is_empty() {
         return Err(format!("typed core return fixture must pass, saw {typed_core:?}"));
+    }
+
+    // Positive false-positive resistance fixtures for module ownership and entrypoints.
+    let fp_fixture = "\
+// mod shared;\n\
+/* outer /* mod shared; */ */\n\
+const S: &str = \"mod shared;\";\n\
+const R: &str = r#\"mod shared;\"#;\n\
+#[cfg(test)]\n\
+mod shared;\n\
+#[cfg(test)]\n\
+mod tests { mod shared; }\n\
+#[cfg(target_os = \"linux\")]\n\
+mod linux { fn run() {} }\n\
+macro_rules! doc { () => { mod shared; }; }\n\
+fn main() -> std::process::ExitCode { mantle::cli_main() }\n";
+    fs::write(src_dir.join("main.rs"), fp_fixture).map_err(|error| format!("fixture: {error}"))?;
+    fs::write(bin_dir.join("crunch.rs"), fp_fixture).map_err(|error| format!("fixture: {error}"))?;
+    let fp_clean = scan_repository(&root)?;
+    if !fp_clean.is_empty() {
+        return Err(format!("false-positive resistance fixture must pass, saw {fp_clean:?}"));
+    }
+
+    // Negative fixtures: ROOT_FORBIDDEN in entrypoints, duplicate module ownership, and duplicate [[bin]] path.
+    fs::write(src_dir.join("main.rs"), "fn main() { std::process::Command::new(\"x\").status(); }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let main_forbidden = scan_repository(&root)?;
+    if !main_forbidden.iter().any(|entry| entry.contains("root boundary")) {
+        return Err(format!("src/main.rs ROOT_FORBIDDEN must fail, saw {main_forbidden:?}"));
+    }
+    fs::write(src_dir.join("main.rs"), "fn main() -> std::process::ExitCode { mantle::cli_main() }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+
+    fs::write(bin_dir.join("crunch.rs"), "fn main() { std::process::Command::new(\"x\").status(); }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let crunch_forbidden = scan_repository(&root)?;
+    if !crunch_forbidden.iter().any(|entry| entry.contains("root boundary")) {
+        return Err(format!("src/bin/crunch.rs ROOT_FORBIDDEN must fail, saw {crunch_forbidden:?}"));
+    }
+    fs::write(bin_dir.join("crunch.rs"), "fn main() -> std::process::ExitCode { mantle::cli_main() }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+
+    fs::write(src_dir.join("main.rs"), "mod shared;\nfn main() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    let dup_main = scan_repository(&root)?;
+    if !dup_main.iter().any(|entry| entry.contains("module ownership boundary")) {
+        return Err(format!("duplicate mod in src/main.rs must fail, saw {dup_main:?}"));
+    }
+    fs::write(src_dir.join("main.rs"), "fn main() -> std::process::ExitCode { mantle::cli_main() }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+
+    fs::write(bin_dir.join("crunch.rs"), "mod shared;\nfn main() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    let dup_crunch = scan_repository(&root)?;
+    if !dup_crunch.iter().any(|entry| entry.contains("module ownership boundary")) {
+        return Err(format!("duplicate mod in src/bin/crunch.rs must fail, saw {dup_crunch:?}"));
+    }
+
+    fs::write(bin_dir.join("crunch.rs"), "#[path = \"../shared.rs\"]\nmod alias;\nfn main() {}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let dup_path_attr = scan_repository(&root)?;
+    if !dup_path_attr.iter().any(|entry| entry.contains("module ownership boundary")) {
+        return Err(format!("duplicate #[path] mod in src/bin/crunch.rs must fail, saw {dup_path_attr:?}"));
+    }
+    fs::write(bin_dir.join("crunch.rs"), "fn main() -> std::process::ExitCode { mantle::cli_main() }\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+
+    // Two src/bin/*.rs crate roots sharing a file via `mod helper;` vs `#[path = "helper.rs"] mod other;`
+    // must collide on `src/bin/helper.rs` in `owner_by_file` even though module names differ.
+    fs::write(bin_dir.join("a.rs"), "mod helper;\nfn main() {}\n").map_err(|error| format!("fixture: {error}"))?;
+    fs::write(bin_dir.join("b.rs"), "#[path = \"helper.rs\"]\nmod other;\nfn main() {}\n")
+        .map_err(|error| format!("fixture: {error}"))?;
+    let dup_bin_file = scan_repository(&root)?;
+    if !dup_bin_file
+        .iter()
+        .any(|entry| entry.contains("src/bin/helper.rs") && entry.contains("already owned by src/bin/a.rs"))
+    {
+        return Err(format!("src/bin/*.rs #[path] collision must fail, saw {dup_bin_file:?}"));
+    }
+    fs::remove_file(bin_dir.join("a.rs")).map_err(|error| format!("fixture: {error}"))?;
+    fs::remove_file(bin_dir.join("b.rs")).map_err(|error| format!("fixture: {error}"))?;
+
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"mantle\"\nversion = \"0.1.0\"\n\n[[bin]]\nname = \"mantle\"\npath = \"src/main.rs\"\n\n[[bin]]\nname = \"crunch\"\npath = \"src/main.rs\"\n",
+    )
+    .map_err(|error| format!("fixture: {error}"))?;
+    let dup_bin_path = scan_repository(&root)?;
+    if !dup_bin_path.iter().any(|entry| entry.contains("module ownership boundary")) {
+        return Err(format!("duplicate [[bin]] path in Cargo.toml must fail, saw {dup_bin_path:?}"));
     }
 
     fs::remove_dir_all(&root).map_err(|error| format!("cleaning {}: {error}", root.display()))?;

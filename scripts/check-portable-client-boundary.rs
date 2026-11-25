@@ -11,7 +11,7 @@ use std::process::ExitCode;
 
 const CORE_MANIFEST: &str = "crates/mantle-portable-client-core/Cargo.toml";
 const CORE_SOURCE: &str = "crates/mantle-portable-client-core/src/lib.rs";
-const ROOT_SOURCE: &str = "src/main.rs";
+const ROOT_SOURCE: &str = "src/cli.rs";
 const FORBIDDEN_DEPENDENCIES: [&str; 10] = [
     "bwrap",
     "fuse",
