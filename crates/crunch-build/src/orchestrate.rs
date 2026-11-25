@@ -2929,7 +2929,7 @@ where BServ: BuildService + 'static
     }
 
     /// Collect build-input provenance for native attestations.
-    fn build_artifact_provenance(
+    pub(crate) fn build_artifact_provenance(
         &self,
         derivation: &Derivation,
         original_drv_path: &StorePath<String>,

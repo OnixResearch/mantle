@@ -166,4 +166,4 @@ When a static consumer arrives via `Worker::want` after the dynamic-plan produce
 This contract governs the single-invocation scheduler–rebuilder boundary inside Mantle (`crates/crunch-build`, `crates/crunch-action-result-core`, `crates/crunch-glue`, and watch sandbox teardown). It does not claim:
 
 - External proof authority beyond admitted signatures/policies (`#14`), remote worker pool placement semantics (`#35`), multi-host cache service availability, or full hardware/compiler determinism of untrusted builders.
-- Root preflight shortcut implementation (`#41`, whose preconditions are specified in §1.4) or future observability/reporting features (`#19`, `#21`, `#40`).
+- Root preflight shortcut implementation (`#41`, whose preconditions are specified in §1.4) or future observability/reporting features (`#19`, `#21`). See `docs/bounded-reference-oracle.md` for the `#40` bounded reference evaluator, differential `proptest` suite, and evidence-tier boundaries.

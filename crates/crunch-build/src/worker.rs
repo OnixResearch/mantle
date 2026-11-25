@@ -5229,7 +5229,7 @@ fn classify_build_service_error(prefix: &str, error: std::io::Error) -> Error {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
     use std::sync::atomic::AtomicUsize;
@@ -13286,6 +13286,35 @@ mod tests {
             }));
             assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::CacheMiss));
             assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::DependencyReady));
+        }
+    }
+
+    /// Test-only scheduler mutation helper for `#40` mutation check `(b)`:
+    /// drops the dependency wait edges on `root_drv_path` so it dispatches
+    /// without waiting for its upstream dependencies.
+    pub(crate) async fn run_with_dropped_wait_mutation<BServ>(
+        root_drv_path: &StorePath<String>,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<WorkerResult, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let mut worker = Worker::new(1);
+        worker.want(root_drv_path, known_paths, true)?;
+        let root_key = root_drv_path.to_absolute_path();
+        if let Some(goal) = worker.registry.get_mut(&root_key) {
+            goal.waitees.clear();
+            goal.state = GoalState::Pending;
+            let _ = goal.inspect(Vec::new())?;
+        }
+        worker.enqueue_ready_goal(&root_key)?;
+        worker.run(builder, known_paths).await
+    }
+
+    impl Worker {
+        pub(crate) fn demanded_outputs_for(&self, drv_path: &StorePath<String>) -> Option<&BTreeSet<String>> {
+            self.goal_demands.get(&drv_path.to_absolute_path())
         }
     }
 }

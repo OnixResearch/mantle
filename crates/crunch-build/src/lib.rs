@@ -31,6 +31,8 @@ mod hermeticity;
 mod network_policy;
 mod orchestrate;
 pub mod plan_output_binding;
+#[cfg(test)]
+mod reference_oracle;
 mod references;
 pub mod registry;
 pub mod rewrite;
