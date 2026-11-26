@@ -508,6 +508,7 @@
             )
             || pkgs.lib.hasPrefix "${toString ./vendor/trellis-fenced-attempt}/" pathString
             || pathString == toString ./README.md
+            || pathString == toString ./dylint.toml
             || pathString == toString ./flake.nix
             || pkgs.lib.hasPrefix "${toString ./.github/workflows}/" pathString
             || pkgs.lib.hasPrefix "${toString ./lib}/" pathString
@@ -521,7 +522,13 @@
             || pathString == toString ./.cairn/changes/separate-remote-build-hexagon
             || pathString == toString ./.cairn/changes/separate-remote-build-hexagon/evidence
             || pkgs.lib.hasPrefix "${toString ./.cairn/changes/separate-remote-build-hexagon/evidence}/" pathString
-            || pkgs.lib.hasPrefix "${toString ./.cairn/archive}/" pathString
+            || pathString == toString ./.cairn/archive
+            || pathString == toString ./.cairn/archive/2026-07-14-prove-hardware-simulation-build-flow
+            || pathString == toString ./.cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence
+            || pkgs.lib.hasPrefix "${toString ./.cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence}/" pathString
+            || pathString == toString ./.cairn/archive/2026-10-04-add-store-backend-selection
+            || pathString == toString ./.cairn/archive/2026-10-04-add-store-backend-selection/evidence
+            || pkgs.lib.hasPrefix "${toString ./.cairn/archive/2026-10-04-add-store-backend-selection/evidence}/" pathString
             || pathString == toString ./config
             || pkgs.lib.hasPrefix "${toString ./config}/" pathString
             || pkgs.lib.hasPrefix "${toString ./contracts}/" pathString
@@ -1989,8 +1996,7 @@
           # misses the admitted Casita source patch used by Crane and the dev shell.
           tigerstyle = pkgs.runCommand "mantle-tigerstyle-check"
             {
-              src = ./.;
-              inherit buildInputs;
+              inherit src buildInputs;
               nativeBuildInputs = nativeBuildInputs ++ [ tigerstyleRunner ];
               SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
             }
