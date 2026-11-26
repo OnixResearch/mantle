@@ -1,0 +1,35 @@
+[workspace]
+
+[package]
+name = "mantle-fuzz"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+
+[dependencies]
+arbitrary = "1.4.2"
+crunch-store = { path = "../crates/crunch-store" }
+hex = "0.4.3"
+object = { version = "0.37.3", default-features = false, features = ["read_core", "elf", "archive"] }
+tokio = { version = "1", features = ["rt", "io-util"] }
+
+[build-dependencies]
+cc = "1.2.59"
+
+[dev-dependencies]
+blake3 = "=1.8.5"
+proptest = "1.11.0"
+rand = "0.8.6"
+tempfile = "3.27.0"
+
+[patch.crates-io]
+fuse-backend-rs = { path = "../vendor/fuse-backend-rs" }
+
+[patch."ssh://git@github.com/OnixResearch/onix-artifact.git"]
+artifact-auth-core = { git = "https://github.com/OnixResearch/onix-artifact.git", rev = "5f3962d7471d1547e044f57daeda72f56621fd52" }
