@@ -34,6 +34,7 @@ use crate::buildservice::SandboxEffectiveLimit;
 use crate::buildservice::SandboxEnforcementMode;
 use crate::buildservice::SandboxHelperScopeOutcome;
 use crate::buildservice::SandboxHelperScopePolicy;
+use crate::buildservice::SandboxLiveCpuUnavailableReason;
 use crate::buildservice::SandboxResourceEnforcementFacts;
 use crate::buildservice::SandboxResourcePolicy;
 use crate::buildservice::SandboxSwapPolicy;
@@ -904,15 +905,30 @@ pub(crate) struct CgroupPostExitEvents {
 }
 
 impl AttemptCgroup {
+    pub(crate) fn rel_path(&self) -> &str {
+        &self.rel_path
+    }
+
+    pub(crate) fn is_diagnostics_only(&self) -> bool {
+        !self.memory_active && !self.pids_active
+    }
+
+    pub(crate) fn read_cpu_usage_usec(&self) -> io::Result<u64> {
+        let text = bounded_cgroup_read(&self.directory, c"cpu.stat")?;
+        named_counter(&text, "usage_usec")
+    }
+
     pub(crate) fn configure_pre_exec(&self, command: &mut Command) -> io::Result<(PendingCgroupSpawn, UnixStream)> {
         let procs_fd = openat_file(&self.directory, c"cgroup.procs", libc::O_WRONLY)?;
         let (ack_reader, ack_writer) = UnixStream::pair()?;
         let procs_raw = procs_fd.as_raw_fd();
         let ack_raw = ack_writer.as_raw_fd();
+        let diagnostics_only = self.is_diagnostics_only();
         // SAFETY: `pre_exec` runs between `fork` and `execve` while both
         // `procs_raw` and `ack_raw` remain owned by `PendingCgroupSpawn` in the
         // parent and open in the forked child. Only async-signal-safe `libc::write`
-        // is executed on success; on failure we write `b"0"` and return `Err`.
+        // is executed on success; on failure we write `b"0"` and return `Err`
+        // (or `Ok(())` in diagnostics-only mode so the build proceeds without failing).
         unsafe {
             command.pre_exec(move || {
                 let zero = b"0";
@@ -927,7 +943,7 @@ impl AttemptCgroup {
                 let err = io::Error::last_os_error();
                 let fail = b"0";
                 let _ = libc::write(ack_raw, fail.as_ptr().cast(), fail.len());
-                Err(err)
+                if diagnostics_only { Ok(()) } else { Err(err) }
             });
         }
         Ok((
@@ -1140,11 +1156,69 @@ pub(crate) fn prepare_attempt_enforcement(
     }
 }
 
-fn setup_attempt_cgroup(
-    input: &AttemptEnforcementInput<'_>,
-    facts: &mut SandboxResourceEnforcementFacts,
+pub(crate) fn prepare_attempt_diagnostics(
+    cgroup_root: Option<&Path>,
+) -> Result<AttemptCgroup, SandboxLiveCpuUnavailableReason> {
+    let attempt = create_verified_attempt_cgroup_dir(cgroup_root, false, false).map_err(unavailable_for_live_cpu)?;
+    if let Err(err) = attempt.read_cpu_usage_usec() {
+        return Err(SandboxLiveCpuUnavailableReason::CpuStatUnreadable {
+            detail: format!("initial cpu.stat read failed on {}: {err}", attempt.rel_path()),
+        });
+    }
+    Ok(attempt)
+}
+
+pub(crate) fn unavailable_for_live_cpu(reason: SandboxUnavailableReason) -> SandboxLiveCpuUnavailableReason {
+    match reason {
+        SandboxUnavailableReason::CgroupRootUnconfigured => SandboxLiveCpuUnavailableReason::CgroupRootUnconfigured,
+        SandboxUnavailableReason::CgroupRootInvalidOrUnowned { detail } => {
+            SandboxLiveCpuUnavailableReason::CgroupRootInvalidOrUnowned { detail }
+        }
+        SandboxUnavailableReason::DelegationLcaNotWritable {
+            self_cgroup,
+            target_cgroup,
+        } => SandboxLiveCpuUnavailableReason::DelegationLcaNotWritable {
+            detail: format!("self_cgroup={self_cgroup} target_cgroup={target_cgroup}"),
+        },
+        SandboxUnavailableReason::ChildMigrationFailed { detail } => {
+            SandboxLiveCpuUnavailableReason::ChildMigrationFailed { detail }
+        }
+        SandboxUnavailableReason::ControllerDisabled { controller } => SandboxLiveCpuUnavailableReason::SetupIoError {
+            detail: format!("controller disabled: {controller}"),
+        },
+        SandboxUnavailableReason::ControllerSubtreeBlocked { controller, detail } => {
+            SandboxLiveCpuUnavailableReason::SetupIoError {
+                detail: format!("controller {controller} subtree blocked: {detail}"),
+            }
+        }
+        SandboxUnavailableReason::KernelFeatureUnsupported { feature } => {
+            SandboxLiveCpuUnavailableReason::SetupIoError {
+                detail: format!("kernel feature unsupported: {feature}"),
+            }
+        }
+        SandboxUnavailableReason::MissingSandboxBinaryOrShell { binary } => {
+            SandboxLiveCpuUnavailableReason::SetupIoError {
+                detail: format!("missing sandbox binary: {binary}"),
+            }
+        }
+        SandboxUnavailableReason::ScratchBindDirUnenforced => SandboxLiveCpuUnavailableReason::SetupIoError {
+            detail: "scratch bind dir unenforced".to_string(),
+        },
+        SandboxUnavailableReason::HelperDaemonOutsideEnforcedScope { socket_kind, detail } => {
+            SandboxLiveCpuUnavailableReason::SetupIoError {
+                detail: format!("helper {socket_kind} outside enforced scope: {detail}"),
+            }
+        }
+        SandboxUnavailableReason::SetupIoError { detail } => SandboxLiveCpuUnavailableReason::SetupIoError { detail },
+    }
+}
+
+fn create_verified_attempt_cgroup_dir(
+    cgroup_root: Option<&Path>,
+    need_memory: bool,
+    need_pids: bool,
 ) -> Result<AttemptCgroup, SandboxUnavailableReason> {
-    let Some(root_path) = input.policy.cgroup_root.as_deref() else {
+    let Some(root_path) = cgroup_root else {
         return Err(SandboxUnavailableReason::CgroupRootUnconfigured);
     };
     let root_file = fs::OpenOptions::new()
@@ -1187,9 +1261,9 @@ fn setup_attempt_cgroup(
     })?;
     check_lca_migration_writable(&mount, &self_cg_rel)?;
 
-    let need_memory = input.policy.memory_mode != SandboxEnforcementMode::Disabled;
-    let need_pids = input.policy.pids_mode != SandboxEnforcementMode::Disabled;
-    check_and_enable_controllers(&root_file, need_memory, need_pids)?;
+    if need_memory || need_pids {
+        check_and_enable_controllers(&root_file, need_memory, need_pids)?;
+    }
 
     let seq = ATTEMPT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let name_str = format!("mantle-sbx-{}-{seq}", std::process::id());
@@ -1242,6 +1316,18 @@ fn setup_attempt_cgroup(
             detail: "fresh attempt cgroup is not empty".to_string(),
         });
     }
+
+    Ok(attempt)
+}
+
+fn setup_attempt_cgroup(
+    input: &AttemptEnforcementInput<'_>,
+    facts: &mut SandboxResourceEnforcementFacts,
+) -> Result<AttemptCgroup, SandboxUnavailableReason> {
+    let need_memory = input.policy.memory_mode != SandboxEnforcementMode::Disabled;
+    let need_pids = input.policy.pids_mode != SandboxEnforcementMode::Disabled;
+    let attempt = create_verified_attempt_cgroup_dir(input.policy.cgroup_root.as_deref(), need_memory, need_pids)?;
+    let attempt_rel_path = attempt.rel_path.clone();
 
     if need_memory {
         configure_memory_controller(&attempt, input.policy, facts)?;
@@ -1709,5 +1795,38 @@ mod tests {
             canonical_sock.display(),
         );
         assert!(!proc_net_unix_has_unique_dgram_owner(&rebound_conflict_table, 22222, &canonical_sock));
+    }
+
+    #[test]
+    fn live_cpu_diagnostics_unreadable_or_missing_cpu_stat_reports_unavailable_cleanly() {
+        let dir = tempfile::tempdir().unwrap();
+        // Missing cgroup_root -> CgroupRootUnconfigured
+        assert_eq!(
+            prepare_attempt_diagnostics(None).err(),
+            Some(SandboxLiveCpuUnavailableReason::CgroupRootUnconfigured)
+        );
+        // Non-cgroup2 directory -> CgroupRootInvalidOrUnowned
+        assert!(matches!(
+            prepare_attempt_diagnostics(Some(dir.path())).err(),
+            Some(SandboxLiveCpuUnavailableReason::CgroupRootInvalidOrUnowned { .. })
+        ));
+        // Direct AttemptCgroup::read_cpu_usage_usec on missing/malformed cpu.stat -> Err without panic
+        let root_file = File::open(dir.path()).unwrap();
+        let attempt_dir_path = dir.path().join("fake-attempt");
+        fs::create_dir(&attempt_dir_path).unwrap();
+        let attempt_dir = File::open(&attempt_dir_path).unwrap();
+        let attempt = AttemptCgroup {
+            root: root_file,
+            directory: attempt_dir,
+            name: CString::new("fake-attempt").unwrap(),
+            rel_path: "/fake-attempt".to_string(),
+            memory_active: false,
+            pids_active: false,
+        };
+        assert!(attempt.read_cpu_usage_usec().is_err());
+        fs::write(attempt_dir_path.join("cpu.stat"), "nr_periods 0\n").unwrap();
+        assert!(attempt.read_cpu_usage_usec().is_err());
+        fs::write(attempt_dir_path.join("cpu.stat"), "usage_usec 42195\nuser_usec 12000\n").unwrap();
+        assert_eq!(attempt.read_cpu_usage_usec().unwrap(), 42_195);
     }
 }

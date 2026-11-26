@@ -249,6 +249,14 @@ const _: () = assert!(SANDBOX_UMASK_BITS <= 0o777);
 /// **Note**: If the build inputs directory overlaps with any of the scratches, an overlayfs mount
 /// will be created for that scratch so it remains writable, i.e. the sandboxed command can create
 /// new files/directories.
+pub(crate) struct BwrapLiveCpuDiagnostics {
+    pub(crate) config: crate::buildservice::SandboxLiveCpuDiagnosticsConfig,
+    pub(crate) attempt_id: u64,
+    pub(crate) attempt_label: String,
+    pub(crate) sender: tokio::sync::mpsc::Sender<crate::buildservice::SandboxCpuSampleEvent>,
+    pub(crate) facts_sink: Option<Arc<Mutex<Option<crate::buildservice::SandboxLiveCpuAttemptFacts>>>>,
+}
+
 pub struct Bwrap {
     host_workdir: PathBuf,
     args: Vec<OsString>,
@@ -261,6 +269,7 @@ pub struct Bwrap {
     provide_shell: Option<PathBuf>,
     has_bind_scratches: bool,
     enforcement_facts_sink: Option<Arc<Mutex<Option<SandboxResourceEnforcementFacts>>>>,
+    live_cpu_diagnostics: Option<BwrapLiveCpuDiagnostics>,
     #[cfg(test)]
     watch_fault: Option<watch_cancel::WatchFault>,
 }
@@ -418,6 +427,11 @@ impl Bwrap {
         self
     }
 
+    pub(crate) fn with_live_cpu_diagnostics(mut self, diagnostics: Option<BwrapLiveCpuDiagnostics>) -> Self {
+        self.live_cpu_diagnostics = diagnostics;
+        self
+    }
+
     #[cfg(test)]
     pub(crate) fn with_test_watch_fault(mut self, fault: Option<watch_cancel::WatchFault>) -> Self {
         self.watch_fault = fault;
@@ -464,6 +478,7 @@ impl Bwrap {
         let pidfd_injected_unavailable = false;
 
         let sink = self.enforcement_facts_sink.take();
+        let mut live_cpu = self.live_cpu_diagnostics.take();
         if self.execution_policy.resources.requests_any_enforcement() {
             let prepared = cgroup::prepare_attempt_enforcement(cgroup::AttemptEnforcementInput {
                 policy: &self.execution_policy.resources,
@@ -476,10 +491,60 @@ impl Bwrap {
             });
             match prepared {
                 Ok(prep) => {
-                    let had_cgroup = prep.cgroup.is_some();
+                    let mut attempt_cgroup = prep.cgroup;
+                    let mut diagnostics_only_cgroup = false;
+                    let mut initial_unavailable = None;
+                    if attempt_cgroup.is_none()
+                        && let Some(live) = live_cpu.as_ref()
+                    {
+                        if !self.execution_policy.resources.requests_cgroup() {
+                            let cg_root = self
+                                .execution_policy
+                                .resources
+                                .cgroup_root
+                                .as_deref()
+                                .or(live.config.cgroup_root.as_deref());
+                            match cgroup::prepare_attempt_diagnostics(cg_root) {
+                                Ok(cg) => {
+                                    attempt_cgroup = Some(Arc::new(cg));
+                                    diagnostics_only_cgroup = true;
+                                }
+                                Err(reason) => {
+                                    initial_unavailable = Some(reason);
+                                }
+                            }
+                        } else {
+                            initial_unavailable = prep
+                                .facts
+                                .unavailable_reasons
+                                .first()
+                                .cloned()
+                                .map(cgroup::unavailable_for_live_cpu)
+                                .or(Some(crate::buildservice::SandboxLiveCpuUnavailableReason::CgroupRootUnconfigured));
+                        }
+                    }
+                    let supervisor_live_cpu = live_cpu.take().map(|live| watch_cancel::SupervisorLiveCpuConfig {
+                        attempt_id: live.attempt_id,
+                        generation: live.config.generation,
+                        attempt_label: live.attempt_label,
+                        allocated_cores: live.config.allocated_cores,
+                        cadence: Duration::from_millis(live.config.sample_cadence_ms),
+                        sender: live.sender,
+                        facts_sink: live.facts_sink,
+                        initial_unavailable,
+                        diagnostics_only_cgroup,
+                    });
+                    let had_cgroup = attempt_cgroup.is_some();
                     let facts_arc = Arc::new(Mutex::new(prep.facts));
                     let result = self
-                        .run_with_prepared_cgroup(cancellation, lease, &program, prep.cgroup, Arc::clone(&facts_arc))
+                        .run_with_prepared_cgroup(
+                            cancellation,
+                            lease,
+                            &program,
+                            attempt_cgroup,
+                            Arc::clone(&facts_arc),
+                            supervisor_live_cpu,
+                        )
                         .await;
                     let mut final_facts = facts_arc.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
                     if result.is_err()
@@ -497,6 +562,9 @@ impl Bwrap {
                 }
                 Err(boxed) => {
                     let (reason, facts) = *boxed;
+                    if let Some(live) = live_cpu.take() {
+                        emit_live_cpu_preflight_failure(live, cgroup::unavailable_for_live_cpu(reason.clone()));
+                    }
                     if let Some(sink) = sink {
                         *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(facts);
                     }
@@ -510,12 +578,64 @@ impl Bwrap {
         }
 
         if pidfd_injected_unavailable {
+            if let Some(live) = live_cpu.take() {
+                emit_live_cpu_preflight_failure(
+                    live,
+                    crate::buildservice::SandboxLiveCpuUnavailableReason::SetupIoError {
+                        detail: "injected preflight pidfd unavailability".to_string(),
+                    },
+                );
+            }
             return Err(std::io::Error::new(ErrorKind::Unsupported, "injected preflight pidfd unavailability"));
         }
-        watch_cancel::require_pidfd_support()?;
+        if let Err(err) = watch_cancel::require_pidfd_support() {
+            if let Some(live) = live_cpu.take() {
+                emit_live_cpu_preflight_failure(
+                    live,
+                    crate::buildservice::SandboxLiveCpuUnavailableReason::SetupIoError {
+                        detail: format!("pidfd unavailable: {err}"),
+                    },
+                );
+            }
+            return Err(err);
+        }
+
+        let (attempt_cgroup, supervisor_live_cpu) = match live_cpu.take() {
+            Some(live) => {
+                let cg_root =
+                    self.execution_policy.resources.cgroup_root.as_deref().or(live.config.cgroup_root.as_deref());
+                let (cg, initial_unavailable, diagnostics_only_cgroup) =
+                    match cgroup::prepare_attempt_diagnostics(cg_root) {
+                        Ok(cg) => (Some(Arc::new(cg)), None, true),
+                        Err(reason) => (None, Some(reason), false),
+                    };
+                let cfg = watch_cancel::SupervisorLiveCpuConfig {
+                    attempt_id: live.attempt_id,
+                    generation: live.config.generation,
+                    attempt_label: live.attempt_label,
+                    allocated_cores: live.config.allocated_cores,
+                    cadence: Duration::from_millis(live.config.sample_cadence_ms),
+                    sender: live.sender,
+                    facts_sink: live.facts_sink,
+                    initial_unavailable,
+                    diagnostics_only_cgroup,
+                };
+                (cg, Some(cfg))
+            }
+            None => (None, None),
+        };
 
         let facts_arc = Arc::new(Mutex::new(SandboxResourceEnforcementFacts::default()));
-        let result = self.run_with_prepared_cgroup(cancellation, lease, &program, None, Arc::clone(&facts_arc)).await;
+        let result = self
+            .run_with_prepared_cgroup(
+                cancellation,
+                lease,
+                &program,
+                attempt_cgroup,
+                Arc::clone(&facts_arc),
+                supervisor_live_cpu,
+            )
+            .await;
         if let Some(sink) = sink {
             let final_facts = facts_arc.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
             *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(final_facts);
@@ -530,6 +650,7 @@ impl Bwrap {
         program: &OsString,
         attempt_cgroup: Option<Arc<cgroup::AttemptCgroup>>,
         enforcement_facts: Arc<Mutex<SandboxResourceEnforcementFacts>>,
+        live_cpu: Option<watch_cancel::SupervisorLiveCpuConfig>,
     ) -> std::io::Result<SandboxOutcome> {
         watch_cancel::require_pidfd_support()?;
         // Transfer InputsGuard ownership into WatchLease so FUSE/materialized
@@ -585,6 +706,7 @@ impl Bwrap {
             cgroup_ack_reader,
             pending_cgroup_spawn,
             enforcement_facts,
+            live_cpu,
         };
         let output = watch_cancel::run_child(
             command,
@@ -760,9 +882,63 @@ impl Bwrap {
             provide_shell,
             has_bind_scratches,
             enforcement_facts_sink: None,
+            live_cpu_diagnostics: None,
             #[cfg(test)]
             watch_fault: None,
         })
+    }
+}
+
+fn emit_live_cpu_preflight_failure(
+    live: BwrapLiveCpuDiagnostics,
+    reason: crate::buildservice::SandboxLiveCpuUnavailableReason,
+) {
+    let scope = crate::buildservice::SandboxCpuScopeAvailability::Unavailable { reason };
+    let now_usec = watch_cancel::monotonic_now_usec();
+    let mut dropped: u64 = 0;
+    if live
+        .sender
+        .try_send(crate::buildservice::SandboxCpuSampleEvent {
+            attempt_id: live.attempt_id,
+            generation: live.config.generation,
+            attempt_label: live.attempt_label.clone(),
+            allocated_cores: live.config.allocated_cores,
+            observed_at_usec: now_usec,
+            kind: crate::buildservice::SandboxCpuSampleKind::Started { scope: scope.clone() },
+        })
+        .is_err()
+    {
+        dropped = dropped.saturating_add(1);
+    }
+    if live
+        .sender
+        .try_send(crate::buildservice::SandboxCpuSampleEvent {
+            attempt_id: live.attempt_id,
+            generation: live.config.generation,
+            attempt_label: live.attempt_label.clone(),
+            allocated_cores: live.config.allocated_cores,
+            observed_at_usec: now_usec,
+            kind: crate::buildservice::SandboxCpuSampleKind::Retired {
+                reason: crate::buildservice::SandboxCpuRetirementReason::Failed,
+            },
+        })
+        .is_err()
+    {
+        dropped = dropped.saturating_add(1);
+    }
+    if let Some(sink) = live.facts_sink {
+        *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(crate::buildservice::SandboxLiveCpuAttemptFacts {
+                attempt_id: live.attempt_id,
+                generation: live.config.generation,
+                attempt_label: live.attempt_label,
+                scope,
+                sample_count: 0,
+                dropped_samples_count: dropped,
+                initial_cpu_usec: None,
+                latest_cpu_usec: None,
+                retired_reason: Some(crate::buildservice::SandboxCpuRetirementReason::Failed),
+            });
     }
 }
 

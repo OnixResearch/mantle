@@ -389,6 +389,45 @@ struct PlanOutputBindingState {
     failure: Option<PlanOutputBindingFailureKind>,
 }
 
+struct LiveCpuWorkerCollector {
+    tracker: crate::live_cpu::LiveCpuTracker,
+    rx: mpsc::Receiver<snix_build::buildservice::SandboxCpuSampleEvent>,
+    allocated_cores: crate::live_cpu::AllocatedCores,
+    active_generations: HashMap<String, crate::live_cpu::AttemptGeneration>,
+    latest_observed_at_usec: crate::live_cpu::MonotonicTimestampUsec,
+}
+
+impl LiveCpuWorkerCollector {
+    fn advance_clock_from_sample(&mut self, event: &crate::live_cpu::LiveCpuSampleEvent) {
+        let observed_usec = match &event.measurement {
+            crate::live_cpu::LiveCpuRawMeasurement::Started { observed_at_usec, .. }
+            | crate::live_cpu::LiveCpuRawMeasurement::Sampled { observed_at_usec, .. }
+            | crate::live_cpu::LiveCpuRawMeasurement::Unreadable { observed_at_usec }
+            | crate::live_cpu::LiveCpuRawMeasurement::Retired { observed_at_usec, .. } => *observed_at_usec,
+        };
+        if observed_usec.as_usec() > self.latest_observed_at_usec.as_usec() {
+            self.latest_observed_at_usec = observed_usec;
+        }
+    }
+
+    fn drain_channel(&mut self) {
+        let drain_max_count = self.tracker.policy().channel_capacity_count.saturating_mul(2);
+        for _ in 0..drain_max_count {
+            match self.rx.try_recv() {
+                Ok(raw_event) => {
+                    if let Ok(event) = crate::live_cpu::from_snix_sample_event(&raw_event) {
+                        self.advance_clock_from_sample(&event);
+                        let _ = self.tracker.ingest(&event);
+                    }
+                }
+                Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+        }
+    }
+}
+
 // Stored in canonical artifact provenance only after an accepted plan and
 // realized root have been observed. The reference name is the canonical sort key.
 #[derive(serde::Serialize)]
@@ -1559,6 +1598,7 @@ pub struct Worker {
     native_plan_binding_facts: BTreeMap<(String, String), NativePlanBindingFact>,
     max_jobs: u32,
     causal_trace: Option<CausalTraceCollector>,
+    live_cpu: Option<LiveCpuWorkerCollector>,
     // Senders and reservations outlive cancellation until each BuildService
     // future returns, including its sandbox/fetch teardown owner.
     build_cancellations: Option<HashMap<String, watch::Sender<bool>>>,
@@ -1671,6 +1711,7 @@ impl Worker {
             native_plan_binding_facts: BTreeMap::new(),
             max_jobs,
             causal_trace: None,
+            live_cpu: None,
             build_cancellations: None,
             is_watch_active: false,
             streaming_cancellation: None,
@@ -1698,6 +1739,90 @@ impl Worker {
             .take()
             .map(|collector| collector.finish().map_err(|reason| Error::Store(format!("causal trace: {reason:?}"))))
             .transpose()
+    }
+
+    /// Enable opt-in, bounded, non-authoritative live CPU diagnostics for owned
+    /// local build attempts. Returns the bounded sender to attach to
+    /// `BubblewrapBuildService::with_live_cpu_diagnostics`.
+    pub fn enable_live_cpu_diagnostics(
+        &mut self,
+        policy: crate::live_cpu::LiveCpuClassifierPolicy,
+        allocated_cores: crate::live_cpu::AllocatedCores,
+    ) -> Result<mpsc::Sender<snix_build::buildservice::SandboxCpuSampleEvent>, Error> {
+        policy.validate().map_err(|err| Error::Store(format!("live CPU diagnostics policy: {err}")))?;
+        let tracker = crate::live_cpu::LiveCpuTracker::new(policy.clone())
+            .map_err(|err| Error::Store(format!("live CPU diagnostics tracker: {err}")))?;
+        let channel_len = usize::try_from(policy.channel_capacity_count)
+            .map_err(|err| Error::Store(format!("live CPU channel capacity: {err}")))?;
+        let (tx, rx) = mpsc::channel(channel_len);
+        self.live_cpu = Some(LiveCpuWorkerCollector {
+            tracker,
+            rx,
+            allocated_cores,
+            active_generations: HashMap::new(),
+            latest_observed_at_usec: crate::live_cpu::MonotonicTimestampUsec::from_usec(0),
+        });
+        debug_assert!(self.live_cpu.is_some());
+        debug_assert!(allocated_cores.as_u32() >= 1);
+        Ok(tx)
+    }
+
+    pub fn record_live_cpu_event(
+        &mut self,
+        event: &crate::live_cpu::LiveCpuSampleEvent,
+    ) -> Option<crate::live_cpu::LiveCpuIngestDisposition> {
+        let collector = self.live_cpu.as_mut()?;
+        collector.advance_clock_from_sample(event);
+        Some(collector.tracker.ingest(event))
+    }
+
+    pub fn live_cpu_summary(&mut self) -> Option<crate::live_cpu::LiveCpuDiagnosticsReport> {
+        self.drain_live_cpu_diagnostics();
+        let collector = self.live_cpu.as_ref()?;
+        Some(collector.tracker.report(collector.latest_observed_at_usec))
+    }
+
+    pub fn live_cpu_summary_at(
+        &mut self,
+        now_usec: crate::live_cpu::MonotonicTimestampUsec,
+    ) -> Option<crate::live_cpu::LiveCpuDiagnosticsReport> {
+        self.drain_live_cpu_diagnostics();
+        let collector = self.live_cpu.as_ref()?;
+        Some(collector.tracker.report(now_usec))
+    }
+
+    pub fn take_live_cpu_diagnostics(&mut self) -> Option<crate::live_cpu::LiveCpuDiagnosticsReport> {
+        self.drain_live_cpu_diagnostics();
+        let collector = self.live_cpu.take()?;
+        Some(collector.tracker.report(collector.latest_observed_at_usec))
+    }
+
+    fn drain_live_cpu_diagnostics(&mut self) {
+        let Some(collector) = self.live_cpu.as_mut() else {
+            return;
+        };
+        collector.drain_channel();
+    }
+
+    fn prepare_live_cpu_attempt(&mut self, drv_key: &str) -> Option<snix_build::buildservice::LiveCpuAttemptContext> {
+        let collector = self.live_cpu.as_mut()?;
+        collector.drain_channel();
+        let generation = collector.tracker.register_attempt(drv_key.to_string(), collector.allocated_cores).ok()?;
+        collector.active_generations.insert(drv_key.to_string(), generation);
+        Some(snix_build::buildservice::LiveCpuAttemptContext {
+            attempt_label: drv_key.to_string(),
+            generation: generation.as_u64(),
+        })
+    }
+
+    fn retire_live_cpu_attempt(&mut self, drv_key: &str, reason: crate::live_cpu::LiveCpuRetirementReason) {
+        let Some(collector) = self.live_cpu.as_mut() else {
+            return;
+        };
+        collector.drain_channel();
+        if let Some(generation) = collector.active_generations.remove(drv_key) {
+            let _ = collector.tracker.retire_attempt(drv_key, generation, reason);
+        }
     }
 
     /// Replace optional duration-class history and invalidate only known graph
@@ -2943,6 +3068,7 @@ impl Worker {
                 }
             }
         }
+        self.drain_live_cpu_diagnostics();
         result?;
         info!(
             completed = state.completed_count,
@@ -3028,12 +3154,14 @@ impl Worker {
                 }
             }
         }
+        self.drain_live_cpu_diagnostics();
         result?;
         if !state.pending_meta.is_empty() || !state.join_set.is_empty() {
             return Err(Error::Store("watch teardown is not observed".to_string()));
         }
         self.build_cancellations = None;
         self.is_watch_active = false;
+        self.drain_live_cpu_diagnostics();
         let bindings = self.final_binding_reports(known_paths)?;
         Ok(finish_worker_result(
             outcomes,
@@ -3046,7 +3174,11 @@ impl Worker {
         ))
     }
 
-    fn watch_request_cancellation(&self, stale: &[String]) {
+    fn watch_request_cancellation(&mut self, stale: &[String]) {
+        self.drain_live_cpu_diagnostics();
+        for key in stale {
+            self.retire_live_cpu_attempt(key, crate::live_cpu::LiveCpuRetirementReason::Cancelled);
+        }
         if let Some(senders) = self.build_cancellations.as_ref() {
             for key in stale {
                 let Some(sender) = senders.get(key) else {
@@ -3271,6 +3403,7 @@ impl Worker {
             senders.remove(key);
         }
         if is_stale {
+            self.retire_live_cpu_attempt(key, crate::live_cpu::LiveCpuRetirementReason::Cancelled);
             state.pending_meta.remove(key);
             if let Some(trace) = self.causal_trace.as_mut() {
                 trace.cancelled(key);
@@ -3627,11 +3760,14 @@ impl Worker {
         {
             senders.remove(key);
         }
+        self.drain_live_cpu_diagnostics();
         match join_result {
             Ok((drv_key, Ok(build_result))) => {
+                self.retire_live_cpu_attempt(&drv_key, crate::live_cpu::LiveCpuRetirementReason::Completed);
                 self.handle_build_completion(&drv_key, build_result, builder, known_paths, state).await
             }
             Ok((drv_key, Err(build_err))) => {
+                self.retire_live_cpu_attempt(&drv_key, crate::live_cpu::LiveCpuRetirementReason::Failed);
                 let prepared = state
                     .pending_meta
                     .remove(&drv_key)
@@ -4784,98 +4920,111 @@ impl Worker {
         let bs = builder.build_service();
         let sem = state.sem.clone();
         let key = drv_key.to_string();
+        let live_cpu_ctx = self.prepare_live_cpu_attempt(&key);
         let cancellation = self.build_cancellations.as_mut().map(|senders| {
             let (sender, receiver) = watch::channel(false);
             senders.insert(key.clone(), sender);
             receiver
         });
         state.join_set.spawn(async move {
-            let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
-            let build_result = match _permit {
-                Ok(_p) if pool.is_some() => match (pool, pool_goal) {
-                    (Some(dispatch), Some(goal)) => {
-                        let is_fallback_allowed = dispatch.allows_local_fallback();
-                        let fallback_cancellation = cancellation.clone();
-                        let attempt = match cancellation {
-                            Some(receiver) => dispatch.dispatch_cancellable(goal, receiver).await,
-                            None => dispatch.dispatch(goal).await,
-                        };
-                        match attempt {
-                            Ok(result) => Ok(result),
-                            Err(error) if is_fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
-                                // The fallback is still an owned sandbox build:
-                                // watch cancellation reaches the sandbox and its
-                                // child teardown instead of waiting for the goal.
-                                match fallback_cancellation {
-                                    Some(receiver) => {
-                                        match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
+            let run_future = async move {
+                let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
+                let build_result = match _permit {
+                    Ok(_p) if pool.is_some() => match (pool, pool_goal) {
+                        (Some(dispatch), Some(goal)) => {
+                            let is_fallback_allowed = dispatch.allows_local_fallback();
+                            let fallback_cancellation = cancellation.clone();
+                            let attempt = match cancellation {
+                                Some(receiver) => dispatch.dispatch_cancellable(goal, receiver).await,
+                                None => dispatch.dispatch(goal).await,
+                            };
+                            match attempt {
+                                Ok(result) => Ok(result),
+                                Err(error) if is_fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
+                                    // The fallback is still an owned sandbox build:
+                                    // watch cancellation reaches the sandbox and its
+                                    // child teardown instead of waiting for the goal.
+                                    match fallback_cancellation {
+                                        Some(receiver) => {
+                                            match std::panic::AssertUnwindSafe(
+                                                bs.do_build_cancellable(build_request, receiver),
+                                            )
                                             .catch_unwind()
                                             .await
-                                        {
-                                            Err(_) => Err(Error::Store(
-                                                "local fallback build service panicked; goal failed while owned child teardown remains supervised"
-                                                    .to_string(),
-                                            )),
-                                            Ok(Ok(result)) => Ok(result),
-                                            Ok(Err(error)) => Err(classify_build_service_error("local fallback", error)),
+                                            {
+                                                Err(_) => Err(Error::Store(
+                                                    "local fallback build service panicked; goal failed while owned child teardown remains supervised"
+                                                        .to_string(),
+                                                )),
+                                                Ok(Ok(result)) => Ok(result),
+                                                Ok(Err(error)) => {
+                                                    Err(classify_build_service_error("local fallback", error))
+                                                }
+                                            }
                                         }
-                                    }
-                                    None => {
-                                        match std::panic::AssertUnwindSafe(bs.do_build(build_request))
-                                            .catch_unwind()
-                                            .await
-                                        {
-                                            Err(_) => Err(Error::Store(
-                                                "local fallback build service panicked; goal failed while owned child teardown remains supervised"
-                                                    .to_string(),
-                                            )),
-                                            Ok(Ok(result)) => Ok(result),
-                                            Ok(Err(error)) => Err(classify_build_service_error("local fallback", error)),
+                                        None => {
+                                            match std::panic::AssertUnwindSafe(bs.do_build(build_request))
+                                                .catch_unwind()
+                                                .await
+                                            {
+                                                Err(_) => Err(Error::Store(
+                                                    "local fallback build service panicked; goal failed while owned child teardown remains supervised"
+                                                        .to_string(),
+                                                )),
+                                                Ok(Ok(result)) => Ok(result),
+                                                Ok(Err(error)) => {
+                                                    Err(classify_build_service_error("local fallback", error))
+                                                }
+                                            }
                                         }
                                     }
                                 }
+                                Err(error) => Err(classify_build_service_error("build", error)),
                             }
-                            Err(error) => Err(classify_build_service_error("build", error)),
                         }
-                    }
-                    _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
-                },
-                Ok(_p) => match cancellation {
-                    Some(receiver) => {
-                        match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
+                        _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
+                    },
+                    Ok(_p) => match cancellation {
+                        Some(receiver) => {
+                            match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
+                                .catch_unwind()
+                                .await
+                            {
+                                Err(_) => Err(Error::Store(
+                                    "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains quarantined"
+                                        .to_string(),
+                                )),
+                                Ok(Ok(result)) => Ok(result),
+                                Ok(Err(error)) => {
+                                    // An unobserved fetch or sandbox reports this
+                                    // classification itself. The service owns the
+                                    // quarantine and releases it when teardown is
+                                    // finally observed; the worker must not park a
+                                    // JoinSet task forever waiting for that.
+                                    Err(classify_build_service_error("build", error))
+                                }
+                            }
+                        }
+                        None => match std::panic::AssertUnwindSafe(bs.do_build(build_request))
                             .catch_unwind()
                             .await
                         {
                             Err(_) => Err(Error::Store(
-                                "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains quarantined"
+                                "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains supervised"
                                     .to_string(),
                             )),
                             Ok(Ok(result)) => Ok(result),
-                            Ok(Err(error)) => {
-                                // An unobserved fetch or sandbox reports this
-                                // classification itself. The service owns the
-                                // quarantine and releases it when teardown is
-                                // finally observed; the worker must not park a
-                                // JoinSet task forever waiting for that.
-                                Err(classify_build_service_error("build", error))
-                            }
-                        }
-                    }
-                    None => match std::panic::AssertUnwindSafe(bs.do_build(build_request))
-                        .catch_unwind()
-                        .await
-                    {
-                        Err(_) => Err(Error::Store(
-                            "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains supervised"
-                                .to_string(),
-                        )),
-                        Ok(Ok(result)) => Ok(result),
-                        Ok(Err(error)) => Err(classify_build_service_error("build", error)),
+                            Ok(Err(error)) => Err(classify_build_service_error("build", error)),
+                        },
                     },
-                },
-                Err(e) => Err(e),
+                    Err(e) => Err(e),
+                };
+                (key, build_result)
             };
-            (key, build_result)
+            match live_cpu_ctx {
+                Some(ctx) => snix_build::buildservice::scope_live_cpu_attempt(ctx, run_future).await,
+                None => run_future.await,
+            }
         });
         Ok(())
     }
@@ -13653,5 +13802,219 @@ pub(crate) mod tests {
         pub(crate) fn demanded_outputs_for(&self, drv_path: &StorePath<String>) -> Option<&BTreeSet<String>> {
             self.goal_demands.get(&drv_path.to_absolute_path())
         }
+    }
+
+    #[tokio::test]
+    async fn live_cpu_diagnostics_leave_derivation_identities_and_warm_cache_reuse_invariant() {
+        use crate::action_result::action_ref_for_derivation;
+        use crate::action_result::policy_refs_for_derivation;
+        use crate::live_cpu::AllocatedCores;
+        use crate::live_cpu::LiveCpuActivityClass;
+        use crate::live_cpu::LiveCpuClassifierPolicy;
+        use crate::rust_waits::request_identity;
+
+        struct SampleEmittingService {
+            calls: Arc<AtomicUsize>,
+            blob_service: MemoryBlobService,
+            tx: Arc<std::sync::Mutex<Option<mpsc::Sender<snix_build::buildservice::SandboxCpuSampleEvent>>>>,
+        }
+
+        #[async_trait::async_trait]
+        impl BuildService for SampleEmittingService {
+            async fn do_build(
+                &self,
+                request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                use snix_castore::blobservice::BlobService as _;
+                use tokio::io::AsyncWriteExt as _;
+
+                let count = self.calls.fetch_add(1, Ordering::Relaxed);
+                let maybe_tx = self.tx.lock().unwrap().clone();
+                if let Some(tx) = maybe_tx
+                    && let Some(ctx) = snix_build::buildservice::current_live_cpu_attempt_context()
+                {
+                    let _ = tx.try_send(snix_build::buildservice::SandboxCpuSampleEvent {
+                        attempt_id: u64::try_from(count).unwrap_or(0).saturating_add(1),
+                        generation: ctx.generation,
+                        attempt_label: ctx.attempt_label.clone(),
+                        allocated_cores: 2,
+                        observed_at_usec: 1_000_000,
+                        kind: snix_build::buildservice::SandboxCpuSampleKind::Started {
+                            scope: snix_build::buildservice::SandboxCpuScopeAvailability::OwnedAttemptCgroupV2 {
+                                rel_path: "/user.slice/live-cpu-test".to_string(),
+                            },
+                        },
+                    });
+                    let _ = tx.try_send(snix_build::buildservice::SandboxCpuSampleEvent {
+                        attempt_id: u64::try_from(count).unwrap_or(0).saturating_add(1),
+                        generation: ctx.generation,
+                        attempt_label: ctx.attempt_label.clone(),
+                        allocated_cores: 2,
+                        observed_at_usec: 1_000_000,
+                        kind: snix_build::buildservice::SandboxCpuSampleKind::Sample {
+                            cumulative_cpu_usec: 100_000,
+                        },
+                    });
+                    let _ = tx.try_send(snix_build::buildservice::SandboxCpuSampleEvent {
+                        attempt_id: u64::try_from(count).unwrap_or(0).saturating_add(1),
+                        generation: ctx.generation,
+                        attempt_label: ctx.attempt_label,
+                        allocated_cores: 2,
+                        observed_at_usec: 2_000_000,
+                        kind: snix_build::buildservice::SandboxCpuSampleKind::Sample {
+                            cumulative_cpu_usec: 1_800_000,
+                        },
+                    });
+                }
+                let mut writer = self.blob_service.open_write().await;
+                writer.write_all(b"live-cpu-output").await.unwrap();
+                let digest = writer.close().await.unwrap();
+                let outputs = request
+                    .outputs
+                    .iter()
+                    .map(|_| snix_build::buildservice::BuildOutput {
+                        node: snix_castore::Node::File {
+                            digest,
+                            size: 15,
+                            executable: false,
+                        },
+                        output_needles: BTreeSet::new(),
+                    })
+                    .collect();
+                Ok(snix_build::buildservice::BuildResult {
+                    outputs,
+                    log: None,
+                    timing: None,
+                })
+            }
+        }
+
+        let store_dir = nix_compat::store_path::STORE_DIR;
+        let out_sp = fake_sp("live-cpu-invariance-out");
+        let mut drv = make_drv();
+        drv.outputs.insert("out".to_string(), Output {
+            path: Some(out_sp),
+            ca_hash: None,
+        });
+        let action_ref_before = action_ref_for_derivation(&drv, store_dir);
+        let policy_refs_before = policy_refs_for_derivation(&drv, store_dir, crate::HermeticityMode::Strict).unwrap();
+        let profile = crate::ExecutionProfile::native_compatibility();
+        let req = crate::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            store_dir,
+            &profile,
+            crate::HermeticityMode::Strict,
+            2,
+        )
+        .unwrap()
+        .build_request;
+        let req_id_before = request_identity(&req).unwrap();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis = test_pis();
+        let out_dir = tempfile::tempdir().unwrap();
+        let keypair = test_keypair();
+        let trusted = test_trusted_keys();
+        let calls = Arc::new(AtomicUsize::new(0));
+
+        let mut policy = LiveCpuClassifierPolicy::standard();
+        policy.sustained_window_ms = 500;
+        let mut worker1 = Worker::new(1);
+        let tx = worker1.enable_live_cpu_diagnostics(policy, AllocatedCores::new(2).unwrap()).unwrap();
+        let tx_slot = Arc::new(std::sync::Mutex::new(Some(tx)));
+
+        let mut paths1 = DerivationRegistry::default();
+        let drv_path = register_drv(&mut paths1, "live-cpu-invariance.drv", &drv);
+        let mut builder = Builder::new(
+            bs.clone(),
+            ds,
+            SampleEmittingService {
+                calls: Arc::clone(&calls),
+                blob_service: bs,
+                tx: Arc::clone(&tx_slot),
+            },
+            pis,
+            out_dir.path().to_path_buf(),
+            store_dir,
+            keypair,
+            trusted,
+            true,
+            false,
+        );
+        worker1.want(&drv_path, &paths1, true).unwrap();
+        let res1 = worker1.run(&mut builder, &mut paths1).await.unwrap();
+        assert_eq!(res1.outcomes.len(), 1);
+        assert!(!res1.outcomes[0].cached);
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+        let diag = worker1.take_live_cpu_diagnostics().expect("live cpu diagnostics report");
+        assert_eq!(diag.attempts.len(), 1);
+        assert_eq!(diag.attempts[0].activity_class, LiveCpuActivityClass::Heavy);
+        assert_eq!(diag.attempts[0].latest_cores_used_milli.map(|m| m.as_u32()), Some(1_700));
+        assert_eq!(diag.attempts[0].retired_reason, Some(crate::live_cpu::LiveCpuRetirementReason::Completed));
+
+        // Identities remain bitwise identical after enabling live CPU diagnostics.
+        assert_eq!(action_ref_before, action_ref_for_derivation(&drv, store_dir));
+        assert_eq!(
+            policy_refs_before,
+            policy_refs_for_derivation(&drv, store_dir, crate::HermeticityMode::Strict).unwrap()
+        );
+        assert_eq!(req_id_before, request_identity(&req).unwrap());
+
+        // Second Worker without live CPU diagnostics reuses warm cache from first build!
+        *tx_slot.lock().unwrap() = None;
+        let mut worker2 = Worker::new(1);
+        worker2.want(&drv_path, &paths1, true).unwrap();
+        let res2 = worker2.run(&mut builder, &mut paths1).await.unwrap();
+        assert_eq!(res2.outcomes.len(), 1);
+        assert!(res2.outcomes[0].cached, "live CPU diagnostics must not alter cache reuse");
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn live_cpu_diagnostics_retires_cancelled_watch_attempt_and_rejects_stale_generation() {
+        use crate::live_cpu::AllocatedCores;
+        use crate::live_cpu::AttemptGeneration;
+        use crate::live_cpu::CumulativeCpuUsec;
+        use crate::live_cpu::LiveCpuAttemptMeta;
+        use crate::live_cpu::LiveCpuClassifierPolicy;
+        use crate::live_cpu::LiveCpuIngestDisposition;
+        use crate::live_cpu::LiveCpuRawMeasurement;
+        use crate::live_cpu::LiveCpuSampleEvent;
+        use crate::live_cpu::MonotonicTimestampUsec;
+
+        let mut worker = Worker::new(1);
+        worker.build_cancellations = Some(HashMap::new());
+        let _tx = worker
+            .enable_live_cpu_diagnostics(LiveCpuClassifierPolicy::standard(), AllocatedCores::new(4).unwrap())
+            .unwrap();
+
+        let drv_key = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-cancel-live-cpu.drv".to_string();
+        let ctx1 = worker.prepare_live_cpu_attempt(&drv_key).unwrap();
+        assert_eq!(ctx1.generation, 1);
+
+        worker.watch_request_cancellation(std::slice::from_ref(&drv_key));
+
+        // Stale sample from retired generation 1 must be rejected cleanly.
+        let stale_event = LiveCpuSampleEvent {
+            meta: LiveCpuAttemptMeta {
+                attempt_id: 1,
+                drv_key: drv_key.clone(),
+                generation: AttemptGeneration::new(ctx1.generation).unwrap(),
+                allocated_cores: AllocatedCores::new(4).unwrap(),
+            },
+            measurement: LiveCpuRawMeasurement::Sampled {
+                observed_at_usec: MonotonicTimestampUsec::from_usec(2_000_000),
+                cumulative_cpu_usec: CumulativeCpuUsec::from_usec(500_000),
+            },
+        };
+        assert_eq!(worker.record_live_cpu_event(&stale_event), Some(LiveCpuIngestDisposition::StaleGenerationIgnored));
+
+        // New generation 2 starts cleanly and never absorbs generation 1 samples.
+        let ctx2 = worker.prepare_live_cpu_attempt(&drv_key).unwrap();
+        assert_eq!(ctx2.generation, 2);
+        assert_eq!(worker.record_live_cpu_event(&stale_event), Some(LiveCpuIngestDisposition::StaleGenerationIgnored));
     }
 }

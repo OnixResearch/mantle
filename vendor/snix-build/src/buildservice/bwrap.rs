@@ -395,9 +395,17 @@ pub struct BubblewrapBuildService<BS, DS> {
     shutdown_signal: Option<watch::Receiver<bool>>,
     /// Most recent attempt's cgroup/resource enforcement facts.
     last_enforcement_facts: std::sync::Arc<std::sync::Mutex<Option<super::SandboxResourceEnforcementFacts>>>,
+    /// Optional bounded opt-in live CPU diagnostics sink (never affects BuildRequest identity).
+    live_cpu_diagnostics:
+        Option<(super::SandboxLiveCpuDiagnosticsConfig, tokio::sync::mpsc::Sender<super::SandboxCpuSampleEvent>)>,
+    /// Most recent attempt's live CPU diagnostics facts.
+    last_live_cpu_facts: std::sync::Arc<std::sync::Mutex<Option<super::SandboxLiveCpuAttemptFacts>>>,
     #[cfg(test)]
     watch_fault: Option<WatchFault>,
 }
+
+static NEXT_LIVE_CPU_ATTEMPT_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 impl<BS, DS> BubblewrapBuildService<BS, DS> {
     pub fn new(workdir: PathBuf, blob_service: BS, directory_service: DS) -> Self {
         // We map root inside the container to the uid/gid this is running at,
@@ -419,9 +427,27 @@ impl<BS, DS> BubblewrapBuildService<BS, DS> {
             execution_policy: super::SandboxExecutionPolicy::standard(),
             shutdown_signal: None,
             last_enforcement_facts: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            live_cpu_diagnostics: None,
+            last_live_cpu_facts: std::sync::Arc::new(std::sync::Mutex::new(None)),
             #[cfg(test)]
             watch_fault: None,
         }
+    }
+
+    /// Enable opt-in bounded live CPU diagnostics for owned local attempts.
+    pub fn with_live_cpu_diagnostics(
+        mut self,
+        config: super::SandboxLiveCpuDiagnosticsConfig,
+        sender: tokio::sync::mpsc::Sender<super::SandboxCpuSampleEvent>,
+    ) -> std::io::Result<Self> {
+        config.validate()?;
+        self.live_cpu_diagnostics = Some((config, sender));
+        Ok(self)
+    }
+
+    /// Return the live CPU sampler facts recorded for the latest local attempt.
+    pub fn last_live_cpu_facts(&self) -> Option<super::SandboxLiveCpuAttemptFacts> {
+        self.last_live_cpu_facts.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
     }
 
     /// Configure local execution deadlines and staged resource enforcement policy.
@@ -650,11 +676,31 @@ where
         let sandbox = match &self.command_factory {
             Some(factory) => sandbox.with_command_factory(Arc::clone(factory)),
             None => sandbox,
-        }
-        .with_execution_policy(self.execution_policy.clone())
-        .with_shutdown_signal(self.shutdown_signal.clone())
-        .with_helper_sockets(self.compile_socket.clone(), self.rust_wait_socket.clone())
-        .with_enforcement_facts_sink(Some(Arc::clone(&self.last_enforcement_facts)));
+        };
+        let live_cpu = self.live_cpu_diagnostics.as_ref().map(|(config, sender)| {
+            let attempt_id = NEXT_LIVE_CPU_ATTEMPT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let mut effective_config = config.clone();
+            let attempt_label = match super::current_live_cpu_attempt_context() {
+                Some(ctx) => {
+                    effective_config.generation = ctx.generation;
+                    ctx.attempt_label
+                }
+                None => build_name_str.clone(),
+            };
+            crate::bwrap::BwrapLiveCpuDiagnostics {
+                config: effective_config,
+                attempt_id,
+                attempt_label,
+                sender: sender.clone(),
+                facts_sink: Some(Arc::clone(&self.last_live_cpu_facts)),
+            }
+        });
+        let sandbox = sandbox
+            .with_execution_policy(self.execution_policy.clone())
+            .with_shutdown_signal(self.shutdown_signal.clone())
+            .with_helper_sockets(self.compile_socket.clone(), self.rust_wait_socket.clone())
+            .with_enforcement_facts_sink(Some(Arc::clone(&self.last_enforcement_facts)))
+            .with_live_cpu_diagnostics(live_cpu);
         #[cfg(test)]
         let sandbox = sandbox.with_test_watch_fault(self.watch_fault.filter(|_| cancellation.is_some()));
         let lease = crate::bwrap::watch_cancel::WatchLease::new(permit, Arc::clone(&sandbox_dir));
@@ -2255,5 +2301,302 @@ mod tests {
             leftover_attempt_dirs.is_empty(),
             "delegated cgroup root leaked attempt directories: {leftover_attempt_dirs:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn delegated_cgroup_live_cpu_diagnostics_cpu_sleep_parallel_and_cancel() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let Some(cg_root) = resolve_or_spawn_delegated_cgroup_root(
+            "buildservice::bwrap::tests::delegated_cgroup_live_cpu_diagnostics_cpu_sleep_parallel_and_cancel",
+        ) else {
+            return;
+        };
+
+        let root = tempfile::tempdir().unwrap();
+        let (tx, mut rx) = tokio::sync::mpsc::channel(256);
+        let mut policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        policy.resources.cgroup_root = Some(cg_root.clone());
+        // Diagnostics-only mode: memory_mode and pids_mode remain Disabled (no subtree_control needed).
+        assert!(!policy.resources.requests_cgroup());
+
+        let diag_cfg = crate::buildservice::SandboxLiveCpuDiagnosticsConfig {
+            sample_cadence_ms: 50,
+            allocated_cores: 2,
+            generation: 1,
+            cgroup_root: None,
+        };
+        let svc = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_execution_policy(policy)
+            .unwrap()
+            .with_live_cpu_diagnostics(diag_cfg, tx)
+            .unwrap();
+
+        // 1. CPU-bound workload: busy loop for ~200ms -> positive cpu delta.
+        let cpu_req = shell_build_request(
+            "i=0; while [ \"$i\" -lt 80000 ]; do i=$((i+1)); done; /bin/busybox echo cpu-ok > /nix/store/cpu-out",
+            &["nix/store/cpu-out"],
+        );
+        svc.do_build(cpu_req).await.expect("cpu-bound diagnostics build must succeed");
+        let cpu_facts = svc.last_live_cpu_facts().unwrap();
+        assert!(
+            matches!(cpu_facts.scope, crate::buildservice::SandboxCpuScopeAvailability::OwnedAttemptCgroupV2 { .. }),
+            "expected owned cgroup scope in diagnostics-only mode, got {:?}",
+            cpu_facts.scope
+        );
+        assert_eq!(cpu_facts.retired_reason, Some(crate::buildservice::SandboxCpuRetirementReason::Completed));
+        assert!(cpu_facts.sample_count >= 2, "expected >=2 cpu.stat samples, got {}", cpu_facts.sample_count);
+        assert!(
+            cpu_facts.latest_cpu_usec.unwrap_or(0) > cpu_facts.initial_cpu_usec.unwrap_or(0),
+            "cpu-bound workload must show positive usage_usec delta: {cpu_facts:?}"
+        );
+
+        // 2. Sleeping workload: sleep 250ms -> low cpu delta over >=200ms wall interval.
+        while rx.try_recv().is_ok() {}
+        let sleep_req =
+            shell_build_request("/bin/busybox usleep 250000; /bin/busybox echo sleep-ok > /nix/store/sleep-out", &[
+                "nix/store/sleep-out",
+            ]);
+        svc.do_build(sleep_req).await.expect("sleeping diagnostics build must succeed");
+        let sleep_facts = svc.last_live_cpu_facts().unwrap();
+        assert_eq!(sleep_facts.retired_reason, Some(crate::buildservice::SandboxCpuRetirementReason::Completed));
+        let mut sleep_events = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            sleep_events.push(ev);
+        }
+        assert!(
+            sleep_events
+                .iter()
+                .any(|ev| matches!(ev.kind, crate::buildservice::SandboxCpuSampleKind::Sample { .. }))
+        );
+        assert!(sleep_events.iter().any(|ev| matches!(ev.kind, crate::buildservice::SandboxCpuSampleKind::Retired {
+            reason: crate::buildservice::SandboxCpuRetirementReason::Completed
+        })));
+
+        // 3. Parallel descendants: 2 concurrent busy loops inside cgroup -> tree cpu delta > wall dt
+        //    (>1_000 milli-cores).
+        while rx.try_recv().is_ok() {}
+        let par_req = shell_build_request(
+            "/bin/busybox sh -c 'i=0; while [ \"$i\" -lt 250000 ]; do i=$((i+1)); done' & \
+             /bin/busybox sh -c 'i=0; while [ \"$i\" -lt 250000 ]; do i=$((i+1)); done' & \
+             wait; /bin/busybox echo par-ok > /nix/store/par-out",
+            &["nix/store/par-out"],
+        );
+        svc.do_build(par_req).await.expect("parallel diagnostics build must succeed");
+        let mut samples: Vec<(u64, u64)> = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if let crate::buildservice::SandboxCpuSampleKind::Sample { cumulative_cpu_usec } = ev.kind {
+                samples.push((ev.observed_at_usec, cumulative_cpu_usec));
+            }
+        }
+        assert!(samples.len() >= 2, "expected >=2 samples for parallel descendants, got {}", samples.len());
+        let mut peak_milli_cores: u128 = 0;
+        for win in samples.windows(2) {
+            let (t0, c0) = win[0];
+            let (t1, c1) = win[1];
+            if t1 > t0 {
+                let rate = (u128::from(c1.saturating_sub(c0)) * 1_000) / u128::from(t1.saturating_sub(t0));
+                if rate > peak_milli_cores {
+                    peak_milli_cores = rate;
+                }
+            }
+        }
+        let (t_first, c_first) = samples[0];
+        let (t_last, c_last) = *samples.last().unwrap();
+        let avg_milli_cores = if t_last > t_first {
+            (u128::from(c_last.saturating_sub(c_first)) * 1_000) / u128::from(t_last.saturating_sub(t_first))
+        } else {
+            0
+        };
+        assert!(
+            peak_milli_cores > 1_000,
+            "expected parallel descendants peak > 1000 milli-cores, got peak={peak_milli_cores} avg={avg_milli_cores} samples={samples:?}"
+        );
+
+        // 4. Cancellation retires sampler synchronously before WatchLease drop and leaks zero post-cancel
+        //    samples.
+        while rx.try_recv().is_ok() {}
+        let markers = tempfile::tempdir().unwrap();
+        let (cancel_tx, cancel_rx) = watch::channel(false);
+        let cancel_svc = Arc::new(svc);
+        let cancel_clone = Arc::clone(&cancel_svc);
+        let cancel_req = watch_build_request(markers.path());
+        let handle = tokio::spawn(async move { cancel_clone.do_build_cancellable(cancel_req, cancel_rx).await });
+        await_watch_start(markers.path()).await;
+        cancel_tx.send(true).unwrap();
+        let cancel_err = handle.await.unwrap().unwrap_err();
+        assert_eq!(cancel_err.kind(), ErrorKind::Interrupted);
+        let cancel_facts = cancel_svc.last_live_cpu_facts().unwrap();
+        assert_eq!(cancel_facts.retired_reason, Some(crate::buildservice::SandboxCpuRetirementReason::Cancelled));
+        let mut saw_retired = false;
+        while let Ok(ev) = rx.try_recv() {
+            if ev.attempt_id == cancel_facts.attempt_id {
+                assert!(!saw_retired, "no sample may arrive after Retired event for cancelled attempt: {ev:?}");
+                if matches!(ev.kind, crate::buildservice::SandboxCpuSampleKind::Retired {
+                    reason: crate::buildservice::SandboxCpuRetirementReason::Cancelled
+                }) {
+                    saw_retired = true;
+                }
+            }
+        }
+        assert!(saw_retired, "expected synchronous Retired(Cancelled) event before return");
+
+        let leftover_attempt_dirs: Vec<_> = std::fs::read_dir(&cg_root)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("mantle-sbx-"))
+            .collect();
+        assert!(
+            leftover_attempt_dirs.is_empty(),
+            "delegated live cpu cgroup root leaked attempt directories: {leftover_attempt_dirs:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn live_cpu_diagnostics_unavailable_fallback_and_resilience_never_block_builds() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let root = tempfile::tempdir().unwrap();
+
+        // 1. Missing cgroup_root -> honest Unavailable, build succeeds normally.
+        let (tx1, mut rx1) = tokio::sync::mpsc::channel(16);
+        let svc_unavail =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_live_cpu_diagnostics(crate::buildservice::SandboxLiveCpuDiagnosticsConfig::standard(2), tx1)
+                .unwrap();
+        svc_unavail
+            .do_build(shell_build_request("/bin/busybox echo ok > /nix/store/out1", &["nix/store/out1"]))
+            .await
+            .expect("build must succeed when live cpu cgroup_root is unconfigured");
+        let facts1 = svc_unavail.last_live_cpu_facts().unwrap();
+        assert!(matches!(facts1.scope, crate::buildservice::SandboxCpuScopeAvailability::Unavailable {
+            reason: crate::buildservice::SandboxLiveCpuUnavailableReason::CgroupRootUnconfigured
+        }));
+        assert_eq!(facts1.retired_reason, Some(crate::buildservice::SandboxCpuRetirementReason::Completed));
+        let mut events1 = Vec::new();
+        while let Ok(ev) = rx1.try_recv() {
+            events1.push(ev);
+        }
+        assert!(events1.iter().any(|ev| matches!(ev.kind, crate::buildservice::SandboxCpuSampleKind::Started {
+            scope: crate::buildservice::SandboxCpuScopeAvailability::Unavailable { .. }
+        })));
+
+        // 2. Full bounded channel (capacity 1) never blocks build and counts dropped samples.
+        let (tx_full, _rx_full_kept_unread) = tokio::sync::mpsc::channel(1);
+        let svc_full = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_live_cpu_diagnostics(crate::buildservice::SandboxLiveCpuDiagnosticsConfig::standard(1), tx_full)
+            .unwrap();
+        svc_full
+            .do_build(shell_build_request("/bin/busybox echo ok > /nix/store/out2", &["nix/store/out2"]))
+            .await
+            .expect("full bounded channel must never block build");
+        let facts_full = svc_full.last_live_cpu_facts().unwrap();
+        assert!(facts_full.dropped_samples_count >= 1);
+
+        // 3. Dropped consumer mid-flight (rx dropped immediately) never blocks or fails build.
+        let (tx_closed, rx_closed) = tokio::sync::mpsc::channel(4);
+        drop(rx_closed);
+        let svc_closed = BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+            .with_live_cpu_diagnostics(crate::buildservice::SandboxLiveCpuDiagnosticsConfig::standard(1), tx_closed)
+            .unwrap();
+        svc_closed
+            .do_build(shell_build_request("/bin/busybox echo ok > /nix/store/out3", &["nix/store/out3"]))
+            .await
+            .expect("dropped diagnostic consumer must never fail or block build");
+        let facts_closed = svc_closed.last_live_cpu_facts().unwrap();
+        assert_eq!(facts_closed.retired_reason, Some(crate::buildservice::SandboxCpuRetirementReason::Completed));
+        assert!(facts_closed.dropped_samples_count >= 1);
+    }
+
+    #[tokio::test]
+    async fn delegated_cgroup_live_cpu_observer_overhead_fixture() {
+        if !require_real_bwrap_and_shell() {
+            return;
+        }
+        let Some(cg_root) = resolve_or_spawn_delegated_cgroup_root(
+            "buildservice::bwrap::tests::delegated_cgroup_live_cpu_observer_overhead_fixture",
+        ) else {
+            return;
+        };
+
+        const ITERATIONS: usize = 8;
+        const MICRO_ITERS: usize = 1_000;
+        let root = tempfile::tempdir().unwrap();
+        let mut policy = crate::buildservice::SandboxExecutionPolicy::standard();
+        policy.resources.cgroup_root = Some(cg_root.clone());
+
+        let baseline_svc =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_execution_policy(policy.clone())
+                .unwrap();
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(256);
+        let observed_svc =
+            BubblewrapBuildService::new(root.path().to_path_buf(), MemoryBlobService::default(), tmp_ds())
+                .with_execution_policy(policy)
+                .unwrap()
+                .with_live_cpu_diagnostics(crate::buildservice::SandboxLiveCpuDiagnosticsConfig::standard(2), tx)
+                .unwrap();
+
+        // Micro-benchmark: 1,000 cpu.stat openat+read+parse + try_send iterations on an owned cgroup.
+        let micro_cg = crate::bwrap::cgroup::prepare_attempt_diagnostics(Some(&cg_root)).unwrap();
+        let (micro_tx, mut micro_rx) = tokio::sync::mpsc::channel(256);
+        let micro_start = std::time::Instant::now();
+        for seq in 0..MICRO_ITERS {
+            let usage = micro_cg.read_cpu_usage_usec().unwrap();
+            let _ = micro_tx.try_send(crate::buildservice::SandboxCpuSampleEvent {
+                attempt_id: 1,
+                generation: 1,
+                attempt_label: "micro".to_string(),
+                allocated_cores: 2,
+                observed_at_usec: u64::try_from(seq).unwrap_or(0),
+                kind: crate::buildservice::SandboxCpuSampleKind::Sample {
+                    cumulative_cpu_usec: usage,
+                },
+            });
+            let _ = micro_rx.try_recv();
+        }
+        let micro_total_us = micro_start.elapsed().as_micros();
+        let micro_per_sample_ns = (micro_total_us.saturating_mul(1_000)) / u128::try_from(MICRO_ITERS).unwrap();
+        drop(micro_cg);
+
+        let script = "/bin/busybox usleep 600000; /bin/busybox echo ok > /nix/store/bench-out";
+
+        // Warm-up 1 build each.
+        baseline_svc.do_build(shell_build_request(script, &["nix/store/bench-out"])).await.unwrap();
+        observed_svc.do_build(shell_build_request(script, &["nix/store/bench-out"])).await.unwrap();
+        while rx.try_recv().is_ok() {}
+
+        let mut baseline_us: Vec<u128> = Vec::with_capacity(ITERATIONS);
+        let mut observed_us: Vec<u128> = Vec::with_capacity(ITERATIONS);
+        let mut total_samples: u64 = 0;
+        for _ in 0..ITERATIONS {
+            let t0 = std::time::Instant::now();
+            baseline_svc.do_build(shell_build_request(script, &["nix/store/bench-out"])).await.unwrap();
+            baseline_us.push(t0.elapsed().as_micros());
+
+            let t1 = std::time::Instant::now();
+            observed_svc.do_build(shell_build_request(script, &["nix/store/bench-out"])).await.unwrap();
+            observed_us.push(t1.elapsed().as_micros());
+            if let Some(facts) = observed_svc.last_live_cpu_facts() {
+                total_samples = total_samples.saturating_add(facts.sample_count);
+            }
+            while rx.try_recv().is_ok() {}
+        }
+
+        baseline_us.sort_unstable();
+        observed_us.sort_unstable();
+        let base_med = baseline_us[ITERATIONS / 2];
+        let obs_med = observed_us[ITERATIONS / 2];
+        let base_mean = baseline_us.iter().sum::<u128>() / u128::try_from(ITERATIONS).unwrap();
+        let obs_mean = observed_us.iter().sum::<u128>() / u128::try_from(ITERATIONS).unwrap();
+        let delta_med_us = obs_med.saturating_sub(base_med);
+        let overhead_bps = (delta_med_us.saturating_mul(10_000)).checked_div(base_med).unwrap_or(0);
+        eprintln!(
+            "OVERHEAD_FIXTURE iterations={ITERATIONS} cadence_ms=500 micro_per_sample_ns={micro_per_sample_ns} baseline_median_us={base_med} observed_median_us={obs_med} baseline_mean_us={base_mean} observed_mean_us={obs_mean} total_samples={total_samples} overhead_bps={overhead_bps}"
+        );
+        assert!(total_samples >= u64::try_from(ITERATIONS).unwrap());
     }
 }

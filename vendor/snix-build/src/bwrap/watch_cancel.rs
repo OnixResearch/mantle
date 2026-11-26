@@ -32,7 +32,13 @@ use tokio::time::sleep;
 use super::capture;
 use super::cgroup::AttemptCgroup;
 use super::cgroup::PendingCgroupSpawn;
+use crate::buildservice::SandboxCpuRetirementReason;
+use crate::buildservice::SandboxCpuSampleEvent;
+use crate::buildservice::SandboxCpuSampleKind;
+use crate::buildservice::SandboxCpuScopeAvailability;
 use crate::buildservice::SandboxFailureClass;
+use crate::buildservice::SandboxLiveCpuAttemptFacts;
+use crate::buildservice::SandboxLiveCpuUnavailableReason;
 use crate::buildservice::SandboxResourceEnforcementFacts;
 use crate::buildservice::SandboxUnavailableReason;
 use crate::buildservice::classified_io_error;
@@ -431,6 +437,189 @@ struct SupervisorIdentities {
     pid1: Option<Arc<OwnedPidNamespaceLeader>>,
 }
 
+pub(crate) fn monotonic_now_usec() -> u64 {
+    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    // SAFETY: `ts` is a valid stack `timespec` passed to `CLOCK_MONOTONIC`.
+    if unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut ts) } == 0 {
+        let secs = u64::try_from(ts.tv_sec).unwrap_or(0);
+        let nsec = u64::try_from(ts.tv_nsec).unwrap_or(0);
+        secs.saturating_mul(1_000_000).saturating_add(nsec / 1_000)
+    } else {
+        0
+    }
+}
+
+pub(crate) struct SupervisorLiveCpuConfig {
+    pub(crate) attempt_id: u64,
+    pub(crate) generation: u64,
+    pub(crate) attempt_label: String,
+    pub(crate) allocated_cores: u32,
+    pub(crate) cadence: Duration,
+    pub(crate) sender: tokio::sync::mpsc::Sender<SandboxCpuSampleEvent>,
+    pub(crate) facts_sink: Option<Arc<Mutex<Option<SandboxLiveCpuAttemptFacts>>>>,
+    pub(crate) initial_unavailable: Option<SandboxLiveCpuUnavailableReason>,
+    pub(crate) diagnostics_only_cgroup: bool,
+}
+
+struct LiveCpuSamplerState {
+    attempt_id: u64,
+    generation: u64,
+    attempt_label: String,
+    allocated_cores: u32,
+    sender: Option<tokio::sync::mpsc::Sender<SandboxCpuSampleEvent>>,
+    facts_sink: Option<Arc<Mutex<Option<SandboxLiveCpuAttemptFacts>>>>,
+    scope: SandboxCpuScopeAvailability,
+    sampling_active: bool,
+    started_emitted: bool,
+    retired: bool,
+    sample_count: u64,
+    dropped_samples_count: u64,
+    initial_cpu_usec: Option<u64>,
+    latest_cpu_usec: Option<u64>,
+    retired_reason: Option<SandboxCpuRetirementReason>,
+}
+
+impl LiveCpuSamplerState {
+    fn from_config(cfg: SupervisorLiveCpuConfig) -> Self {
+        let scope = match cfg.initial_unavailable {
+            Some(reason) => SandboxCpuScopeAvailability::Unavailable { reason },
+            None => SandboxCpuScopeAvailability::Unavailable {
+                reason: SandboxLiveCpuUnavailableReason::CgroupRootUnconfigured,
+            },
+        };
+        Self {
+            attempt_id: cfg.attempt_id,
+            generation: cfg.generation,
+            attempt_label: cfg.attempt_label,
+            allocated_cores: cfg.allocated_cores,
+            sender: Some(cfg.sender),
+            facts_sink: cfg.facts_sink,
+            scope,
+            sampling_active: false,
+            started_emitted: false,
+            retired: false,
+            sample_count: 0,
+            dropped_samples_count: 0,
+            initial_cpu_usec: None,
+            latest_cpu_usec: None,
+            retired_reason: None,
+        }
+    }
+
+    fn publish_facts(&self) {
+        if let Some(sink) = &self.facts_sink {
+            *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(SandboxLiveCpuAttemptFacts {
+                attempt_id: self.attempt_id,
+                generation: self.generation,
+                attempt_label: self.attempt_label.clone(),
+                scope: self.scope.clone(),
+                sample_count: self.sample_count,
+                dropped_samples_count: self.dropped_samples_count,
+                initial_cpu_usec: self.initial_cpu_usec,
+                latest_cpu_usec: self.latest_cpu_usec,
+                retired_reason: self.retired_reason,
+            });
+        }
+    }
+
+    fn try_emit(&mut self, kind: SandboxCpuSampleKind) {
+        let Some(sender) = self.sender.as_ref() else {
+            return;
+        };
+        let event = SandboxCpuSampleEvent {
+            attempt_id: self.attempt_id,
+            generation: self.generation,
+            attempt_label: self.attempt_label.clone(),
+            allocated_cores: self.allocated_cores,
+            observed_at_usec: monotonic_now_usec(),
+            kind,
+        };
+        match sender.try_send(event) {
+            Ok(()) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                self.dropped_samples_count = self.dropped_samples_count.saturating_add(1);
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                self.dropped_samples_count = self.dropped_samples_count.saturating_add(1);
+                self.sender = None;
+                self.sampling_active = false;
+            }
+        }
+    }
+
+    fn mark_started_with_cgroup(&mut self, cgroup: &AttemptCgroup) {
+        if self.retired || self.started_emitted {
+            return;
+        }
+        self.scope = SandboxCpuScopeAvailability::OwnedAttemptCgroupV2 {
+            rel_path: cgroup.rel_path().to_string(),
+        };
+        self.sampling_active = true;
+        self.started_emitted = true;
+        self.try_emit(SandboxCpuSampleKind::Started {
+            scope: self.scope.clone(),
+        });
+        self.sample_once(cgroup);
+        self.publish_facts();
+    }
+
+    fn mark_started_unavailable(&mut self, reason: SandboxLiveCpuUnavailableReason) {
+        if self.retired || self.started_emitted {
+            return;
+        }
+        self.scope = SandboxCpuScopeAvailability::Unavailable { reason };
+        self.sampling_active = false;
+        self.started_emitted = true;
+        self.try_emit(SandboxCpuSampleKind::Started {
+            scope: self.scope.clone(),
+        });
+        self.publish_facts();
+    }
+
+    fn sample_once(&mut self, cgroup: &AttemptCgroup) {
+        if self.retired || !self.sampling_active {
+            return;
+        }
+        match cgroup.read_cpu_usage_usec() {
+            Ok(usage_usec) => {
+                if self.initial_cpu_usec.is_none() {
+                    self.initial_cpu_usec = Some(usage_usec);
+                }
+                self.latest_cpu_usec = Some(usage_usec);
+                self.sample_count = self.sample_count.saturating_add(1);
+                self.try_emit(SandboxCpuSampleKind::Sample {
+                    cumulative_cpu_usec: usage_usec,
+                });
+            }
+            Err(err) => {
+                self.try_emit(SandboxCpuSampleKind::Unreadable {
+                    detail: err.to_string(),
+                });
+            }
+        }
+        self.publish_facts();
+    }
+
+    fn retire(&mut self, reason: SandboxCpuRetirementReason) {
+        if self.retired {
+            return;
+        }
+        self.retired = true;
+        self.sampling_active = false;
+        self.retired_reason = Some(reason);
+        self.try_emit(SandboxCpuSampleKind::Retired { reason });
+        self.sender = None;
+        self.publish_facts();
+    }
+}
+
+fn retire_live_cpu_sampler(sampler: &Option<Arc<Mutex<LiveCpuSamplerState>>>, reason: SandboxCpuRetirementReason) {
+    if let Some(state) = sampler {
+        let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.retire(reason);
+    }
+}
+
 pub(crate) struct SupervisorRunConfig {
     pub(crate) wall_deadline: Option<Duration>,
     pub(crate) silence_budget: Option<Duration>,
@@ -440,6 +629,7 @@ pub(crate) struct SupervisorRunConfig {
     pub(crate) cgroup_ack_reader: Option<std::os::unix::net::UnixStream>,
     pub(crate) pending_cgroup_spawn: Option<PendingCgroupSpawn>,
     pub(crate) enforcement_facts: Arc<Mutex<SandboxResourceEnforcementFacts>>,
+    pub(crate) live_cpu: Option<SupervisorLiveCpuConfig>,
 }
 
 /// The supervisor, not the awaiting BuildService future, owns the child and
@@ -455,6 +645,11 @@ pub(crate) async fn run_child(
     #[cfg(test)] fault: Option<WatchFault>,
 ) -> io::Result<std::process::Output> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let diagnostics_only_cgroup = config.live_cpu.as_ref().is_some_and(|cfg| cfg.diagnostics_only_cgroup);
+    let live_cpu_cadence = config.live_cpu.as_ref().map(|cfg| cfg.cadence);
+    let live_cpu_initial_unavailable = config.live_cpu.as_ref().and_then(|cfg| cfg.initial_unavailable.clone());
+    let live_cpu_sampler =
+        config.live_cpu.take().map(|cfg| Arc::new(Mutex::new(LiveCpuSamplerState::from_config(cfg))));
     // Make the emergency writer while no child exists; a failed dup must not
     // strand a spawned sandbox. A supervisor panic cannot create gate EOF.
     let panic_writer = gate.writer.try_clone()?;
@@ -478,12 +673,26 @@ pub(crate) async fn run_child(
                         detail: format!("child pre_exec cgroup migration failed: {error}"),
                     };
                     facts.unavailable_reasons.push(reason);
+                    if let Some(state) = live_cpu_sampler.as_ref() {
+                        let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                        guard.mark_started_unavailable(SandboxLiveCpuUnavailableReason::ChildMigrationFailed {
+                            detail: format!("child pre_exec cgroup migration failed: {error}"),
+                        });
+                        guard.retire(SandboxCpuRetirementReason::Failed);
+                    }
                     return Err(classified_io_error(
                         error.kind(),
                         SandboxFailureClass::ResourceEnforcementUnavailable,
                         format!("cgroup migration failed during spawn: {error}"),
                     ));
                 }
+            }
+            if let Some(state) = live_cpu_sampler.as_ref() {
+                let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                guard.mark_started_unavailable(SandboxLiveCpuUnavailableReason::SetupIoError {
+                    detail: format!("sandbox spawn failed: {error}"),
+                });
+                guard.retire(SandboxCpuRetirementReason::Failed);
             }
             return Err(super::annotate_bwrap_spawn_error(program, error));
         }
@@ -495,6 +704,7 @@ pub(crate) async fn run_child(
     let (abort_tx, abort_rx) = oneshot::channel();
     let watchdog_cgroup = config.cgroup.clone();
     let watchdog_facts = Arc::clone(&config.enforcement_facts);
+    let watchdog_sampler = live_cpu_sampler.clone();
     let worker = tokio::spawn(supervise_child(SupervisedChildContext {
         child,
         gate,
@@ -503,6 +713,10 @@ pub(crate) async fn run_child(
         lease: Arc::clone(&lease),
         identities: Arc::clone(&identities),
         config,
+        live_cpu_sampler,
+        live_cpu_cadence,
+        live_cpu_initial_unavailable,
+        diagnostics_only_cgroup,
         #[cfg(test)]
         fault,
     }));
@@ -511,10 +725,12 @@ pub(crate) async fn run_child(
     let watchdog = tokio::spawn(async move {
         match worker.await {
             Ok(result) => {
+                retire_live_cpu_sampler(&watchdog_sampler, SandboxCpuRetirementReason::Completed);
                 drop(watchdog_cgroup);
                 result
             }
             Err(error) => {
+                retire_live_cpu_sampler(&watchdog_sampler, SandboxCpuRetirementReason::Failed);
                 let (pid1, outer) = {
                     let owned = identities.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
                     (owned.pid1.clone(), owned.outer.clone())
@@ -626,8 +842,14 @@ async fn classify_unbound_child(
     lease: Arc<WatchLease>,
     outer: Option<Arc<OwnedOuterBwrap>>,
     cgroup: Option<Arc<AttemptCgroup>>,
+    live_cpu_sampler: Option<Arc<Mutex<LiveCpuSamplerState>>>,
     reason: &'static str,
 ) -> io::Result<std::process::Output> {
+    if let Some(state) = live_cpu_sampler.as_ref() {
+        let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard.mark_started_unavailable(SandboxLiveCpuUnavailableReason::SupervisorPanickedOrUnbound);
+        guard.retire(SandboxCpuRetirementReason::Failed);
+    }
     let readers_closed = gate.no_readers().unwrap_or(false);
     let outer_exited = if let Some(outer) = &outer {
         outer.is_exited().unwrap_or(false)
@@ -711,7 +933,10 @@ async fn reap_and_drain(
     wait_future: &mut std::pin::Pin<&mut impl std::future::Future<Output = io::Result<std::process::Output>>>,
     cgroup: Option<Arc<AttemptCgroup>>,
     facts: &Arc<Mutex<SandboxResourceEnforcementFacts>>,
+    live_cpu_sampler: &Option<Arc<Mutex<LiveCpuSamplerState>>>,
+    retire_reason: SandboxCpuRetirementReason,
 ) -> io::Result<Option<std::process::Output>> {
+    retire_live_cpu_sampler(live_cpu_sampler, retire_reason);
     terminate_until_observed(pid1).await;
     let output_res = wait_future.as_mut().await;
     if output_res.is_err() {
@@ -757,6 +982,7 @@ struct GracefulShutdownContext<'a> {
     shutdown_grace: Duration,
     cgroup: Option<Arc<AttemptCgroup>>,
     facts: &'a Arc<Mutex<SandboxResourceEnforcementFacts>>,
+    live_cpu_sampler: &'a Option<Arc<Mutex<LiveCpuSamplerState>>>,
 }
 
 async fn handle_graceful_shutdown(
@@ -776,17 +1002,44 @@ async fn handle_graceful_shutdown(
         tokio::select! {
             biased;
             _ = &mut *ctx.abort => {
-                reap_and_drain(ctx.pid1, ctx.outer, wait_future, ctx.cgroup, ctx.facts).await?;
+                reap_and_drain(
+                    ctx.pid1,
+                    ctx.outer,
+                    wait_future,
+                    ctx.cgroup,
+                    ctx.facts,
+                    ctx.live_cpu_sampler,
+                    SandboxCpuRetirementReason::DroppedOrAborted,
+                )
+                .await?;
                 return Err(io::Error::new(ErrorKind::Interrupted, "dropped sandbox build stopped during shutdown grace"));
             }
             triggered = wait_for_watch_trigger(ctx.cancellation), if ctx.cancellation.is_some() => {
                 if triggered {
-                    reap_and_drain(ctx.pid1, ctx.outer, wait_future, ctx.cgroup, ctx.facts).await?;
+                    reap_and_drain(
+                        ctx.pid1,
+                        ctx.outer,
+                        wait_future,
+                        ctx.cgroup,
+                        ctx.facts,
+                        ctx.live_cpu_sampler,
+                        SandboxCpuRetirementReason::Cancelled,
+                    )
+                    .await?;
                     return Err(io::Error::new(ErrorKind::Interrupted, "watch sandbox cancelled during shutdown grace"));
                 }
             }
             () = &mut grace_sleep => {
-                reap_and_drain(ctx.pid1, ctx.outer, wait_future, ctx.cgroup, ctx.facts).await?;
+                reap_and_drain(
+                    ctx.pid1,
+                    ctx.outer,
+                    wait_future,
+                    ctx.cgroup,
+                    ctx.facts,
+                    ctx.live_cpu_sampler,
+                    SandboxCpuRetirementReason::GracefulShutdown,
+                )
+                .await?;
                 return Err(io::Error::new(
                     ErrorKind::Interrupted,
                     format!(
@@ -796,6 +1049,7 @@ async fn handle_graceful_shutdown(
                 ));
             }
             result = wait_future.as_mut() => {
+                retire_live_cpu_sampler(ctx.live_cpu_sampler, SandboxCpuRetirementReason::GracefulShutdown);
                 terminate_until_observed(ctx.pid1).await;
                 if result.is_err() {
                     wait_outer_exit(ctx.outer).await;
@@ -818,6 +1072,10 @@ struct SupervisedChildContext {
     lease: Arc<WatchLease>,
     identities: Arc<Mutex<SupervisorIdentities>>,
     config: SupervisorRunConfig,
+    live_cpu_sampler: Option<Arc<Mutex<LiveCpuSamplerState>>>,
+    live_cpu_cadence: Option<Duration>,
+    live_cpu_initial_unavailable: Option<SandboxLiveCpuUnavailableReason>,
+    diagnostics_only_cgroup: bool,
     #[cfg(test)]
     fault: Option<WatchFault>,
 }
@@ -830,6 +1088,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
             ctx.lease,
             None,
             ctx.config.cgroup.take(),
+            ctx.live_cpu_sampler.take(),
             "spawned child has no PID",
         )
         .await;
@@ -852,6 +1111,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                         ctx.lease,
                         None,
                         ctx.config.cgroup.take(),
+                        ctx.live_cpu_sampler.take(),
                         "outer pidfd unavailable",
                     )
                     .await;
@@ -892,6 +1152,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                         ctx.lease,
                         Some(outer),
                         ctx.config.cgroup.take(),
+                        ctx.live_cpu_sampler.take(),
                         "outer exited before namespace PID1",
                     )
                     .await;
@@ -929,24 +1190,50 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
         })
         .and_then(|inner| inner);
         if let Err(reason) = ack_result {
-            {
-                let mut facts = ctx.config.enforcement_facts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-                facts.enforced_memory = false;
-                facts.enforced_pids = false;
-                facts.unavailable_reasons.push(reason.clone());
+            if ctx.diagnostics_only_cgroup {
+                if let Some(state) = ctx.live_cpu_sampler.as_ref() {
+                    let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    guard.mark_started_unavailable(super::cgroup::unavailable_for_live_cpu(reason));
+                }
+                drop(ctx.config.cgroup.take());
+            } else {
+                {
+                    let mut facts =
+                        ctx.config.enforcement_facts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    facts.enforced_memory = false;
+                    facts.enforced_pids = false;
+                    facts.unavailable_reasons.push(reason.clone());
+                }
+                if let Some(state) = ctx.live_cpu_sampler.as_ref() {
+                    let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    guard.mark_started_unavailable(super::cgroup::unavailable_for_live_cpu(reason.clone()));
+                    guard.retire(SandboxCpuRetirementReason::Failed);
+                }
+                terminate_until_observed(&pid1).await;
+                let _ = capture::capture_child_output(ctx.child).await;
+                wait_outer_exit(&outer).await;
+                let _ = finalize_cgroup(ctx.config.cgroup.take(), &ctx.config.enforcement_facts).await;
+                return Err(classified_io_error(
+                    ErrorKind::Other,
+                    SandboxFailureClass::ResourceEnforcementUnavailable,
+                    format!("cgroup migration failed before payload start: {reason:?}"),
+                ));
             }
-            terminate_until_observed(&pid1).await;
-            let _ = capture::capture_child_output(ctx.child).await;
-            wait_outer_exit(&outer).await;
-            let _ = finalize_cgroup(ctx.config.cgroup.take(), &ctx.config.enforcement_facts).await;
-            return Err(classified_io_error(
-                ErrorKind::Other,
-                SandboxFailureClass::ResourceEnforcementUnavailable,
-                format!("cgroup migration failed before payload start: {reason:?}"),
-            ));
+        } else {
+            let mut facts = ctx.config.enforcement_facts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            cg.observe_live_membership(&mut facts);
+            if let Some(state) = ctx.live_cpu_sampler.as_ref() {
+                let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                guard.mark_started_with_cgroup(cg);
+            }
         }
-        let mut facts = ctx.config.enforcement_facts.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        cg.observe_live_membership(&mut facts);
+    } else if let Some(state) = ctx.live_cpu_sampler.as_ref() {
+        let mut guard = state.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reason = ctx
+            .live_cpu_initial_unavailable
+            .take()
+            .unwrap_or(SandboxLiveCpuUnavailableReason::CgroupRootUnconfigured);
+        guard.mark_started_unavailable(reason);
     }
 
     let activity = Arc::new(capture::OutputActivityTracker::new());
@@ -957,14 +1244,36 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
         || is_watch_triggered(&ctx.config.shutdown_signal)
         || ctx.abort.try_recv().is_ok()
     {
-        reap_and_drain(&pid1, &outer, &mut wait_future, ctx.config.cgroup.take(), &ctx.config.enforcement_facts)
-            .await?;
+        let retire_reason = if is_watch_triggered(&ctx.cancellation) {
+            SandboxCpuRetirementReason::Cancelled
+        } else if is_watch_triggered(&ctx.config.shutdown_signal) {
+            SandboxCpuRetirementReason::GracefulShutdown
+        } else {
+            SandboxCpuRetirementReason::DroppedOrAborted
+        };
+        reap_and_drain(
+            &pid1,
+            &outer,
+            &mut wait_future,
+            ctx.config.cgroup.take(),
+            &ctx.config.enforcement_facts,
+            &ctx.live_cpu_sampler,
+            retire_reason,
+        )
+        .await?;
         return Err(io::Error::new(ErrorKind::Interrupted, "watch sandbox stopped before builder start"));
     }
     if let Err(error) = ctx.gate.release() {
-        let _ =
-            reap_and_drain(&pid1, &outer, &mut wait_future, ctx.config.cgroup.take(), &ctx.config.enforcement_facts)
-                .await;
+        let _ = reap_and_drain(
+            &pid1,
+            &outer,
+            &mut wait_future,
+            ctx.config.cgroup.take(),
+            &ctx.config.enforcement_facts,
+            &ctx.live_cpu_sampler,
+            SandboxCpuRetirementReason::Failed,
+        )
+        .await;
         return Err(error);
     }
 
@@ -976,18 +1285,44 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
     tokio::pin!(wall_sleep);
     let silence_sleep = tokio::time::sleep_until(silence_dur.map(|dur| payload_started + dur).unwrap_or(far_future));
     tokio::pin!(silence_sleep);
+    let sample_cadence = ctx.live_cpu_cadence.unwrap_or_else(|| Duration::from_millis(500));
+    let sample_sleep = tokio::time::sleep_until(payload_started + sample_cadence);
+    tokio::pin!(sample_sleep);
 
     let mut shutdown_signal = ctx.config.shutdown_signal.take();
     loop {
+        let sampling_active = ctx.config.cgroup.is_some()
+            && ctx
+                .live_cpu_sampler
+                .as_ref()
+                .is_some_and(|state| state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sampling_active);
         tokio::select! {
             biased;
             _ = &mut ctx.abort => {
-                reap_and_drain(&pid1, &outer, &mut wait_future, ctx.config.cgroup.take(), &ctx.config.enforcement_facts).await?;
+                reap_and_drain(
+                    &pid1,
+                    &outer,
+                    &mut wait_future,
+                    ctx.config.cgroup.take(),
+                    &ctx.config.enforcement_facts,
+                    &ctx.live_cpu_sampler,
+                    SandboxCpuRetirementReason::DroppedOrAborted,
+                )
+                .await?;
                 return Err(io::Error::new(ErrorKind::Interrupted, "dropped watch build stopped by supervisor"));
             }
             triggered = wait_for_watch_trigger(&mut ctx.cancellation), if ctx.cancellation.is_some() => {
                 if triggered {
-                    reap_and_drain(&pid1, &outer, &mut wait_future, ctx.config.cgroup.take(), &ctx.config.enforcement_facts).await?;
+                    reap_and_drain(
+                        &pid1,
+                        &outer,
+                        &mut wait_future,
+                        ctx.config.cgroup.take(),
+                        &ctx.config.enforcement_facts,
+                        &ctx.live_cpu_sampler,
+                        SandboxCpuRetirementReason::Cancelled,
+                    )
+                    .await?;
                     return Err(io::Error::new(ErrorKind::Interrupted, "watch sandbox stopped after cancellation"));
                 }
             }
@@ -1003,6 +1338,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                             shutdown_grace: ctx.config.shutdown_grace,
                             cgroup: ctx.config.cgroup.take(),
                             facts: &ctx.config.enforcement_facts,
+                            live_cpu_sampler: &ctx.live_cpu_sampler,
                         },
                         &mut wait_future,
                     )
@@ -1016,6 +1352,8 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                     &mut wait_future,
                     ctx.config.cgroup.take(),
                     &ctx.config.enforcement_facts,
+                    &ctx.live_cpu_sampler,
+                    SandboxCpuRetirementReason::TimedOut,
                 )
                 .await
                 .ok()
@@ -1045,6 +1383,8 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                         &mut wait_future,
                         ctx.config.cgroup.take(),
                         &ctx.config.enforcement_facts,
+                        &ctx.live_cpu_sampler,
+                        SandboxCpuRetirementReason::TimedOut,
                     )
                     .await
                     .ok()
@@ -1065,6 +1405,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
             result = &mut wait_future => {
                 let cgroup_arc = ctx.config.cgroup.take();
                 if ctx.abort.try_recv().is_ok() {
+                    retire_live_cpu_sampler(&ctx.live_cpu_sampler, SandboxCpuRetirementReason::DroppedOrAborted);
                     terminate_until_observed(&pid1).await;
                     if result.is_err() {
                         wait_outer_exit(&outer).await;
@@ -1073,6 +1414,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                     return Err(io::Error::new(ErrorKind::Interrupted, "dropped watch build stopped by supervisor"));
                 }
                 if is_watch_triggered(&ctx.cancellation) {
+                    retire_live_cpu_sampler(&ctx.live_cpu_sampler, SandboxCpuRetirementReason::Cancelled);
                     terminate_until_observed(&pid1).await;
                     if result.is_err() {
                         wait_outer_exit(&outer).await;
@@ -1081,6 +1423,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                     return Err(io::Error::new(ErrorKind::Interrupted, "watch sandbox stopped after cancellation"));
                 }
                 if is_watch_triggered(&shutdown_signal) {
+                    retire_live_cpu_sampler(&ctx.live_cpu_sampler, SandboxCpuRetirementReason::GracefulShutdown);
                     terminate_until_observed(&pid1).await;
                     if result.is_err() {
                         wait_outer_exit(&outer).await;
@@ -1089,6 +1432,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                     return Err(io::Error::new(ErrorKind::Interrupted, "local sandbox stopped by supervisor shutdown"));
                 }
                 if wall_deadline_instant.is_some_and(|d| TokioInstant::now() >= d) {
+                    retire_live_cpu_sampler(&ctx.live_cpu_sampler, SandboxCpuRetirementReason::TimedOut);
                     terminate_until_observed(&pid1).await;
                     if result.is_err() {
                         wait_outer_exit(&outer).await;
@@ -1103,6 +1447,7 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                 if let Some(dur) = silence_dur {
                     let last_active = activity.last_activity_instant().max(payload_started);
                     if TokioInstant::now() >= last_active + dur {
+                        retire_live_cpu_sampler(&ctx.live_cpu_sampler, SandboxCpuRetirementReason::TimedOut);
                         terminate_until_observed(&pid1).await;
                         if result.is_err() {
                             wait_outer_exit(&outer).await;
@@ -1117,6 +1462,17 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                 }
                 match result {
                     Ok(output) => {
+                        if let Some(cg) = cgroup_arc.as_ref()
+                            && let Some(state) = ctx.live_cpu_sampler.as_ref()
+                        {
+                            state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sample_once(cg);
+                        }
+                        let retire_reason = if output.status.success() {
+                            SandboxCpuRetirementReason::Completed
+                        } else {
+                            SandboxCpuRetirementReason::Failed
+                        };
+                        retire_live_cpu_sampler(&ctx.live_cpu_sampler, retire_reason);
                         if let Some(events) = finalize_cgroup(cgroup_arc, &ctx.config.enforcement_facts).await? {
                             if events.oom_kill_count > 0 {
                                 return Err(classified_io_error(
@@ -1142,12 +1498,19 @@ async fn supervise_child(mut ctx: SupervisedChildContext) -> io::Result<std::pro
                         return Ok(output);
                     }
                     Err(error) => {
+                        retire_live_cpu_sampler(&ctx.live_cpu_sampler, SandboxCpuRetirementReason::Failed);
                         terminate_until_observed(&pid1).await;
                         wait_outer_exit(&outer).await;
                         let _ = finalize_cgroup(cgroup_arc, &ctx.config.enforcement_facts).await;
                         return Err(error);
                     }
                 }
+            }
+            () = &mut sample_sleep, if sampling_active => {
+                if let (Some(cg), Some(state)) = (ctx.config.cgroup.as_ref(), ctx.live_cpu_sampler.as_ref()) {
+                    state.lock().unwrap_or_else(std::sync::PoisonError::into_inner).sample_once(cg);
+                }
+                sample_sleep.as_mut().reset(TokioInstant::now() + sample_cadence);
             }
         }
     }

@@ -172,7 +172,7 @@ impl serde::Serialize for InputSequence<'_> {
     }
 }
 
-fn request_identity(request: &BuildRequest) -> io::Result<Digest> {
+pub(crate) fn request_identity(request: &BuildRequest) -> io::Result<Digest> {
     use snix_build::buildservice::BuildConstraints;
     let BuildRequest {
         inputs,

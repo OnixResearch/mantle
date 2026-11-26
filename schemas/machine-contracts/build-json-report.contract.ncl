@@ -18,6 +18,10 @@ let MAX_FINISH_GATE_EXCERPT_BYTES = 160 in
 let MAX_FINISH_GATE_OPTIONAL_SONAMES = 32 in
 let MAX_FINISH_GATE_REFERENCE_FINDINGS = 128 in
 let MAX_KNOWN_CRITICAL_PATH_WORK_UNITS = 80000 in
+let MAX_LIVE_CPU_ALLOCATED_CORES = 1024 in
+let MAX_LIVE_CPU_MILLI_CORES = 1024000 in
+let MAX_LIVE_CPU_NON_CLAIM_BYTES = 512 in
+let MAX_LIVE_CPU_PER_MILLE = 1024000 in
 let MAX_OVERLAY_BASE_LAYERS = 8 in
 let MAX_POOL_GOAL_OBSERVATIONS = 4096 in
 let MAX_PRIORITY_DECISIONS = 10000 in
@@ -45,6 +49,10 @@ let MIN_EVIDENCE_VERSION = 1 in
 let MIN_FENCE_GENERATION = 1 in
 let MIN_KNOWN_CRITICAL_PATH_NODES = 0 in
 let MIN_KNOWN_CRITICAL_PATH_WORK_UNITS = 0 in
+let MIN_LIVE_CPU_ALLOCATED_CORES = 1 in
+let MIN_LIVE_CPU_MILLI_CORES = 0 in
+let MIN_LIVE_CPU_PER_MILLE = 0 in
+let MIN_LIVE_CPU_SAMPLE_COUNT = 0 in
 let MIN_LOG_CHUNKS = 1 in
 let MIN_LOG_CURSOR = 0 in
 let MIN_LOG_RECORDS = 0 in
@@ -685,6 +693,57 @@ let is_frontend = fun value => ((std.is_record (value)
   && C.IsNonEmptyString (std.record.get "validator_kind" (value))))))
   && (std.record.has_field "validator_ref" (value) && (((std.is_string (std.record.get "validator_ref" (value))
   && C.IsSafeReference (std.record.get "validator_ref" (value)))))))) in
+let is_live_cpu_diagnostics = fun value => ((std.is_record (value)
+  && std.array.all (fun field_1 => std.array.elem field_1 ["activity_class","allocated_cores","average_cores_used_milli","latest_cores_used_milli","latest_utilization_per_mille","non_claim","peak_cores_used_milli","retired_reason","sample_count","schema","scope","scope_label","sustained_duration_ms","unavailable_reason","unknown_reason","window_elapsed_ms"]) (std.record.fields (value))
+  && (std.record.has_field "activity_class" (value) && ((std.array.elem (std.record.get "activity_class" (value)) ["unknown","idle","low-parallelism","moderate","heavy"]
+  && (std.is_string (std.record.get "activity_class" (value))))))
+  && (std.record.has_field "allocated_cores" (value) && (((std.is_number (std.record.get "allocated_cores" (value))
+  && std.number.is_integer (std.record.get "allocated_cores" (value))
+  && (std.record.get "allocated_cores" (value)) >= MIN_LIVE_CPU_ALLOCATED_CORES
+  && (std.record.get "allocated_cores" (value)) <= MAX_LIVE_CPU_ALLOCATED_CORES))))
+  && (!std.record.has_field "average_cores_used_milli" (value) || (((std.is_number (std.record.get "average_cores_used_milli" (value))
+  && std.number.is_integer (std.record.get "average_cores_used_milli" (value))
+  && (std.record.get "average_cores_used_milli" (value)) >= MIN_LIVE_CPU_MILLI_CORES
+  && (std.record.get "average_cores_used_milli" (value)) <= MAX_LIVE_CPU_MILLI_CORES))))
+  && (!std.record.has_field "latest_cores_used_milli" (value) || (((std.is_number (std.record.get "latest_cores_used_milli" (value))
+  && std.number.is_integer (std.record.get "latest_cores_used_milli" (value))
+  && (std.record.get "latest_cores_used_milli" (value)) >= MIN_LIVE_CPU_MILLI_CORES
+  && (std.record.get "latest_cores_used_milli" (value)) <= MAX_LIVE_CPU_MILLI_CORES))))
+  && (!std.record.has_field "latest_utilization_per_mille" (value) || (((std.is_number (std.record.get "latest_utilization_per_mille" (value))
+  && std.number.is_integer (std.record.get "latest_utilization_per_mille" (value))
+  && (std.record.get "latest_utilization_per_mille" (value)) >= MIN_LIVE_CPU_PER_MILLE
+  && (std.record.get "latest_utilization_per_mille" (value)) <= MAX_LIVE_CPU_PER_MILLE))))
+  && (std.record.has_field "non_claim" (value) && (((std.is_string (std.record.get "non_claim" (value))
+  && C.Utf8ByteLength (std.record.get "non_claim" (value)) <= MAX_LIVE_CPU_NON_CLAIM_BYTES
+  && C.IsRedactionSafe (std.record.get "non_claim" (value))))))
+  && (!std.record.has_field "peak_cores_used_milli" (value) || (((std.is_number (std.record.get "peak_cores_used_milli" (value))
+  && std.number.is_integer (std.record.get "peak_cores_used_milli" (value))
+  && (std.record.get "peak_cores_used_milli" (value)) >= MIN_LIVE_CPU_MILLI_CORES
+  && (std.record.get "peak_cores_used_milli" (value)) <= MAX_LIVE_CPU_MILLI_CORES))))
+  && (!std.record.has_field "retired_reason" (value) || ((std.array.elem (std.record.get "retired_reason" (value)) ["completed","cancelled","timed-out","graceful-shutdown","failed","dropped-or-aborted"]
+  && (std.is_string (std.record.get "retired_reason" (value))))))
+  && (std.record.has_field "sample_count" (value) && (((std.is_number (std.record.get "sample_count" (value))
+  && std.number.is_integer (std.record.get "sample_count" (value))
+  && (std.record.get "sample_count" (value)) >= MIN_LIVE_CPU_SAMPLE_COUNT
+  && (std.record.get "sample_count" (value)) <= MAX_U64))))
+  && (std.record.has_field "schema" (value) && (((std.record.get "schema" (value)) == "mantle-live-cpu-diagnostics-v1"
+  && (std.is_string (std.record.get "schema" (value))))))
+  && (std.record.has_field "scope" (value) && ((std.array.elem (std.record.get "scope" (value)) ["owned-attempt-cgroup-v2","unavailable"]
+  && (std.is_string (std.record.get "scope" (value))))))
+  && (std.record.has_field "scope_label" (value) && (((std.record.get "scope_label" (value)) == "observed-local-build-attempts-only"
+  && (std.is_string (std.record.get "scope_label" (value))))))
+  && (std.record.has_field "sustained_duration_ms" (value) && (((std.is_number (std.record.get "sustained_duration_ms" (value))
+  && std.number.is_integer (std.record.get "sustained_duration_ms" (value))
+  && (std.record.get "sustained_duration_ms" (value)) >= MIN_DURATION_MS
+  && (std.record.get "sustained_duration_ms" (value)) <= MAX_U64))))
+  && (!std.record.has_field "unavailable_reason" (value) || ((std.array.elem (std.record.get "unavailable_reason" (value)) ["cgroup-root-unconfigured","cgroup-root-invalid-or-unowned","delegation-lca-not-writable","child-migration-failed","cpu-stat-unreadable","setup-io-error","supervisor-panicked-or-unbound"]
+  && (std.is_string (std.record.get "unavailable_reason" (value))))))
+  && (!std.record.has_field "unknown_reason" (value) || ((std.array.elem (std.record.get "unknown_reason" (value)) ["first-sample","insufficient-elapsed-window","non-monotonic-interval","counter-reset","unreadable-sample","scope-unavailable","stale-sample"]
+  && (std.is_string (std.record.get "unknown_reason" (value))))))
+  && (std.record.has_field "window_elapsed_ms" (value) && (((std.is_number (std.record.get "window_elapsed_ms" (value))
+  && std.number.is_integer (std.record.get "window_elapsed_ms" (value))
+  && (std.record.get "window_elapsed_ms" (value)) >= MIN_DURATION_MS
+  && (std.record.get "window_elapsed_ms" (value)) <= MAX_U64)))))) in
 let is_network = fun value => ((std.is_record (value)
   && std.array.all (fun field_1 => std.array.elem field_1 ["action_name","audit_class","capability","diagnostic","fixed_output","mode","policy_basis","result"]) (std.record.fields (value))
   && (std.record.has_field "action_name" (value) && (((std.is_string (std.record.get "action_name" (value))
@@ -767,12 +826,13 @@ let is_output = fun value => ((std.is_record (value)
   && (std.record.get "transferred_bytes" (std.record.get "substitution" (value))) >= MIN_TRANSFER_BYTES
   && (std.record.get "transferred_bytes" (std.record.get "substitution" (value))) <= MAX_U64)))))))))))) in
 let is_outcome = fun value => ((std.is_record (value)
-  && std.array.all (fun field_1 => std.array.elem field_1 ["cached","drv_key","label","log_file","outputs","sandbox_timing"]) (std.record.fields (value))
+  && std.array.all (fun field_1 => std.array.elem field_1 ["cached","drv_key","label","live_cpu_diagnostics","log_file","outputs","sandbox_timing"]) (std.record.fields (value))
   && (std.record.has_field "cached" (value) && (((std.is_bool (std.record.get "cached" (value))))))
   && (std.record.has_field "drv_key" (value) && (((std.is_string (std.record.get "drv_key" (value))
   && C.IsSafeReference (std.record.get "drv_key" (value))))))
   && (std.record.has_field "label" (value) && (((std.is_string (std.record.get "label" (value))
   && C.IsNonEmptyString (std.record.get "label" (value))))))
+  && (!std.record.has_field "live_cpu_diagnostics" (value) || (is_live_cpu_diagnostics (std.record.get "live_cpu_diagnostics" (value))))
   && (std.record.has_field "log_file" (value) && ((((std.record.get "log_file" (value)) == null || ((std.is_string (std.record.get "log_file" (value))
   && C.IsSafeReference (std.record.get "log_file" (value))))))))
   && (std.record.has_field "outputs" (value) && (((std.is_array (std.record.get "outputs" (value))

@@ -249,6 +249,52 @@ pub struct BuildJsonSandboxTiming {
     pub execution_ms: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct BuildJsonLiveCpuDiagnostics {
+    pub schema: String,
+    pub scope_label: String,
+    pub scope: String,
+    pub activity_class: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unknown_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unavailable_reason: Option<String>,
+    pub allocated_cores: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_cores_used_milli: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub average_cores_used_milli: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peak_cores_used_milli: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_utilization_per_mille: Option<u32>,
+    pub sample_count: u64,
+    pub window_elapsed_ms: u64,
+    pub sustained_duration_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retired_reason: Option<String>,
+    pub non_claim: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct BuildJsonLiveCpuSummary {
+    pub schema: String,
+    pub scope_label: String,
+    pub active_attempts_count: u32,
+    pub observed_attempts_count: u32,
+    pub unavailable_attempts_count: u32,
+    pub unknown_attempts_count: u32,
+    pub completed_attempts_count: u32,
+    pub normalization_denominator_cores: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observed_cores_used_milli: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observed_utilization_per_mille: Option<u32>,
+    pub aggregate_class: String,
+    pub dropped_samples_count: u64,
+    pub non_claim: String,
+}
+
 #[derive(Debug, Serialize)]
 pub struct BuildJsonOutcome {
     pub drv_key: String,
@@ -258,6 +304,8 @@ pub struct BuildJsonOutcome {
     pub outputs: Vec<BuildJsonOutput>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sandbox_timing: Option<BuildJsonSandboxTiming>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub live_cpu_diagnostics: Option<BuildJsonLiveCpuDiagnostics>,
 }
 
 #[derive(Debug, Serialize)]
@@ -420,9 +468,125 @@ pub fn render_build_json_report_with_frontend_artifact_attestations(
     diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
     frontend_artifact_attestations: &[FrontendArtifactAdmissionAttestation],
 ) -> Result<String, serde_json::Error> {
-    let build_document =
-        build_json_report(config, result, logs_dir, diagnostic_persistence_failures, frontend_artifact_attestations);
+    if frontend_artifact_attestations.is_empty() {
+        return render_build_json_report_with_live_cpu_diagnostics(
+            config,
+            result,
+            logs_dir,
+            diagnostic_persistence_failures,
+            None,
+        );
+    }
+    let build_document = build_json_report(
+        config,
+        result,
+        logs_dir,
+        diagnostic_persistence_failures,
+        frontend_artifact_attestations,
+        None,
+    );
     serde_json::to_string_pretty(&build_document)
+}
+
+pub fn render_build_json_report_with_live_cpu_diagnostics(
+    config: &BuildConfig,
+    result: &PipelineResult,
+    logs_dir: &Path,
+    diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
+    live_cpu_report: Option<&crunch_build::LiveCpuDiagnosticsReport>,
+) -> Result<String, serde_json::Error> {
+    let build_document =
+        build_json_report(config, result, logs_dir, diagnostic_persistence_failures, &[], live_cpu_report);
+    serde_json::to_string_pretty(&build_document)
+}
+
+pub fn build_json_live_cpu_summary(summary: &crunch_build::LiveCpuAggregateSummary) -> BuildJsonLiveCpuSummary {
+    debug_assert!(!summary.schema.is_empty());
+    debug_assert!(!summary.scope_label.is_empty());
+    BuildJsonLiveCpuSummary {
+        schema: summary.schema.clone(),
+        scope_label: summary.scope_label.clone(),
+        active_attempts_count: summary.active_attempts_count,
+        observed_attempts_count: summary.observed_attempts_count,
+        unavailable_attempts_count: summary.unavailable_attempts_count,
+        unknown_attempts_count: summary.unknown_attempts_count,
+        completed_attempts_count: summary.completed_attempts_count,
+        normalization_denominator_cores: summary.normalization_denominator_cores,
+        observed_cores_used_milli: summary.observed_cores_used_milli.map(|val| val.as_u32()),
+        observed_utilization_per_mille: summary.observed_utilization_per_mille.map(|val| val.as_u32()),
+        aggregate_class: summary.aggregate_class.as_str().to_string(),
+        dropped_samples_count: summary.dropped_samples_count,
+        non_claim: summary.non_claim.clone(),
+    }
+}
+
+pub fn format_live_cpu_human_summary(summary: &crunch_build::LiveCpuAggregateSummary) -> String {
+    const MILLI_SCALE: u32 = 1_000;
+    const PER_MILLE_TO_PERCENT_TENTHS: u32 = 10;
+
+    let dto = build_json_live_cpu_summary(summary);
+    debug_assert!(!dto.schema.is_empty());
+    debug_assert!(!dto.non_claim.is_empty());
+    let cores_text = match dto.observed_cores_used_milli {
+        Some(milli) => {
+            let whole = milli / MILLI_SCALE;
+            let frac = milli % MILLI_SCALE;
+            format!("{whole}.{frac:03}")
+        }
+        None => "unknown".to_string(),
+    };
+    let util_text = match dto.observed_utilization_per_mille {
+        Some(per_mille) => {
+            let pct_whole = per_mille / PER_MILLE_TO_PERCENT_TENTHS;
+            let pct_frac = per_mille % PER_MILLE_TO_PERCENT_TENTHS;
+            format!("{pct_whole}.{pct_frac}%")
+        }
+        None => "unknown".to_string(),
+    };
+    format!(
+        "live_cpu [{} scope={}]: class={} observed={}/{} active={} completed={} unavailable={} unknown={} cores_used={} norm_cores={} util={} dropped={} ({})",
+        dto.schema,
+        dto.scope_label,
+        dto.aggregate_class,
+        dto.observed_attempts_count,
+        dto.active_attempts_count,
+        dto.active_attempts_count,
+        dto.completed_attempts_count,
+        dto.unavailable_attempts_count,
+        dto.unknown_attempts_count,
+        cores_text,
+        dto.normalization_denominator_cores,
+        util_text,
+        dto.dropped_samples_count,
+        dto.non_claim,
+    )
+}
+
+fn build_json_live_cpu_attempt_dto(attempt: &crunch_build::LiveCpuAttemptStatus) -> BuildJsonLiveCpuDiagnostics {
+    let unavailable_reason = match &attempt.scope {
+        crunch_build::LiveCpuScopeAvailability::OwnedAttemptCgroupV2 { .. } => None,
+        crunch_build::LiveCpuScopeAvailability::Unavailable { reason } => Some(reason.as_str().to_string()),
+    };
+    debug_assert!(attempt.allocated_cores.as_u32() >= 1);
+    debug_assert!(!crunch_build::LIVE_CPU_DIAGNOSTICS_SCHEMA.is_empty());
+    BuildJsonLiveCpuDiagnostics {
+        schema: crunch_build::LIVE_CPU_DIAGNOSTICS_SCHEMA.to_string(),
+        scope_label: crunch_build::LIVE_CPU_SCOPE_LABEL.to_string(),
+        scope: attempt.scope.as_kind_str().to_string(),
+        activity_class: attempt.activity_class.as_str().to_string(),
+        unknown_reason: attempt.unknown_reason.map(|reason| reason.as_str().to_string()),
+        unavailable_reason,
+        allocated_cores: attempt.allocated_cores.as_u32(),
+        latest_cores_used_milli: attempt.latest_cores_used_milli.map(|val| val.as_u32()),
+        average_cores_used_milli: attempt.average_cores_used_milli.map(|val| val.as_u32()),
+        peak_cores_used_milli: attempt.peak_cores_used_milli.map(|val| val.as_u32()),
+        latest_utilization_per_mille: attempt.latest_utilization_per_mille.map(|val| val.as_u32()),
+        sample_count: attempt.sample_count,
+        window_elapsed_ms: attempt.window_elapsed_ms,
+        sustained_duration_ms: attempt.sustained_duration_ms,
+        retired_reason: attempt.retired_reason.map(|reason| reason.as_str().to_string()),
+        non_claim: crunch_build::LIVE_CPU_DIAGNOSTICS_NON_CLAIM.to_string(),
+    }
 }
 
 fn build_json_report(
@@ -431,9 +595,19 @@ fn build_json_report(
     logs_dir: &Path,
     diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
     frontend_artifact_attestations: &[FrontendArtifactAdmissionAttestation],
+    live_cpu_report: Option<&crunch_build::LiveCpuDiagnosticsReport>,
 ) -> BuildJsonReport {
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
-    let outcome_rows = build_outcome_reports(config, result, logs_dir);
+    let mut outcome_rows = build_outcome_reports(config, result, logs_dir);
+    if let Some(cpu_report) = live_cpu_report {
+        let human = format_live_cpu_human_summary(&cpu_report.aggregate);
+        tracing::debug!(summary = %human, "projected live CPU diagnostics into build report");
+        for outcome in &mut outcome_rows {
+            if let Some(attempt) = cpu_report.attempts.iter().find(|row| row.drv_key == outcome.drv_key) {
+                outcome.live_cpu_diagnostics = Some(build_json_live_cpu_attempt_dto(attempt));
+            }
+        }
+    }
     let (ast_grep_structural_evidence, ast_grep_structural_evidence_diagnostics) =
         build_ast_grep_structural_evidence_reports(&outcome_rows);
     let cargo_store_paths = OfflineCargoStorePaths {
@@ -761,6 +935,7 @@ fn build_outcome_reports(config: &BuildConfig, result: &PipelineResult, logs_dir
                     admission_wait_ms: timing.admission_wait_ms,
                     execution_ms: timing.execution_ms,
                 }),
+                live_cpu_diagnostics: None,
             }
         })
         .collect();
@@ -1235,6 +1410,7 @@ mod tests {
                 log_file: None,
                 outputs: Vec::new(),
                 sandbox_timing: None,
+                live_cpu_diagnostics: None,
             },
             BuildJsonOutcome {
                 drv_key: "b".into(),
@@ -1243,6 +1419,7 @@ mod tests {
                 log_file: None,
                 outputs: Vec::new(),
                 sandbox_timing: None,
+                live_cpu_diagnostics: None,
             },
         ];
         let failed = vec![BuildFailureEnvelope {
@@ -1709,7 +1886,7 @@ mod tests {
             }],
         };
 
-        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
+        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[], None);
         let logical_path = output_path.to_absolute_path_with_prefix(&config.store_dir);
 
         assert_eq!(report.hermeticity_mode, "practical");
@@ -1938,7 +2115,7 @@ mod tests {
             store_layer_selections: Vec::new(),
         };
 
-        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[]);
+        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[], None);
 
         assert_eq!(report.cargo_build_evidence.len(), 1);
         assert_eq!(report.cargo_build_evidence[0].label, "demo");
@@ -2319,6 +2496,7 @@ mod tests {
             log_file: None,
             outputs: vec![output],
             sandbox_timing: None,
+            live_cpu_diagnostics: None,
         }
     }
 
@@ -2698,5 +2876,135 @@ mod tests {
                 "execution_ms": 175,
             })
         );
+        assert!(json_value["outcomes"][0].get("live_cpu_diagnostics").is_none());
+    }
+
+    #[test]
+    fn render_build_json_report_with_live_cpu_diagnostics_and_human_summary_disclose_scope() {
+        use std::collections::HashMap;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let logs_dir = tempfile::tempdir().unwrap();
+        let signing_key = crate::signing_key::load_or_generate_signing_keypair(None, state_dir.path(), false).unwrap();
+        let config = BuildConfig {
+            file: output_dir.path().join("demo.ncl"),
+            import_paths: Vec::new(),
+            output_dir: output_dir.path().to_path_buf(),
+            state_dir: state_dir.path().to_path_buf(),
+            backend: crunch_store::StoreBackend::Snix,
+            base_state_dirs: Vec::new(),
+            source_admission: None,
+            store_dir: "/crunch/store".to_string(),
+            verbose: false,
+            max_jobs: 4,
+            scheduling_policy: crunch_pipeline::SchedulingPolicy::default(),
+            substituter_urls: Vec::new(),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            build_cores: 4,
+            keypair: signing_key,
+            trusted_keys: Vec::new(),
+            trust_unsigned: false,
+            root_retention_source: None,
+            root_registration: None,
+            source_fetch_overrides: Vec::new(),
+            remote_enabled: false,
+            compile_driver_runtime: None,
+            rust_wait_runtime: None,
+            interchange_dir: None,
+            pool_executor_factory: None,
+        };
+        let drv_path =
+            nix_compat::store_path::StorePath::from_name_and_digest_fixed("cpu-diag.drv", [6u8; 20]).unwrap();
+        let drv_key = drv_key_for(&config.store_dir, &drv_path);
+        let outcome = crunch_build::BuildOutcome {
+            drv_path,
+            outputs: std::collections::BTreeMap::new(),
+            substitutions: std::collections::BTreeMap::new(),
+            cached: false,
+            log: None,
+            sandbox_timing: None,
+        };
+        let result = PipelineResult {
+            outcomes: vec![outcome],
+            failed: Vec::new(),
+            fod_mismatches: Vec::new(),
+            root_labels: HashMap::from([(drv_key.clone(), "cpu-diag".to_string())]),
+            hermeticity_mode: crunch_pipeline::HermeticityMode::Strict,
+            hermeticity_audit_events: Vec::new(),
+            build_environment_reports: Vec::new(),
+            finish_gate_reports: Vec::new(),
+            network_policy_reports: Vec::new(),
+            workspace_reports: Vec::new(),
+            action_result_reports: Vec::new(),
+            native_dynamic_plans: Vec::new(),
+            plan_output_bindings: Vec::new(),
+            priority_decisions: Vec::new(),
+            pool_goal_observations: Vec::new(),
+            overlay_report: None,
+            store_layer_selections: Vec::new(),
+        };
+
+        let mut policy = crunch_build::LiveCpuClassifierPolicy::standard();
+        policy.sustained_window_ms = 500;
+        let mut tracker = crunch_build::LiveCpuTracker::new(policy).unwrap();
+        let meta = crunch_build::LiveCpuAttemptMeta {
+            attempt_id: 1,
+            drv_key: drv_key.clone(),
+            generation: crunch_build::AttemptGeneration::new(1).unwrap(),
+            allocated_cores: crunch_build::AllocatedCores::new(4).unwrap(),
+        };
+        tracker.ingest(&crunch_build::LiveCpuSampleEvent {
+            meta: meta.clone(),
+            measurement: crunch_build::LiveCpuRawMeasurement::Started {
+                observed_at_usec: crunch_build::MonotonicTimestampUsec::from_usec(1_000_000),
+                scope: crunch_build::LiveCpuScopeAvailability::OwnedAttemptCgroupV2 {
+                    rel_path: "/user.slice/attempt-1".to_string(),
+                },
+            },
+        });
+        tracker.ingest(&crunch_build::LiveCpuSampleEvent {
+            meta: meta.clone(),
+            measurement: crunch_build::LiveCpuRawMeasurement::Sampled {
+                observed_at_usec: crunch_build::MonotonicTimestampUsec::from_usec(1_000_000),
+                cumulative_cpu_usec: crunch_build::CumulativeCpuUsec::from_usec(0),
+            },
+        });
+        tracker.ingest(&crunch_build::LiveCpuSampleEvent {
+            meta: meta.clone(),
+            measurement: crunch_build::LiveCpuRawMeasurement::Sampled {
+                observed_at_usec: crunch_build::MonotonicTimestampUsec::from_usec(2_000_000),
+                cumulative_cpu_usec: crunch_build::CumulativeCpuUsec::from_usec(1_000_000),
+            },
+        });
+        let active_report = tracker.report(crunch_build::MonotonicTimestampUsec::from_usec(2_000_000));
+        let human = format_live_cpu_human_summary(&active_report.aggregate);
+        assert!(human.contains(crunch_build::LIVE_CPU_SCOPE_LABEL));
+        assert!(human.contains("observed=1/1"));
+        assert!(human.contains("norm_cores=4"));
+        assert!(human.contains("cores_used=1.000"));
+        assert!(human.contains("low-parallelism"));
+
+        assert!(tracker.retire_attempt(&drv_key, meta.generation, crunch_build::LiveCpuRetirementReason::Completed));
+        let final_report = tracker.report(crunch_build::MonotonicTimestampUsec::from_usec(2_000_000));
+
+        let json_report = render_build_json_report_with_live_cpu_diagnostics(
+            &config,
+            &result,
+            logs_dir.path(),
+            &[],
+            Some(&final_report),
+        )
+        .unwrap();
+        let json_value: serde_json::Value = serde_json::from_str(&json_report).unwrap();
+        let diag = &json_value["outcomes"][0]["live_cpu_diagnostics"];
+        assert_eq!(diag["schema"], crunch_build::LIVE_CPU_DIAGNOSTICS_SCHEMA);
+        assert_eq!(diag["scope_label"], crunch_build::LIVE_CPU_SCOPE_LABEL);
+        assert_eq!(diag["scope"], "owned-attempt-cgroup-v2");
+        assert_eq!(diag["activity_class"], "low-parallelism");
+        assert_eq!(diag["allocated_cores"], 4);
+        assert_eq!(diag["latest_cores_used_milli"], 1_000);
+        assert_eq!(diag["latest_utilization_per_mille"], 250);
+        assert_eq!(diag["retired_reason"], "completed");
     }
 }
