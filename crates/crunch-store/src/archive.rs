@@ -39,10 +39,15 @@ use crate::path_identity::require_ca_path_identity;
 pub const ARCHIVE_FORMAT_NAME: &str = "mantle-store-archive-v1";
 pub const ARCHIVE_VERSION: u32 = 1;
 pub const ARCHIVE_COMPATIBILITY: &str = "mantle-native; nario-v2 byte compatibility unproven";
-pub const MAX_ARCHIVE_RECORDS: usize = 1_000_000;
-pub const MAX_ARCHIVE_METADATA_BYTES: usize = 1_048_576;
+const MANTLE_FUZZING_ENABLED: bool = matches!(
+    option_env!("MANTLE_FUZZING"),
+    Some(value) if !value.is_empty() && !matches!(value.as_bytes(), b"0")
+);
+pub const MAX_ARCHIVE_RECORDS: usize = if MANTLE_FUZZING_ENABLED { 16 } else { 1_000_000 };
+pub const MAX_ARCHIVE_METADATA_BYTES: usize = if MANTLE_FUZZING_ENABLED { 64 * 1_024 } else { 1_048_576 };
 pub const ARCHIVE_IO_BUFFER_BYTES: usize = 65_536;
 
+const INITIAL_ARCHIVE_REPORT_CAPACITY: usize = 64;
 const ARCHIVE_MAGIC: &[u8] = b"mantle-store-archive-v1\n";
 const FRAME_LEN_BYTES: usize = 4;
 const TEMP_ARCHIVE_RENDER_DIR: &str = "archive-render-tmp";
@@ -288,14 +293,17 @@ pub async fn list_store_archive<R: AsyncRead + Unpin>(reader: &mut R) -> Result<
         record_count: header.record_count,
         total_payload_bytes: 0,
         compatibility: header.compatibility,
-        paths: Vec::with_capacity(planned_path_count),
+        paths: Vec::with_capacity(planned_path_count.min(INITIAL_ARCHIVE_REPORT_CAPACITY)),
     };
 
     let mut seen = BTreeSet::new();
-    for record_index in 0..MAX_ARCHIVE_RECORDS {
+    for _record_index in 0..=MAX_ARCHIVE_RECORDS {
         let frame = read_frame(reader).await?;
         match frame {
             ArchiveFrame::Path(path_frame) => {
+                if list_result.paths.len() >= MAX_ARCHIVE_RECORDS {
+                    return Err(Error::Store(format!("archive record count exceeded {MAX_ARCHIVE_RECORDS}")));
+                }
                 let listed = listed_path_from_frame(&path_frame)?;
                 if !seen.insert(listed.store_path.clone()) {
                     return Err(Error::Store(format!("archive contains duplicate path record {}", listed.store_path)));
@@ -312,9 +320,6 @@ pub async fn list_store_archive<R: AsyncRead + Unpin>(reader: &mut R) -> Result<
             ArchiveFrame::Header(_) => {
                 return Err(Error::Store("archive header frame repeated after first frame".to_string()));
             }
-        }
-        if record_index == MAX_ARCHIVE_RECORDS.saturating_sub(1) {
-            return Err(Error::Store(format!("archive record count exceeded {MAX_ARCHIVE_RECORDS}")));
         }
     }
 
@@ -345,14 +350,17 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
         imported_count: 0,
         skipped_already_present_count: 0,
         total_payload_bytes: 0,
-        paths: Vec::with_capacity(planned_path_count),
+        paths: Vec::with_capacity(planned_path_count.min(INITIAL_ARCHIVE_REPORT_CAPACITY)),
     };
     let mut seen = BTreeSet::new();
 
-    for record_index in 0..MAX_ARCHIVE_RECORDS {
+    for _record_index in 0..=MAX_ARCHIVE_RECORDS {
         let frame = read_frame(reader).await?;
         match frame {
             ArchiveFrame::Path(path_frame) => {
+                if seen.len() >= MAX_ARCHIVE_RECORDS {
+                    return Err(Error::Store(format!("archive record count exceeded {MAX_ARCHIVE_RECORDS}")));
+                }
                 let listed = listed_path_from_frame(&path_frame)?;
                 if !seen.insert(listed.store_path.clone()) {
                     return Err(Error::Store(format!("archive contains duplicate path record {}", listed.store_path)));
@@ -374,9 +382,6 @@ pub async fn import_store_archive<R: AsyncRead + Unpin + Send>(
             ArchiveFrame::Header(_) => {
                 return Err(Error::Store("archive header frame repeated after first frame".to_string()));
             }
-        }
-        if record_index == MAX_ARCHIVE_RECORDS.saturating_sub(1) {
-            return Err(Error::Store(format!("archive record count exceeded {MAX_ARCHIVE_RECORDS}")));
         }
     }
 
@@ -2154,5 +2159,196 @@ mod tests {
         }
         let service = LruPathInfoService::with_capacity("archive-fixture".to_string(), NonZeroUsize::new(32).unwrap());
         let _: Arc<dyn PathInfoService> = Arc::new(service);
+    }
+
+    fn encode_test_frame(frame: &ArchiveFrame) -> Vec<u8> {
+        let encoded = serde_json::to_vec(frame).unwrap();
+        let len = u32::try_from(encoded.len()).unwrap();
+        let mut out = Vec::with_capacity(FRAME_LEN_BYTES + encoded.len());
+        out.extend_from_slice(&len.to_le_bytes());
+        out.extend_from_slice(&encoded);
+        out
+    }
+
+    fn header_frame_bytes(record_count: u32) -> Vec<u8> {
+        let mut bytes = Vec::from(ARCHIVE_MAGIC);
+        bytes.extend_from_slice(&encode_test_frame(&ArchiveFrame::Header(ArchiveHeaderFrame {
+            format: ARCHIVE_FORMAT_NAME.to_string(),
+            version: ARCHIVE_VERSION,
+            store_prefix: "/mantle/store".to_string(),
+            record_count,
+            roots: Vec::new(),
+            compatibility: ARCHIVE_COMPATIBILITY.to_string(),
+            payload_len: 0,
+        })));
+        bytes
+    }
+
+    #[tokio::test]
+    async fn archive_list_rejects_inflated_record_count_header_without_oom() {
+        let max_records_u32 = u32::try_from(MAX_ARCHIVE_RECORDS).unwrap();
+        let bytes = header_frame_bytes(max_records_u32);
+        let mut reader = std::io::Cursor::new(bytes);
+        let err = list_store_archive(&mut reader).await.unwrap_err();
+        assert!(err.to_string().contains("reading archive frame length"));
+
+        let over_limit = header_frame_bytes(max_records_u32.saturating_add(1));
+        let mut over_reader = std::io::Cursor::new(over_limit);
+        let over_err = list_store_archive(&mut over_reader).await.unwrap_err();
+        assert!(over_err.to_string().contains("archive record count exceeds"));
+    }
+
+    #[tokio::test]
+    async fn archive_list_rejects_malformed_frames_and_headers() {
+        let mut zero_len = Vec::from(ARCHIVE_MAGIC);
+        zero_len.extend_from_slice(&0u32.to_le_bytes());
+        assert!(
+            list_store_archive(&mut std::io::Cursor::new(zero_len))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("outside 1..=")
+        );
+
+        let mut oversized_len = Vec::from(ARCHIVE_MAGIC);
+        let too_big = u32::try_from(MAX_ARCHIVE_METADATA_BYTES + 1).unwrap();
+        oversized_len.extend_from_slice(&too_big.to_le_bytes());
+        assert!(
+            list_store_archive(&mut std::io::Cursor::new(oversized_len))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("outside 1..=")
+        );
+
+        let mut end_before_header = Vec::from(ARCHIVE_MAGIC);
+        end_before_header.extend_from_slice(&encode_test_frame(&ArchiveFrame::End(ArchiveEndFrame {
+            record_count: 0,
+            total_payload_bytes: 0,
+            payload_len: 0,
+        })));
+        assert!(
+            list_store_archive(&mut std::io::Cursor::new(end_before_header))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("before header")
+        );
+
+        let mut repeated_header = header_frame_bytes(0);
+        repeated_header.extend_from_slice(&encode_test_frame(&ArchiveFrame::Header(ArchiveHeaderFrame {
+            format: ARCHIVE_FORMAT_NAME.to_string(),
+            version: ARCHIVE_VERSION,
+            store_prefix: "/mantle/store".to_string(),
+            record_count: 0,
+            roots: Vec::new(),
+            compatibility: ARCHIVE_COMPATIBILITY.to_string(),
+            payload_len: 0,
+        })));
+        assert!(
+            list_store_archive(&mut std::io::Cursor::new(repeated_header))
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("repeated after first frame")
+        );
+    }
+
+    #[tokio::test]
+    async fn archive_list_accepts_exact_max_archive_records_when_fuzz_bounded() {
+        if !MANTLE_FUZZING_ENABLED {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let store = open_test_store(temp.path(), "/mantle/store").await;
+        let payload = b"bound";
+        let path_info = signed_pathinfo(&store, "bound-item", payload).await;
+        let nar = render_nar_bytes(&store, &path_info.node).await;
+        let nar_blake3 = blake3::hash(&nar).to_hex().to_string();
+
+        let build_n_records = |count: usize, header_count: u32, end_count: u32| -> Vec<u8> {
+            let mut out = header_frame_bytes(header_count);
+            for index in 0..count {
+                let mut entry = path_info.clone();
+                let mut digest = [0u8; 20];
+                digest[0..8].copy_from_slice(&(index as u64).to_le_bytes());
+                entry.store_path = StorePath::from_name_and_digest_fixed("bound-item", digest).unwrap();
+                out.extend_from_slice(&encode_test_frame(&ArchiveFrame::Path(ArchivePathFrame {
+                    path_info: entry,
+                    root: true,
+                    payload_len: nar.len() as u64,
+                    payload_blake3: nar_blake3.clone(),
+                })));
+                out.extend_from_slice(&nar);
+            }
+            out.extend_from_slice(&encode_test_frame(&ArchiveFrame::End(ArchiveEndFrame {
+                record_count: end_count,
+                total_payload_bytes: (nar.len() as u64) * u64::from(end_count),
+                payload_len: 0,
+            })));
+            out
+        };
+
+        let max_u32 = u32::try_from(MAX_ARCHIVE_RECORDS).unwrap();
+        let exact = build_n_records(MAX_ARCHIVE_RECORDS, max_u32, max_u32);
+        let listed = list_store_archive(&mut std::io::Cursor::new(exact)).await.unwrap();
+        assert_eq!(listed.paths.len(), MAX_ARCHIVE_RECORDS);
+
+        let extra = build_n_records(MAX_ARCHIVE_RECORDS + 1, max_u32, max_u32);
+        let err = list_store_archive(&mut std::io::Cursor::new(extra)).await.unwrap_err();
+        assert!(err.to_string().contains("archive record count exceeded"));
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(32))]
+
+        #[test]
+        fn proptest_list_store_archive_chunk_invariance_and_roundtrip(
+            payload_a in proptest::collection::vec(proptest::prelude::any::<u8>(), 0..=128),
+            payload_b in proptest::collection::vec(proptest::prelude::any::<u8>(), 0..=128),
+            chunk_size in 1usize..=64,
+            mutate_idx in proptest::option::of(0usize..512),
+            mutate_xor in 1u8..=255,
+        ) {
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            rt.block_on(async {
+                let temp = tempfile::tempdir().unwrap();
+                let store = open_test_store(temp.path(), "/mantle/store").await;
+                let info_a = signed_pathinfo(&store, "prop-a", &payload_a).await;
+                let info_b = signed_pathinfo(&store, "prop-b", &payload_b).await;
+                store.pathinfo_service().put(info_a.clone()).await.unwrap();
+                store.pathinfo_service().put(info_b.clone()).await.unwrap();
+
+                let mut archive = Vec::new();
+                let exported = export_store_archive(
+                    &store,
+                    &[info_a.clone(), info_b.clone()],
+                    &mut archive,
+                    &ArchiveExportOptions { trust_unsigned: false },
+                )
+                .await
+                .unwrap();
+                assert_eq!(exported.exported_count, 2);
+
+                let direct = list_store_archive(&mut std::io::Cursor::new(archive.clone())).await.unwrap();
+                let chunked = list_store_archive(&mut ChunkedAsyncRead::new(archive.clone(), chunk_size))
+                    .await
+                    .unwrap();
+                assert_eq!(direct, chunked);
+                assert_eq!(direct.record_count, 2);
+                assert_eq!(direct.total_payload_bytes, exported.total_payload_bytes);
+
+                if let Some(raw_idx) = mutate_idx && !archive.is_empty() {
+                    let idx = raw_idx % archive.len();
+                    archive[idx] ^= mutate_xor;
+                    let r1 = list_store_archive(&mut std::io::Cursor::new(archive.clone())).await;
+                    let r2 = list_store_archive(&mut ChunkedAsyncRead::new(archive, chunk_size)).await;
+                    assert_eq!(r1.is_ok(), r2.is_ok());
+                    if let (Ok(ok1), Ok(ok2)) = (r1, r2) {
+                        assert_eq!(ok1, ok2);
+                    }
+                }
+            });
+        }
     }
 }

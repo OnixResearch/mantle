@@ -962,7 +962,7 @@ target = "x86_64-unknown-linux-musl"
 
 [target.x86_64-unknown-linux-musl]
 linker = "__SELF_BUILD_BOOTSTRAP_ALIAS_ROOT__/gcc/bin/gcc"
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition", "-C", "link-arg=-L${GCC_LINK_LIB}"]
+rustflags = ["-C", "link-arg=-L${GCC_LINK_LIB}"]
 CARGOEOF
 
       export CARGO_HOME="$CARGO_HOME_DIR"
@@ -3752,6 +3752,28 @@ mod tests {
         assert!(!ncl.contains("/tmp/build/crunch"));
         assert!(!ncl.contains("linker = \"gcc\""));
         assert!(!ncl.contains("$RUST/bin:$GCC/bin:$BINUTILS/bin"));
+    }
+
+    #[test]
+    fn generate_ncl_enforces_strict_duplicate_symbol_policy() {
+        const BOOTSTRAP_CRUNCH_NCL: &str = include_str!("../bootstrap/crunch.ncl");
+        let ncl = test_self_build_ncl();
+        for (label, text) in [
+            ("self_build.rs", ncl.as_str()),
+            ("bootstrap/crunch.ncl", BOOTSTRAP_CRUNCH_NCL),
+        ] {
+            for forbidden in [
+                "--allow-multiple-definition",
+                "multiply_defined",
+                "muldefs",
+                "--allow-shlib-undefined",
+                "--unresolved-symbols",
+            ] {
+                assert!(!text.contains(forbidden), "{label} must not emit {forbidden}");
+            }
+        }
+        assert!(ncl.contains("rustflags = [\"-C\", \"link-arg=-L${GCC_LINK_LIB}\"]"));
+        assert!(BOOTSTRAP_CRUNCH_NCL.contains("rustflags = [\"-C\", \"link-arg=-L${GCC_LIB}\"]"));
     }
 
     #[test]

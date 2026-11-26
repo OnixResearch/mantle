@@ -8,10 +8,26 @@ const ARCHIVE_GROUP_BYTES: usize = 6;
 const ARCHIVE_MODE_BYTES: usize = 8;
 const ARCHIVE_SIZE_BYTES: usize = 10;
 const ARCHIVE_ALIGNMENT_BYTES: usize = 2;
-const ARCHIVE_MEMBER_COUNT_MAX: usize = 256;
-const ARCHIVE_MEMBER_BYTES_MAX: usize = 64 * 1_024 * 1_024;
-const ARCHIVE_STRING_TABLE_BYTES_MAX: usize = 1_024 * 1_024;
-const ARCHIVE_OUTPUT_BYTES_MAX: usize = 512 * 1_024 * 1_024;
+const MANTLE_FUZZING_ENABLED: bool = matches!(
+    option_env!("MANTLE_FUZZING"),
+    Some(value) if !value.is_empty() && !matches!(value.as_bytes(), b"0")
+);
+const ARCHIVE_MEMBER_COUNT_MAX: usize = if MANTLE_FUZZING_ENABLED { 16 } else { 256 };
+const ARCHIVE_MEMBER_BYTES_MAX: usize = if MANTLE_FUZZING_ENABLED {
+    1_024 * 1_024
+} else {
+    64 * 1_024 * 1_024
+};
+const ARCHIVE_STRING_TABLE_BYTES_MAX: usize = if MANTLE_FUZZING_ENABLED {
+    64 * 1_024
+} else {
+    1_024 * 1_024
+};
+const ARCHIVE_OUTPUT_BYTES_MAX: usize = if MANTLE_FUZZING_ENABLED {
+    2 * 1_024 * 1_024
+} else {
+    512 * 1_024 * 1_024
+};
 const ARCHIVE_MEMBER_NAME_BYTES_MAX: usize = 255;
 const ARCHIVE_SHORT_NAME_BYTES_MAX: usize = 15;
 const ARCHIVE_MODE: &str = "100644";
@@ -70,8 +86,16 @@ pub(crate) fn canonicalize_stagex_archive_elf_members(
             continue;
         }
         validate_member_name(member.header_name, string_table)?;
+        let next_member_count = usize::try_from(member_count)
+            .ok()
+            .and_then(|count| count.checked_add(1))
+            .ok_or(StagexArchiveError::LimitExceeded("member count"))?;
+        if next_member_count > ARCHIVE_MEMBER_COUNT_MAX {
+            return Err(StagexArchiveError::LimitExceeded("archive member count"));
+        }
         let canonical = canonicalize_member(member.payload)?;
-        member_count = member_count.checked_add(1).ok_or(StagexArchiveError::LimitExceeded("member count"))?;
+        member_count =
+            u32::try_from(next_member_count).map_err(|_| StagexArchiveError::LimitExceeded("member count"))?;
         rewritten_member_count = rewritten_member_count
             .checked_add(u32::from(canonical.bytes != member.payload))
             .ok_or(StagexArchiveError::LimitExceeded("rewritten member count"))?;
@@ -326,7 +350,12 @@ fn validate_long_name_offset(table: &[u8], offset: usize) -> Result<(), StagexAr
 }
 
 fn validate_plain_member_name(name: &[u8]) -> Result<(), StagexArchiveError> {
-    if name.is_empty() || name.len() > ARCHIVE_MEMBER_NAME_BYTES_MAX {
+    if name.is_empty()
+        || name.len() > ARCHIVE_MEMBER_NAME_BYTES_MAX
+        || name == b"."
+        || name == b".."
+        || name == b"__.SYMDEF"
+    {
         return Err(StagexArchiveError::InvalidMemberName);
     }
     if !name.iter().all(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'.' | b'_' | b'+' | b'-')) {
@@ -480,6 +509,53 @@ mod tests {
         assert!(timestamp_error.to_string().contains("timestamp"));
         assert!(non_elf_error.to_string().contains("not ELF"));
         assert_eq!(long_offset_error, StagexArchiveError::InvalidMemberName);
+    }
+
+    #[test]
+    fn rejects_exceeding_member_limit_without_string_table_instead_of_panicking() {
+        let elf = synthetic_elf(TEST_SHORT_NAME);
+        let mut archive = Vec::from(ARCHIVE_MAGIC);
+        for index in 0..=ARCHIVE_MEMBER_COUNT_MAX {
+            let name = format!("m{index}.o/");
+            append_member(&mut archive, &name, &elf).unwrap();
+        }
+
+        let error = canonicalize_stagex_archive_elf_members(&archive).unwrap_err();
+        assert_eq!(error, StagexArchiveError::LimitExceeded("archive member count"));
+    }
+
+    #[test]
+    fn rejects_path_traversal_and_unsupported_archive_variants() {
+        let elf = synthetic_elf(TEST_SHORT_NAME);
+        for bad_short in ["./", "../"] {
+            let archive = archive_with_member(bad_short, &elf);
+            assert_eq!(
+                canonicalize_stagex_archive_elf_members(&archive).unwrap_err(),
+                StagexArchiveError::InvalidMemberName
+            );
+        }
+
+        for bad_long in [b"../\n".as_slice(), b"./\n".as_slice()] {
+            let mut archive = Vec::from(ARCHIVE_MAGIC);
+            append_member(&mut archive, ARCHIVE_STRING_TABLE_NAME, bad_long).unwrap();
+            append_member(&mut archive, "/0", &elf).unwrap();
+            assert_eq!(
+                canonicalize_stagex_archive_elf_members(&archive).unwrap_err(),
+                StagexArchiveError::InvalidMemberName
+            );
+        }
+
+        let mut thin = archive_with_member("member.o/", &elf);
+        thin[..ARCHIVE_MAGIC.len()].copy_from_slice(b"!<thin>\n");
+        assert!(matches!(
+            canonicalize_stagex_archive_elf_members(&thin),
+            Err(StagexArchiveError::UnsupportedFormat(_))
+        ));
+
+        for unsupported_name in ["/", "/SYM64/", "#1/12", "__.SYMDEF/"] {
+            let archive = archive_with_member(unsupported_name, &elf);
+            assert!(canonicalize_stagex_archive_elf_members(&archive).is_err());
+        }
     }
 
     fn archive_with_member(name: &str, payload: &[u8]) -> Vec<u8> {

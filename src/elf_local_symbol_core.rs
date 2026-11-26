@@ -10,6 +10,8 @@ const ELF_PROGRAM_ENTRY_SIZE_OFFSET: usize = 54;
 const ELF_PROGRAM_COUNT_OFFSET: usize = 56;
 const ELF_SECTION_ENTRY_SIZE_OFFSET: usize = 58;
 const ELF_SECTION_COUNT_OFFSET: usize = 60;
+const ELF_SECTION_NAME_TABLE_INDEX_OFFSET: usize = 62;
+const ELF_SECTION_HEADER_XINDEX: usize = 0xffff;
 const SECTION_TYPE_OFFSET: usize = 4;
 const SECTION_FILE_OFFSET_OFFSET: usize = 24;
 const SECTION_SIZE_OFFSET: usize = 32;
@@ -30,9 +32,17 @@ const SECTION_TYPE_STRING_TABLE: u32 = 3;
 const SECTION_TYPE_NO_BITS: u32 = 8;
 const SYMBOL_BIND_SHIFT: u8 = 4;
 const SYMBOL_BIND_LOCAL: u8 = 0;
-const SECTION_COUNT_MAX: usize = 4_096;
-const SYMBOL_COUNT_MAX: usize = 1_048_576;
-const STRING_TABLE_BYTES_MAX: usize = 64 * 1_024 * 1_024;
+const MANTLE_FUZZING_ENABLED: bool = matches!(
+    option_env!("MANTLE_FUZZING"),
+    Some(value) if !value.is_empty() && !matches!(value.as_bytes(), b"0")
+);
+const SECTION_COUNT_MAX: usize = if MANTLE_FUZZING_ENABLED { 16 } else { 4_096 };
+const SYMBOL_COUNT_MAX: usize = if MANTLE_FUZZING_ENABLED { 256 } else { 1_048_576 };
+const STRING_TABLE_BYTES_MAX: usize = if MANTLE_FUZZING_ENABLED {
+    64 * 1_024
+} else {
+    64 * 1_024 * 1_024
+};
 const LOCAL_SYMBOL_PREFIX: &[u8] = b"L.";
 const LOCAL_SYMBOL_DECIMAL_DIGITS: usize = 10;
 const DECIMAL_RADIX: usize = 10;
@@ -91,18 +101,23 @@ struct SymbolReference {
 }
 
 pub(crate) fn canonicalize_local_elf_symbol_names(bytes: &[u8]) -> Result<CanonicalizedElf, ElfCanonicalizationError> {
-    let (section_table_offset, section_count) = validate_header(bytes)?;
+    let (section_table_offset, section_count, section_name_table_index) = validate_header(bytes)?;
     let sections = read_sections(bytes, section_table_offset, section_count)?;
     let (symbol_section_index, symbols) = sole_symbol_table(&sections)?;
     if symbols.linked_section_index >= section_count {
         return Err(ElfCanonicalizationError::OutOfBounds("linked string-table section"));
     }
     let string_section_index = symbols.linked_section_index;
+    if section_name_table_index == string_section_index {
+        return Err(ElfCanonicalizationError::UnsupportedFormat(
+            "symbol string table cannot be shared with section-header string table",
+        ));
+    }
     let strings = sections[string_section_index];
     if strings.section_type != SECTION_TYPE_STRING_TABLE {
         return Err(ElfCanonicalizationError::UnsupportedFormat("symbol table does not link to a string table"));
     }
-    validate_section_layout(bytes, section_table_offset, &sections, string_section_index)?;
+    validate_section_layout(bytes, section_table_offset, &sections, symbol_section_index, string_section_index)?;
     let entries = read_string_entries(bytes, strings)?;
     let symbols = read_symbols(bytes, symbols, &entries)?;
     let targets = collect_canonical_targets(bytes, strings, &symbols)?;
@@ -127,7 +142,7 @@ pub(crate) fn canonicalize_local_elf_symbol_names(bytes: &[u8]) -> Result<Canoni
     })
 }
 
-fn validate_header(bytes: &[u8]) -> Result<(usize, usize), ElfCanonicalizationError> {
+fn validate_header(bytes: &[u8]) -> Result<(usize, usize, usize), ElfCanonicalizationError> {
     if bytes.len() < ELF_HEADER_BYTES {
         return Err(ElfCanonicalizationError::UnsupportedFormat("file is smaller than an ELF64 header"));
     }
@@ -149,8 +164,15 @@ fn validate_header(bytes: &[u8]) -> Result<(usize, usize), ElfCanonicalizationEr
     let section_table_offset = read_usize_from_u64(bytes, ELF_SECTION_TABLE_OFFSET, "section table offset")?;
     let section_entry_size = usize::from(read_u16(bytes, ELF_SECTION_ENTRY_SIZE_OFFSET, "section entry size")?);
     let section_count = usize::from(read_u16(bytes, ELF_SECTION_COUNT_OFFSET, "section count")?);
+    let section_name_table_index =
+        usize::from(read_u16(bytes, ELF_SECTION_NAME_TABLE_INDEX_OFFSET, "section name table index")?);
     if section_entry_size != ELF_SECTION_HEADER_BYTES || section_count == 0 {
         return Err(ElfCanonicalizationError::UnsupportedFormat("invalid section table shape"));
+    }
+    if section_name_table_index == ELF_SECTION_HEADER_XINDEX {
+        return Err(ElfCanonicalizationError::UnsupportedFormat(
+            "extended section-header string table index is not supported",
+        ));
     }
     if section_count > SECTION_COUNT_MAX {
         return Err(ElfCanonicalizationError::LimitExceeded("section count"));
@@ -161,7 +183,7 @@ fn validate_header(bytes: &[u8]) -> Result<(usize, usize), ElfCanonicalizationEr
     checked_range(bytes.len(), section_table_offset, section_table_bytes, "section table")?;
     assert!(ELF_HEADER_BYTES <= bytes.len());
     debug_assert_eq!(ELF_MAGIC.len(), ELF_IDENT_CLASS_OFFSET);
-    Ok((section_table_offset, section_count))
+    Ok((section_table_offset, section_count, section_name_table_index))
 }
 
 fn read_sections(
@@ -199,25 +221,61 @@ fn validate_section_layout(
     bytes: &[u8],
     section_table_offset: usize,
     sections: &[SectionHeader],
+    symbol_section_index: usize,
     string_section_index: usize,
 ) -> Result<(), ElfCanonicalizationError> {
+    let symbols = sections[symbol_section_index];
+    if symbols.size_bytes == 0 {
+        return Err(ElfCanonicalizationError::UnsupportedFormat("invalid ELF64 symbol-table entry size"));
+    }
     let strings = sections[string_section_index];
+    if strings.size_bytes == 0 {
+        return Err(ElfCanonicalizationError::UnsupportedFormat("string table is empty"));
+    }
+    let header_range = 0..ELF_HEADER_BYTES;
+    let symbol_range = checked_range(bytes.len(), symbols.file_offset, symbols.size_bytes, "section payload")?;
     let string_range = checked_range(bytes.len(), strings.file_offset, strings.size_bytes, "string table")?;
+    if strings.size_bytes > STRING_TABLE_BYTES_MAX {
+        return Err(ElfCanonicalizationError::LimitExceeded("string table bytes"));
+    }
     let section_table_bytes = sections
         .len()
         .checked_mul(ELF_SECTION_HEADER_BYTES)
         .ok_or(ElfCanonicalizationError::OutOfBounds("section table"))?;
     let section_table_range = checked_range(bytes.len(), section_table_offset, section_table_bytes, "section table")?;
+    if ranges_overlap(&section_table_range, &header_range) {
+        return Err(ElfCanonicalizationError::UnsupportedFormat("section headers overlap ELF header"));
+    }
+    if ranges_overlap(&string_range, &header_range) {
+        return Err(ElfCanonicalizationError::UnsupportedFormat("string table overlaps ELF header"));
+    }
     if ranges_overlap(&string_range, &section_table_range) {
         return Err(ElfCanonicalizationError::UnsupportedFormat("string table overlaps section headers"));
     }
     for (section_index, section) in sections.iter().copied().enumerate() {
+        if section_index != symbol_section_index && section.linked_section_index == string_section_index {
+            return Err(ElfCanonicalizationError::UnsupportedFormat("secondary section links to symbol string table"));
+        }
         if section.section_type == SECTION_TYPE_NO_BITS || section.size_bytes == 0 {
+            if section.file_offset > string_range.start && section.file_offset < string_range.end {
+                return Err(ElfCanonicalizationError::UnsupportedFormat(
+                    "zero-sized or NOBITS section falls inside string table",
+                ));
+            }
             continue;
         }
         let range = checked_range(bytes.len(), section.file_offset, section.size_bytes, "section payload")?;
+        if ranges_overlap(&range, &header_range) {
+            return Err(ElfCanonicalizationError::UnsupportedFormat("section payload overlaps ELF header"));
+        }
+        if ranges_overlap(&range, &section_table_range) {
+            return Err(ElfCanonicalizationError::UnsupportedFormat("section payload overlaps section headers"));
+        }
         if section_index != string_section_index && ranges_overlap(&string_range, &range) {
             return Err(ElfCanonicalizationError::UnsupportedFormat("string table overlaps another section"));
+        }
+        if section_index != symbol_section_index && ranges_overlap(&symbol_range, &range) {
+            return Err(ElfCanonicalizationError::UnsupportedFormat("symbol table overlaps another section"));
         }
     }
     assert!(string_range.end <= bytes.len());
@@ -264,7 +322,10 @@ fn read_symbols(
     symbols: SectionHeader,
     entries: &[StringEntry],
 ) -> Result<Vec<SymbolReference>, ElfCanonicalizationError> {
-    if symbols.entry_size_bytes != ELF_SYMBOL_BYTES || !symbols.size_bytes.is_multiple_of(ELF_SYMBOL_BYTES) {
+    if symbols.size_bytes == 0
+        || symbols.entry_size_bytes != ELF_SYMBOL_BYTES
+        || !symbols.size_bytes.is_multiple_of(ELF_SYMBOL_BYTES)
+    {
         return Err(ElfCanonicalizationError::UnsupportedFormat("invalid ELF64 symbol-table entry size"));
     }
     checked_range(bytes.len(), symbols.file_offset, symbols.size_bytes, "symbol table")?;
@@ -476,6 +537,15 @@ fn rebuild_elf(
         checked_range(output.len(), header_offset, ELF_SECTION_HEADER_BYTES, "section header")?;
         let new_file_offset = if section.file_offset == 0 || section_index == string_section_index {
             section.file_offset
+        } else if section.section_type == SECTION_TYPE_NO_BITS || section.size_bytes == 0 {
+            shift_zero_size_offset(
+                section.file_offset,
+                strings.file_offset,
+                old_string_end,
+                old_replacement_end,
+                canonical_string_end,
+                growth,
+            )?
         } else {
             shift_offset(section.file_offset, strings.file_offset, old_replacement_end, growth)?
         };
@@ -498,8 +568,12 @@ fn rebuild_elf(
             "section size",
         )?;
     }
-    let new_symbol_offset = sections[symbol_section_index].file_offset;
-    assert!(new_symbol_offset < output.len());
+    let symbol_section = sections[symbol_section_index];
+    let new_symbol_offset = shift_offset(symbol_section.file_offset, strings.file_offset, old_replacement_end, growth)?;
+    let new_symbol_end = new_symbol_offset
+        .checked_add(symbol_section.size_bytes)
+        .ok_or(ElfCanonicalizationError::OutOfBounds("symbol table"))?;
+    assert!(new_symbol_end <= output.len());
     assert_eq!(canonical_replacement_end, strings.file_offset + replacement.len());
     debug_assert_eq!(output.len(), expected_output_bytes);
     Ok(output)
@@ -562,6 +636,26 @@ fn align_up(value: usize, alignment_bytes: usize) -> Result<usize, ElfCanonicali
         .checked_add(mask)
         .map(|aligned| aligned & !mask)
         .ok_or(ElfCanonicalizationError::OutOfBounds("aligned ELF offset"))
+}
+
+fn shift_zero_size_offset(
+    old_offset: usize,
+    replaced_start: usize,
+    old_string_end: usize,
+    replaced_end: usize,
+    canonical_string_end: usize,
+    growth: usize,
+) -> Result<usize, ElfCanonicalizationError> {
+    if old_offset <= replaced_start {
+        return Ok(old_offset);
+    }
+    if old_offset < old_string_end {
+        return Err(ElfCanonicalizationError::UnsupportedFormat("ELF offset points inside the replaced string table"));
+    }
+    if old_offset < replaced_end {
+        return Ok(canonical_string_end);
+    }
+    old_offset.checked_add(growth).ok_or(ElfCanonicalizationError::OutOfBounds("shifted ELF offset"))
 }
 
 fn shift_offset(
@@ -753,6 +847,108 @@ mod tests {
 
         assert!(matches!(error, ElfCanonicalizationError::OutOfBounds("section payload")));
         assert!(elf.windows(TEST_LONG_NAME.len()).any(|window| window == TEST_LONG_NAME));
+    }
+
+    #[test]
+    fn rejects_zero_size_symbol_table_at_eof_without_panicking() {
+        let mut elf = synthetic_elf(TEST_SHORT_NAME);
+        let eof = u64::try_from(elf.len()).unwrap();
+        let symbols_section = TEST_SECTION_TABLE_OFFSET + ELF_SECTION_HEADER_BYTES;
+        write_test_u64(&mut elf, symbols_section + SECTION_FILE_OFFSET_OFFSET, eof);
+        write_test_u64(&mut elf, symbols_section + SECTION_SIZE_OFFSET, 0);
+
+        let error = canonicalize_local_elf_symbol_names(&elf).unwrap_err();
+        assert!(matches!(error, ElfCanonicalizationError::UnsupportedFormat(_)));
+    }
+
+    #[test]
+    fn rejects_sections_overlapping_elf_header() {
+        let mut elf = synthetic_elf(TEST_SHORT_NAME);
+        let string_table = b"\0L.1\0";
+        elf[24..24 + string_table.len()].copy_from_slice(string_table);
+        let strings_section = TEST_SECTION_TABLE_OFFSET + 2 * ELF_SECTION_HEADER_BYTES;
+        write_test_u64(&mut elf, strings_section + SECTION_FILE_OFFSET_OFFSET, 24);
+        write_test_u64(&mut elf, strings_section + SECTION_SIZE_OFFSET, u64::try_from(string_table.len()).unwrap());
+
+        let error = canonicalize_local_elf_symbol_names(&elf).unwrap_err();
+        assert_eq!(error, ElfCanonicalizationError::UnsupportedFormat("string table overlaps ELF header"));
+    }
+
+    #[test]
+    fn rejects_shared_shstrtab_xindex_secondary_sh_link_and_tail_shared_strtab() {
+        let mut shared_shstrtab = synthetic_elf(TEST_SHORT_NAME);
+        write_test_u16(&mut shared_shstrtab, ELF_SECTION_NAME_TABLE_INDEX_OFFSET, 2);
+        assert!(matches!(
+            canonicalize_local_elf_symbol_names(&shared_shstrtab),
+            Err(ElfCanonicalizationError::UnsupportedFormat(_))
+        ));
+
+        let mut xindex_shstrtab = synthetic_elf(TEST_SHORT_NAME);
+        write_test_u16(
+            &mut xindex_shstrtab,
+            ELF_SECTION_NAME_TABLE_INDEX_OFFSET,
+            u16::try_from(ELF_SECTION_HEADER_XINDEX).unwrap(),
+        );
+        assert!(matches!(
+            canonicalize_local_elf_symbol_names(&xindex_shstrtab),
+            Err(ElfCanonicalizationError::UnsupportedFormat(_))
+        ));
+
+        let mut secondary_link = synthetic_elf(TEST_SHORT_NAME);
+        let strings_section = TEST_SECTION_TABLE_OFFSET + 2 * ELF_SECTION_HEADER_BYTES;
+        write_test_u32(&mut secondary_link, strings_section + SECTION_LINK_OFFSET, 2);
+        assert!(matches!(
+            canonicalize_local_elf_symbol_names(&secondary_link),
+            Err(ElfCanonicalizationError::UnsupportedFormat(_))
+        ));
+
+        let mut tail_shared = synthetic_elf(b"fooL.1");
+        let local_symbol = TEST_SYMBOL_TABLE_OFFSET + ELF_SYMBOL_BYTES;
+        write_test_u32(&mut tail_shared, local_symbol + SYMBOL_NAME_OFFSET, 4);
+        assert!(matches!(
+            canonicalize_local_elf_symbol_names(&tail_shared),
+            Err(ElfCanonicalizationError::UnsupportedFormat(_))
+        ));
+
+        let mut shdr_overlap = synthetic_elf(TEST_SHORT_NAME);
+        let null_section = TEST_SECTION_TABLE_OFFSET;
+        write_test_u32(&mut shdr_overlap, null_section + SECTION_TYPE_OFFSET, 1);
+        write_test_u64(
+            &mut shdr_overlap,
+            null_section + SECTION_FILE_OFFSET_OFFSET,
+            u64::try_from(TEST_SECTION_TABLE_OFFSET).unwrap(),
+        );
+        write_test_u64(&mut shdr_overlap, null_section + SECTION_SIZE_OFFSET, 24);
+        assert!(matches!(
+            canonicalize_local_elf_symbol_names(&shdr_overlap),
+            Err(ElfCanonicalizationError::UnsupportedFormat(_))
+        ));
+    }
+
+    #[test]
+    fn preserves_nobits_and_zero_size_sections_at_strtab_boundary_idempotently() {
+        let elf = synthetic_elf(TEST_SHORT_NAME);
+        let old_string_end = elf.len();
+        let aligned_shoff = align_up(old_string_end, SECTION_HEADER_ALIGNMENT_BYTES).unwrap();
+        let mut with_nobits = vec![0u8; aligned_shoff + 4 * ELF_SECTION_HEADER_BYTES];
+        with_nobits[..old_string_end].copy_from_slice(&elf);
+        with_nobits[aligned_shoff..aligned_shoff + 3 * ELF_SECTION_HEADER_BYTES]
+            .copy_from_slice(&elf[TEST_SECTION_TABLE_OFFSET..TEST_SECTION_TABLE_OFFSET + 3 * ELF_SECTION_HEADER_BYTES]);
+        write_test_u64(&mut with_nobits, ELF_SECTION_TABLE_OFFSET, u64::try_from(aligned_shoff).unwrap());
+        write_test_u16(&mut with_nobits, ELF_SECTION_COUNT_OFFSET, 4);
+        let nobits_hdr = aligned_shoff + 3 * ELF_SECTION_HEADER_BYTES;
+        write_test_u32(&mut with_nobits, nobits_hdr + SECTION_TYPE_OFFSET, SECTION_TYPE_NO_BITS);
+        write_test_u64(
+            &mut with_nobits,
+            nobits_hdr + SECTION_FILE_OFFSET_OFFSET,
+            u64::try_from(old_string_end).unwrap(),
+        );
+        write_test_u64(&mut with_nobits, nobits_hdr + SECTION_SIZE_OFFSET, 32);
+
+        let pass1 = canonicalize_local_elf_symbol_names(&with_nobits).unwrap();
+        let pass2 = canonicalize_local_elf_symbol_names(&pass1.bytes).unwrap();
+        assert_eq!(pass1.bytes, pass2.bytes);
+        assert_eq!(pass1.rewrite_count, 1);
     }
 
     fn synthetic_elf(local_name: &[u8]) -> Vec<u8> {
