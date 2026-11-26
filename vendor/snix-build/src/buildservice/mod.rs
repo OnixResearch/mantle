@@ -3,6 +3,8 @@ use tokio::sync::watch;
 
 pub mod build_request;
 pub use crate::buildservice::build_request::*;
+pub mod policy;
+pub use crate::buildservice::policy::*;
 mod dummy;
 mod ephemeral_dir;
 mod from_addr;
@@ -14,20 +16,32 @@ mod oci;
 mod bwrap;
 
 #[cfg(target_os = "linux")]
-pub use bwrap::{
-    BubblewrapBuildService, DEFAULT_CONCURRENT_SANDBOX_BUILDS, DEFAULT_SANDBOX_FD_BUDGET,
-    ESTIMATED_FDS_PER_SANDBOX, MAX_CONCURRENT_SANDBOX_BUILDS, SandboxConcurrencyPolicy,
-};
+pub use bwrap::BubblewrapBuildService;
 #[cfg(target_os = "linux")]
-pub use crate::bwrap::watch_cancel::UnobservedWatchSandbox;
+pub use bwrap::DEFAULT_CONCURRENT_SANDBOX_BUILDS;
+#[cfg(target_os = "linux")]
+pub use bwrap::DEFAULT_SANDBOX_FD_BUDGET;
+#[cfg(target_os = "linux")]
+pub use bwrap::ESTIMATED_FDS_PER_SANDBOX;
+#[cfg(target_os = "linux")]
+pub use bwrap::MAX_CONCURRENT_SANDBOX_BUILDS;
+#[cfg(target_os = "linux")]
+pub use bwrap::SandboxConcurrencyPolicy;
 pub use dummy::DummyBuildService;
 pub use from_addr::from_addr;
+
+#[cfg(target_os = "linux")]
+pub use crate::bwrap::watch_cancel::UnobservedWatchSandbox;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxFailureClass {
     SandboxStartup,
     MissingOutputs,
     Builder,
+    WallDeadlineExceeded,
+    SilenceBudgetExceeded,
+    ResourceBudgetExceeded,
+    ResourceEnforcementUnavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,13 +63,10 @@ pub fn classified_io_error(
     class: SandboxFailureClass,
     message: impl Into<String>,
 ) -> std::io::Error {
-    std::io::Error::new(
-        kind,
-        ClassifiedBuildServiceError {
-            class,
-            message: message.into(),
-        },
-    )
+    std::io::Error::new(kind, ClassifiedBuildServiceError {
+        class,
+        message: message.into(),
+    })
 }
 
 pub fn wrap_classified_io_error(error: std::io::Error, class: SandboxFailureClass) -> std::io::Error {

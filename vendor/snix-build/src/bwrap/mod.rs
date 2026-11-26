@@ -8,15 +8,23 @@ use std::path::PathBuf;
 use std::process::Output;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
 
 use tokio::process::Command;
 use tokio::sync::watch;
 
+use crate::buildservice::SandboxExecutionPolicy;
+use crate::buildservice::SandboxFailureClass;
+use crate::buildservice::SandboxResourceEnforcementFacts;
+use crate::buildservice::classified_io_error;
 use crate::sandbox::InputsProvider;
 use crate::sandbox::SandboxSpec;
+pub(crate) mod capture;
+#[cfg(target_os = "linux")]
+pub(crate) mod cgroup;
 #[cfg(target_os = "linux")]
 pub(crate) mod watch_cancel;
-pub(crate) mod capture;
 
 const BWRAP_PROGRAM: &str = "bwrap";
 const BWRAP_PATH_ENV: &str = "SNIX_BUILD_BWRAP";
@@ -33,10 +41,7 @@ fn sandbox_env_value(value: &[u8]) -> std::io::Result<OsString> {
         ));
     }
     if value.contains(&0) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "sandbox environment value contains NUL",
-        ));
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "sandbox environment value contains NUL"));
     }
     #[cfg(unix)]
     {
@@ -46,7 +51,10 @@ fn sandbox_env_value(value: &[u8]) -> std::io::Result<OsString> {
     #[cfg(not(unix))]
     {
         std::str::from_utf8(value).map(OsString::from).map_err(|_| {
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "sandbox environment value is not UTF-8 on this platform")
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "sandbox environment value is not UTF-8 on this platform",
+            )
         })
     }
 }
@@ -241,11 +249,27 @@ const _: () = assert!(SANDBOX_UMASK_BITS <= 0o777);
 /// **Note**: If the build inputs directory overlaps with any of the scratches, an overlayfs mount
 /// will be created for that scratch so it remains writable, i.e. the sandboxed command can create
 /// new files/directories.
+pub(crate) struct BwrapLiveCpuDiagnostics {
+    pub(crate) config: crate::buildservice::SandboxLiveCpuDiagnosticsConfig,
+    pub(crate) attempt_id: u64,
+    pub(crate) attempt_label: String,
+    pub(crate) sender: tokio::sync::mpsc::Sender<crate::buildservice::SandboxCpuSampleEvent>,
+    pub(crate) facts_sink: Option<Arc<Mutex<Option<crate::buildservice::SandboxLiveCpuAttemptFacts>>>>,
+}
+
 pub struct Bwrap {
     host_workdir: PathBuf,
     args: Vec<OsString>,
     inputs_provider: InputsProvider,
     command_factory: Option<Arc<dyn BwrapCommandFactory>>,
+    execution_policy: SandboxExecutionPolicy,
+    shutdown_signal: Option<watch::Receiver<bool>>,
+    compile_socket: Option<PathBuf>,
+    rust_wait_socket: Option<PathBuf>,
+    provide_shell: Option<PathBuf>,
+    has_bind_scratches: bool,
+    enforcement_facts_sink: Option<Arc<Mutex<Option<SandboxResourceEnforcementFacts>>>>,
+    live_cpu_diagnostics: Option<BwrapLiveCpuDiagnostics>,
     #[cfg(test)]
     watch_fault: Option<watch_cancel::WatchFault>,
 }
@@ -304,7 +328,7 @@ fn choose_bwrap_program(env_value: Option<OsString>) -> OsString {
     }
 }
 
-fn bwrap_program() -> OsString {
+pub(crate) fn bwrap_program() -> OsString {
     choose_bwrap_program(std::env::var_os(BWRAP_PATH_ENV))
 }
 
@@ -349,8 +373,11 @@ fn append_prevalidated_mount_args<'a>(
                 return Err(std::io::Error::other("compile runtime mount requires one read-only Unix socket"));
             }
             args.extend([
-                "--dir".into(), "/run/mantle".into(), "--ro-bind".into(),
-                mount.host_path.clone().into(), mount.guest_path.clone().into(),
+                "--dir".into(),
+                "/run/mantle".into(),
+                "--ro-bind".into(),
+                mount.host_path.clone().into(),
+                mount.guest_path.clone().into(),
             ]);
             continue;
         }
@@ -366,10 +393,42 @@ fn append_prevalidated_mount_args<'a>(
     Ok(())
 }
 
-
 impl Bwrap {
     pub(crate) fn with_command_factory(mut self, command_factory: Arc<dyn BwrapCommandFactory>) -> Self {
         self.command_factory = Some(command_factory);
+        self
+    }
+
+    pub(crate) fn with_execution_policy(mut self, policy: SandboxExecutionPolicy) -> Self {
+        self.execution_policy = policy;
+        self
+    }
+
+    pub(crate) fn with_shutdown_signal(mut self, signal: Option<watch::Receiver<bool>>) -> Self {
+        self.shutdown_signal = signal;
+        self
+    }
+
+    pub(crate) fn with_helper_sockets(
+        mut self,
+        compile_socket: Option<PathBuf>,
+        rust_wait_socket: Option<PathBuf>,
+    ) -> Self {
+        self.compile_socket = compile_socket;
+        self.rust_wait_socket = rust_wait_socket;
+        self
+    }
+
+    pub(crate) fn with_enforcement_facts_sink(
+        mut self,
+        sink: Option<Arc<Mutex<Option<SandboxResourceEnforcementFacts>>>>,
+    ) -> Self {
+        self.enforcement_facts_sink = sink;
+        self
+    }
+
+    pub(crate) fn with_live_cpu_diagnostics(mut self, diagnostics: Option<BwrapLiveCpuDiagnostics>) -> Self {
+        self.live_cpu_diagnostics = diagnostics;
         self
     }
 
@@ -383,15 +442,16 @@ impl Bwrap {
         self.run_inner(None, None).await
     }
 
-    /// Run a watch-owned sandbox until its dedicated supervisor confirms
-    /// completion or pidfd-backed cancellation. Dropping this future requests
-    /// teardown; it cannot drop the owned PID1 gate or child process.
-    pub(crate) async fn run_cancellable(
+    /// Run a supervised sandbox (one-shot or watch-cancellable) until its
+    /// dedicated pidfd + gate supervisor confirms completion, deadline expiry,
+    /// graceful shutdown, or cancellation. Dropping this future requests
+    /// teardown; it cannot drop the owned PID1 gate, cgroup, or child process.
+    pub(crate) async fn run_supervised(
         self,
-        cancellation: watch::Receiver<bool>,
+        cancellation: Option<watch::Receiver<bool>>,
         lease: watch_cancel::WatchLease,
     ) -> std::io::Result<SandboxOutcome> {
-        self.run_inner(Some(cancellation), Some(lease)).await
+        self.run_inner(cancellation, Some(lease)).await
     }
 
     async fn run_inner(
@@ -402,69 +462,263 @@ impl Bwrap {
         if cancellation.as_ref().is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err()) {
             return Err(std::io::Error::new(ErrorKind::Interrupted, "watch build cancelled before sandbox start"));
         }
-        #[cfg(test)]
-        if matches!(self.watch_fault, Some(watch_cancel::WatchFault::PidfdUnavailable)) && cancellation.is_some() {
-            return Err(std::io::Error::new(ErrorKind::Unsupported, "injected preflight pidfd unavailability"));
+        if self
+            .shutdown_signal
+            .as_ref()
+            .is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err())
+        {
+            return Err(std::io::Error::new(ErrorKind::Interrupted, "sandbox shutdown requested before start"));
         }
-        if cancellation.is_some() {
-            watch_cancel::require_pidfd_support()?;
-        }
-        // The input guard mutably borrows its provider. Only an opted-in
-        // callback needs a copy of the guest path while that guard is alive.
-        let factory = self.command_factory.as_ref().map(|factory| {
-            (factory, self.inputs_provider.inputs_dir().to_path_buf())
-        });
-        let host_inputs_dir = self.host_workdir.join("host_inputs_dir");
-        let _guard = self.inputs_provider.provide_inputs(&host_inputs_dir)?;
+        self.execution_policy.validate()?;
 
         let program = bwrap_program();
-        let gate = cancellation.as_ref().map(|_| watch_cancel::WatchStartGate::new()).transpose()?;
-        if let Some(gate) = &gate {
-            self.args.splice(0..0, gate.block_arguments());
+        #[cfg(test)]
+        let pidfd_injected_unavailable = matches!(self.watch_fault, Some(watch_cancel::WatchFault::PidfdUnavailable));
+        #[cfg(not(test))]
+        let pidfd_injected_unavailable = false;
+
+        let sink = self.enforcement_facts_sink.take();
+        let mut live_cpu = self.live_cpu_diagnostics.take();
+        if self.execution_policy.resources.requests_any_enforcement() {
+            let prepared = cgroup::prepare_attempt_enforcement(cgroup::AttemptEnforcementInput {
+                policy: &self.execution_policy.resources,
+                bwrap_program: Path::new(&program),
+                provide_shell: self.provide_shell.as_deref(),
+                has_bind_scratches: self.has_bind_scratches,
+                compile_socket: self.compile_socket.as_deref(),
+                rust_wait_socket: self.rust_wait_socket.as_deref(),
+                pidfd_injected_unavailable,
+            });
+            match prepared {
+                Ok(prep) => {
+                    let mut attempt_cgroup = prep.cgroup;
+                    let mut diagnostics_only_cgroup = false;
+                    let mut initial_unavailable = None;
+                    if attempt_cgroup.is_none()
+                        && let Some(live) = live_cpu.as_ref()
+                    {
+                        if !self.execution_policy.resources.requests_cgroup() {
+                            let cg_root = self
+                                .execution_policy
+                                .resources
+                                .cgroup_root
+                                .as_deref()
+                                .or(live.config.cgroup_root.as_deref());
+                            match cgroup::prepare_attempt_diagnostics(cg_root) {
+                                Ok(cg) => {
+                                    attempt_cgroup = Some(Arc::new(cg));
+                                    diagnostics_only_cgroup = true;
+                                }
+                                Err(reason) => {
+                                    initial_unavailable = Some(reason);
+                                }
+                            }
+                        } else {
+                            initial_unavailable = prep
+                                .facts
+                                .unavailable_reasons
+                                .first()
+                                .cloned()
+                                .map(cgroup::unavailable_for_live_cpu)
+                                .or(Some(crate::buildservice::SandboxLiveCpuUnavailableReason::CgroupRootUnconfigured));
+                        }
+                    }
+                    let supervisor_live_cpu = live_cpu.take().map(|live| watch_cancel::SupervisorLiveCpuConfig {
+                        attempt_id: live.attempt_id,
+                        generation: live.config.generation,
+                        attempt_label: live.attempt_label,
+                        allocated_cores: live.config.allocated_cores,
+                        cadence: Duration::from_millis(live.config.sample_cadence_ms),
+                        sender: live.sender,
+                        facts_sink: live.facts_sink,
+                        initial_unavailable,
+                        diagnostics_only_cgroup,
+                    });
+                    let had_cgroup = attempt_cgroup.is_some();
+                    let facts_arc = Arc::new(Mutex::new(prep.facts));
+                    let result = self
+                        .run_with_prepared_cgroup(
+                            cancellation,
+                            lease,
+                            &program,
+                            attempt_cgroup,
+                            Arc::clone(&facts_arc),
+                            supervisor_live_cpu,
+                        )
+                        .await;
+                    let mut final_facts = facts_arc.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+                    if result.is_err()
+                        && had_cgroup
+                        && !final_facts.populated_observed
+                        && final_facts.observed_member_pids.is_empty()
+                    {
+                        final_facts.enforced_memory = false;
+                        final_facts.enforced_pids = false;
+                    }
+                    if let Some(sink) = sink {
+                        *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(final_facts);
+                    }
+                    return result;
+                }
+                Err(boxed) => {
+                    let (reason, facts) = *boxed;
+                    if let Some(live) = live_cpu.take() {
+                        emit_live_cpu_preflight_failure(live, cgroup::unavailable_for_live_cpu(reason.clone()));
+                    }
+                    if let Some(sink) = sink {
+                        *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(facts);
+                    }
+                    return Err(classified_io_error(
+                        ErrorKind::Other,
+                        SandboxFailureClass::ResourceEnforcementUnavailable,
+                        format!("local sandbox resource enforcement unavailable: {reason:?}"),
+                    ));
+                }
+            }
         }
+
+        if pidfd_injected_unavailable {
+            if let Some(live) = live_cpu.take() {
+                emit_live_cpu_preflight_failure(
+                    live,
+                    crate::buildservice::SandboxLiveCpuUnavailableReason::SetupIoError {
+                        detail: "injected preflight pidfd unavailability".to_string(),
+                    },
+                );
+            }
+            return Err(std::io::Error::new(ErrorKind::Unsupported, "injected preflight pidfd unavailability"));
+        }
+        if let Err(err) = watch_cancel::require_pidfd_support() {
+            if let Some(live) = live_cpu.take() {
+                emit_live_cpu_preflight_failure(
+                    live,
+                    crate::buildservice::SandboxLiveCpuUnavailableReason::SetupIoError {
+                        detail: format!("pidfd unavailable: {err}"),
+                    },
+                );
+            }
+            return Err(err);
+        }
+
+        let (attempt_cgroup, supervisor_live_cpu) = match live_cpu.take() {
+            Some(live) => {
+                let cg_root =
+                    self.execution_policy.resources.cgroup_root.as_deref().or(live.config.cgroup_root.as_deref());
+                let (cg, initial_unavailable, diagnostics_only_cgroup) =
+                    match cgroup::prepare_attempt_diagnostics(cg_root) {
+                        Ok(cg) => (Some(Arc::new(cg)), None, true),
+                        Err(reason) => (None, Some(reason), false),
+                    };
+                let cfg = watch_cancel::SupervisorLiveCpuConfig {
+                    attempt_id: live.attempt_id,
+                    generation: live.config.generation,
+                    attempt_label: live.attempt_label,
+                    allocated_cores: live.config.allocated_cores,
+                    cadence: Duration::from_millis(live.config.sample_cadence_ms),
+                    sender: live.sender,
+                    facts_sink: live.facts_sink,
+                    initial_unavailable,
+                    diagnostics_only_cgroup,
+                };
+                (cg, Some(cfg))
+            }
+            None => (None, None),
+        };
+
+        let facts_arc = Arc::new(Mutex::new(SandboxResourceEnforcementFacts::default()));
+        let result = self
+            .run_with_prepared_cgroup(
+                cancellation,
+                lease,
+                &program,
+                attempt_cgroup,
+                Arc::clone(&facts_arc),
+                supervisor_live_cpu,
+            )
+            .await;
+        if let Some(sink) = sink {
+            let final_facts = facts_arc.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+            *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(final_facts);
+        }
+        result
+    }
+
+    async fn run_with_prepared_cgroup(
+        mut self,
+        cancellation: Option<watch::Receiver<bool>>,
+        lease: Option<watch_cancel::WatchLease>,
+        program: &OsString,
+        attempt_cgroup: Option<Arc<cgroup::AttemptCgroup>>,
+        enforcement_facts: Arc<Mutex<SandboxResourceEnforcementFacts>>,
+        live_cpu: Option<watch_cancel::SupervisorLiveCpuConfig>,
+    ) -> std::io::Result<SandboxOutcome> {
+        watch_cancel::require_pidfd_support()?;
+        // Transfer InputsGuard ownership into WatchLease so FUSE/materialized
+        // inputs stay mounted until the owned supervisor completes PID1 teardown.
+        let inputs_dir = self.inputs_provider.inputs_dir().to_path_buf();
+        let host_inputs_dir = self.host_workdir.join("host_inputs_dir");
+        let inputs_guard = self.inputs_provider.into_guard(&host_inputs_dir)?;
+        let lease = match lease {
+            Some(mut existing) => {
+                existing.attach_inputs_guard(inputs_guard);
+                existing
+            }
+            None => watch_cancel::WatchLease::from_inputs_only(inputs_guard),
+        };
+
+        let gate = watch_cancel::WatchStartGate::new()?;
+        self.args.splice(0..0, gate.block_arguments());
         #[cfg(test)]
         if matches!(self.watch_fault, Some(watch_cancel::WatchFault::ExitBeforePid1)) {
             self.args.insert(0, "--invalid-bwrap-watch-early-exit".into());
         }
-        let mut command = match factory {
-            Some((factory, inputs_dir)) => factory.command(BwrapInvocation {
-                program: &program,
+        let mut command = match self.command_factory.as_ref() {
+            Some(factory) => factory.command(BwrapInvocation {
+                program,
                 args: &self.args,
                 host_workdir: &self.host_workdir,
                 host_inputs_dir: &host_inputs_dir,
                 inputs_dir: &inputs_dir,
             })?,
             None => {
-                let mut command = Command::new(&program);
+                let mut command = Command::new(program);
                 command.args(&self.args);
                 command
             }
         };
-        if let Some(gate) = &gate {
-            gate.configure(&mut command);
-        }
+        gate.configure(&mut command);
+        let (pending_cgroup_spawn, cgroup_ack_reader) = match attempt_cgroup.as_ref() {
+            Some(cg) => {
+                let (pending, ack_reader) = cg.configure_pre_exec(&mut command)?;
+                (Some(pending), Some(ack_reader))
+            }
+            None => (None, None),
+        };
         command.stdin(Stdio::null());
         set_sandbox_umask(&mut command);
-        let output = match (cancellation, gate, lease) {
-            (None, None, None) => {
-                // `Command::output` would retain unbounded bytes. Pipe both
-                // streams and drain them under the shared capture bound.
-                command.stdout(Stdio::piped()).stderr(Stdio::piped());
-                let child = command.spawn().map_err(|error| annotate_bwrap_spawn_error(&program, error))?;
-                capture::capture_child_output(child).await?
-            }
-            (Some(receiver), Some(gate), Some(lease)) => {
-                #[cfg(test)]
-                {
-                    watch_cancel::run_child(command, &program, receiver, gate, lease, self.watch_fault).await?
-                }
-                #[cfg(not(test))]
-                {
-                    watch_cancel::run_child(command, &program, receiver, gate, lease).await?
-                }
-            }
-            _ => unreachable!("watch gate and cancellation are constructed together"),
+
+        let supervisor_config = watch_cancel::SupervisorRunConfig {
+            wall_deadline: self.execution_policy.wall_deadline.as_duration(),
+            silence_budget: self.execution_policy.silence_budget.as_duration(),
+            shutdown_grace: Duration::from_millis(self.execution_policy.shutdown_grace_ms),
+            shutdown_signal: self.shutdown_signal,
+            cgroup: attempt_cgroup,
+            cgroup_ack_reader,
+            pending_cgroup_spawn,
+            enforcement_facts,
+            live_cpu,
         };
+        let output = watch_cancel::run_child(
+            command,
+            program,
+            cancellation,
+            gate,
+            lease,
+            supervisor_config,
+            #[cfg(test)]
+            self.watch_fault,
+        )
+        .await?;
 
         Ok(SandboxOutcome {
             output,
@@ -493,7 +747,11 @@ impl Bwrap {
                     "sandbox environment variable name is empty or contains NUL",
                 ));
             }
-            args.extend(["--setenv".into(), env.key.clone().into(), sandbox_env_value(&env.value)?]);
+            args.extend([
+                "--setenv".into(),
+                env.key.clone().into(),
+                sandbox_env_value(&env.value)?,
+            ]);
         }
 
         let host_inputs_dir = spec.host_workdir().join("host_inputs_dir");
@@ -609,14 +867,78 @@ impl Bwrap {
         }
         args.extend(spec.command().into_iter().map(|s| s.into()));
 
+        let has_bind_scratches = spec.scratches().into_iter().next().is_some();
+        let provide_shell = spec.provide_shell().map(Path::to_path_buf);
+
         Ok(Self {
             host_workdir: spec.host_workdir().into(),
             args,
             inputs_provider: spec.into(),
             command_factory: None,
+            execution_policy: SandboxExecutionPolicy::standard(),
+            shutdown_signal: None,
+            compile_socket: None,
+            rust_wait_socket: None,
+            provide_shell,
+            has_bind_scratches,
+            enforcement_facts_sink: None,
+            live_cpu_diagnostics: None,
             #[cfg(test)]
             watch_fault: None,
         })
+    }
+}
+
+fn emit_live_cpu_preflight_failure(
+    live: BwrapLiveCpuDiagnostics,
+    reason: crate::buildservice::SandboxLiveCpuUnavailableReason,
+) {
+    let scope = crate::buildservice::SandboxCpuScopeAvailability::Unavailable { reason };
+    let now_usec = watch_cancel::monotonic_now_usec();
+    let mut dropped: u64 = 0;
+    if live
+        .sender
+        .try_send(crate::buildservice::SandboxCpuSampleEvent {
+            attempt_id: live.attempt_id,
+            generation: live.config.generation,
+            attempt_label: live.attempt_label.clone(),
+            allocated_cores: live.config.allocated_cores,
+            observed_at_usec: now_usec,
+            kind: crate::buildservice::SandboxCpuSampleKind::Started { scope: scope.clone() },
+        })
+        .is_err()
+    {
+        dropped = dropped.saturating_add(1);
+    }
+    if live
+        .sender
+        .try_send(crate::buildservice::SandboxCpuSampleEvent {
+            attempt_id: live.attempt_id,
+            generation: live.config.generation,
+            attempt_label: live.attempt_label.clone(),
+            allocated_cores: live.config.allocated_cores,
+            observed_at_usec: now_usec,
+            kind: crate::buildservice::SandboxCpuSampleKind::Retired {
+                reason: crate::buildservice::SandboxCpuRetirementReason::Failed,
+            },
+        })
+        .is_err()
+    {
+        dropped = dropped.saturating_add(1);
+    }
+    if let Some(sink) = live.facts_sink {
+        *sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some(crate::buildservice::SandboxLiveCpuAttemptFacts {
+                attempt_id: live.attempt_id,
+                generation: live.config.generation,
+                attempt_label: live.attempt_label,
+                scope,
+                sample_count: 0,
+                dropped_samples_count: dropped,
+                initial_cpu_usec: None,
+                latest_cpu_usec: None,
+                retired_reason: Some(crate::buildservice::SandboxCpuRetirementReason::Failed),
+            });
     }
 }
 
@@ -844,10 +1166,9 @@ mod tests {
     #[test]
     fn network_sandbox_binds_explicit_private_resolver_without_public_dns_fallback() {
         let tempdir = tempfile::tempdir().expect("tempdir must be available");
-        let dns = crate::buildservice::SandboxDnsConfig::new(
-            vec!["10.53.0.2".parse().expect("valid ip")],
-            vec!["corp.internal".to_string()],
-        )
+        let dns = crate::buildservice::SandboxDnsConfig::new(vec!["10.53.0.2".parse().expect("valid ip")], vec![
+            "corp.internal".to_string(),
+        ])
         .expect("valid private dns config");
         let spec = SandboxSpec::builder()
             .host_workdir(tempdir.path())
@@ -897,11 +1218,8 @@ mod tests {
         assert!(!tempdir.path().join("etc/services").exists());
 
         let tempdir2 = tempfile::tempdir().expect("tempdir must be available");
-        let dns = crate::buildservice::SandboxDnsConfig::new(
-            vec!["10.53.0.2".parse().expect("valid ip")],
-            Vec::new(),
-        )
-        .expect("valid dns");
+        let dns = crate::buildservice::SandboxDnsConfig::new(vec!["10.53.0.2".parse().expect("valid ip")], Vec::new())
+            .expect("valid dns");
         let spec = SandboxSpec::builder()
             .host_workdir(tempdir2.path())
             .command(["/bin/sh", "-c", "true"])
@@ -920,7 +1238,10 @@ mod tests {
 
     #[test]
     fn sandbox_dns_config_rejects_malformed_and_unbounded_inputs() {
-        use crate::buildservice::{MAX_DNS_NAMESERVERS, MAX_DNS_RESOLV_CONF_BYTES, MAX_DNS_SEARCH_DOMAINS, SandboxDnsConfig};
+        use crate::buildservice::MAX_DNS_NAMESERVERS;
+        use crate::buildservice::MAX_DNS_RESOLV_CONF_BYTES;
+        use crate::buildservice::MAX_DNS_SEARCH_DOMAINS;
+        use crate::buildservice::SandboxDnsConfig;
 
         assert!(SandboxDnsConfig::new(Vec::new(), Vec::new()).is_err());
         let too_many_ns: Vec<std::net::IpAddr> =

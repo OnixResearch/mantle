@@ -242,6 +242,25 @@ impl Goal {
         Ok(())
     }
 
+    /// Reopen a completed goal when a later consumer demands outputs not yet
+    /// satisfied by the prior outcome. Transitions from `Done` to `Pending`
+    /// and clears stale `waitees` so `inspect()` can re-wire dependencies.
+    pub(crate) fn reopen_for_demand(&mut self) -> Result<(), Error> {
+        if self.state != GoalState::Done {
+            return Err(Error::Store(format!(
+                "goal {}: reopen_for_demand() in {:?}, expected Done",
+                self.drv_path.name(),
+                self.state,
+            )));
+        }
+        assert!(self.derivation.is_some(), "Done goal must carry a derivation");
+        self.waitees.clear();
+        self.state = GoalState::Pending;
+        debug_assert_eq!(self.state, GoalState::Pending);
+        debug_assert!(self.waitees.is_empty());
+        Ok(())
+    }
+
     /// Transition from Building (or Ready, for inline failures) to Failed.
     ///
     /// Accepts `Ready` because `prepare_build` can fail inline (e.g.,
@@ -860,6 +879,28 @@ mod tests {
         assert!(g.mark_building().is_err());
         assert!(g.mark_done().is_err());
         assert!(g.mark_build_failed().is_err());
+    }
+
+    #[test]
+    fn reopen_for_demand_transitions_done_to_pending_and_rejects_other_states() {
+        let mut g = Goal::new(fake_sp("reopen.drv"), make_drv());
+        assert!(g.reopen_for_demand().is_err());
+
+        g.inspect(vec![]).unwrap();
+        assert!(g.reopen_for_demand().is_err());
+
+        g.mark_building().unwrap();
+        assert!(g.reopen_for_demand().is_err());
+
+        g.mark_done().unwrap();
+        g.waitees.push("stale-dep.drv".into());
+        g.reopen_for_demand().unwrap();
+        assert_eq!(g.state, GoalState::Pending);
+        assert!(g.waitees.is_empty());
+
+        g.inspect(vec![]).unwrap();
+        g.mark_build_failed().unwrap();
+        assert!(g.reopen_for_demand().is_err());
     }
 
     // ── Registry: root tracking ─────────────────────────────────

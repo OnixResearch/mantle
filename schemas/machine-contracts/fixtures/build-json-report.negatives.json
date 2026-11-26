@@ -811,6 +811,68 @@
         "failed": [],
         "fod_mismatches": []
       }
+    },
+    {
+      "id": "live-cpu-diagnostics-invalid-activity-class",
+      "issue_class": "enum",
+      "expected_path": "/outcomes/0/live_cpu_diagnostics/activity_class",
+      "artifact": {
+        "schema": "crunch-build-report-v1",
+        "file": "examples/hello.ncl",
+        "output_dir": "/mantle/store",
+        "state_dir": ".mantle/state",
+        "store_dir": "/mantle/store",
+        "scheduler_policy": {
+          "schema": "mantle-scheduling-policy-v1",
+          "policy_id": "mantle-lazy-priority-v1",
+          "preference_order": ["known-graph", "resource-fit", "locality-transfer"],
+          "aged_after_epochs": 4,
+          "protected_after_epochs": 8
+        },
+        "hermeticity_mode": "strict",
+        "hermeticity_audit_events": [],
+        "build_environment_reports": [],
+        "network_policy_reports": [],
+        "workspace_reports": [],
+        "native_dynamic_plans": [],
+        "overlay_base_generations": [],
+        "store_layer_selections": [],
+        "scheduler_priority_decisions": [],
+        "frontend_artifact_attestations": [],
+        "cargo_build_evidence": [],
+        "cargo_build_evidence_diagnostics": [],
+        "ast_grep_structural_evidence": [],
+        "ast_grep_structural_evidence_diagnostics": [],
+        "diagnostic_persistence_failures": [],
+        "counts": {
+          "succeeded_total": 1,
+          "built_total": 1,
+          "cached_total": 0,
+          "failed_total": 0
+        },
+        "outcomes": [
+          {
+            "drv_key": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+            "label": "fixture",
+            "cached": false,
+            "log_file": null,
+            "outputs": [],
+            "live_cpu_diagnostics": {
+              "schema": "mantle-live-cpu-diagnostics-v1",
+              "scope_label": "observed-local-build-attempts-only",
+              "scope": "owned-attempt-cgroup-v2",
+              "activity_class": "host-wide-bottleneck",
+              "allocated_cores": 4,
+              "sample_count": 1,
+              "window_elapsed_ms": 0,
+              "sustained_duration_ms": 0,
+              "non_claim": "heuristic local attempt cpu observation only"
+            }
+          }
+        ],
+        "failed": [],
+        "fod_mismatches": []
+      }
     }
   ]
 }

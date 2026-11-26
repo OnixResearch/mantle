@@ -1064,22 +1064,46 @@ fn build_json_sandbox_startup_failure_reports_sandbox_class() {
     assert!(Path::new(saved_log_path).exists(), "saved log path must exist");
 }
 
+fn real_bwrap_path() -> std::ffi::OsString {
+    std::env::var_os("MANTLE_TEST_REAL_BWRAP")
+        .or_else(|| std::env::var_os("SNIX_BUILD_BWRAP"))
+        .unwrap_or_else(|| "bwrap".into())
+}
+
+fn can_run_real_bwrap() -> bool {
+    std::process::Command::new(real_bwrap_path())
+        .args(["--unshare-pid", "--ro-bind", "/", "/", "--", "/bin/sh", "-c", "true"])
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
 #[test]
 fn build_json_builder_failure_with_legacy_tokens_keeps_builder_class() {
+    if !can_run_real_bwrap() {
+        eprintln!("skipping: real bwrap user/pid namespace unavailable");
+        return;
+    }
     let root = TempDir::new().unwrap();
-    let tool_dir = root.path().join("tools");
     let store_dir = root.path().join("store");
     let state_dir = root.path().join("state");
     let ncl_file = root.path().join("builder-legacy-tokens.ncl");
-    fs::create_dir_all(&tool_dir).unwrap();
     fs::create_dir_all(&store_dir).unwrap();
     fs::create_dir_all(&state_dir).unwrap();
-    write_executable(
-        &tool_dir,
-        "fake-bwrap",
-        "#!/bin/sh\necho \"bwrap fusermount trusted signature FOD hash mismatch opening store:\" >&2\nexit 1\n",
-    );
-    write_shell_derivation_ncl(&ncl_file);
+    let lib_path = repo_lib_path();
+    fs::write(
+        &ncl_file,
+        format!(
+            r#"let crunch = import "{}" in
+{{
+  name = "builder-legacy-tokens-test",
+  builder = "/bin/sh",
+  args = ["-c", "echo \"bwrap fusermount trusted signature FOD hash mismatch opening store:\" >&2; exit 1"],
+  addressing_mode = 'input-addressed,
+}} | crunch.Derivation"#,
+            lib_path.display(),
+        ),
+    )
+    .unwrap();
 
     let output = crunch()
         .arg("--json")
@@ -1091,7 +1115,7 @@ fn build_json_builder_failure_with_legacy_tokens_keeps_builder_class() {
         .arg("--no-substitute")
         .arg(&ncl_file)
         .env("CRUNCH_NO_FUSE", "1")
-        .env("SNIX_BUILD_BWRAP", tool_dir.join("fake-bwrap"))
+        .env("SNIX_BUILD_BWRAP", real_bwrap_path())
         .current_dir(root.path())
         .output()
         .unwrap();
@@ -1103,5 +1127,9 @@ fn build_json_builder_failure_with_legacy_tokens_keeps_builder_class() {
     assert_eq!(failure["phase"], "build");
     assert_eq!(failure["error_class"], "builder");
     let saved_log_path = failure["saved_log_path"].as_str().expect("saved_log_path");
-    assert!(Path::new(saved_log_path).exists(), "saved log path must exist");
+    let saved_log = fs::read_to_string(saved_log_path).expect("saved log path must exist");
+    assert!(
+        saved_log.contains("bwrap fusermount trusted signature FOD hash mismatch opening store:"),
+        "expected legacy tokens in saved builder log: {saved_log}"
+    );
 }

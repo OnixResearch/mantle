@@ -251,13 +251,10 @@ impl SandboxDnsConfig {
             .read_to_end(&mut bytes)
             .map_err(|error| format!("reading host resolv.conf {}: {error}", path.display()))?;
         if bytes.len() > MAX_DNS_RESOLV_CONF_BYTES {
-            return Err(format!(
-                "host resolv.conf {} exceeds bound {MAX_DNS_RESOLV_CONF_BYTES} bytes",
-                path.display()
-            ));
+            return Err(format!("host resolv.conf {} exceeds bound {MAX_DNS_RESOLV_CONF_BYTES} bytes", path.display()));
         }
-        let text = String::from_utf8(bytes)
-            .map_err(|_| format!("host resolv.conf {} is not valid UTF-8", path.display()))?;
+        let text =
+            String::from_utf8(bytes).map_err(|_| format!("host resolv.conf {} is not valid UTF-8", path.display()))?;
         Self::parse_resolv_conf(&text)
     }
 }
@@ -267,9 +264,7 @@ fn validate_dns_search_domain(domain: &str) -> Result<(), String> {
         return Err("sandbox DNS search domain must not be empty".to_string());
     }
     if domain.len() > MAX_DNS_SEARCH_DOMAIN_BYTES {
-        return Err(format!(
-            "sandbox DNS search domain {domain:?} exceeds {MAX_DNS_SEARCH_DOMAIN_BYTES} bytes"
-        ));
+        return Err(format!("sandbox DNS search domain {domain:?} exceeds {MAX_DNS_SEARCH_DOMAIN_BYTES} bytes"));
     }
     if domain.starts_with('.') || domain.ends_with('.') || domain.contains("..") {
         return Err(format!("sandbox DNS search domain {domain:?} has empty label"));

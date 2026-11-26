@@ -131,6 +131,20 @@ type PendingRegistryEntry = (
 );
 type CreatedGoal = (String, Vec<StorePath<String>>);
 type BuildTaskOutput = (String, Result<snix_build::buildservice::BuildResult, Error>);
+type PreflightRootInputs = (StorePath<String>, Arc<Derivation>);
+
+struct CreateGoalsBfsState {
+    queue: VecDeque<StorePath<String>>,
+    queued_roots: BTreeSet<String>,
+    queued_demands: HashMap<String, BTreeSet<String>>,
+    to_inspect: Vec<CreatedGoal>,
+    to_inspect_keys: BTreeSet<String>,
+}
+
+struct FailedDepEdge<'a> {
+    waiter_key: &'a str,
+    dep_key: &'a str,
+}
 
 fn observe_dynamic_parent_facts(
     validated: &ValidatedDynamicDerivation,
@@ -373,6 +387,45 @@ struct PlanOutputBindingState {
     plan_digest: Option<String>,
     realized_path: Option<StorePath<String>>,
     failure: Option<PlanOutputBindingFailureKind>,
+}
+
+struct LiveCpuWorkerCollector {
+    tracker: crate::live_cpu::LiveCpuTracker,
+    rx: mpsc::Receiver<snix_build::buildservice::SandboxCpuSampleEvent>,
+    allocated_cores: crate::live_cpu::AllocatedCores,
+    active_generations: HashMap<String, crate::live_cpu::AttemptGeneration>,
+    latest_observed_at_usec: crate::live_cpu::MonotonicTimestampUsec,
+}
+
+impl LiveCpuWorkerCollector {
+    fn advance_clock_from_sample(&mut self, event: &crate::live_cpu::LiveCpuSampleEvent) {
+        let observed_usec = match &event.measurement {
+            crate::live_cpu::LiveCpuRawMeasurement::Started { observed_at_usec, .. }
+            | crate::live_cpu::LiveCpuRawMeasurement::Sampled { observed_at_usec, .. }
+            | crate::live_cpu::LiveCpuRawMeasurement::Unreadable { observed_at_usec }
+            | crate::live_cpu::LiveCpuRawMeasurement::Retired { observed_at_usec, .. } => *observed_at_usec,
+        };
+        if observed_usec.as_usec() > self.latest_observed_at_usec.as_usec() {
+            self.latest_observed_at_usec = observed_usec;
+        }
+    }
+
+    fn drain_channel(&mut self) {
+        let drain_max_count = self.tracker.policy().channel_capacity_count.saturating_mul(2);
+        for _ in 0..drain_max_count {
+            match self.rx.try_recv() {
+                Ok(raw_event) => {
+                    if let Ok(event) = crate::live_cpu::from_snix_sample_event(&raw_event) {
+                        self.advance_clock_from_sample(&event);
+                        let _ = self.tracker.ingest(&event);
+                    }
+                }
+                Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 // Stored in canonical artifact provenance only after an accepted plan and
@@ -1545,6 +1598,7 @@ pub struct Worker {
     native_plan_binding_facts: BTreeMap<(String, String), NativePlanBindingFact>,
     max_jobs: u32,
     causal_trace: Option<CausalTraceCollector>,
+    live_cpu: Option<LiveCpuWorkerCollector>,
     // Senders and reservations outlive cancellation until each BuildService
     // future returns, including its sandbox/fetch teardown owner.
     build_cancellations: Option<HashMap<String, watch::Sender<bool>>>,
@@ -1552,6 +1606,65 @@ pub struct Worker {
     streaming_cancellation: Option<watch::Receiver<bool>>,
     /// Waiters woken by completed goals in this run.
     waiter_notifications: u32,
+    /// Union of output names demanded for each tracked goal.
+    goal_demands: HashMap<String, BTreeSet<String>>,
+    /// Output names satisfied by the most recent completed outcome of a Done goal.
+    satisfied_outputs: HashMap<String, BTreeSet<String>>,
+    /// Brand-new preflight-eligible root keys awaiting authenticated cache preflight
+    /// before their `input_derivations` are expanded.
+    pending_preflight_roots: VecDeque<String>,
+    /// Membership index mirroring `pending_preflight_roots` for duplicate
+    /// suppression and O(log N) retraction while the root stays in `Pending`.
+    deferred_root_keys: BTreeSet<String>,
+}
+
+fn format_available_outputs(derivation: &Derivation) -> String {
+    let available: Vec<&str> = derivation.outputs.keys().map(String::as_str).collect();
+    available.join(", ")
+}
+
+fn validate_output_selection(
+    drv_name: &str,
+    derivation: &Derivation,
+    outputs: Option<&BTreeSet<String>>,
+) -> Result<BTreeSet<String>, Error> {
+    assert!(!drv_name.is_empty(), "derivation name must not be empty");
+    let Some(selected) = outputs else {
+        return Ok(derivation.outputs.keys().cloned().collect());
+    };
+    if selected.is_empty() {
+        return Err(Error::InvalidOutputSelection {
+            drv_name: drv_name.to_string(),
+            output: "<empty>".to_string(),
+            available: format_available_outputs(derivation),
+        });
+    }
+    for output_name in selected {
+        if !derivation.outputs.contains_key(output_name) {
+            return Err(Error::InvalidOutputSelection {
+                drv_name: drv_name.to_string(),
+                output: output_name.clone(),
+                available: format_available_outputs(derivation),
+            });
+        }
+    }
+    debug_assert!(selected.iter().all(|name| derivation.outputs.contains_key(name)));
+    Ok(selected.clone())
+}
+
+fn upsert_build_outcome(list: &mut Vec<BuildOutcome>, mut outcome: BuildOutcome) {
+    if let Some(existing) = list.iter_mut().find(|row| row.drv_path == outcome.drv_path) {
+        for (name, path_info) in &existing.outputs {
+            outcome.outputs.entry(name.clone()).or_insert_with(|| path_info.clone());
+        }
+        for (name, report) in &existing.substitutions {
+            outcome.substitutions.entry(name.clone()).or_insert_with(|| report.clone());
+        }
+        outcome.cached = existing.cached && outcome.cached;
+        *existing = outcome;
+    } else {
+        list.push(outcome);
+    }
 }
 
 fn redacted_goal_identity(goal_key: &str) -> String {
@@ -1598,10 +1711,15 @@ impl Worker {
             native_plan_binding_facts: BTreeMap::new(),
             max_jobs,
             causal_trace: None,
+            live_cpu: None,
             build_cancellations: None,
             is_watch_active: false,
             streaming_cancellation: None,
             waiter_notifications: 0,
+            goal_demands: HashMap::new(),
+            satisfied_outputs: HashMap::new(),
+            pending_preflight_roots: VecDeque::new(),
+            deferred_root_keys: BTreeSet::new(),
         })
     }
 
@@ -1621,6 +1739,90 @@ impl Worker {
             .take()
             .map(|collector| collector.finish().map_err(|reason| Error::Store(format!("causal trace: {reason:?}"))))
             .transpose()
+    }
+
+    /// Enable opt-in, bounded, non-authoritative live CPU diagnostics for owned
+    /// local build attempts. Returns the bounded sender to attach to
+    /// `BubblewrapBuildService::with_live_cpu_diagnostics`.
+    pub fn enable_live_cpu_diagnostics(
+        &mut self,
+        policy: crate::live_cpu::LiveCpuClassifierPolicy,
+        allocated_cores: crate::live_cpu::AllocatedCores,
+    ) -> Result<mpsc::Sender<snix_build::buildservice::SandboxCpuSampleEvent>, Error> {
+        policy.validate().map_err(|err| Error::Store(format!("live CPU diagnostics policy: {err}")))?;
+        let tracker = crate::live_cpu::LiveCpuTracker::new(policy.clone())
+            .map_err(|err| Error::Store(format!("live CPU diagnostics tracker: {err}")))?;
+        let channel_len = usize::try_from(policy.channel_capacity_count)
+            .map_err(|err| Error::Store(format!("live CPU channel capacity: {err}")))?;
+        let (tx, rx) = mpsc::channel(channel_len);
+        self.live_cpu = Some(LiveCpuWorkerCollector {
+            tracker,
+            rx,
+            allocated_cores,
+            active_generations: HashMap::new(),
+            latest_observed_at_usec: crate::live_cpu::MonotonicTimestampUsec::from_usec(0),
+        });
+        debug_assert!(self.live_cpu.is_some());
+        debug_assert!(allocated_cores.as_u32() >= 1);
+        Ok(tx)
+    }
+
+    pub fn record_live_cpu_event(
+        &mut self,
+        event: &crate::live_cpu::LiveCpuSampleEvent,
+    ) -> Option<crate::live_cpu::LiveCpuIngestDisposition> {
+        let collector = self.live_cpu.as_mut()?;
+        collector.advance_clock_from_sample(event);
+        Some(collector.tracker.ingest(event))
+    }
+
+    pub fn live_cpu_summary(&mut self) -> Option<crate::live_cpu::LiveCpuDiagnosticsReport> {
+        self.drain_live_cpu_diagnostics();
+        let collector = self.live_cpu.as_ref()?;
+        Some(collector.tracker.report(collector.latest_observed_at_usec))
+    }
+
+    pub fn live_cpu_summary_at(
+        &mut self,
+        now_usec: crate::live_cpu::MonotonicTimestampUsec,
+    ) -> Option<crate::live_cpu::LiveCpuDiagnosticsReport> {
+        self.drain_live_cpu_diagnostics();
+        let collector = self.live_cpu.as_ref()?;
+        Some(collector.tracker.report(now_usec))
+    }
+
+    pub fn take_live_cpu_diagnostics(&mut self) -> Option<crate::live_cpu::LiveCpuDiagnosticsReport> {
+        self.drain_live_cpu_diagnostics();
+        let collector = self.live_cpu.take()?;
+        Some(collector.tracker.report(collector.latest_observed_at_usec))
+    }
+
+    fn drain_live_cpu_diagnostics(&mut self) {
+        let Some(collector) = self.live_cpu.as_mut() else {
+            return;
+        };
+        collector.drain_channel();
+    }
+
+    fn prepare_live_cpu_attempt(&mut self, drv_key: &str) -> Option<snix_build::buildservice::LiveCpuAttemptContext> {
+        let collector = self.live_cpu.as_mut()?;
+        collector.drain_channel();
+        let generation = collector.tracker.register_attempt(drv_key.to_string(), collector.allocated_cores).ok()?;
+        collector.active_generations.insert(drv_key.to_string(), generation);
+        Some(snix_build::buildservice::LiveCpuAttemptContext {
+            attempt_label: drv_key.to_string(),
+            generation: generation.as_u64(),
+        })
+    }
+
+    fn retire_live_cpu_attempt(&mut self, drv_key: &str, reason: crate::live_cpu::LiveCpuRetirementReason) {
+        let Some(collector) = self.live_cpu.as_mut() else {
+            return;
+        };
+        collector.drain_channel();
+        if let Some(generation) = collector.active_generations.remove(drv_key) {
+            let _ = collector.tracker.retire_attempt(drv_key, generation, reason);
+        }
     }
 
     /// Replace optional duration-class history and invalidate only known graph
@@ -1800,9 +2002,24 @@ impl Worker {
         known_paths: &DerivationRegistry,
         is_root: bool,
     ) -> Result<(), Error> {
-        // Pass 1: BFS to create all goals. Collect (key, dep_paths)
-        // for each newly created goal, in creation order.
-        let created = self.create_goals_bfs(drv_path, known_paths, is_root)?;
+        self.want_outputs(drv_path, known_paths, is_root, None)
+    }
+
+    /// Lazily create a goal for a derivation with explicit output demand.
+    ///
+    /// `outputs`: `None` demands all declared outputs; `Some(set)` demands
+    /// only the named outputs (rejecting empty sets or unknown output names).
+    /// Unions new demand into existing goals and reopens `Done` goals whose
+    /// satisfied outputs do not cover the widened demand.
+    pub fn want_outputs(
+        &mut self,
+        drv_path: &StorePath<String>,
+        known_paths: &DerivationRegistry,
+        is_root: bool,
+        outputs: Option<BTreeSet<String>>,
+    ) -> Result<(), Error> {
+        // Pass 1: BFS to create/reopen goals and coalesce demands.
+        let created = self.create_goals_bfs(drv_path, known_paths, is_root, outputs)?;
         if let Some(trace) = self.causal_trace.as_mut() {
             if is_root {
                 trace.root_required(&drv_path.to_absolute_path());
@@ -1814,147 +2031,580 @@ impl Worker {
             }
         }
 
-        // Pass 2: Wire deps and inspect, in creation order (leaves
-        // first since BFS processes deps before dependents).
+        // Pass 2: Wire deps and inspect, in creation/reopen order.
         for (key, dep_drv_paths) in &created {
-            self.resolve_binding_states(key, known_paths);
+            self.resolve_binding_states(key, known_paths)?;
             self.wire_deps_and_inspect(key, dep_drv_paths)?;
         }
 
         Ok(())
     }
 
-    /// BFS pass: create Goal structs for a root and all its transitive
-    /// deps. Returns `(key, dep_paths)` for each newly created goal.
+    fn resolve_initial_demand(
+        &self,
+        drv_path: &StorePath<String>,
+        known_paths: &DerivationRegistry,
+        outputs: Option<BTreeSet<String>>,
+    ) -> Result<BTreeSet<String>, Error> {
+        let key = drv_path.to_absolute_path();
+        let drv_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+        if let Some(entry) = known_paths.get_by_drv_path(&drv_abs) {
+            return validate_output_selection(drv_path.name(), &entry.derivation, outputs.as_ref());
+        }
+        if let Some(goal) = self.registry.get(&key) {
+            if let Some(derivation) = goal.derivation.as_deref() {
+                return validate_output_selection(drv_path.name(), derivation, outputs.as_ref());
+            }
+            if let Some(selected) = outputs {
+                if selected.is_empty() {
+                    return Err(Error::InvalidOutputSelection {
+                        drv_name: drv_path.name().to_string(),
+                        output: "<empty>".to_string(),
+                        available: String::new(),
+                    });
+                }
+                return Ok(selected);
+            }
+            return Ok(BTreeSet::new());
+        }
+        Err(Error::DerivationNotFound { path: drv_path.clone() })
+    }
+
+    fn validate_and_enqueue_deps(
+        &self,
+        derivation: &Derivation,
+        known_paths: &DerivationRegistry,
+        bfs: &mut CreateGoalsBfsState,
+    ) -> Result<(), Error> {
+        assert!(!derivation.outputs.is_empty(), "derivation must declare at least one output");
+        for (dep_sp, dep_outputs) in &derivation.input_derivations {
+            let dep_key = dep_sp.to_absolute_path();
+            let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+            if let Some(goal) = self.registry.get(&dep_key) {
+                if let Some(dep_drv) = goal.derivation.as_deref() {
+                    let _ = validate_output_selection(dep_sp.name(), dep_drv, Some(dep_outputs))?;
+                }
+            } else if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
+                let _ = validate_output_selection(dep_sp.name(), &entry.derivation, Some(dep_outputs))?;
+            } else {
+                return Err(Error::DerivationNotFound { path: dep_sp.clone() });
+            }
+
+            let is_missing_from_registry = !self.registry.contains(&dep_key);
+            let needs_more_demand =
+                self.goal_demands.get(&dep_key).is_none_or(|existing| !dep_outputs.is_subset(existing));
+            let is_done_missing_output = self.registry.get(&dep_key).is_some_and(|goal| {
+                goal.state == GoalState::Done
+                    && self.satisfied_outputs.get(&dep_key).is_none_or(|satisfied| !dep_outputs.is_subset(satisfied))
+            });
+            let is_unexpanded_non_root_pending = self.registry.get(&dep_key).is_some_and(|goal| {
+                !goal.is_root && goal.state == GoalState::Pending && !bfs.to_inspect_keys.contains(&dep_key)
+            });
+            let should_enqueue = is_missing_from_registry
+                || needs_more_demand
+                || is_done_missing_output
+                || is_unexpanded_non_root_pending;
+            if should_enqueue {
+                let is_new_in_queue = !bfs.queued_demands.contains_key(&dep_key);
+                bfs.queued_demands.entry(dep_key).or_default().extend(dep_outputs.iter().cloned());
+                if is_new_in_queue {
+                    bfs.queue.push_back(dep_sp.clone());
+                }
+            }
+        }
+        debug_assert!(bfs.queued_demands.len() >= bfs.queue.len());
+        Ok(())
+    }
+
+    /// BFS pass: create or reopen Goal structs and propagate demanded outputs.
+    /// Returns `(key, dep_paths)` for each goal requiring Pass 2 inspection.
     fn create_goals_bfs(
         &mut self,
         drv_path: &StorePath<String>,
         known_paths: &DerivationRegistry,
         is_root: bool,
+        outputs: Option<BTreeSet<String>>,
     ) -> Result<Vec<CreatedGoal>, Error> {
-        let mut queue: VecDeque<(StorePath<String>, bool)> = VecDeque::new();
-        queue.push_back((drv_path.clone(), is_root));
+        let initial_demand = self.resolve_initial_demand(drv_path, known_paths, outputs)?;
+        let initial_key = drv_path.to_absolute_path();
 
-        let mut created: Vec<CreatedGoal> = Vec::with_capacity(64);
-        // Tiger Style: fixed iteration limit.
-        let goal_count_max: u32 = MAX_GOALS;
+        let mut bfs = CreateGoalsBfsState {
+            queue: VecDeque::new(),
+            queued_roots: BTreeSet::new(),
+            queued_demands: HashMap::new(),
+            to_inspect: Vec::with_capacity(64),
+            to_inspect_keys: BTreeSet::new(),
+        };
+        if is_root {
+            bfs.queued_roots.insert(initial_key.clone());
+        }
+        bfs.queued_demands.insert(initial_key, initial_demand);
+        bfs.queue.push_back(drv_path.clone());
+
+        self.run_create_goals_bfs_loop(&mut bfs, known_paths)?;
+        Ok(bfs.to_inspect)
+    }
+
+    fn run_create_goals_bfs_loop(
+        &mut self,
+        bfs: &mut CreateGoalsBfsState,
+        known_paths: &DerivationRegistry,
+    ) -> Result<(), Error> {
+        // Tiger Style: fixed iteration limit (allows diamond demand widening).
+        let goal_count_max: u32 = MAX_GOALS.saturating_mul(4);
         let mut iterations: u32 = 0;
 
-        while let Some((sp, root)) = queue.pop_front() {
+        while let Some(sp) = bfs.queue.pop_front() {
             iterations = iterations.saturating_add(1);
             if iterations > goal_count_max {
                 return Err(Error::Store(format!("want() BFS exceeded iteration limit ({goal_count_max})")));
             }
 
             let key = sp.to_absolute_path();
+            let is_root_goal = bfs.queued_roots.remove(&key);
+            let req_outputs = bfs.queued_demands.remove(&key).unwrap_or_default();
 
-            // Already tracked — just upgrade to root if needed.
-            if let Some(goal) = self.registry.get_mut(&key) {
-                if root && !goal.is_root {
-                    goal.is_root = true;
-                    // A dispatched goal exports at completion. A finished goal still
-                    // needs its root export and exactly one root result.
-                    if matches!(goal.state, GoalState::Done | GoalState::Failed) {
-                        self.late_roots.insert(key.clone());
-                    }
-                    self.pressure_dirty_goals.insert(key);
-                }
-                continue;
-            }
-
-            // Look up derivation.
-            let drv_abs = sp.to_absolute_path_with_prefix(known_paths.store_dir());
-            let entry = known_paths
-                .get_by_drv_path(&drv_abs)
-                .ok_or_else(|| Error::DerivationNotFound { path: sp.clone() })?;
-            let derivation = entry.derivation.clone();
-            let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
-            if let Some(raw_bindings) = derivation.environment.get(PLAN_OUTPUT_BINDINGS_ENV_KEY) {
-                let records = decode_binding_records(raw_bindings.as_ref(), known_paths.store_dir())
-                    .map_err(|kind| Error::Store(format!("{}: invalid static input in {key}", kind.as_str())))?;
-                if records.is_empty() {
-                    return Err(Error::Store(format!("plan-output-invalid: empty binding list in {key}")));
-                }
-                let bindings = records
-                    .into_iter()
-                    .map(|record| {
-                        let has_declared_edge = derivation
-                            .input_derivations
-                            .get(&record.producer_drv_path)
-                            .is_some_and(|outputs| outputs.contains(record.plan_output.as_str()));
-                        let producer_abs =
-                            record.producer_drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
-                        let has_declared_plan = known_paths.get_by_drv_path(&producer_abs).is_some_and(|producer| {
-                            producer.dynamic_plan_outputs.iter().any(|output| output == record.plan_output.as_str())
-                        });
-                        PlanOutputBindingState {
-                            record,
-                            root: None,
-                            plan_digest: None,
-                            realized_path: None,
-                            failure: (!has_declared_edge || !has_declared_plan)
-                                .then_some(PlanOutputBindingFailureKind::Undeclared),
-                        }
-                    })
-                    .collect();
-                self.plan_output_bindings.insert(key.clone(), bindings);
-            }
-
-            let goal = if root {
-                Goal::new_root(sp.clone(), derivation)
+            if self.registry.contains(&key) {
+                self.handle_existing_goal_in_bfs(key, is_root_goal, req_outputs, bfs, known_paths)?;
             } else {
-                Goal::new(sp, derivation)
-            };
-            self.registry.insert(key.clone(), goal)?;
-            self.pressure_dirty_goals.insert(key.clone());
-
-            // A complete derivation is realized as-is; expanding its build-only
-            // inputs would schedule work no realized path needs.
-            let should_expand_deps = root || !self.satisfied_drvs.contains(&key);
-            if should_expand_deps {
-                for dep_sp in &dep_drv_paths {
-                    if !self.registry.contains(&dep_sp.to_absolute_path()) {
-                        queue.push_back((dep_sp.clone(), false));
-                    }
-                }
+                self.create_new_goal_in_bfs(sp, is_root_goal, req_outputs, bfs, known_paths)?;
             }
-
-            created.push((key, if should_expand_deps { dep_drv_paths } else { Vec::new() }));
         }
 
         debug_assert!(iterations <= goal_count_max);
-        Ok(created)
+        Ok(())
     }
 
-    fn resolve_binding_states(&mut self, key: &str, known_paths: &DerivationRegistry) {
+    fn enqueue_deferred_preflight_root(&mut self, key: String) -> Result<(), Error> {
+        assert!(!key.is_empty(), "deferred preflight root key must not be empty");
+        let pending_count = u32::try_from(self.deferred_root_keys.len())
+            .map_err(|_| Error::Store("deferred preflight root count overflow".to_string()))?;
+        if pending_count >= MAX_GOALS {
+            return Err(Error::Store(format!("goal limit ({MAX_GOALS}) exceeded")));
+        }
+        if self.deferred_root_keys.insert(key.clone()) {
+            self.pending_preflight_roots.push_back(key);
+        }
+        debug_assert!(u32::try_from(self.deferred_root_keys.len()).is_ok_and(|count| count <= MAX_GOALS));
+        Ok(())
+    }
+
+    fn handle_existing_pending_goal(
+        &mut self,
+        key: String,
+        is_upgraded_root: bool,
+        bfs: &mut CreateGoalsBfsState,
+        known_paths: &DerivationRegistry,
+    ) -> Result<(), Error> {
+        assert!(!key.is_empty(), "existing pending goal key must not be empty");
+        let (is_root, drv_path, derivation) = {
+            let goal = self
+                .registry
+                .get(&key)
+                .ok_or_else(|| Error::Store(format!("pending goal disappeared during BFS: {key}")))?;
+            debug_assert_eq!(goal.state, GoalState::Pending);
+            let Some(derivation) = goal.derivation.as_deref().cloned() else {
+                return Ok(());
+            };
+            (goal.is_root, goal.drv_path.clone(), derivation)
+        };
+        let is_upgraded_satisfied = is_upgraded_root && self.satisfied_drvs.contains(&key);
+        if is_upgraded_satisfied {
+            let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
+            self.validate_and_enqueue_deps(&derivation, known_paths, bfs)?;
+            if let Some(entry) = bfs.to_inspect.iter_mut().find(|(existing_key, _)| existing_key == &key) {
+                entry.1 = dep_drv_paths;
+            } else if bfs.to_inspect_keys.insert(key.clone()) {
+                bfs.to_inspect.push((key, dep_drv_paths));
+            }
+            return Ok(());
+        }
+        if bfs.to_inspect_keys.contains(&key) {
+            return Ok(());
+        }
+        if is_root {
+            if self.deferred_root_keys.contains(&key) {
+                return Ok(());
+            }
+            let is_eligible_preflight = !self.satisfied_drvs.contains(&key)
+                && crate::orchestrate::is_preflight_eligible_root(&drv_path, known_paths);
+            if is_eligible_preflight {
+                return self.enqueue_deferred_preflight_root(key);
+            }
+        } else {
+            self.deferred_root_keys.remove(&key);
+        }
+        let should_expand_deps = !self.satisfied_drvs.contains(&key);
+        let dep_drv_paths = if should_expand_deps {
+            self.validate_and_enqueue_deps(&derivation, known_paths, bfs)?;
+            derivation.input_derivations.keys().cloned().collect()
+        } else {
+            Vec::new()
+        };
+        if bfs.to_inspect_keys.insert(key.clone()) {
+            bfs.to_inspect.push((key, dep_drv_paths));
+        }
+        Ok(())
+    }
+
+    fn handle_existing_goal_in_bfs(
+        &mut self,
+        key: String,
+        is_root_goal: bool,
+        req_outputs: BTreeSet<String>,
+        bfs: &mut CreateGoalsBfsState,
+        known_paths: &DerivationRegistry,
+    ) -> Result<(), Error> {
+        assert!(!key.is_empty(), "existing goal key must not be empty");
+        let (reopen_deps, is_pending_goal, is_upgraded_root) = {
+            let goal = self
+                .registry
+                .get_mut(&key)
+                .ok_or_else(|| Error::Store(format!("goal disappeared during BFS: {key}")))?;
+            let is_upgraded_root = is_root_goal && !goal.is_root;
+            if is_upgraded_root {
+                goal.is_root = true;
+                self.pressure_dirty_goals.insert(key.clone());
+            }
+            let demands = self.goal_demands.entry(key.clone()).or_default();
+            demands.extend(req_outputs);
+
+            let mut reopen_deps: Option<Derivation> = None;
+            let mut is_pending_goal = false;
+            match goal.state {
+                GoalState::Done => {
+                    let is_already_satisfied =
+                        self.satisfied_outputs.get(&key).is_some_and(|satisfied| demands.is_subset(satisfied));
+                    if is_already_satisfied {
+                        if is_upgraded_root {
+                            self.late_roots.insert(key.clone());
+                        }
+                    } else {
+                        goal.reopen_for_demand()?;
+                        reopen_deps = goal.derivation.as_deref().cloned();
+                        self.satisfied_outputs.remove(&key);
+                        self.late_roots.remove(&key);
+                        self.satisfied_drvs.remove(&key);
+                        self.pressure_dirty_goals.insert(key.clone());
+                    }
+                }
+                GoalState::Failed => {
+                    if is_upgraded_root {
+                        self.late_roots.insert(key.clone());
+                    }
+                }
+                GoalState::Pending => {
+                    is_pending_goal = true;
+                }
+                GoalState::AwaitingDerivation | GoalState::Waiting { .. } | GoalState::Ready | GoalState::Building => {}
+            }
+            (reopen_deps, is_pending_goal, is_upgraded_root)
+        };
+        if let Some(derivation) = reopen_deps {
+            let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
+            self.validate_and_enqueue_deps(&derivation, known_paths, bfs)?;
+            if bfs.to_inspect_keys.insert(key.clone()) {
+                bfs.to_inspect.push((key, dep_drv_paths));
+            }
+        } else if is_pending_goal {
+            self.handle_existing_pending_goal(key, is_upgraded_root, bfs, known_paths)?;
+        }
+        debug_assert_eq!(bfs.to_inspect_keys.len(), bfs.to_inspect.len());
+        Ok(())
+    }
+
+    fn create_new_goal_in_bfs(
+        &mut self,
+        sp: StorePath<String>,
+        is_root_goal: bool,
+        req_outputs: BTreeSet<String>,
+        bfs: &mut CreateGoalsBfsState,
+        known_paths: &DerivationRegistry,
+    ) -> Result<(), Error> {
+        let key = sp.to_absolute_path();
+        assert!(!key.is_empty(), "new goal key must not be empty");
+        let drv_abs = sp.to_absolute_path_with_prefix(known_paths.store_dir());
+        let entry = known_paths
+            .get_by_drv_path(&drv_abs)
+            .ok_or_else(|| Error::DerivationNotFound { path: sp.clone() })?;
+        let derivation = entry.derivation.clone();
+        let validated_req = if req_outputs.is_empty() {
+            validate_output_selection(sp.name(), &derivation, None)?
+        } else {
+            validate_output_selection(sp.name(), &derivation, Some(&req_outputs))?
+        };
+        let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
+        self.record_new_goal_plan_bindings(&key, &derivation, known_paths)?;
+
+        let goal = if is_root_goal {
+            Goal::new_root(sp.clone(), derivation.clone())
+        } else {
+            Goal::new(sp.clone(), derivation.clone())
+        };
+        self.registry.insert(key.clone(), goal)?;
+        self.pressure_dirty_goals.insert(key.clone());
+        self.goal_demands.insert(key.clone(), validated_req);
+
+        let is_deferred_preflight_root = is_root_goal
+            && !self.satisfied_drvs.contains(&key)
+            && crate::orchestrate::is_preflight_eligible_root(&sp, known_paths);
+        if is_deferred_preflight_root {
+            return self.enqueue_deferred_preflight_root(key);
+        }
+
+        // A complete derivation is realized as-is; expanding its build-only
+        // inputs would schedule work no realized path needs.
+        let should_expand_deps = is_root_goal || !self.satisfied_drvs.contains(&key);
+        if should_expand_deps {
+            self.validate_and_enqueue_deps(&derivation, known_paths, bfs)?;
+        }
+
+        if bfs.to_inspect_keys.insert(key.clone()) {
+            bfs.to_inspect.push((key, if should_expand_deps { dep_drv_paths } else { Vec::new() }));
+        }
+        debug_assert_eq!(bfs.to_inspect_keys.len(), bfs.to_inspect.len());
+        Ok(())
+    }
+
+    fn record_new_goal_plan_bindings(
+        &mut self,
+        key: &str,
+        derivation: &Derivation,
+        known_paths: &DerivationRegistry,
+    ) -> Result<(), Error> {
+        let Some(raw_bindings) = derivation.environment.get(PLAN_OUTPUT_BINDINGS_ENV_KEY) else {
+            return Ok(());
+        };
+        let records = decode_binding_records(raw_bindings.as_ref(), known_paths.store_dir())
+            .map_err(|kind| Error::Store(format!("{}: invalid static input in {key}", kind.as_str())))?;
+        if records.is_empty() {
+            return Err(Error::Store(format!("plan-output-invalid: empty binding list in {key}")));
+        }
+        let bindings = records
+            .into_iter()
+            .map(|record| {
+                let has_declared_edge = derivation
+                    .input_derivations
+                    .get(&record.producer_drv_path)
+                    .is_some_and(|outputs| outputs.contains(record.plan_output.as_str()));
+                let producer_abs = record.producer_drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+                let has_declared_plan = known_paths.get_by_drv_path(&producer_abs).is_some_and(|producer| {
+                    producer.dynamic_plan_outputs.iter().any(|output| output == record.plan_output.as_str())
+                });
+                PlanOutputBindingState {
+                    record,
+                    root: None,
+                    plan_digest: None,
+                    realized_path: None,
+                    failure: (!has_declared_edge || !has_declared_plan)
+                        .then_some(PlanOutputBindingFailureKind::Undeclared),
+                }
+            })
+            .collect();
+        self.plan_output_bindings.insert(key.to_string(), bindings);
+        Ok(())
+    }
+
+    fn expand_deferred_root_deps(
+        &mut self,
+        drv_key: &str,
+        known_paths: &DerivationRegistry,
+        failed: &mut Vec<FailedGoal>,
+    ) -> Result<(), Error> {
+        assert!(!self.deferred_root_keys.contains(drv_key), "deferred root key must be popped before expansion");
+        let derivation = {
+            let goal = self
+                .registry
+                .get(drv_key)
+                .ok_or_else(|| Error::Store(format!("deferred root vanished before expansion: {drv_key}")))?;
+            assert_eq!(goal.state, GoalState::Pending, "deferred root must be Pending before expansion");
+            goal.derivation
+                .as_ref()
+                .ok_or_else(|| Error::Store(format!("deferred root {drv_key} has no derivation")))?
+                .clone()
+        };
+        let dep_drv_paths: Vec<StorePath<String>> = derivation.input_derivations.keys().cloned().collect();
+        let mut bfs = CreateGoalsBfsState {
+            queue: VecDeque::new(),
+            queued_roots: BTreeSet::new(),
+            queued_demands: HashMap::new(),
+            to_inspect: Vec::with_capacity(dep_drv_paths.len()),
+            to_inspect_keys: BTreeSet::new(),
+        };
+        self.validate_and_enqueue_deps(&derivation, known_paths, &mut bfs)?;
+        self.run_create_goals_bfs_loop(&mut bfs, known_paths)?;
+
+        if let Some(trace) = self.causal_trace.as_mut() {
+            for dep in &dep_drv_paths {
+                trace.dependency_required(drv_key, &dep.to_absolute_path());
+            }
+            for (key, dependencies) in &bfs.to_inspect {
+                for dep in dependencies {
+                    trace.dependency_required(key, &dep.to_absolute_path());
+                }
+            }
+        }
+
+        self.resolve_binding_states(drv_key, known_paths)?;
+        self.wire_deps_and_inspect(drv_key, &dep_drv_paths)?;
+        for (key, deps) in &bfs.to_inspect {
+            self.resolve_binding_states(key, known_paths)?;
+            self.wire_deps_and_inspect(key, deps)?;
+        }
+        self.propagate_existing_dep_failures(drv_key, &bfs.to_inspect, failed)?;
+        Ok(())
+    }
+
+    fn propagate_existing_dep_failures(
+        &mut self,
+        root_key: &str,
+        created: &[CreatedGoal],
+        failed: &mut Vec<FailedGoal>,
+    ) -> Result<(), Error> {
+        let keys_to_check: Vec<String> = created
+            .iter()
+            .rev()
+            .map(|(key, _)| key.clone())
+            .chain(std::iter::once(root_key.to_string()))
+            .collect();
+        for key in keys_to_check {
+            let failed_dep_key = {
+                let Some(goal) = self.registry.get(&key) else {
+                    continue;
+                };
+                if !matches!(goal.state, GoalState::Waiting { .. }) {
+                    continue;
+                }
+                goal.waitees
+                    .iter()
+                    .find(|dep_key| self.registry.get(dep_key).is_some_and(|dep| dep.state == GoalState::Failed))
+                    .cloned()
+            };
+            if let Some(dep_key) = failed_dep_key {
+                self.propagate_single_failed_dep(
+                    FailedDepEdge {
+                        waiter_key: &key,
+                        dep_key: &dep_key,
+                    },
+                    failed,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    fn propagate_single_failed_dep(
+        &mut self,
+        edge: FailedDepEdge<'_>,
+        failed: &mut Vec<FailedGoal>,
+    ) -> Result<(), Error> {
+        let dep_name = self
+            .registry
+            .get(edge.dep_key)
+            .map_or_else(String::new, |dep_goal| dep_goal.drv_path.name().to_string());
+        let failure = self
+            .dependency_failures
+            .get(edge.dep_key)
+            .or_else(|| failed.iter().find(|row| row.drv_key == edge.dep_key))
+            .cloned();
+        match failure {
+            Some(dep_failure) => {
+                let failure_facts = BuildFailureFacts {
+                    phase: dep_failure.phase,
+                    error_class: dep_failure.error_class,
+                    fod_mismatch: dep_failure.fod_mismatch.clone(),
+                };
+                let build_log =
+                    self.dependency_failure_logs.get(&dep_failure.origin_drv_key).cloned().or(dep_failure.build_log);
+                self.propagate_failure(
+                    edge.waiter_key,
+                    &dep_failure.origin_drv_key,
+                    edge.dep_key,
+                    &dep_name,
+                    &dep_failure.origin_error,
+                    &failure_facts,
+                    build_log.as_deref(),
+                    failed,
+                )
+            }
+            None => self.propagate_failure(
+                edge.waiter_key,
+                edge.dep_key,
+                edge.dep_key,
+                &dep_name,
+                "dependency build failed",
+                &BuildFailureFacts::builder(),
+                None,
+                failed,
+            ),
+        }
+    }
+
+    fn resolve_binding_plan_roots(&mut self, key: &str) {
+        let Some(bindings) = self.plan_output_bindings.get_mut(key) else {
+            return;
+        };
+        for binding in bindings {
+            if binding.failure.is_some() || binding.realized_path.is_some() || binding.root.is_some() {
+                continue;
+            }
+            let producer_key = binding.record.producer_drv_path.to_absolute_path();
+            match self
+                .native_plan_binding_facts
+                .get(&(producer_key.clone(), binding.record.plan_output.as_str().to_owned()))
+            {
+                Some(NativePlanBindingFact::Accepted { plan, registered_units }) => {
+                    binding.plan_digest = Some(plan.digest().to_owned());
+                    match bind_accepted_plan_root(&binding.record, plan, registered_units) {
+                        Ok(root) => binding.root = Some(root),
+                        Err(failure) => binding.failure = Some(failure),
+                    }
+                }
+                Some(NativePlanBindingFact::Rejected) => {
+                    binding.failure = Some(PlanOutputBindingFailureKind::PlanRejected);
+                }
+                None if self.registry.get(&producer_key).is_some_and(|goal| goal.state == GoalState::Failed) => {
+                    binding.failure = Some(PlanOutputBindingFailureKind::ProducerFailed);
+                }
+                None => {}
+            }
+        }
+    }
+
+    fn widen_binding_root_demands(&mut self, key: &str, known_paths: &DerivationRegistry) -> Result<(), Error> {
+        let Some(bindings) = self.plan_output_bindings.get(key) else {
+            return Ok(());
+        };
+        let mut pending_roots: Vec<(StorePath<String>, String)> = Vec::with_capacity(bindings.len());
+        for binding in bindings {
+            if binding.failure.is_some() || binding.realized_path.is_some() {
+                continue;
+            }
+            let Some(root) = &binding.root else {
+                continue;
+            };
+            let root_key = root.drv_path.to_absolute_path();
+            if root_key != key && self.registry.contains(&root_key) {
+                pending_roots.push((root.drv_path.clone(), root.output.as_str().to_owned()));
+            }
+        }
+        for (root_drv_path, output_name) in pending_roots {
+            let created =
+                self.create_goals_bfs(&root_drv_path, known_paths, false, Some(BTreeSet::from([output_name])))?;
+            for (reopened_key, dep_drv_paths) in &created {
+                self.wire_deps_and_inspect(reopened_key, dep_drv_paths)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_binding_realized_paths(&mut self, key: &str, known_paths: &DerivationRegistry) {
         let Some(bindings) = self.plan_output_bindings.get_mut(key) else {
             return;
         };
         for binding in bindings {
             if binding.failure.is_some() || binding.realized_path.is_some() {
                 continue;
-            }
-            if binding.root.is_none() {
-                let producer_key = binding.record.producer_drv_path.to_absolute_path();
-                match self
-                    .native_plan_binding_facts
-                    .get(&(producer_key.clone(), binding.record.plan_output.as_str().to_owned()))
-                {
-                    Some(NativePlanBindingFact::Accepted { plan, registered_units }) => {
-                        binding.plan_digest = Some(plan.digest().to_owned());
-                        match bind_accepted_plan_root(&binding.record, plan, registered_units) {
-                            Ok(root) => binding.root = Some(root),
-                            Err(failure) => binding.failure = Some(failure),
-                        }
-                    }
-                    Some(NativePlanBindingFact::Rejected) => {
-                        binding.failure = Some(PlanOutputBindingFailureKind::PlanRejected);
-                    }
-                    None if self.registry.get(&producer_key).is_some_and(|goal| goal.state == GoalState::Failed) => {
-                        binding.failure = Some(PlanOutputBindingFailureKind::ProducerFailed);
-                    }
-                    None => continue,
-                }
             }
             if let Some(root) = &binding.root {
                 let root_key = root.drv_path.to_absolute_path();
@@ -1977,6 +2627,13 @@ impl Worker {
                 }
             }
         }
+    }
+
+    fn resolve_binding_states(&mut self, key: &str, known_paths: &DerivationRegistry) -> Result<(), Error> {
+        self.resolve_binding_plan_roots(key);
+        self.widen_binding_root_demands(key, known_paths)?;
+        self.resolve_binding_realized_paths(key, known_paths);
+        Ok(())
     }
 
     fn binding_failure(&self, key: &str) -> Option<PlanOutputBindingFailureKind> {
@@ -2005,6 +2662,10 @@ impl Worker {
             }
             let goal =
                 self.registry.get_mut(key).ok_or_else(|| Error::Store(format!("binding consumer missing: {key}")))?;
+            debug_assert!(
+                matches!(goal.state, GoalState::Waiting { .. } | GoalState::Failed),
+                "binding consumer {key} must be Waiting or Failed before attaching root {root_key}"
+            );
             if let GoalState::Waiting { remaining_deps } = &mut goal.state {
                 *remaining_deps = remaining_deps
                     .checked_add(1)
@@ -2070,15 +2731,18 @@ impl Worker {
         Ok(Some(claim))
     }
 
-    fn final_binding_reports(&mut self, known_paths: &DerivationRegistry) -> Vec<NativePlanOutputBindingReport> {
+    fn final_binding_reports(
+        &mut self,
+        known_paths: &DerivationRegistry,
+    ) -> Result<Vec<NativePlanOutputBindingReport>, Error> {
         if self.plan_output_bindings.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
         let consumers: Vec<String> = self.plan_output_bindings.keys().cloned().collect();
         for consumer in consumers {
-            self.resolve_binding_states(&consumer, known_paths);
+            self.resolve_binding_states(&consumer, known_paths)?;
         }
-        self.binding_reports()
+        Ok(self.binding_reports())
     }
     /// Wire waiter edges for a goal's deps and inspect (Pending →
     /// Waiting/Ready). All deps must already exist in the registry.
@@ -2166,7 +2830,7 @@ impl Worker {
             native_dynamic_plans: &mut native_dynamic_plans,
             completed_count: 0,
         };
-        let iteration_count_max: u32 = total_goals.saturating_mul(4).max(16);
+        let iteration_count_max: u32 = MAX_GOALS.saturating_mul(4);
         let mut live_observer = None;
 
         for _ in 0..iteration_count_max {
@@ -2180,7 +2844,17 @@ impl Worker {
                     "worker finished"
                 );
                 let priority_decisions = std::mem::take(&mut self.priority_decisions);
-                let binding_rows = self.final_binding_reports(known_paths);
+                let binding_rows = self.final_binding_reports(known_paths)?;
+                outcomes.retain(|outcome| {
+                    self.registry
+                        .get(&outcome.drv_path.to_absolute_path())
+                        .is_some_and(|goal| goal.state == GoalState::Done)
+                });
+                all_outcomes.retain(|outcome| {
+                    self.registry
+                        .get(&outcome.drv_path.to_absolute_path())
+                        .is_some_and(|goal| goal.state == GoalState::Done)
+                });
                 return Ok(finish_worker_result(
                     outcomes,
                     all_outcomes,
@@ -2342,6 +3016,8 @@ impl Worker {
                 return Err(Error::Store("streaming teardown is not observed".to_string()));
             }
             if is_cancelled {
+                self.pending_preflight_roots.clear();
+                self.deferred_root_keys.clear();
                 let goals: Vec<_> = self
                     .registry
                     .iter()
@@ -2363,6 +3039,18 @@ impl Worker {
                                 state.failed,
                             )?;
                         }
+                        Some(GoalState::Pending) => {
+                            if let Some(goal) = self.registry.get_mut(&key) {
+                                let _ = goal.inspect(Vec::new())?;
+                            }
+                            self.fail_goal(
+                                &key,
+                                "build cancelled after owned teardown",
+                                BuildFailureFacts::builder(),
+                                None,
+                                state.failed,
+                            )?;
+                        }
                         Some(GoalState::Ready | GoalState::Building) => {
                             self.fail_goal(
                                 &key,
@@ -2372,8 +3060,7 @@ impl Worker {
                                 state.failed,
                             )?;
                         }
-                        Some(GoalState::Done | GoalState::Failed) => {}
-                        _ => return Err(Error::Store("cancelled goal has an unobserved scheduling state".into())),
+                        Some(GoalState::Done | GoalState::Failed) | None => {}
                     }
                 }
                 if let Some(observer) = live_observer.as_mut() {
@@ -2381,6 +3068,7 @@ impl Worker {
                 }
             }
         }
+        self.drain_live_cpu_diagnostics();
         result?;
         info!(
             completed = state.completed_count,
@@ -2390,7 +3078,17 @@ impl Worker {
             "worker streaming finished"
         );
         let priority_decisions = std::mem::take(&mut self.priority_decisions);
-        let binding_rows = self.final_binding_reports(known_paths);
+        let binding_rows = self.final_binding_reports(known_paths)?;
+        outcomes.retain(|outcome| {
+            self.registry
+                .get(&outcome.drv_path.to_absolute_path())
+                .is_some_and(|goal| goal.state == GoalState::Done)
+        });
+        all_outcomes.retain(|outcome| {
+            self.registry
+                .get(&outcome.drv_path.to_absolute_path())
+                .is_some_and(|goal| goal.state == GoalState::Done)
+        });
         Ok(finish_worker_result(
             outcomes,
             all_outcomes,
@@ -2456,13 +3154,15 @@ impl Worker {
                 }
             }
         }
+        self.drain_live_cpu_diagnostics();
         result?;
         if !state.pending_meta.is_empty() || !state.join_set.is_empty() {
             return Err(Error::Store("watch teardown is not observed".to_string()));
         }
         self.build_cancellations = None;
         self.is_watch_active = false;
-        let bindings = self.final_binding_reports(known_paths);
+        self.drain_live_cpu_diagnostics();
+        let bindings = self.final_binding_reports(known_paths)?;
         Ok(finish_worker_result(
             outcomes,
             all_outcomes,
@@ -2474,7 +3174,11 @@ impl Worker {
         ))
     }
 
-    fn watch_request_cancellation(&self, stale: &[String]) {
+    fn watch_request_cancellation(&mut self, stale: &[String]) {
+        self.drain_live_cpu_diagnostics();
+        for key in stale {
+            self.retire_live_cpu_attempt(key, crate::live_cpu::LiveCpuRetirementReason::Cancelled);
+        }
         if let Some(senders) = self.build_cancellations.as_ref() {
             for key in stale {
                 let Some(sender) = senders.get(key) else {
@@ -2551,12 +3255,16 @@ impl Worker {
                     return Err(Error::Store("plan-output-invalid: empty watched binding list".to_string()));
                 }
             }
-            queue.extend(
-                derivation
-                    .input_derivations
-                    .keys()
-                    .map(|dependency| dependency.to_absolute_path_with_prefix(prefix)),
-            );
+            for (dependency, selected_outputs) in &derivation.input_derivations {
+                let dep_path = dependency.to_absolute_path_with_prefix(prefix);
+                let dep_derivation = incoming
+                    .get(&dep_path)
+                    .map(|entry| &entry.2)
+                    .or_else(|| known_paths.get_by_drv_path(&dep_path).map(|entry| entry.derivation.as_ref()))
+                    .ok_or_else(|| Error::Store(format!("watch incoming derivation missing: {dep_path}")))?;
+                let _ = validate_output_selection(dependency.name(), dep_derivation, Some(selected_outputs))?;
+                queue.push_back(dep_path);
+            }
         }
         Ok(())
     }
@@ -2613,6 +3321,10 @@ impl Worker {
         self.late_roots.retain(|key| !keys.contains(key));
         self.dependency_failures.retain(|key, _| !keys.contains(key));
         self.dependency_failure_logs.retain(|key, _| !keys.contains(key));
+        self.goal_demands.retain(|key, _| !keys.contains(key));
+        self.satisfied_outputs.retain(|key, _| !keys.contains(key));
+        self.deferred_root_keys.retain(|key| !keys.contains(key));
+        self.pending_preflight_roots.retain(|key| !keys.contains(key));
         self.pressure_dirty_goals.extend(self.registry.iter().map(|(key, _)| key.to_owned()));
         self.watch_retain_metadata(builder, known_paths)?;
         Ok(())
@@ -2685,11 +3397,13 @@ impl Worker {
                 return Err(Error::Store(format!("watch task lost without teardown proof: {error}")));
             }
         };
+        debug_assert!(stale.windows(2).all(|pair| pair[0] <= pair[1]), "watch_join stale list must be sorted");
         let is_stale = stale.binary_search(key).is_ok();
         if let Some(senders) = self.build_cancellations.as_mut() {
             senders.remove(key);
         }
         if is_stale {
+            self.retire_live_cpu_attempt(key, crate::live_cpu::LiveCpuRetirementReason::Cancelled);
             state.pending_meta.remove(key);
             if let Some(trace) = self.causal_trace.as_mut() {
                 trace.cancelled(key);
@@ -2782,7 +3496,11 @@ impl Worker {
                     let outcomes = state
                         .all_outcomes
                         .iter()
-                        .filter(|outcome| roots.contains(&outcome.drv_path.to_absolute_path()))
+                        .filter(|outcome| {
+                            let key = outcome.drv_path.to_absolute_path();
+                            roots.contains(&key)
+                                && self.registry.get(&key).is_some_and(|goal| goal.state == GoalState::Done)
+                        })
                         .cloned()
                         .collect();
                     let failed: Vec<FailedGoal> =
@@ -3042,16 +3760,21 @@ impl Worker {
         {
             senders.remove(key);
         }
+        self.drain_live_cpu_diagnostics();
         match join_result {
             Ok((drv_key, Ok(build_result))) => {
+                self.retire_live_cpu_attempt(&drv_key, crate::live_cpu::LiveCpuRetirementReason::Completed);
                 self.handle_build_completion(&drv_key, build_result, builder, known_paths, state).await
             }
             Ok((drv_key, Err(build_err))) => {
+                self.retire_live_cpu_attempt(&drv_key, crate::live_cpu::LiveCpuRetirementReason::Failed);
+                let prepared = state
+                    .pending_meta
+                    .remove(&drv_key)
+                    .ok_or_else(|| Error::Store(format!("BUG: failed build has no pending metadata: {drv_key}")))?;
                 let failure_facts = build_err.failure_facts();
                 let mut err_msg = format!("{build_err}");
-                if let Some(prepared) = state.pending_meta.remove(&drv_key)
-                    && let Err(report_error) = builder.record_failed_finish_gates(&prepared, &err_msg)
-                {
+                if let Err(report_error) = builder.record_failed_finish_gates(&prepared, &err_msg) {
                     err_msg.push_str(&format!("; finish-gate report unavailable: {report_error}"));
                 }
                 tracing::warn!(drv = %drv_key, err = %err_msg, "sandbox build failed");
@@ -3164,12 +3887,22 @@ impl Worker {
             .map(|(key, _)| key.clone())
             .collect();
         for consumer in &consumers {
-            self.resolve_binding_states(consumer, known_paths);
+            self.resolve_binding_states(consumer, known_paths)?;
             self.attach_binding_roots(consumer)?;
         }
 
         self.detect_dynamic_derivations(drv_key, &outcome, builder, known_paths, &declared_native_outputs)
             .await?;
+
+        let is_demand_satisfied = self
+            .goal_demands
+            .get(drv_key)
+            .is_none_or(|demanded| demanded.iter().all(|name| outcome.outputs.contains_key(name)));
+        if !is_demand_satisfied {
+            return Err(Error::Store(format!("completed outcome for {drv_key} is missing demanded outputs")));
+        }
+        let satisfied: BTreeSet<String> = outcome.outputs.keys().cloned().collect();
+        self.satisfied_outputs.insert(drv_key.to_owned(), satisfied);
 
         self.complete_goal(drv_key, outcome, state.outcomes, state.all_outcomes, state.failed)?;
         for consumer in consumers {
@@ -3614,8 +4347,14 @@ impl Worker {
         } else {
             register_v1_dynamic_plan_units(&accepted, known_paths)?
         };
-        for root_drv_path in &registered.root_drv_paths {
-            self.want(root_drv_path, known_paths, true)?;
+        let units_by_id: BTreeMap<&UnitId, &DynamicUnit> =
+            accepted.plan.units().iter().map(|unit| (&unit.id, unit)).collect();
+        for (root_unit_id, root_drv_path) in accepted.plan.roots().iter().zip(&registered.root_drv_paths) {
+            let requested =
+                units_by_id.get(root_unit_id).filter(|unit| !unit.requested_outputs.is_empty()).map(|unit| {
+                    unit.requested_outputs.iter().map(|output| output.as_str().to_owned()).collect::<BTreeSet<_>>()
+                });
+            self.want_outputs(root_drv_path, known_paths, true, requested)?;
         }
         debug_assert!(registered.unit_drv_paths.len() >= accepted.plan.roots().len());
         self.native_plan_binding_facts.insert(
@@ -3735,17 +4474,17 @@ impl Worker {
                 .registry
                 .get_mut(awaiting_key)
                 .ok_or_else(|| Error::Store(format!("worker: awaiting goal not found: {awaiting_key}")))?;
+            let drv_name = goal.drv_path.name().to_owned();
             goal.set_derivation(dyn_drv.derivation.clone())?;
+            let validated_demand =
+                validate_output_selection(&drv_name, &dyn_drv.derivation, self.goal_demands.get(awaiting_key))?;
+            self.goal_demands.insert(awaiting_key.clone(), validated_demand);
             let dep_drv_paths: Vec<StorePath<String>> = dyn_drv.derivation.input_derivations.keys().cloned().collect();
-            for dep_sp in &dep_drv_paths {
+            for (dep_sp, dep_outputs) in &dyn_drv.derivation.input_derivations {
                 let dep_key = dep_sp.to_absolute_path();
-                if !self.registry.contains(&dep_key) {
-                    let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
-                    if let Some(entry) = known_paths.get_by_drv_path(&dep_abs) {
-                        let dep_goal = crate::goal::Goal::new(dep_sp.clone(), entry.derivation.clone());
-                        self.registry.insert(dep_key.clone(), dep_goal)?;
-                        self.pressure_dirty_goals.insert(dep_key.clone());
-                    }
+                let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+                if known_paths.get_by_drv_path(&dep_abs).is_some() || self.registry.contains(&dep_key) {
+                    self.want_outputs(dep_sp, known_paths, false, Some(dep_outputs.clone()))?;
                 }
             }
             if let Some(trace) = self.causal_trace.as_mut() {
@@ -3779,6 +4518,181 @@ impl Worker {
     /// - Call `prepare_build` (may resolve as cache hit or fetcher)
     /// - If cache/fetcher: complete immediately, notify waiters
     /// - If sandbox build: spawn on JoinSet with Semaphore
+    fn pending_preflight_root_inputs(&self, drv_key: &str) -> Result<Option<PreflightRootInputs>, Error> {
+        let Some(goal) = self.registry.get(drv_key) else {
+            return Ok(None);
+        };
+        if !goal.is_root {
+            return Ok(None);
+        }
+        if goal.state != GoalState::Pending {
+            return Ok(None);
+        }
+        let derivation = goal
+            .derivation
+            .as_ref()
+            .ok_or_else(|| Error::Store(format!("deferred root {drv_key} has no derivation")))?
+            .clone();
+        Ok(Some((goal.drv_path.clone(), derivation)))
+    }
+
+    async fn handle_preflight_result<BServ>(
+        &mut self,
+        drv_key: &str,
+        preflight_result: Result<Option<BuildOutcome>, Error>,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        state: &mut WorkerLoopState<'_>,
+    ) -> Result<bool, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        match preflight_result {
+            Ok(Some(outcome)) => {
+                let goal = self
+                    .registry
+                    .get_mut(drv_key)
+                    .ok_or_else(|| Error::Store(format!("preflight root vanished: {drv_key}")))?;
+                let _ = goal.inspect(Vec::new())?;
+                if let Some(trace) = self.causal_trace.as_mut() {
+                    trace.cache_decided(drv_key, outcome.cached);
+                }
+                self.handle_completed_outcome(drv_key, outcome, builder, known_paths, state).await?;
+                Ok(true)
+            }
+            Ok(None) => {
+                if let Some(trace) = self.causal_trace.as_mut() {
+                    trace.cache_decided(drv_key, false);
+                }
+                self.expand_deferred_root_deps(drv_key, known_paths, state.failed)?;
+                Ok(false)
+            }
+            Err(err) => {
+                let failure_facts = err.failure_facts();
+                let err_msg = format!("{err}");
+                tracing::warn!(drv = %drv_key, err = %err_msg, "preflight_cached_root failed");
+                let goal = self
+                    .registry
+                    .get_mut(drv_key)
+                    .ok_or_else(|| Error::Store(format!("preflight root vanished: {drv_key}")))?;
+                let _ = goal.inspect(Vec::new())?;
+                self.fail_goal(drv_key, &err_msg, failure_facts, None, state.failed)?;
+                Ok(true)
+            }
+        }
+    }
+
+    fn drain_demoted_preflight_roots(
+        &mut self,
+        demoted: Vec<String>,
+        known_paths: &DerivationRegistry,
+        state: &mut WorkerLoopState<'_>,
+        live_observer: &mut Option<&mut dyn FnMut(&GoalRegistry)>,
+    ) -> Result<(), Error> {
+        let demoted_count = u32::try_from(demoted.len())
+            .map_err(|_| Error::Store("demoted preflight root count overflow".to_string()))?;
+        assert!(demoted_count <= MAX_GOALS, "demoted preflight root count exceeds MAX_GOALS");
+        let mut iter = demoted.into_iter();
+        for _ in 0..MAX_GOALS {
+            if self.streaming_cancelled() {
+                break;
+            }
+            let Some(drv_key) = iter.next() else {
+                break;
+            };
+            if !self.deferred_root_keys.remove(&drv_key) {
+                continue;
+            }
+            let Some(goal) = self.registry.get(&drv_key) else {
+                continue;
+            };
+            if goal.is_root {
+                continue;
+            }
+            if goal.state != GoalState::Pending {
+                continue;
+            }
+            if goal.waiters.is_empty() {
+                continue;
+            }
+            self.expand_deferred_root_deps(&drv_key, known_paths, state.failed)?;
+            if let Some(observer) = live_observer.as_mut() {
+                observer(&self.registry);
+            }
+        }
+        if !self.streaming_cancelled() {
+            debug_assert!(self.pending_preflight_roots.is_empty());
+        }
+        Ok(())
+    }
+
+    async fn drain_pending_preflight_roots<BServ>(
+        &mut self,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+        state: &mut WorkerLoopState<'_>,
+        live_observer: &mut Option<&mut dyn FnMut(&GoalRegistry)>,
+    ) -> Result<u32, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        assert!(self.max_jobs > 0, "worker max_jobs must be positive");
+        let mut dispatched: u32 = 0;
+        let mut demoted: Vec<String> = Vec::with_capacity(self.pending_preflight_roots.len());
+        for _ in 0..MAX_GOALS {
+            if self.streaming_cancelled() {
+                break;
+            }
+            let Some(drv_key) = self.pending_preflight_roots.pop_front() else {
+                break;
+            };
+            let is_demoted_pending =
+                self.registry.get(&drv_key).is_some_and(|goal| !goal.is_root && goal.state == GoalState::Pending);
+            if is_demoted_pending {
+                if self.deferred_root_keys.contains(&drv_key) {
+                    demoted.push(drv_key);
+                }
+                continue;
+            }
+            if !self.deferred_root_keys.remove(&drv_key) {
+                continue;
+            }
+            let Some((drv_path, derivation)) = self.pending_preflight_root_inputs(&drv_key)? else {
+                continue;
+            };
+            if let Some(trace) = self.causal_trace.as_mut() {
+                trace.cache_checked(&drv_key);
+            }
+            let demanded_outputs = self.goal_demands.get(&drv_key);
+            let preflight_result = builder
+                .preflight_cached_root(
+                    crate::orchestrate::PreflightRootInput {
+                        drv_path: &drv_path,
+                        derivation,
+                        demanded_outputs,
+                        cancellation: self.streaming_cancellation.as_ref(),
+                    },
+                    known_paths,
+                )
+                .await;
+            if self.streaming_cancelled() {
+                break;
+            }
+            let is_dispatched =
+                self.handle_preflight_result(&drv_key, preflight_result, builder, known_paths, state).await?;
+            if let Some(observer) = live_observer.as_mut() {
+                observer(&self.registry);
+            }
+            if is_dispatched {
+                dispatched =
+                    dispatched.checked_add(1).ok_or_else(|| Error::Store("dispatch count overflow".to_string()))?;
+            }
+        }
+        self.drain_demoted_preflight_roots(demoted, known_paths, state, live_observer)?;
+        debug_assert!(dispatched <= MAX_GOALS);
+        Ok(dispatched)
+    }
+
     async fn dispatch_ready<BServ>(
         &mut self,
         builder: &mut Builder<BServ>,
@@ -3790,20 +4704,23 @@ impl Worker {
         BServ: BuildService + 'static,
     {
         self.settle_late_roots(builder, state).await?;
+        let mut dispatched = self.drain_pending_preflight_roots(builder, known_paths, state, live_observer).await?;
         let running_jobs = u32::try_from(state.join_set.len())
             .map_err(|_| Error::Store("running job count exceeds u32".to_string()))?;
         let mut available_build_slots = self.max_jobs.checked_sub(running_jobs).ok_or_else(|| {
             Error::Store(format!("running job count {running_jobs} exceeds configured max_jobs {}", self.max_jobs))
         })?;
-        let mut dispatched: u32 = 0;
         while available_build_slots > 0 {
             if self.streaming_cancelled() {
+                break;
+            }
+            if self.registry.all_roots_terminal() {
                 break;
             }
             let Some(drv_key) = self.select_next_ready_goal()? else {
                 break;
             };
-            self.resolve_binding_states(&drv_key, known_paths);
+            self.resolve_binding_states(&drv_key, known_paths)?;
             let mut bound_paths = Vec::new();
             if let Some(bindings) = self.plan_output_bindings.get(&drv_key) {
                 if let Some(failure) = bindings.iter().find_map(|binding| binding.failure) {
@@ -3847,7 +4764,19 @@ impl Worker {
             if let Some(trace) = self.causal_trace.as_mut() {
                 trace.cache_checked(&drv_key);
             }
-            let prepare_result = builder.prepare_build(&drv_path, derivation, known_paths, is_root, &bound_paths).await;
+            let demanded_outputs = self.goal_demands.get(&drv_key);
+            let prepare_result = builder
+                .prepare_build_with_demand(
+                    crate::orchestrate::PrepareBuildInput {
+                        drv_path: &drv_path,
+                        derivation,
+                        is_root,
+                        bound_plan_outputs: &bound_paths,
+                        demanded_outputs,
+                    },
+                    known_paths,
+                )
+                .await;
             if self.streaming_cancelled() {
                 break;
             }
@@ -3991,73 +4920,111 @@ impl Worker {
         let bs = builder.build_service();
         let sem = state.sem.clone();
         let key = drv_key.to_string();
+        let live_cpu_ctx = self.prepare_live_cpu_attempt(&key);
         let cancellation = self.build_cancellations.as_mut().map(|senders| {
             let (sender, receiver) = watch::channel(false);
             senders.insert(key.clone(), sender);
             receiver
         });
         state.join_set.spawn(async move {
-            let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
-            let build_result = match _permit {
-                Ok(_p) if pool.is_some() => match (pool, pool_goal) {
-                    (Some(dispatch), Some(goal)) => {
-                        let is_fallback_allowed = dispatch.allows_local_fallback();
-                        let fallback_cancellation = cancellation.clone();
-                        let attempt = match cancellation {
-                            Some(receiver) => dispatch.dispatch_cancellable(goal, receiver).await,
-                            None => dispatch.dispatch(goal).await,
-                        };
-                        match attempt {
-                            Ok(result) => Ok(result),
-                            Err(error) if is_fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
-                                // The fallback is still an owned sandbox build:
-                                // watch cancellation reaches the sandbox and its
-                                // child teardown instead of waiting for the goal.
-                                match fallback_cancellation {
-                                    Some(receiver) => bs
-                                        .do_build_cancellable(build_request, receiver)
-                                        .await
-                                        .map_err(|error| classify_build_service_error("local fallback", error)),
-                                    None => bs
-                                        .do_build(build_request)
-                                        .await
-                                        .map_err(|error| classify_build_service_error("local fallback", error)),
+            let run_future = async move {
+                let _permit = sem.acquire_owned().await.map_err(|e| Error::Store(format!("semaphore: {e}")));
+                let build_result = match _permit {
+                    Ok(_p) if pool.is_some() => match (pool, pool_goal) {
+                        (Some(dispatch), Some(goal)) => {
+                            let is_fallback_allowed = dispatch.allows_local_fallback();
+                            let fallback_cancellation = cancellation.clone();
+                            let attempt = match cancellation {
+                                Some(receiver) => dispatch.dispatch_cancellable(goal, receiver).await,
+                                None => dispatch.dispatch(goal).await,
+                            };
+                            match attempt {
+                                Ok(result) => Ok(result),
+                                Err(error) if is_fallback_allowed && error.kind() == std::io::ErrorKind::WouldBlock => {
+                                    // The fallback is still an owned sandbox build:
+                                    // watch cancellation reaches the sandbox and its
+                                    // child teardown instead of waiting for the goal.
+                                    match fallback_cancellation {
+                                        Some(receiver) => {
+                                            match std::panic::AssertUnwindSafe(
+                                                bs.do_build_cancellable(build_request, receiver),
+                                            )
+                                            .catch_unwind()
+                                            .await
+                                            {
+                                                Err(_) => Err(Error::Store(
+                                                    "local fallback build service panicked; goal failed while owned child teardown remains supervised"
+                                                        .to_string(),
+                                                )),
+                                                Ok(Ok(result)) => Ok(result),
+                                                Ok(Err(error)) => {
+                                                    Err(classify_build_service_error("local fallback", error))
+                                                }
+                                            }
+                                        }
+                                        None => {
+                                            match std::panic::AssertUnwindSafe(bs.do_build(build_request))
+                                                .catch_unwind()
+                                                .await
+                                            {
+                                                Err(_) => Err(Error::Store(
+                                                    "local fallback build service panicked; goal failed while owned child teardown remains supervised"
+                                                        .to_string(),
+                                                )),
+                                                Ok(Ok(result)) => Ok(result),
+                                                Ok(Err(error)) => {
+                                                    Err(classify_build_service_error("local fallback", error))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Err(error) => Err(classify_build_service_error("build", error)),
+                            }
+                        }
+                        _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
+                    },
+                    Ok(_p) => match cancellation {
+                        Some(receiver) => {
+                            match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
+                                .catch_unwind()
+                                .await
+                            {
+                                Err(_) => Err(Error::Store(
+                                    "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains quarantined"
+                                        .to_string(),
+                                )),
+                                Ok(Ok(result)) => Ok(result),
+                                Ok(Err(error)) => {
+                                    // An unobserved fetch or sandbox reports this
+                                    // classification itself. The service owns the
+                                    // quarantine and releases it when teardown is
+                                    // finally observed; the worker must not park a
+                                    // JoinSet task forever waiting for that.
+                                    Err(classify_build_service_error("build", error))
                                 }
                             }
-                            Err(error) => Err(classify_build_service_error("build", error)),
                         }
-                    }
-                    _ => Err(Error::Store("remote-pool:prepared-goal-missing".to_string())),
-                },
-                Ok(_p) => match cancellation {
-                    Some(receiver) => {
-                        match std::panic::AssertUnwindSafe(bs.do_build_cancellable(build_request, receiver))
+                        None => match std::panic::AssertUnwindSafe(bs.do_build(build_request))
                             .catch_unwind()
                             .await
                         {
                             Err(_) => Err(Error::Store(
-                                "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains quarantined"
+                                "build service panicked; goal failed and the scheduler permit is released, while any owned child teardown remains supervised"
                                     .to_string(),
                             )),
                             Ok(Ok(result)) => Ok(result),
-                            Ok(Err(error)) => {
-                                // An unobserved fetch or sandbox reports this
-                                // classification itself. The service owns the
-                                // quarantine and releases it when teardown is
-                                // finally observed; the worker must not park a
-                                // JoinSet task forever waiting for that.
-                                Err(classify_build_service_error("build", error))
-                            }
-                        }
-                    }
-                    None => bs
-                        .do_build(build_request)
-                        .await
-                        .map_err(|error| classify_build_service_error("build", error)),
-                },
-                Err(e) => Err(e),
+                            Ok(Err(error)) => Err(classify_build_service_error("build", error)),
+                        },
+                    },
+                    Err(e) => Err(e),
+                };
+                (key, build_result)
             };
-            (key, build_result)
+            match live_cpu_ctx {
+                Some(ctx) => snix_build::buildservice::scope_live_cpu_attempt(ctx, run_future).await,
+                None => run_future.await,
+            }
         });
         Ok(())
     }
@@ -4102,9 +5069,9 @@ impl Worker {
             trace.completed(drv_key, outcome.cached, None);
         }
 
-        all_outcomes.push(outcome.clone());
+        upsert_build_outcome(all_outcomes, outcome.clone());
         if is_root {
-            outcomes.push(outcome);
+            upsert_build_outcome(outcomes, outcome);
         }
 
         debug!(drv = drv_key, waiters = waiters.len(), "goal completed");
@@ -4284,6 +5251,7 @@ impl Worker {
             .ok_or_else(|| Error::Store(format!("failing unknown goal: {drv_key}")))?;
 
         goal.mark_build_failed()?;
+        self.satisfied_outputs.remove(drv_key);
 
         let is_root = goal.is_root;
         let waiters = std::mem::take(&mut goal.waiters);
@@ -4426,6 +5394,18 @@ fn classify_build_service_error(prefix: &str, error: std::io::Error) -> Error {
             snix_build::buildservice::SandboxFailureClass::Builder => {
                 Error::Store(format!("{prefix}: {}", classified.message))
             }
+            snix_build::buildservice::SandboxFailureClass::WallDeadlineExceeded => {
+                Error::SandboxWallTimeout(format!("{prefix}: {}", classified.message))
+            }
+            snix_build::buildservice::SandboxFailureClass::SilenceBudgetExceeded => {
+                Error::SandboxSilenceTimeout(format!("{prefix}: {}", classified.message))
+            }
+            snix_build::buildservice::SandboxFailureClass::ResourceBudgetExceeded => {
+                Error::SandboxResourceBudget(format!("{prefix}: {}", classified.message))
+            }
+            snix_build::buildservice::SandboxFailureClass::ResourceEnforcementUnavailable => {
+                Error::SandboxResourceEnforcementUnavailable(format!("{prefix}: {}", classified.message))
+            }
         };
     }
     match error.downcast::<crate::fetcher::FetchError>() {
@@ -4435,7 +5415,7 @@ fn classify_build_service_error(prefix: &str, error: std::io::Error) -> Error {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
     use std::sync::atomic::AtomicUsize;
@@ -6031,7 +7011,7 @@ mod tests {
                 registered_units: BTreeMap::from([(UnitId::new("unit.main").unwrap(), root.clone())]),
             },
         );
-        worker.resolve_binding_states(&consumer_key, &kp);
+        worker.resolve_binding_states(&consumer_key, &kp).unwrap();
         worker.attach_binding_roots(&consumer_key).unwrap();
         assert_eq!(worker.registry.get(&consumer_key).unwrap().state, GoalState::Waiting { remaining_deps: 2 });
         assert!(worker.registry.get(&consumer_key).unwrap().waitees.contains(&root_key));
@@ -6136,7 +7116,7 @@ mod tests {
                     registered_units: BTreeMap::new(),
                 },
             );
-            worker.resolve_binding_states(&consumer_key, &kp);
+            worker.resolve_binding_states(&consumer_key, &kp).unwrap();
             let row = &worker.binding_reports()[0];
             assert_eq!(row.failure_reason.as_deref(), Some(expected));
             assert!(row.root_drv_path.is_none());
@@ -6371,6 +7351,258 @@ mod tests {
         assert_eq!(ordinary_calls.lock().unwrap().len(), 0, "ordinary service must not run");
         assert_eq!(calls_a.lock().unwrap().len(), 0, "unselected endpoint must not run");
         assert_eq!(calls_b.lock().unwrap().len(), 1, "selected endpoint runs the goal");
+    }
+
+    #[tokio::test]
+    async fn pool_dispatch_with_local_fallback_runs_local_service_and_classifies_tight_budget() {
+        use std::sync::atomic::AtomicUsize;
+        use std::sync::atomic::Ordering;
+
+        struct NoFitSelector;
+        impl crate::distributed::PoolGoalSelector for NoFitSelector {
+            fn select(
+                &self,
+                _goal: &crate::distributed::PreparedPoolGoal,
+                _endpoint_ids: &[String],
+            ) -> Result<usize, crate::distributed::PoolSelectionError> {
+                Err(crate::distributed::PoolSelectionError::NoFit)
+            }
+        }
+
+        struct TightBudgetWatchService {
+            calls: Arc<AtomicUsize>,
+            cancellable_calls: Arc<AtomicUsize>,
+        }
+        #[async_trait::async_trait]
+        impl BuildService for TightBudgetWatchService {
+            async fn do_build(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                self.calls.fetch_add(1, Ordering::Relaxed);
+                Err(snix_build::buildservice::classified_io_error(
+                    std::io::ErrorKind::TimedOut,
+                    snix_build::buildservice::SandboxFailureClass::WallDeadlineExceeded,
+                    "one-shot tight budget fallback elapsed",
+                ))
+            }
+
+            async fn do_build_cancellable(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+                _cancellation: watch::Receiver<bool>,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                self.cancellable_calls.fetch_add(1, Ordering::Relaxed);
+                Err(snix_build::buildservice::classified_io_error(
+                    std::io::ErrorKind::TimedOut,
+                    snix_build::buildservice::SandboxFailureClass::WallDeadlineExceeded,
+                    "watch tight budget fallback elapsed",
+                ))
+            }
+        }
+
+        let make_dispatch = |fallback: bool, bs: MemoryBlobService| {
+            let (endpoint, ep_calls) = MockBuildService::new(bs);
+            let dispatch = std::sync::Arc::new(
+                crate::distributed::PoolDispatch::new(
+                    vec![crate::distributed::PoolEndpointService::new(
+                        "worker-a",
+                        std::sync::Arc::new(crate::distributed::BuildServiceExecutor::new(endpoint))
+                            as std::sync::Arc<dyn crate::distributed::PoolGoalExecutor>,
+                    )],
+                    std::sync::Arc::new(NoFitSelector),
+                )
+                .unwrap()
+                .with_local_fallback(fallback),
+            );
+            (dispatch, ep_calls)
+        };
+
+        // 1. with_local_fallback(true) + NoFit -> runs local MockBuildService.
+        let bs = MemoryBlobService::default();
+        let (local_mock, local_calls) = MockBuildService::new(bs.clone());
+        let (dispatch_ok, ep_calls_ok) = make_dispatch(true, bs.clone());
+        let mut builder_ok = Builder::new(
+            bs.clone(),
+            tmp_ds(),
+            local_mock,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch_ok);
+        let mut kp = DerivationRegistry::default();
+        let (sp1, _) = build_and_register("fallback-ok", &[], &mut kp);
+        let mut w1 = Worker::new(1);
+        w1.want(&sp1, &kp, true).unwrap();
+        let res1 = w1.run(&mut builder_ok, &mut kp).await.unwrap();
+        assert_eq!(res1.outcomes.len(), 1);
+        assert!(res1.failed.is_empty());
+        assert_eq!(ep_calls_ok.lock().unwrap().len(), 0);
+        assert_eq!(local_calls.lock().unwrap().len(), 1);
+
+        // 2. with_local_fallback(false) + NoFit -> fails with remote-pool, 0 local calls.
+        let (local_no, local_no_calls) = MockBuildService::new(bs.clone());
+        let (dispatch_no, _) = make_dispatch(false, bs.clone());
+        let mut builder_no = Builder::new(
+            bs.clone(),
+            tmp_ds(),
+            local_no,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch_no);
+        let (sp2, _) = build_and_register("fallback-disallowed", &[], &mut kp);
+        let mut w2 = Worker::new(1);
+        w2.want(&sp2, &kp, true).unwrap();
+        let res2 = w2.run(&mut builder_no, &mut kp).await.unwrap();
+        assert_eq!(res2.failed.len(), 1);
+        assert!(res2.failed[0].error.contains("remote-pool"));
+        assert_eq!(local_no_calls.lock().unwrap().len(), 0);
+
+        // 3. with_local_fallback(true) + WallDeadlineExceeded in both one-shot and watch modes ->
+        //    WallTimeout.
+        let oneshot_calls = Arc::new(AtomicUsize::new(0));
+        let watch_calls = Arc::new(AtomicUsize::new(0));
+        let (dispatch_tb, _) = make_dispatch(true, bs.clone());
+        let mut builder_tb = Builder::new(
+            bs,
+            tmp_ds(),
+            TightBudgetWatchService {
+                calls: oneshot_calls.clone(),
+                cancellable_calls: watch_calls.clone(),
+            },
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch_tb);
+        let (sp3, _) = build_and_register("fallback-oneshot-wall", &[], &mut kp);
+        let mut w3 = Worker::new(1);
+        w3.want(&sp3, &kp, true).unwrap();
+        let res3 = w3.run(&mut builder_tb, &mut kp).await.unwrap();
+        assert_eq!(res3.failed.len(), 1);
+        assert_eq!(res3.failed[0].error_class, BuildFailureClass::WallTimeout);
+        assert_eq!(oneshot_calls.load(Ordering::Relaxed), 1);
+
+        let (sp4, _) = build_and_register("fallback-watch-wall", &[], &mut kp);
+        let (tx, mut rx) = mpsc::channel(1);
+        tx.send(EvalMessage {
+            label: sp4.name().to_string(),
+            drv_path: sp4,
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
+        drop(tx);
+        let (_cancel_tx, cancel_rx) = watch::channel(false);
+        let mut w4 = Worker::new(1);
+        let res4 = w4.run_streaming_cancellable(&mut builder_tb, &mut kp, &mut rx, None, cancel_rx).await.unwrap();
+        assert_eq!(res4.failed.len(), 1);
+        assert_eq!(res4.failed[0].error_class, BuildFailureClass::WallTimeout);
+        assert_eq!(watch_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn pool_dispatch_local_fallback_enforces_real_bubblewrap_wall_deadline() {
+        if !crate::test_support::real_bwrap_and_shell_available() {
+            eprintln!("skipping: real bwrap and static sandbox shell unavailable");
+            return;
+        }
+        struct NoFitSelector;
+        impl crate::distributed::PoolGoalSelector for NoFitSelector {
+            fn select(
+                &self,
+                _goal: &crate::distributed::PreparedPoolGoal,
+                _endpoint_ids: &[String],
+            ) -> Result<usize, crate::distributed::PoolSelectionError> {
+                Err(crate::distributed::PoolSelectionError::NoFit)
+            }
+        }
+
+        let workdir = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let mut policy = crate::LocalExecutionPolicy::standard();
+        policy.wall_deadline = crate::LocalWallDeadlinePolicy::Bounded { wall_deadline_secs: 1 };
+        let bwrap =
+            snix_build::buildservice::BubblewrapBuildService::new(workdir.path().to_path_buf(), bs.clone(), ds.clone())
+                .with_execution_policy(policy.to_snix_execution_policy().unwrap())
+                .unwrap();
+
+        let (endpoint, _) = MockBuildService::new(bs.clone());
+        let dispatch = std::sync::Arc::new(
+            crate::distributed::PoolDispatch::new(
+                vec![crate::distributed::PoolEndpointService::new(
+                    "worker-a",
+                    std::sync::Arc::new(crate::distributed::BuildServiceExecutor::new(endpoint))
+                        as std::sync::Arc<dyn crate::distributed::PoolGoalExecutor>,
+                )],
+                std::sync::Arc::new(NoFitSelector),
+            )
+            .unwrap()
+            .with_local_fallback(true),
+        );
+        let mut builder = Builder::new(
+            bs,
+            ds,
+            bwrap,
+            test_pis(),
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            true,
+            false,
+        )
+        .with_pool_dispatch(dispatch);
+
+        let mut outputs = std::collections::BTreeMap::new();
+        outputs.insert("out".to_string(), nix_compat::derivation::Output {
+            path: None,
+            ca_hash: None,
+        });
+        let mut environment = std::collections::BTreeMap::new();
+        environment.insert("name".to_string(), "real-bwrap-fallback-timeout".into());
+        environment.insert("system".to_string(), "x86_64-linux".into());
+        environment.insert("builder".to_string(), "/bin/sh".into());
+        environment.insert("out".to_string(), "".into());
+        let mut drv = nix_compat::derivation::Derivation {
+            arguments: vec![
+                "-c".into(),
+                "/bin/busybox sleep 5; /bin/busybox echo late > $out".into(),
+            ],
+            builder: "/bin/sh".to_string(),
+            environment,
+            input_derivations: std::collections::BTreeMap::new(),
+            input_sources: std::collections::BTreeSet::new(),
+            outputs,
+            system: "x86_64-linux".to_string(),
+        };
+        let mut kp = DerivationRegistry::default();
+        let hdm = drv.hash_derivation_modulo(|_| panic!("leaf derivation"));
+        drv.calculate_output_paths("real-bwrap-fallback-timeout", &hdm).unwrap();
+        let sp = drv.calculate_derivation_path("real-bwrap-fallback-timeout").unwrap();
+        kp.insert(sp.clone(), hdm, drv, false, None);
+
+        let mut worker = Worker::new(1);
+        worker.want(&sp, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert_eq!(result.failed.len(), 1);
+        assert_eq!(result.failed[0].error_class, BuildFailureClass::WallTimeout);
     }
 
     #[tokio::test]
@@ -9517,6 +10749,54 @@ mod tests {
                 expect_fod: false,
             },
             TypedErrorCase {
+                label: "wall-deadline-exceeded",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::TimedOut,
+                        SandboxFailureClass::WallDeadlineExceeded,
+                        "wall deadline elapsed",
+                    )
+                },
+                expected_class: BuildFailureClass::WallTimeout,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "silence-budget-exceeded",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::TimedOut,
+                        SandboxFailureClass::SilenceBudgetExceeded,
+                        "silence budget elapsed",
+                    )
+                },
+                expected_class: BuildFailureClass::SilenceTimeout,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "resource-budget-exceeded",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::Other,
+                        SandboxFailureClass::ResourceBudgetExceeded,
+                        "cgroup oom kill",
+                    )
+                },
+                expected_class: BuildFailureClass::ResourceBudget,
+                expect_fod: false,
+            },
+            TypedErrorCase {
+                label: "resource-enforcement-unavailable",
+                make_error: || {
+                    classified_io_error(
+                        std::io::ErrorKind::Other,
+                        SandboxFailureClass::ResourceEnforcementUnavailable,
+                        "missing delegated cgroup",
+                    )
+                },
+                expected_class: BuildFailureClass::ResourceEnforcementUnavailable,
+                expect_fod: false,
+            },
+            TypedErrorCase {
                 label: "fetch-hash-mismatch",
                 make_error: || {
                     std::io::Error::other(crate::fetcher::FetchError::HashMismatch {
@@ -9570,5 +10850,3171 @@ mod tests {
             assert_eq!(failure.error_class, case.expected_class, "{label}");
             assert_eq!(failure.fod_mismatch.is_some(), case.expect_fod, "{label}");
         }
+    }
+
+    #[derive(Clone, Copy)]
+    enum TraceFixtureMode {
+        Disabled,
+        Enabled,
+        Capped,
+    }
+
+    async fn run_causal_trace_fixture(mode: TraceFixtureMode) -> (WorkerResult, usize, Result<Option<()>, String>) {
+        let blobs = MemoryBlobService::default();
+        let pis = test_pis();
+        let mut kp = DerivationRegistry::default();
+        let (cached_leaf, cached_drv) = build_and_register("trace-cached-leaf", &[], &mut kp);
+        let cached_out = cached_drv.outputs["out"].path.clone().unwrap();
+        let cached_node = put_test_blob(&blobs, b"trace cached leaf").await;
+        let mut cached_info = PathInfo {
+            store_path: cached_out,
+            node: cached_node,
+            references: vec![],
+            nar_size: 17,
+            nar_sha256: [15u8; 32],
+            signatures: vec![],
+            deriver: Some(cached_leaf.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo(&mut cached_info, &test_keypair().signing_key);
+        pis.put(cached_info).await.unwrap();
+
+        let (built_leaf, _) = build_and_register("trace-built-leaf", &[], &mut kp);
+        let (root, _) = build_and_register("trace-root", &[(cached_leaf, "out"), (built_leaf, "out")], &mut kp);
+        let (mock, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::new(
+            blobs,
+            tmp_ds(),
+            mock,
+            pis,
+            PathBuf::from("/nix/store"),
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut worker = Worker::new(1);
+        match mode {
+            TraceFixtureMode::Disabled => {}
+            TraceFixtureMode::Enabled => worker.enable_causal_trace(kp.store_dir()),
+            TraceFixtureMode::Capped => {
+                worker.enable_causal_trace(kp.store_dir());
+                let trace = worker.causal_trace.as_mut().unwrap();
+                let prefill_count = mantle_causal_trace_core::MAX_ACTIONS.saturating_sub(6);
+                for idx in 0..prefill_count {
+                    trace.root_required(&format!("/nix/store/00000000000000000000000000000000-pad-{idx}.drv"));
+                }
+            }
+        }
+        worker.want(&root, &kp, true).unwrap();
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        let trace_status = worker.take_causal_trace().map(|opt| opt.map(|_| ())).map_err(|err| format!("{err:?}"));
+        let call_count = calls.lock().unwrap().len();
+        (result, call_count, trace_status)
+    }
+
+    #[tokio::test]
+    async fn causal_trace_enable_and_cap_never_alter_build_outcomes_or_reuse() {
+        let (disabled, disabled_calls, disabled_trace) = run_causal_trace_fixture(TraceFixtureMode::Disabled).await;
+        let (enabled, enabled_calls, enabled_trace) = run_causal_trace_fixture(TraceFixtureMode::Enabled).await;
+        let (capped, capped_calls, capped_trace) = run_causal_trace_fixture(TraceFixtureMode::Capped).await;
+
+        assert_eq!(disabled_trace, Ok(None));
+        assert_eq!(enabled_trace, Ok(Some(())));
+        assert!(capped_trace.is_err(), "saturated trace must fail without altering worker result: {capped_trace:?}");
+        assert_eq!(disabled_calls, 2);
+        assert_eq!(enabled_calls, disabled_calls);
+        assert_eq!(capped_calls, disabled_calls);
+        assert!(disabled.failed.is_empty());
+        assert!(enabled.failed.is_empty());
+        assert!(capped.failed.is_empty());
+        let summarize = |res: &WorkerResult| {
+            let mut summary: Vec<_> = res
+                .all_outcomes
+                .iter()
+                .map(|o| (o.drv_path.to_absolute_path(), o.cached, o.outputs.clone()))
+                .collect();
+            summary.sort_by(|left, right| left.0.cmp(&right.0));
+            summary
+        };
+        assert_eq!(summarize(&disabled), summarize(&enabled));
+        assert_eq!(summarize(&disabled), summarize(&capped));
+        assert_eq!(disabled.outcomes.len(), 1);
+        assert_eq!(enabled.outcomes[0].outputs, disabled.outcomes[0].outputs);
+        assert_eq!(capped.outcomes[0].outputs, disabled.outcomes[0].outputs);
+    }
+
+    #[tokio::test]
+    async fn cached_native_plan_producer_admits_plan_and_attaches_root_before_waking_consumer() {
+        // Case A: Cached accepted native dynamic-plan producer must admit units and
+        // attach generated root waits before waking a waiting static consumer.
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock_pre, calls_pre) = DrvProducingMockBuildService::new(
+            blobs.clone(),
+            StdHashMap::from([("cached-native-producer".to_owned(), valid_native_plan_bytes())]),
+        );
+        let mut builder_pre = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(ds.clone()),
+            mock_pre,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp_pre = DerivationRegistry::default();
+        let (producer_pre, _) = build_and_register_multi("cached-native-producer", &["out", "plan"], &[], &mut kp_pre);
+        let producer_pre_outcome = builder_pre.build(&producer_pre, &mut kp_pre).await.unwrap();
+        assert!(!producer_pre_outcome.cached);
+        assert_eq!(calls_pre.lock().unwrap().len(), 1);
+
+        let (mock, calls) = DrvProducingMockBuildService::new(blobs.clone(), StdHashMap::new());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(ds),
+            mock,
+            pis,
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp = DerivationRegistry::default();
+        let (producer, _) = build_and_register_multi("cached-native-producer", &["out", "plan"], &[], &mut kp);
+        assert_eq!(producer, producer_pre);
+        declare_native_plan_output(&mut kp, &producer, "plan");
+        let (consumer, placeholder) = register_bound_consumer(&mut kp, &producer);
+        let consumer_key = consumer.to_absolute_path();
+        let producer_key = producer.to_absolute_path();
+
+        let (tx, mut rx) = mpsc::channel(2);
+        tx.send(EvalMessage {
+            label: "consumer".to_owned(),
+            drv_path: consumer.clone(),
+            new_entries: vec![],
+        })
+        .await
+        .unwrap();
+        drop(tx);
+
+        let mut observed_waiting_while_root_incomplete = false;
+        let mut observer = |goals: &GoalRegistry| {
+            let has_incomplete_dynamic_root = goals.iter().any(|(key, goal)| {
+                key != producer_key.as_str()
+                    && key != consumer_key.as_str()
+                    && !matches!(goal.state, GoalState::Done | GoalState::Failed)
+            });
+            if has_incomplete_dynamic_root && let Some(consumer_goal) = goals.get(&consumer_key) {
+                assert!(
+                    matches!(consumer_goal.state, GoalState::Waiting { .. }),
+                    "consumer must remain Waiting while dynamic root is incomplete, saw {:?}",
+                    consumer_goal.state
+                );
+                observed_waiting_while_root_incomplete = true;
+            }
+        };
+
+        let mut worker = Worker::new(2);
+        let result = worker.run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut observer)).await.unwrap();
+        assert!(observed_waiting_while_root_incomplete);
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.plan_output_bindings.len(), 1);
+        assert_eq!(result.plan_output_bindings[0].status, "bound");
+        let producer_outcome = result.all_outcomes.iter().find(|outcome| outcome.drv_path == producer).unwrap();
+        assert!(producer_outcome.cached, "producer must hit cache via PrepareResult::Done");
+        let actual = result.plan_output_bindings[0].output_path.as_ref().unwrap();
+        {
+            let recorded = calls.lock().unwrap();
+            assert_eq!(recorded.len(), 2, "only dynamic root and static consumer execute: {recorded:?}");
+            assert!(recorded[1].iter().any(|arg| arg == &format!("--bound={}", actual.to_absolute_path())));
+            assert!(!recorded[1].iter().any(|arg| arg.contains(&placeholder)));
+        }
+
+        // Case B: Cached invalid/rejected native dynamic-plan producer fails static consumer
+        // without dispatching any build.
+        let blobs_bad = MemoryBlobService::default();
+        let ds_bad = tmp_ds();
+        let pis_bad: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock_bad_pre, _) = DrvProducingMockBuildService::new(
+            blobs_bad.clone(),
+            StdHashMap::from([("cached-native-bad".to_owned(), b"{bad-cached-plan".to_vec())]),
+        );
+        let mut builder_bad_pre = Builder::with_state_dir(
+            Arc::new(blobs_bad.clone()),
+            Arc::new(ds_bad.clone()),
+            mock_bad_pre,
+            pis_bad.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp_bad_pre = DerivationRegistry::default();
+        let (bad_producer_pre, _) =
+            build_and_register_multi("cached-native-bad", &["out", "plan"], &[], &mut kp_bad_pre);
+        let _ = builder_bad_pre.build(&bad_producer_pre, &mut kp_bad_pre).await.unwrap();
+
+        let (mock_bad, calls_bad) = DrvProducingMockBuildService::new(blobs_bad.clone(), StdHashMap::new());
+        let mut builder_bad = Builder::with_state_dir(
+            Arc::new(blobs_bad),
+            Arc::new(ds_bad),
+            mock_bad,
+            pis_bad,
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut kp_bad = DerivationRegistry::default();
+        let (bad_producer, _) = build_and_register_multi("cached-native-bad", &["out", "plan"], &[], &mut kp_bad);
+        declare_native_plan_output(&mut kp_bad, &bad_producer, "plan");
+        let (bad_consumer, _) = register_bound_consumer(&mut kp_bad, &bad_producer);
+
+        let mut worker_bad = Worker::new(1);
+        worker_bad.want(&bad_consumer, &kp_bad, true).unwrap();
+        let bad_result = worker_bad.run(&mut builder_bad, &mut kp_bad).await.unwrap();
+        assert_eq!(bad_result.failed.len(), 1);
+        assert_eq!(bad_result.failed[0].drv_key, bad_consumer.to_absolute_path());
+        assert_eq!(bad_result.failed[0].error, "plan-output-plan-rejected");
+        assert!(calls_bad.lock().unwrap().is_empty(), "neither cached producer nor rejected consumer may run");
+    }
+
+    #[tokio::test]
+    async fn process_join_result_rejects_unowned_completion_without_admitting_output() {
+        let mut paths = DerivationRegistry::default();
+        let (drv_path, _) = build_and_register("unowned-join-completion", &[], &mut paths);
+        let key = drv_path.to_absolute_path();
+        let output = paths.get_output_path(&key, "out").unwrap();
+        let blobs = MemoryBlobService::default();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(tmp_ds()),
+            mock,
+            pis.clone(),
+            PathBuf::from("/nix/store"),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let node = put_test_blob(&blobs, b"unowned output").await;
+        let build_result = snix_build::buildservice::BuildResult {
+            outputs: vec![snix_build::buildservice::BuildOutput {
+                node,
+                output_needles: BTreeSet::new(),
+            }],
+            log: None,
+            timing: None,
+        };
+
+        let mut worker = Worker::new(1);
+        worker.want(&drv_path, &paths, true).unwrap();
+        worker.ready_goals.remove(&key);
+        worker.registry.get_mut(&key).unwrap().mark_building().unwrap();
+
+        let mut outcomes = Vec::new();
+        let mut all_outcomes = Vec::new();
+        let mut failed = Vec::new();
+        let mut native_dynamic_plans = Vec::new();
+        let mut state = WorkerLoopState {
+            sem: Arc::new(Semaphore::new(1)),
+            join_set: JoinSet::new(),
+            pending_meta: HashMap::new(),
+            outcomes: &mut outcomes,
+            all_outcomes: &mut all_outcomes,
+            failed: &mut failed,
+            native_dynamic_plans: &mut native_dynamic_plans,
+            completed_count: 0,
+        };
+
+        let ok_err = worker
+            .process_join_result(Ok((key.clone(), Ok(build_result))), &mut builder, &mut paths, &mut state)
+            .await
+            .unwrap_err();
+        assert!(ok_err.to_string().contains("no pending metadata"), "{ok_err}");
+        assert_eq!(worker.registry.get(&key).unwrap().state, GoalState::Building);
+        assert!(state.outcomes.is_empty());
+        assert!(state.all_outcomes.is_empty());
+        assert!(state.failed.is_empty());
+        assert!(pis.get(*output.digest()).await.unwrap().is_none());
+
+        let synthetic_fail = classify_build_service_error("build", std::io::Error::other("unowned error"));
+        let err_err = worker
+            .process_join_result(Ok((key.clone(), Err(synthetic_fail))), &mut builder, &mut paths, &mut state)
+            .await
+            .unwrap_err();
+        assert!(err_err.to_string().contains("no pending metadata"), "{err_err}");
+        assert_eq!(worker.registry.get(&key).unwrap().state, GoalState::Building);
+        assert!(state.failed.is_empty());
+    }
+
+    struct WatchReplacementBuildService {
+        mock: MockBuildService,
+        gated_marker: String,
+        started: mpsc::UnboundedSender<()>,
+        cancellation_observed: mpsc::UnboundedSender<()>,
+        release_teardown: watch::Receiver<bool>,
+    }
+
+    #[async_trait::async_trait]
+    impl BuildService for WatchReplacementBuildService {
+        async fn do_build(
+            &self,
+            _request: snix_build::buildservice::BuildRequest,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            Err(std::io::Error::other("watch replacement bypassed cancellable build service"))
+        }
+
+        async fn do_build_cancellable(
+            &self,
+            request: snix_build::buildservice::BuildRequest,
+            mut cancellation: watch::Receiver<bool>,
+        ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+            let is_gated = request.command_args.iter().any(|arg| arg.contains(&self.gated_marker));
+            if is_gated {
+                self.started.send(()).map_err(std::io::Error::other)?;
+                while !*cancellation.borrow_and_update() {
+                    cancellation.changed().await.map_err(std::io::Error::other)?;
+                }
+                self.cancellation_observed.send(()).map_err(std::io::Error::other)?;
+                let mut release = self.release_teardown.clone();
+                while !*release.borrow_and_update() {
+                    release.changed().await.map_err(std::io::Error::other)?;
+                }
+            }
+            self.mock.do_build(request).await
+        }
+    }
+
+    #[tokio::test]
+    async fn watch_replacement_discards_late_success_from_retracted_root_and_completes_replacement() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let (started, mut started_rx) = mpsc::unbounded_channel();
+        let (cancellation_observed, mut cancelled_rx) = mpsc::unbounded_channel();
+        let (release_tx, release_teardown) = watch::channel(false);
+        let pis: Arc<dyn PathInfoService> = Arc::new(
+            RedbPathInfoService::new_temporary("watch-replace-pis".into(), RedbPathInfoServiceConfig::default())
+                .unwrap(),
+        );
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            WatchReplacementBuildService {
+                mock,
+                gated_marker: "watch-replace-old".to_owned(),
+                started,
+                cancellation_observed,
+                release_teardown,
+            },
+            pis.clone(),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut paths = DerivationRegistry::default();
+        let (old_root, _) = build_and_register("watch-replace-old", &[], &mut paths);
+        let (new_root, new_drv) = build_and_register("watch-replace-new", &[], &mut paths);
+        let new_hdm = paths.get_hdm_by_drv_path(&new_root.to_absolute_path()).unwrap();
+        let old_out = paths.get_output_path(&old_root.to_absolute_path(), "out").unwrap();
+        let new_out = paths.get_output_path(&new_root.to_absolute_path(), "out").unwrap();
+
+        let (tx, mut updates) = mpsc::channel(4);
+        let (events_tx, mut events) = mpsc::channel(8);
+        let mut worker = Worker::new(1);
+        let result = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            tx.send(WatchWorkerUpdate {
+                generation: 1,
+                roots: vec![EvalMessage {
+                    label: "old".to_owned(),
+                    drv_path: old_root.clone(),
+                    new_entries: vec![],
+                }],
+            })
+            .await
+            .unwrap();
+            let run = worker.run_watch(&mut builder, &mut paths, &mut updates, &events_tx);
+            tokio::pin!(run);
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-1 candidate: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit.send(()).unwrap(),
+                    event => panic!("unexpected gen-1 candidate: {event:?}"),
+                }
+            }
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-1 start: {res:?}"),
+                started = started_rx.recv() => assert_eq!(started, Some(())),
+            }
+
+            // Replace gen-1 root with gen-2 root while gen-1 is running.
+            tx.send(WatchWorkerUpdate {
+                generation: 2,
+                roots: vec![EvalMessage {
+                    label: "new".to_owned(),
+                    drv_path: new_root.clone(),
+                    new_entries: vec![(new_root.clone(), new_hdm, new_drv, false, vec![], None)],
+                }],
+            })
+            .await
+            .unwrap();
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before cancellation observed: {res:?}"),
+                cancelled = cancelled_rx.recv() => assert_eq!(cancelled, Some(())),
+                ev = events.recv() => panic!("unexpected watch event instead of cancellation: {ev:?}"),
+            }
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before PendingCancellation: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::PendingCancellation { generation: 2, stale }) => {
+                        assert_eq!(stale, vec![old_root.to_absolute_path()]);
+                    }
+                    event => panic!("expected PendingCancellation for gen-2, got {event:?}"),
+                }
+            }
+            // Retracted gen-1 finishes with Ok(BuildResult) during teardown.
+            release_tx.send(true).unwrap();
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-2 CandidateReady: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                    event => panic!("unexpected gen-2 candidate: {event:?}"),
+                }
+            }
+            tokio::select! {
+                res = &mut run => panic!("run_watch exited before gen-2 Settled: {res:?}"),
+                ev = events.recv() => match ev {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 2,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty(), "{failed:?}");
+                        assert_eq!(outcomes.len(), 1);
+                        assert_eq!(outcomes[0].drv_path, new_root);
+                    }
+                    event => panic!("expected Settled for gen-2, got {event:?}"),
+                }
+            }
+            drop(tx);
+            run.await
+        })
+        .await
+        .expect("watch replacement regression exceeded cleanup guard")
+        .unwrap();
+        assert!(result.outcomes.iter().all(|o| o.drv_path == new_root));
+        assert!(result.all_outcomes.iter().all(|o| o.drv_path == new_root));
+        assert!(pis.get(*old_out.digest()).await.unwrap().is_none(), "retracted gen-1 published PathInfo");
+        assert!(pis.get(*new_out.digest()).await.unwrap().is_some(), "replacement gen-2 must publish PathInfo");
+    }
+
+    fn register_ca_leaf_for_worker_test(name: &str, kp: &mut DerivationRegistry) -> StorePath<String> {
+        let mut drv = nix_compat::derivation::Derivation {
+            arguments: vec!["-c".into(), format!("echo {name} > $out")],
+            builder: "/bin/sh".to_owned(),
+            environment: BTreeMap::from([
+                ("name".to_owned(), name.into()),
+                ("system".to_owned(), "x86_64-linux".into()),
+                ("builder".to_owned(), "/bin/sh".into()),
+                ("outputs".to_owned(), "out".into()),
+                ("out".to_owned(), "".into()),
+            ]),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_owned(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            })]),
+            system: "x86_64-linux".to_owned(),
+        };
+        let hdm = drv.hash_derivation_modulo(|_| panic!("CA leaf has no input derivations"));
+        drv.calculate_output_paths(name, &hdm).unwrap();
+        for output in drv.outputs.values_mut() {
+            output.path = None;
+        }
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
+        kp.insert(drv_path.clone(), hdm, drv, true, None);
+        drv_path
+    }
+
+    async fn run_policy_non_interference_fixture(
+        policy: SchedulingPolicy,
+        prefer_fast: bool,
+    ) -> (WorkerResult, Vec<Vec<String>>) {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis = test_pis();
+        let (mock, calls) = MockBuildService::new(blobs.clone());
+        let mut kp = DerivationRegistry::default();
+
+        // Untrusted cached leaf: signature belongs to a non-trusted key, so
+        // check_cache must reject it and rebuild regardless of scheduling order.
+        let (untrusted_leaf, untrusted_drv) = build_and_register("policy-untrusted-leaf", &[], &mut kp);
+        let untrusted_out = untrusted_drv.outputs["out"].path.clone().unwrap();
+        let untrusted_node = put_test_blob(&blobs, b"untrusted-leaf-stale").await;
+        let wrong_secret = ed25519_dalek::SigningKey::from_bytes(&[55u8; 32]);
+        let wrong_key = nix_compat::narinfo::SigningKey::new("rogue-signer".to_owned(), wrong_secret);
+        let mut untrusted_info = PathInfo {
+            store_path: untrusted_out,
+            node: untrusted_node,
+            references: vec![],
+            nar_size: 20,
+            nar_sha256: [17u8; 32],
+            signatures: vec![],
+            deriver: Some(untrusted_leaf.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo(&mut untrusted_info, &wrong_key);
+        pis.put(untrusted_info).await.unwrap();
+
+        let ca_leaf = register_ca_leaf_for_worker_test("policy-ca-leaf", &mut kp);
+        let (fast_root, _) = build_and_register("policy-fast-root", &[], &mut kp);
+        let (pressure_left, _) = build_and_register(
+            "policy-pressure-left",
+            &[(untrusted_leaf.clone(), "out"), (ca_leaf.clone(), "out")],
+            &mut kp,
+        );
+        let (pressure_right, _) =
+            build_and_register("policy-pressure-right", &[(untrusted_leaf, "out"), (ca_leaf, "out")], &mut kp);
+
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(ds),
+            mock,
+            Arc::new(pis),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut worker = Worker::with_scheduling_policy(1, policy).unwrap();
+        worker.want(&fast_root, &kp, true).unwrap();
+        worker.want(&pressure_left, &kp, true).unwrap();
+        worker.want(&pressure_right, &kp, true).unwrap();
+        if prefer_fast {
+            let preference = crate::scheduling::normalize_eligible_preference(
+                crate::scheduling::HardEligibilityFacts::ELIGIBLE,
+                crate::scheduling::ResourceFitClass::Exact,
+                crate::scheduling::ContentLocalityClass::FullyPresent,
+                crate::scheduling::TransferCostClass::None,
+            )
+            .unwrap();
+            worker
+                .set_goal_scheduling_preference(
+                    &fast_root.to_absolute_path(),
+                    OperatorPolicyClass::Ordinary,
+                    preference,
+                )
+                .unwrap();
+        }
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        let recorded = calls.lock().unwrap().clone();
+        (result, recorded)
+    }
+
+    #[tokio::test]
+    async fn scheduling_policy_changes_dispatch_order_without_altering_outcomes_or_cache_admission() {
+        let default_policy = SchedulingPolicy::default();
+        let locality_first_policy = SchedulingPolicy {
+            preference_order: vec![
+                crate::scheduling::PreferenceField::LocalityTransfer,
+                crate::scheduling::PreferenceField::ResourceFit,
+                crate::scheduling::PreferenceField::KnownGraph,
+            ],
+            ..SchedulingPolicy::default()
+        };
+
+        let (res_a, calls_a) = run_policy_non_interference_fixture(default_policy, false).await;
+        let (res_b, calls_b) = run_policy_non_interference_fixture(locality_first_policy, true).await;
+
+        assert!(res_a.failed.is_empty(), "{:?}", res_a.failed);
+        assert!(res_b.failed.is_empty(), "{:?}", res_b.failed);
+        assert_ne!(
+            res_a.priority_decisions[0].selected_goal_key_blake3, res_b.priority_decisions[0].selected_goal_key_blake3,
+            "distinct scheduling policies must reorder initial dispatch"
+        );
+        assert_ne!(calls_a[0], calls_b[0]);
+        assert_eq!(calls_a.len(), 5);
+        assert_eq!(calls_b.len(), 5);
+
+        let summarize = |res: &WorkerResult| {
+            let mut summary: Vec<_> = res
+                .all_outcomes
+                .iter()
+                .map(|outcome| (outcome.drv_path.to_absolute_path(), outcome.cached, outcome.outputs.clone()))
+                .collect();
+            summary.sort_by(|left, right| left.0.cmp(&right.0));
+            summary
+        };
+        let summary_a = summarize(&res_a);
+        let summary_b = summarize(&res_b);
+        assert_eq!(summary_a, summary_b);
+        assert!(
+            summary_a.iter().all(|(_, cached, _)| !cached),
+            "untrusted cached leaf must be rejected and rebuilt under every policy"
+        );
+    }
+
+    async fn put_signed_worker_path_info(
+        bs: &MemoryBlobService,
+        pis: &dyn PathInfoService,
+        store_path: StorePath<String>,
+        drv_path: &StorePath<String>,
+        references: Vec<StorePath<String>>,
+    ) {
+        let payload = format!("signed-worker-{}", store_path.name());
+        let node = put_test_blob(bs, payload.as_bytes()).await;
+        let mut info = snix_store::path_info::PathInfo {
+            store_path,
+            node,
+            references,
+            nar_size: payload.len() as u64,
+            nar_sha256: [13u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo_with_store_dir(
+            &mut info,
+            &test_keypair().signing_key,
+            nix_compat::store_path::STORE_DIR,
+        );
+        pis.put(info).await.unwrap();
+    }
+
+    fn signed_worker_builder<S: BuildService + 'static>(
+        blobs: MemoryBlobService,
+        service: S,
+        pis: Arc<dyn PathInfoService>,
+        output_dir: &std::path::Path,
+    ) -> Builder<S> {
+        Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            service,
+            pis,
+            output_dir.to_path_buf(),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        )
+    }
+
+    #[tokio::test]
+    async fn selected_output_reuses_trusted_out_when_unused_dev_missing() {
+        // Cold run: builds sdk + consumer (2 calls).
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut kp = DerivationRegistry::default();
+            let (sdk, _) = crate::test_support::build_and_register_multi("sdk-cold", &["out", "dev"], &[], &mut kp);
+            let (consumer, _) =
+                crate::test_support::build_and_register_multi("consumer-cold", &["out"], &[(sdk, "out")], &mut kp);
+
+            let mut worker = Worker::new(1);
+            worker.want(&consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(calls.lock().unwrap().len(), 2, "cold run executes sdk and consumer");
+        }
+
+        // Warm run: ONLY signed sdk:out cached (sdk:dev absent) -> 0 producer builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (sdk, sdk_drv) =
+                crate::test_support::build_and_register_multi("sdk-warm", &["out", "dev"], &[], &mut kp);
+            let (consumer, _) = crate::test_support::build_and_register_multi(
+                "consumer-warm",
+                &["out"],
+                &[(sdk.clone(), "out")],
+                &mut kp,
+            );
+
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis.clone(), temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            let sdk_outcome = result.all_outcomes.iter().find(|o| o.drv_path == sdk).unwrap();
+            assert!(sdk_outcome.cached, "sdk:out should be reused with dev absent");
+            assert!(sdk_outcome.outputs.contains_key("out"));
+            assert!(!sdk_outcome.outputs.contains_key("dev"));
+            let recorded = calls.lock().unwrap();
+            assert_eq!(recorded.len(), 1, "only consumer should execute: {recorded:?}");
+            assert!(
+                recorded[0].iter().any(|arg| arg.contains("consumer-warm")),
+                "expected consumer-warm in args: {recorded:?}"
+            );
+        }
+
+        // Contrast: unqualified root want(&sdk, ..., true) still requires ALL outputs and rebuilds when dev
+        // absent.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (sdk, sdk_drv) =
+                crate::test_support::build_and_register_multi("sdk-unqual", &["out", "dev"], &[], &mut kp);
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&sdk, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert!(!result.outcomes[0].cached);
+            assert_eq!(calls.lock().unwrap().len(), 1, "unqualified root must rebuild when dev is absent");
+        }
+    }
+
+    #[tokio::test]
+    async fn concurrent_consumers_union_demand_for_out_and_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-concurrent", &["out", "dev"], &[], &mut kp);
+        let (consumer_out, _) =
+            crate::test_support::build_and_register_multi("consumer-out", &["out"], &[(sdk.clone(), "out")], &mut kp);
+        let (consumer_dev, _) =
+            crate::test_support::build_and_register_multi("consumer-dev", &["out"], &[(sdk.clone(), "dev")], &mut kp);
+
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+        let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+        let mut worker = Worker::new(2);
+        worker.want(&consumer_out, &kp, true).unwrap();
+        worker.want(&consumer_dev, &kp, true).unwrap();
+
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert_eq!(
+            worker.goal_demands.get(&sdk.to_absolute_path()),
+            Some(&BTreeSet::from(["out".to_string(), "dev".to_string()]))
+        );
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.outcomes.len(), 2);
+        let sdk_outcome = result.all_outcomes.iter().find(|o| o.drv_path == sdk).unwrap();
+        assert!(!sdk_outcome.cached, "combined out+dev demand must miss when dev is absent");
+        assert!(sdk_outcome.outputs.contains_key("out"));
+        assert!(sdk_outcome.outputs.contains_key("dev"));
+        assert_eq!(calls.lock().unwrap().len(), 3, "sdk executes once, both consumers execute once");
+    }
+
+    #[tokio::test]
+    async fn sequential_want_before_run_widens_demand_to_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-sequential", &["out", "dev"], &[], &mut kp);
+        let (consumer_out, _) = crate::test_support::build_and_register_multi(
+            "seq-consumer-out",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut kp,
+        );
+
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+        let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+        let mut worker = Worker::new(1);
+        worker.want(&consumer_out, &kp, true).unwrap();
+        worker.want_outputs(&sdk, &kp, true, Some(BTreeSet::from(["dev".to_string()]))).unwrap();
+        assert_eq!(worker.goal_demands.get(&sdk.to_absolute_path()), Some(&BTreeSet::from(["dev".to_string()])));
+
+        let result = worker.run(&mut builder, &mut kp).await.unwrap();
+        assert_eq!(
+            worker.goal_demands.get(&sdk.to_absolute_path()),
+            Some(&BTreeSet::from(["out".to_string(), "dev".to_string()]))
+        );
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.outcomes.len(), 2);
+        assert_eq!(calls.lock().unwrap().len(), 2, "sdk builds once + consumer_out builds once");
+    }
+
+    #[tokio::test]
+    async fn streaming_late_consumer_widens_done_goal_from_out_to_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let release = Arc::new(tokio::sync::Notify::new());
+        let gated_service = LateRootGatedBuildService {
+            mock,
+            gated_name: "stream-consumer-out",
+            release: release.clone(),
+        };
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) = crate::test_support::build_and_register_multi("sdk-stream", &["out", "dev"], &[], &mut kp);
+        let (consumer_out, consumer_out_drv) = crate::test_support::build_and_register_multi(
+            "stream-consumer-out",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut kp,
+        );
+        let (consumer_dev, consumer_dev_drv) = crate::test_support::build_and_register_multi(
+            "stream-consumer-dev",
+            &["out"],
+            &[(sdk.clone(), "dev")],
+            &mut kp,
+        );
+
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+        let mut builder = signed_worker_builder(bs, gated_service, pis, temp.path());
+        let mut worker = Worker::new(2);
+        let (tx, mut rx) = mpsc::channel(8);
+
+        let sdk_hdm = kp.get_hdm_by_drv_path(&sdk.to_absolute_path()).unwrap();
+        let out_hdm = kp.get_hdm_by_drv_path(&consumer_out.to_absolute_path()).unwrap();
+        let dev_hdm = kp.get_hdm_by_drv_path(&consumer_dev.to_absolute_path()).unwrap();
+
+        tx.send(EvalMessage {
+            label: "consumer-out".into(),
+            drv_path: consumer_out.clone(),
+            new_entries: vec![
+                (sdk.clone(), sdk_hdm, sdk_drv, false, vec![], None),
+                (consumer_out.clone(), out_hdm, consumer_out_drv, false, vec![], None),
+            ],
+        })
+        .await
+        .unwrap();
+
+        let mut pending_tx = Some(tx);
+        let dev_msg = EvalMessage {
+            label: "consumer-dev".into(),
+            drv_path: consumer_dev.clone(),
+            new_entries: vec![(consumer_dev.clone(), dev_hdm, consumer_dev_drv, false, vec![], None)],
+        };
+        let sdk_done_notified = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let sdk_done_flag = sdk_done_notified.clone();
+        let sdk_key = sdk.to_absolute_path();
+        let mut observer = move |reg: &GoalRegistry| {
+            if !sdk_done_flag.load(std::sync::atomic::Ordering::SeqCst)
+                && reg.get(&sdk_key).is_some_and(|g| g.state == GoalState::Done)
+            {
+                sdk_done_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                if let Some(sender) = pending_tx.take() {
+                    sender.try_send(dev_msg.clone()).unwrap();
+                }
+                release.notify_one();
+            }
+        };
+
+        let result = worker.run_streaming_observed(&mut builder, &mut kp, &mut rx, Some(&mut observer)).await.unwrap();
+        assert!(sdk_done_notified.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(result.outcomes.len(), 2);
+        let sdk_outcomes: Vec<_> = result.all_outcomes.iter().filter(|o| o.drv_path == sdk).collect();
+        assert_eq!(sdk_outcomes.len(), 1, "reopened sdk outcome must be upserted without duplicates");
+        assert!(!sdk_outcomes[0].cached, "reopened sdk rebuilt to produce dev");
+        assert!(sdk_outcomes[0].outputs.contains_key("out"));
+        assert!(sdk_outcomes[0].outputs.contains_key("dev"));
+        assert_eq!(calls.lock().unwrap().len(), 3, "consumer_out + reopened sdk + consumer_dev");
+    }
+
+    #[tokio::test]
+    async fn watch_late_generation_widens_retained_done_goal_to_dev() {
+        let temp = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock, _) = MockBuildService::new(blobs.clone());
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(tmp_ds()),
+            CancellableWatchMock {
+                mock,
+                calls: calls.clone(),
+            },
+            pis.clone(),
+            temp.path().to_path_buf(),
+            None,
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let mut build_kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-watch", &["out", "dev"], &[], &mut build_kp);
+        let (consumer_out, consumer_out_drv) = crate::test_support::build_and_register_multi(
+            "watch-consumer-out",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut build_kp,
+        );
+        let (consumer_dev, consumer_dev_drv) = crate::test_support::build_and_register_multi(
+            "watch-consumer-dev",
+            &["out"],
+            &[(sdk.clone(), "dev")],
+            &mut build_kp,
+        );
+        let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+        let sdk_dev = sdk_drv.outputs["dev"].path.clone().unwrap();
+        put_signed_worker_path_info(&blobs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+        assert!(pis.get(*sdk_dev.digest()).await.unwrap().is_none(), "dev must initially be absent");
+
+        let sdk_hdm = build_kp.get_hdm_by_drv_path(&sdk.to_absolute_path()).unwrap();
+        let out_hdm = build_kp.get_hdm_by_drv_path(&consumer_out.to_absolute_path()).unwrap();
+        let dev_hdm = build_kp.get_hdm_by_drv_path(&consumer_dev.to_absolute_path()).unwrap();
+
+        let mut watch_paths = DerivationRegistry::default();
+        let (tx, mut updates) = mpsc::channel(4);
+        let (events_tx, mut events) = mpsc::channel(8);
+        tx.send(WatchWorkerUpdate {
+            generation: 1,
+            roots: vec![EvalMessage {
+                label: "watch-out".into(),
+                drv_path: consumer_out.clone(),
+                new_entries: vec![
+                    (sdk.clone(), sdk_hdm, sdk_drv, false, vec![], None),
+                    (consumer_out.clone(), out_hdm, consumer_out_drv, false, vec![], None),
+                ],
+            }],
+        })
+        .await
+        .unwrap();
+
+        let calls_observer = calls.clone();
+        let consumer_out_gen2 = consumer_out.clone();
+        let consumer_dev_gen2 = consumer_dev.clone();
+        let mut worker = Worker::new(1);
+        let controller = async move {
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit.send(()).unwrap(),
+                other => panic!("unexpected gen 1 event: {other:?}"),
+            }
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::Settled {
+                    generation: 1,
+                    outcomes,
+                    failed,
+                    ..
+                }) => {
+                    assert!(failed.is_empty(), "{failed:?}");
+                    assert_eq!(outcomes.len(), 1);
+                }
+                other => panic!("unexpected gen 1 settled: {other:?}"),
+            }
+            assert_eq!(calls_observer.load(std::sync::atomic::Ordering::Relaxed), 1, "gen 1 skips sdk build");
+
+            tx.send(WatchWorkerUpdate {
+                generation: 2,
+                roots: vec![
+                    EvalMessage {
+                        label: "watch-out".into(),
+                        drv_path: consumer_out_gen2,
+                        new_entries: vec![],
+                    },
+                    EvalMessage {
+                        label: "watch-dev".into(),
+                        drv_path: consumer_dev_gen2.clone(),
+                        new_entries: vec![(consumer_dev_gen2, dev_hdm, consumer_dev_drv, false, vec![], None)],
+                    },
+                ],
+            })
+            .await
+            .unwrap();
+
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                other => panic!("unexpected gen 2 event: {other:?}"),
+            }
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::Settled {
+                    generation: 2,
+                    outcomes,
+                    failed,
+                    ..
+                }) => {
+                    assert!(failed.is_empty(), "{failed:?}");
+                    assert_eq!(outcomes.len(), 2);
+                }
+                other => panic!("unexpected gen 2 settled: {other:?}"),
+            }
+            drop(tx);
+        };
+        let (result, ()) =
+            tokio::join!(worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx), controller,);
+        let result = result.unwrap();
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert_eq!(
+            calls.load(std::sync::atomic::Ordering::Relaxed),
+            3,
+            "gen1 consumer_out + gen2 reopened sdk + gen2 consumer_dev"
+        );
+        assert!(
+            pis.get(*sdk_dev.digest()).await.unwrap().is_some(),
+            "reopened sdk in gen 2 must produce and persist dev output"
+        );
+    }
+
+    #[tokio::test]
+    async fn unknown_output_selection_rejected_at_worker_boundaries() {
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-invalid-sel", &["out", "dev"], &[], &mut kp);
+        let (bad_consumer, bad_consumer_drv) = crate::test_support::build_and_register_multi(
+            "bad-consumer",
+            &["out"],
+            &[(sdk.clone(), "headers")],
+            &mut kp,
+        );
+
+        let mut worker = Worker::new(1);
+        let err_direct =
+            worker.want_outputs(&sdk, &kp, false, Some(BTreeSet::from(["headers".to_string()]))).unwrap_err();
+        let msg_direct = err_direct.to_string();
+        assert!(matches!(err_direct, Error::InvalidOutputSelection { .. }), "{err_direct:?}");
+        assert!(msg_direct.contains("headers"), "{msg_direct}");
+        assert!(msg_direct.contains("out"), "{msg_direct}");
+        assert!(msg_direct.contains("dev"), "{msg_direct}");
+
+        let err_empty = worker.want_outputs(&sdk, &kp, false, Some(BTreeSet::new())).unwrap_err();
+        assert!(matches!(err_empty, Error::InvalidOutputSelection { .. }), "{err_empty:?}");
+
+        let err_edge = worker.want(&bad_consumer, &kp, true).unwrap_err();
+        let msg_edge = err_edge.to_string();
+        assert!(matches!(err_edge, Error::InvalidOutputSelection { .. }), "{err_edge:?}");
+        assert!(msg_edge.contains("headers"), "{msg_edge}");
+        assert!(msg_edge.contains("out"), "{msg_edge}");
+        assert!(msg_edge.contains("dev"), "{msg_edge}");
+
+        // Watch preflight also rejects invalid output selections cleanly with WatchWorkerEvent::Rejected.
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+        let (mock, calls) = MockBuildService::new(bs.clone());
+        let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+        let bad_demand = BTreeSet::from(["headers".to_string()]);
+        let err_prepare = match builder
+            .prepare_build_with_demand(
+                crate::orchestrate::PrepareBuildInput {
+                    drv_path: &sdk,
+                    derivation: Arc::new(sdk_drv.clone()),
+                    is_root: true,
+                    bound_plan_outputs: &[],
+                    demanded_outputs: Some(&bad_demand),
+                },
+                &mut kp,
+            )
+            .await
+        {
+            Ok(_) => panic!("prepare_build_with_demand must reject unknown output"),
+            Err(error) => error,
+        };
+        assert!(matches!(err_prepare, Error::InvalidOutputSelection { .. }), "{err_prepare:?}");
+
+        let sdk_hdm = kp.get_hdm_by_drv_path(&sdk.to_absolute_path()).unwrap();
+        let bad_hdm = kp.get_hdm_by_drv_path(&bad_consumer.to_absolute_path()).unwrap();
+        let mut watch_paths = DerivationRegistry::default();
+        let (tx, mut updates) = mpsc::channel(4);
+        let (events_tx, mut events) = mpsc::channel(4);
+        tx.send(WatchWorkerUpdate {
+            generation: 9,
+            roots: vec![EvalMessage {
+                label: "bad-watch".into(),
+                drv_path: bad_consumer.clone(),
+                new_entries: vec![
+                    (sdk, sdk_hdm, sdk_drv, false, vec![], None),
+                    (bad_consumer, bad_hdm, bad_consumer_drv, false, vec![], None),
+                ],
+            }],
+        })
+        .await
+        .unwrap();
+        drop(tx);
+        let mut watch_worker = Worker::new(1);
+        let (watch_res, event) = tokio::join!(
+            watch_worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx),
+            events.recv(),
+        );
+        watch_res.unwrap();
+        assert!(matches!(event, Some(WatchWorkerEvent::Rejected { generation: 9 })), "{event:?}");
+        assert_eq!(calls.lock().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn multi_output_sdk_ncl_fixture_coverage() {
+        // Mirrors examples/projects/multi-output-sdk/mantle-project.ncl:
+        // sdk_package has ["out", "dev", "doc", "debug"];
+        // runtime_consumer selects "out"; development_consumer selects "dev".
+        let mut kp = DerivationRegistry::default();
+        let (sdk, sdk_drv) =
+            crate::test_support::build_and_register_multi("sdk-package", &["out", "dev", "doc", "debug"], &[], &mut kp);
+        let (runtime_consumer, _) = crate::test_support::build_and_register_multi(
+            "runtime-consumer",
+            &["out"],
+            &[(sdk.clone(), "out")],
+            &mut kp,
+        );
+        let (development_consumer, _) = crate::test_support::build_and_register_multi(
+            "development-consumer",
+            &["out"],
+            &[(sdk.clone(), "dev")],
+            &mut kp,
+        );
+
+        // Cold run: builds sdk + runtime_consumer + development_consumer (3 executions).
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(2);
+            worker.want(&runtime_consumer, &kp, true).unwrap();
+            worker.want(&development_consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(result.outcomes.len(), 2);
+            assert_eq!(calls.lock().unwrap().len(), 3);
+        }
+
+        // Warm run 1: ONLY sdk:out cached (dev, doc, debug absent) -> runtime_consumer hits 0 producer
+        // builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&runtime_consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(calls.lock().unwrap().len(), 1, "only runtime_consumer executes");
+        }
+
+        // Warm run 2: sdk:out + sdk:dev cached (doc, debug absent) -> both consumers reuse sdk with 0
+        // producer builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis: Arc<dyn PathInfoService> = Arc::new(test_pis());
+            let sdk_out = sdk_drv.outputs["out"].path.clone().unwrap();
+            let sdk_dev = sdk_drv.outputs["dev"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_out, &sdk, vec![]).await;
+            put_signed_worker_path_info(&bs, pis.as_ref(), sdk_dev, &sdk, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(2);
+            worker.want(&runtime_consumer, &kp, true).unwrap();
+            worker.want(&development_consumer, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            let sdk_outcome = result.all_outcomes.iter().find(|o| o.drv_path == sdk).unwrap();
+            assert!(sdk_outcome.cached);
+            assert_eq!(calls.lock().unwrap().len(), 2, "only runtime_consumer + development_consumer execute");
+        }
+    }
+
+    async fn export_http_cache_fixture(
+        bs: &MemoryBlobService,
+        ds: &snix_castore::directoryservice::RedbDirectoryService,
+        cache_dir: &std::path::Path,
+        infos: &[snix_store::path_info::PathInfo],
+    ) {
+        let export_shell = crate::test_support::store_handle(bs.clone(), ds.clone());
+        crunch_store::export_paths_to_cache_dir(&export_shell, infos, cache_dir, &crunch_store::PushOptions {
+            trust_unsigned: false,
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn make_signed_nar_path_info(
+        bs: &MemoryBlobService,
+        store_path: StorePath<String>,
+        drv_path: &StorePath<String>,
+        references: Vec<StorePath<String>>,
+        payload: &[u8],
+    ) -> snix_store::path_info::PathInfo {
+        let node = put_test_blob(bs, payload).await;
+        let mut nar_buf = Vec::new();
+        let nar_hash = {
+            use sha2::Digest as _;
+            let nar = nix_compat::nar::writer::open(&mut nar_buf).unwrap();
+            nar.file(false, payload.len() as u64, &mut std::io::Cursor::new(payload)).unwrap();
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(&nar_buf);
+            let digest = hasher.finalize();
+            let mut out = [0u8; 32];
+            out.copy_from_slice(&digest);
+            out
+        };
+        let mut info = snix_store::path_info::PathInfo {
+            store_path,
+            node,
+            references,
+            nar_size: nar_buf.len() as u64,
+            nar_sha256: nar_hash,
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo_with_store_dir(
+            &mut info,
+            &test_keypair().signing_key,
+            nix_compat::store_path::STORE_DIR,
+        );
+        info
+    }
+
+    async fn open_http_client_store(
+        server_url: &str,
+        consumer_state: &std::path::Path,
+        consumer_output: &std::path::Path,
+    ) -> crunch_store::StoreHandle {
+        let trusted_keys = test_trusted_keys();
+        let trusted_token =
+            url::form_urlencoded::byte_serialize(trusted_keys[0].to_string().as_bytes()).collect::<String>();
+        let mut store_config = crunch_store::StoreConfig::new(
+            crunch_store::StoreBackend::Snix,
+            consumer_state.to_path_buf(),
+            consumer_output.to_path_buf(),
+            nix_compat::store_path::STORE_DIR.to_string(),
+        );
+        store_config.remote_cache_urls = vec![format!("{server_url}?trusted_public_keys[0]={trusted_token}")];
+        store_config.source_admission = Some(crate::test_support::test_source_admission());
+        crunch_store::StoreHandle::open(store_config).await.unwrap()
+    }
+
+    // T1: Baseline vs after on fresh client (HTTP ActionResult + HTTP PathInfo-only)
+    #[tokio::test]
+    async fn worker_preflight_fresh_client_skips_build_only_deps_for_action_result_and_http_pathinfo() {
+        use crunch_store::ActionResultStore as _;
+
+        // Producer builds B_tool -> R_app and exports BOTH to cache_dir.
+        let producer_state = tempfile::tempdir().unwrap();
+        let producer_output = tempfile::tempdir().unwrap();
+        let producer_bs = MemoryBlobService::default();
+        let producer_ds = tmp_ds();
+        let (producer_mock, _) = MockBuildService::new(producer_bs.clone());
+        let mut producer = Builder::with_state_dir(
+            Arc::new(producer_bs.clone()),
+            Arc::new(producer_ds.clone()),
+            producer_mock,
+            Arc::new(test_pis()),
+            producer_output.path().to_path_buf(),
+            Some(producer_state.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut producer_kp = DerivationRegistry::default();
+        let (b_tool, b_drv) = crate::test_support::build_and_register("preflight-t1-tool", &[], &mut producer_kp);
+        let (r_app, r_drv) =
+            crate::test_support::build_and_register("preflight-t1-app", &[(b_tool.clone(), "out")], &mut producer_kp);
+        let b_out = b_drv.outputs["out"].path.clone().unwrap();
+        let r_out = r_drv.outputs["out"].path.clone().unwrap();
+
+        let mut producer_worker = Worker::new(1);
+        producer_worker.want(&r_app, &producer_kp, true).unwrap();
+        let producer_res = producer_worker.run(&mut producer, &mut producer_kp).await.unwrap();
+        assert!(producer_res.failed.is_empty());
+        let all_infos: Vec<_> =
+            producer_res.all_outcomes.iter().flat_map(|outcome| outcome.outputs.values().cloned()).collect();
+
+        // Case A: HTTP PathInfo-only (no action-result sidecars) -> 0 builds, 0 HTTP fetches for B_tool.
+        {
+            let cache_dir = tempfile::tempdir().unwrap();
+            export_http_cache_fixture(&producer_bs, &producer_ds, cache_dir.path(), &all_infos).await;
+            let server = crate::test_support::StaticHttpServer::start(crate::test_support::collect_static_http_files(
+                cache_dir.path(),
+            ));
+
+            let consumer_state = tempfile::tempdir().unwrap();
+            let consumer_output = tempfile::tempdir().unwrap();
+            let consumer_store =
+                open_http_client_store(&server.base_url, consumer_state.path(), consumer_output.path()).await;
+            let mut consumer_builder = Builder::from_store_parts(
+                consumer_store.into_builder_store_parts(),
+                crate::test_support::PanicBuildService,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let mut consumer_kp = DerivationRegistry::default();
+            let (b2, _) = crate::test_support::build_and_register("preflight-t1-tool", &[], &mut consumer_kp);
+            let (r2, _) = crate::test_support::build_and_register("preflight-t1-app", &[(b2, "out")], &mut consumer_kp);
+            let mut worker = Worker::new(1);
+            worker.want(&r2, &consumer_kp, true).unwrap();
+            let result = worker.run(&mut consumer_builder, &mut consumer_kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(result.outcomes.len(), 1);
+            assert!(result.outcomes[0].cached);
+            assert!(result.outcomes[0].substitutions.contains_key("out"));
+            assert!(consumer_builder.store.cached_node_for_path(&b_out).await.unwrap().is_none());
+            let b_physical =
+                PathBuf::from(b_out.to_absolute_path_with_prefix(consumer_output.path().to_str().unwrap()));
+            let r_physical =
+                PathBuf::from(r_out.to_absolute_path_with_prefix(consumer_output.path().to_str().unwrap()));
+            assert!(!b_physical.exists(), "build-only dep must remain unmaterialized");
+            assert!(r_physical.exists(), "cached root must be exported");
+
+            let requests = server.requests.lock().unwrap().clone();
+            let b_str = b_out.to_string();
+            let b_hash_prefix = b_str.split('-').next().unwrap();
+            assert!(
+                !requests.iter().any(|req| req.contains(b_hash_prefix)),
+                "build-only dep narinfo must never be fetched: {requests:?}"
+            );
+            let nar_fetch_count = requests.iter().filter(|req| req.starts_with("/nar/")).count();
+            assert_eq!(nar_fetch_count, 1, "only root NAR should be fetched: {requests:?}");
+        }
+
+        // Case B: HTTP ActionResult sidecars present -> 0 builds, 0 HTTP fetches for B_tool,
+        // ActionResultRuntimeReport disposition == reused.
+        {
+            let cache_dir = tempfile::tempdir().unwrap();
+            export_http_cache_fixture(&producer_bs, &producer_ds, cache_dir.path(), &all_infos).await;
+            let local_results = crunch_store::LocalActionResultStore::new(producer_state.path());
+            let action_ref = crate::action_result::action_ref_for_derivation(&r_drv, nix_compat::store_path::STORE_DIR);
+            let lookup = local_results.lookup(&action_ref).await.unwrap();
+            let signed = lookup.records.first().unwrap();
+            crate::test_support::write_http_action_result_sidecars(cache_dir.path(), &lookup.index, signed);
+            let server = crate::test_support::StaticHttpServer::start(crate::test_support::collect_static_http_files(
+                cache_dir.path(),
+            ));
+
+            let consumer_state = tempfile::tempdir().unwrap();
+            let consumer_output = tempfile::tempdir().unwrap();
+            let consumer_store =
+                open_http_client_store(&server.base_url, consumer_state.path(), consumer_output.path()).await;
+            let mut consumer_builder = Builder::from_store_parts(
+                consumer_store.into_builder_store_parts(),
+                crate::test_support::PanicBuildService,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let mut consumer_kp = DerivationRegistry::default();
+            let (b2, _) = crate::test_support::build_and_register("preflight-t1-tool", &[], &mut consumer_kp);
+            let (r2, _) = crate::test_support::build_and_register("preflight-t1-app", &[(b2, "out")], &mut consumer_kp);
+            let mut worker = Worker::new(1);
+            worker.want(&r2, &consumer_kp, true).unwrap();
+            let result = worker.run(&mut consumer_builder, &mut consumer_kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert!(result.outcomes[0].cached);
+            let reports = consumer_builder.take_action_result_reports();
+            assert!(
+                reports
+                    .iter()
+                    .any(|report| report.disposition == crate::action_result::ACTION_RESULT_DISPOSITION_REUSED),
+                "expected reused action result report: {reports:?}"
+            );
+            assert!(consumer_builder.store.cached_node_for_path(&b_out).await.unwrap().is_none());
+            let requests = server.requests.lock().unwrap().clone();
+            let b_str = b_out.to_string();
+            let b_hash_prefix = b_str.split('-').next().unwrap();
+            assert!(!requests.iter().any(|req| req.contains(b_hash_prefix)), "{requests:?}");
+        }
+
+        // Case C: Baseline/contrast uncached root -> expands and fetches/builds B_tool.
+        {
+            let cache_dir = tempfile::tempdir().unwrap();
+            let b_info_only: Vec<_> = all_infos.into_iter().filter(|pi| pi.store_path == b_out).collect();
+            export_http_cache_fixture(&producer_bs, &producer_ds, cache_dir.path(), &b_info_only).await;
+            let server = crate::test_support::StaticHttpServer::start(crate::test_support::collect_static_http_files(
+                cache_dir.path(),
+            ));
+            let consumer_state = tempfile::tempdir().unwrap();
+            let consumer_output = tempfile::tempdir().unwrap();
+            let consumer_store =
+                open_http_client_store(&server.base_url, consumer_state.path(), consumer_output.path()).await;
+            let (consumer_mock, consumer_calls) = MockBuildService::new(MemoryBlobService::default());
+            let mut consumer_builder = Builder::from_store_parts(
+                consumer_store.into_builder_store_parts(),
+                consumer_mock,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let mut consumer_kp = DerivationRegistry::default();
+            let (b2, _) = crate::test_support::build_and_register("preflight-t1-tool", &[], &mut consumer_kp);
+            let (r2, _) = crate::test_support::build_and_register("preflight-t1-app", &[(b2, "out")], &mut consumer_kp);
+            let mut worker = Worker::new(1);
+            worker.want(&r2, &consumer_kp, true).unwrap();
+            let result = worker.run(&mut consumer_builder, &mut consumer_kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert_eq!(consumer_calls.lock().unwrap().len(), 1, "B_tool substituted, R_app built");
+            let requests = server.requests.lock().unwrap().clone();
+            let b_str = b_out.to_string();
+            let b_hash_prefix = b_str.split('-').next().unwrap();
+            assert!(requests.iter().any(|req| req.contains(b_hash_prefix)), "baseline must fetch B_tool: {requests:?}");
+        }
+    }
+
+    // T2: Runtime-closure member materialization (transitive chain + sibling) without build-only deps
+    #[tokio::test]
+    async fn worker_preflight_materializes_runtime_closure_chain_and_sibling_without_build_deps() {
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let mut kp = DerivationRegistry::default();
+        let (b_tool, b_drv) = crate::test_support::build_and_register("preflight-t2-tool", &[], &mut kp);
+        let (l2_drv_path, l2_drv) = crate::test_support::build_and_register("preflight-t2-l2", &[], &mut kp);
+        let (l1_drv_path, l1_drv) = crate::test_support::build_and_register("preflight-t2-l1", &[], &mut kp);
+        let (r_app, r_drv) = crate::test_support::build_and_register_multi(
+            "preflight-t2-app",
+            &["out", "lib"],
+            &[(b_tool.clone(), "out")],
+            &mut kp,
+        );
+
+        let b_out = b_drv.outputs["out"].path.clone().unwrap();
+        let l2_out = l2_drv.outputs["out"].path.clone().unwrap();
+        let l1_out = l1_drv.outputs["out"].path.clone().unwrap();
+        let r_lib = r_drv.outputs["lib"].path.clone().unwrap();
+        let r_out = r_drv.outputs["out"].path.clone().unwrap();
+
+        let b_pi = make_signed_nar_path_info(&bs, b_out.clone(), &b_tool, vec![], b"build-only-tool").await;
+        let l2_pi = make_signed_nar_path_info(&bs, l2_out.clone(), &l2_drv_path, vec![], b"runtime-l2").await;
+        let l1_pi =
+            make_signed_nar_path_info(&bs, l1_out.clone(), &l1_drv_path, vec![l2_out.clone()], b"runtime-l1").await;
+        let r_lib_pi = make_signed_nar_path_info(&bs, r_lib.clone(), &r_app, vec![], b"root-sibling-lib").await;
+        let r_out_pi = make_signed_nar_path_info(
+            &bs,
+            r_out.clone(),
+            &r_app,
+            vec![r_lib.clone(), l1_out.clone()],
+            b"root-main-out",
+        )
+        .await;
+
+        let cache_dir = tempfile::tempdir().unwrap();
+        export_http_cache_fixture(&bs, &ds, cache_dir.path(), &[b_pi, l2_pi, l1_pi, r_lib_pi, r_out_pi]).await;
+        let server = crate::test_support::StaticHttpServer::start(crate::test_support::collect_static_http_files(
+            cache_dir.path(),
+        ));
+
+        let consumer_state = tempfile::tempdir().unwrap();
+        let consumer_output = tempfile::tempdir().unwrap();
+        let consumer_store =
+            open_http_client_store(&server.base_url, consumer_state.path(), consumer_output.path()).await;
+        let mut consumer_builder = Builder::from_store_parts(
+            consumer_store.into_builder_store_parts(),
+            crate::test_support::PanicBuildService,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+
+        let mut worker = Worker::new(1);
+        worker.want_outputs(&r_app, &kp, true, Some(BTreeSet::from(["out".to_string()]))).unwrap();
+        let result = worker.run(&mut consumer_builder, &mut kp).await.unwrap();
+        assert!(result.failed.is_empty(), "{:?}", result.failed);
+        assert!(result.outcomes[0].cached);
+        assert!(result.outcomes[0].outputs.contains_key("out"));
+        assert!(result.outcomes[0].outputs.contains_key("lib"));
+        assert!(consumer_builder.store.cached_node_for_path(&b_out).await.unwrap().is_none());
+        assert!(consumer_builder.store.cached_node_for_path(&l1_out).await.unwrap().is_some());
+        assert!(consumer_builder.store.cached_node_for_path(&l2_out).await.unwrap().is_some());
+        assert!(consumer_builder.store.cached_node_for_path(&r_lib).await.unwrap().is_some());
+        let out_dir = consumer_output.path().to_str().unwrap();
+        assert!(!PathBuf::from(b_out.to_absolute_path_with_prefix(out_dir)).exists());
+        assert!(PathBuf::from(r_out.to_absolute_path_with_prefix(out_dir)).exists());
+        assert!(PathBuf::from(r_lib.to_absolute_path_with_prefix(out_dir)).exists());
+
+        let requests = server.requests.lock().unwrap().clone();
+        let b_str = b_out.to_string();
+        let l1_str = l1_out.to_string();
+        let l2_str = l2_out.to_string();
+        assert!(!requests.iter().any(|req| req.contains(b_str.split('-').next().unwrap())));
+        assert!(requests.iter().any(|req| req.contains(l1_str.split('-').next().unwrap())));
+        assert!(requests.iter().any(|req| req.contains(l2_str.split('-').next().unwrap())));
+    }
+
+    // T3: Shared build-only dep also needed by an uncached second root (both arrival orders) +
+    // consumer depending directly on a deferred root
+    #[tokio::test]
+    async fn worker_preflight_shared_build_only_dep_with_second_uncached_root_both_orders() {
+        for cached_first in [true, false] {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(crate::test_support::CountingPathInfoService::default());
+            let mut kp = DerivationRegistry::default();
+            let (b_shared, _) = crate::test_support::build_and_register("t3-shared-dep", &[], &mut kp);
+            let (r_cached, r_cached_drv) =
+                crate::test_support::build_and_register("t3-cached-root", &[(b_shared.clone(), "out")], &mut kp);
+            let (r_uncached, _) =
+                crate::test_support::build_and_register("t3-uncached-root", &[(b_shared.clone(), "out")], &mut kp);
+
+            let r_cached_out = r_cached_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), r_cached_out, &r_cached, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(2);
+            if cached_first {
+                worker.want(&r_cached, &kp, true).unwrap();
+                worker.want(&r_uncached, &kp, true).unwrap();
+            } else {
+                worker.want(&r_uncached, &kp, true).unwrap();
+                worker.want(&r_cached, &kp, true).unwrap();
+            }
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(result.outcomes.len(), 2);
+            assert_eq!(calls.lock().unwrap().len(), 2, "only b_shared and r_uncached build");
+            let cached_outcome = result.outcomes.iter().find(|o| o.drv_path == r_cached).unwrap();
+            let uncached_outcome = result.outcomes.iter().find(|o| o.drv_path == r_uncached).unwrap();
+            assert!(cached_outcome.cached);
+            assert!(!uncached_outcome.cached);
+        }
+
+        // Non-deferred consumer depending directly on a deferred Pending root before preflight runs.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (b_dep, _) = crate::test_support::build_and_register("t3-chain-b", &[], &mut kp);
+            let (r_mid, r_mid_drv) =
+                crate::test_support::build_and_register("t3-chain-mid", &[(b_dep, "out")], &mut kp);
+            let (c_top, _) =
+                crate::test_support::build_and_register("t3-chain-top", &[(r_mid.clone(), "out")], &mut kp);
+            put_signed_worker_path_info(
+                &bs,
+                pis.as_ref(),
+                r_mid_drv.outputs["out"].path.clone().unwrap(),
+                &r_mid,
+                vec![],
+            )
+            .await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&r_mid, &kp, true).unwrap();
+            worker.want(&c_top, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert_eq!(calls.lock().unwrap().len(), 1, "only c_top builds; b_dep skipped");
+        }
+    }
+
+    // T4: Preflight miss, incomplete runtime closure fallback, failed shared dep propagation,
+    // and >16-dep deferred graph completion
+    #[tokio::test]
+    async fn worker_preflight_miss_and_incomplete_closure_fall_back_and_propagate_failed_dep() {
+        // (a) Uncached root with cached dep -> preflight misses, expands dep, dep hits cache, root builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (b_dep, b_drv) = crate::test_support::build_and_register("t4a-dep", &[], &mut kp);
+            let (root, _) = crate::test_support::build_and_register("t4a-root", &[(b_dep.clone(), "out")], &mut kp);
+            put_signed_worker_path_info(&bs, pis.as_ref(), b_drv.outputs["out"].path.clone().unwrap(), &b_dep, vec![])
+                .await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&root, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert_eq!(calls.lock().unwrap().len(), 1, "only root builds");
+            assert!(!result.outcomes[0].cached);
+        }
+
+        // (b) Cached root with missing runtime closure member -> preflight misses, no premature export,
+        // expands & builds dep + root.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (b_dep, _) = crate::test_support::build_and_register("t4b-dep", &[], &mut kp);
+            let (root, root_drv) = crate::test_support::build_and_register("t4b-root", &[(b_dep, "out")], &mut kp);
+            let root_out = root_drv.outputs["out"].path.clone().unwrap();
+            let missing_runtime_ref = StorePath::from_name_and_digest_fixed("t4b-missing-rt", [81u8; 20]).unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), root_out, &root, vec![missing_runtime_ref]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&root, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert_eq!(calls.lock().unwrap().len(), 2);
+            assert!(!result.outcomes[0].cached);
+        }
+
+        // (c) Already-failed shared dep must immediately fail deferred root when preflight misses.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (failing_mock, _) =
+                crate::test_support::FailingMockBuildService::new(bs.clone(), vec!["t4c-bad-dep".to_string()]);
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (bad_dep, _) = crate::test_support::build_and_register("t4c-bad-dep", &[], &mut kp);
+            let (r_first, _) =
+                crate::test_support::build_and_register("t4c-first", &[(bad_dep.clone(), "out")], &mut kp);
+            let (r_second, _) = crate::test_support::build_and_register("t4c-second", &[(bad_dep, "out")], &mut kp);
+
+            let mut builder = signed_worker_builder(bs, failing_mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&r_first, &kp, true).unwrap();
+            let (tx, mut rx) = mpsc::channel(4);
+            let r_second_entry = kp.get_by_drv_path(&r_second.to_absolute_path()).unwrap();
+            let msg = EvalMessage {
+                label: "t4c-second".into(),
+                drv_path: r_second.clone(),
+                new_entries: vec![(
+                    r_second.clone(),
+                    r_second_entry.hash_derivation_modulo,
+                    r_second_entry.derivation.as_ref().clone(),
+                    false,
+                    vec![],
+                    None,
+                )],
+            };
+            let sender_task = tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                tx.send(msg).await.unwrap();
+            });
+            let result = worker.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+            sender_task.await.unwrap();
+            assert_eq!(result.failed.len(), 2, "both roots must fail cleanly without deadlock: {:?}", result.failed);
+        }
+
+        // (d) >16 transitive deps under a deferred root missing preflight must not hit iteration limit.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let mut deps = Vec::new();
+            for i in 0..20u32 {
+                let (dep, _) = crate::test_support::build_and_register(&format!("t4d-dep-{i}"), &[], &mut kp);
+                deps.push((dep, "out"));
+            }
+            let (root, _) = crate::test_support::build_and_register("t4d-wide-root", &deps, &mut kp);
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&root, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert_eq!(calls.lock().unwrap().len(), 21);
+        }
+    }
+
+    // T5: Multi-output root: all-output default vs selected-output demand & reopen_for_demand
+    #[tokio::test]
+    async fn worker_preflight_multi_output_all_vs_selected_and_reopen_for_demand() {
+        let mut kp = DerivationRegistry::default();
+        let (b_dep, b_drv) = crate::test_support::build_and_register("t5-build-dep", &[], &mut kp);
+        let (pkg, pkg_drv) = crate::test_support::build_and_register_multi(
+            "t5-pkg",
+            &["out", "dev"],
+            &[(b_dep.clone(), "out")],
+            &mut kp,
+        );
+        let b_out = b_drv.outputs["out"].path.clone().unwrap();
+        let pkg_out = pkg_drv.outputs["out"].path.clone().unwrap();
+
+        // (a) Unqualified root when only pkg:out cached -> preflight misses, expands B, rebuilds pkg.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            put_signed_worker_path_info(&bs, pis.as_ref(), pkg_out.clone(), &pkg, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&pkg, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert_eq!(calls.lock().unwrap().len(), 2);
+            assert!(!result.outcomes[0].cached);
+        }
+
+        // (b) Selected want_outputs(Some({"out"})) when pkg:out cached -> preflight hits, 0 builds, 0 B
+        // fetches.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let pis = Arc::new(crate::test_support::CountingPathInfoService::default());
+            put_signed_worker_path_info(&bs, pis.as_ref(), pkg_out.clone(), &pkg, vec![]).await;
+
+            let mut builder =
+                signed_worker_builder(bs, crate::test_support::PanicBuildService, pis.clone(), temp.path());
+            let mut worker = Worker::new(1);
+            worker.want_outputs(&pkg, &kp, true, Some(BTreeSet::from(["out".to_string()]))).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty());
+            assert!(result.outcomes[0].cached);
+            assert_eq!(pis.get_count(&b_out), 0, "build-only dep must not be probed on preflight hit");
+        }
+
+        // (c) Reopen after preflight hit when late consumer widens demand from out to dev.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            put_signed_worker_path_info(&bs, pis.as_ref(), pkg_out, &pkg, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want_outputs(&pkg, &kp, true, Some(BTreeSet::from(["out".to_string()]))).unwrap();
+            let (tx, mut rx) = mpsc::channel(4);
+            let pkg_clone = pkg.clone();
+            let tx_task = tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                tx.send(EvalMessage {
+                    label: "widen-dev".into(),
+                    drv_path: pkg_clone,
+                    new_entries: vec![],
+                })
+                .await
+                .unwrap();
+            });
+            // Note: EvalMessage calls want(..., true) which demands ALL outputs (out + dev).
+            let result = worker.run_streaming(&mut builder, &mut kp, &mut rx).await.unwrap();
+            tx_task.await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(result.outcomes.len(), 1, "upsert_build_outcome must yield 1 merged outcome");
+            assert!(result.outcomes[0].outputs.contains_key("out"));
+            assert!(result.outcomes[0].outputs.contains_key("dev"));
+            assert_eq!(calls.lock().unwrap().len(), 2, "reopening expands b_dep and rebuilds pkg");
+        }
+    }
+
+    // T6: Adversarial rejection (fail-closed Error::CacheVerification) vs untrusted/missing-blob miss
+    // fallback
+    #[tokio::test]
+    async fn worker_preflight_adversarial_rejection_fails_closed_and_untrusted_misses() {
+        use crunch_store::ActionResultStore as _;
+
+        let mut kp = DerivationRegistry::default();
+        let (b_dep, _) = crate::test_support::build_and_register("t6-dep", &[], &mut kp);
+        let (root, root_drv) = crate::test_support::build_and_register("t6-root", &[(b_dep, "out")], &mut kp);
+        let root_out = root_drv.outputs["out"].path.clone().unwrap();
+
+        // (a)-(d): Unsigned, untrusted signer, missing blob, corrupted signature -> miss & build fallback.
+        for mode in ["unsigned", "untrusted-key", "missing-blob", "corrupted-sig"] {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            let node = if mode == "missing-blob" {
+                snix_castore::Node::File {
+                    digest: blake3::hash(b"never-written-t6").as_bytes().into(),
+                    size: 16,
+                    executable: false,
+                }
+            } else {
+                put_test_blob(&bs, b"t6-data").await
+            };
+            let mut info = snix_store::path_info::PathInfo {
+                store_path: root_out.clone(),
+                node,
+                references: vec![],
+                nar_size: 7,
+                nar_sha256: [14u8; 32],
+                signatures: vec![],
+                deriver: Some(root.clone()),
+                ca: None,
+            };
+            match mode {
+                "unsigned" => {}
+                "untrusted-key" => {
+                    let wrong_secret = ed25519_dalek::SigningKey::from_bytes(&[77u8; 32]);
+                    let wrong_key = nix_compat::narinfo::SigningKey::new("untrusted-t6".to_owned(), wrong_secret);
+                    crate::signing::sign_pathinfo_with_store_dir(
+                        &mut info,
+                        &wrong_key,
+                        nix_compat::store_path::STORE_DIR,
+                    );
+                }
+                "missing-blob" => {
+                    crate::signing::sign_pathinfo_with_store_dir(
+                        &mut info,
+                        &test_keypair().signing_key,
+                        nix_compat::store_path::STORE_DIR,
+                    );
+                }
+                "corrupted-sig" => {
+                    crate::signing::sign_pathinfo_with_store_dir(
+                        &mut info,
+                        &test_keypair().signing_key,
+                        nix_compat::store_path::STORE_DIR,
+                    );
+                    crate::test_support::corrupt_signature_bytes(&mut info);
+                }
+                _ => unreachable!(),
+            }
+            pis.put(info).await.unwrap();
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&root, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "mode {mode} failed: {:?}", result.failed);
+            assert!(!result.outcomes[0].cached, "mode {mode} must fall back to build");
+            assert_eq!(calls.lock().unwrap().len(), 2, "mode {mode} must expand & build dep + root");
+        }
+
+        // (e): Conflicting signed IA ActionResultRecords -> fail closed with CacheVerification, 0 builds!
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let state_dir = temp.path().join("state");
+            let bs = MemoryBlobService::default();
+            let seq_pis = Arc::new(crate::test_support::SequencePathInfoService::new());
+
+            let node1 = put_test_blob(&bs, b"conflict-1").await;
+            let mut info1 = snix_store::path_info::PathInfo {
+                store_path: root_out.clone(),
+                node: node1,
+                references: vec![],
+                nar_size: 10,
+                nar_sha256: [21u8; 32],
+                signatures: vec![],
+                deriver: Some(root.clone()),
+                ca: None,
+            };
+            crate::signing::sign_pathinfo_with_store_dir(
+                &mut info1,
+                &test_keypair().signing_key,
+                nix_compat::store_path::STORE_DIR,
+            );
+            let node2 = put_test_blob(&bs, b"conflict-2").await;
+            let mut info2 = snix_store::path_info::PathInfo {
+                store_path: root_out.clone(),
+                node: node2,
+                references: vec![],
+                nar_size: 10,
+                nar_sha256: [22u8; 32],
+                signatures: vec![],
+                deriver: Some(root.clone()),
+                ca: None,
+            };
+            crate::signing::sign_pathinfo_with_store_dir(
+                &mut info2,
+                &test_keypair().signing_key,
+                nix_compat::store_path::STORE_DIR,
+            );
+
+            let rec1 = crate::action_result::signed_record_for_outputs(
+                &root_drv,
+                &BTreeMap::from([("out".to_owned(), info1.clone())]),
+                nix_compat::store_path::STORE_DIR,
+                crate::HermeticityMode::Practical,
+                &test_keypair(),
+            )
+            .unwrap();
+            let rec2 = crate::action_result::signed_record_for_outputs(
+                &root_drv,
+                &BTreeMap::from([("out".to_owned(), info2.clone())]),
+                nix_compat::store_path::STORE_DIR,
+                crate::HermeticityMode::Practical,
+                &test_keypair(),
+            )
+            .unwrap();
+            let local_ar = crunch_store::LocalActionResultStore::new(&state_dir);
+            local_ar.publish(&rec1).await.unwrap();
+            local_ar.publish(&rec2).await.unwrap();
+            let action_ref =
+                crate::action_result::action_ref_for_derivation(&root_drv, nix_compat::store_path::STORE_DIR);
+            let lookup = local_ar.lookup(&action_ref).await.unwrap();
+            assert_eq!(lookup.records.len(), 2);
+            for rec in &lookup.records {
+                if rec.record.result_ref == rec1.record.result_ref {
+                    seq_pis.push(info1.clone());
+                } else {
+                    seq_pis.push(info2.clone());
+                }
+            }
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(tmp_ds()),
+                crate::test_support::PanicBuildService,
+                seq_pis,
+                temp.path().join("store"),
+                Some(state_dir),
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let mut worker = Worker::new(1);
+            worker.want(&root, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.outcomes.is_empty());
+            assert_eq!(result.failed.len(), 1);
+            assert_eq!(result.failed[0].error_class, crate::BuildFailureClass::CacheVerification);
+            assert_eq!(worker.registry.len(), 1, "build-only dep must never be expanded on fail-closed error");
+        }
+    }
+
+    // T7: Ineligible lanes (CA, dynamic-plan, bound-plan, mutable workspace) expand deps up front
+    #[tokio::test]
+    async fn worker_preflight_ineligible_lanes_preserve_dependency_first_scheduling() {
+        let mut kp = DerivationRegistry::default();
+        let (b_dep, _) = crate::test_support::build_and_register("t7-dep", &[], &mut kp);
+
+        // 1. Dynamic-plan producer root
+        let (dyn_root, _) = crate::test_support::build_and_register("t7-dyn-root", &[(b_dep.clone(), "out")], &mut kp);
+        kp.get_by_drv_path_mut(&dyn_root.to_absolute_path()).unwrap().dynamic_plan_outputs = vec!["out".to_string()];
+        let mut w_dyn = Worker::new(1);
+        w_dyn.want(&dyn_root, &kp, true).unwrap();
+        assert!(w_dyn.deferred_root_keys.is_empty());
+        assert!(w_dyn.registry.contains(&b_dep.to_absolute_path()));
+
+        // 2. Mutable workspace root
+        let mutable_policy = serde_json::to_string(&crate::WorkspacePolicy {
+            mode: crate::WorkspaceMode::MutableSession,
+            workspace_id: Some("t7-sess".to_string()),
+            ..crate::WorkspacePolicy::default()
+        })
+        .unwrap();
+        let mut mut_drv = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".into(),
+            environment: BTreeMap::from([
+                ("name".into(), "t7-mut-root".into()),
+                ("out".into(), "".into()),
+                (crate::WORKSPACE_POLICY_ENV.into(), mutable_policy.into()),
+            ]),
+            input_derivations: BTreeMap::from([(b_dep.clone(), BTreeSet::from(["out".to_string()]))]),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".into(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            })]),
+            system: "x86_64-linux".into(),
+        };
+        let mut_hdm = mut_drv.hash_derivation_modulo(|p| kp.get_hdm_by_drv_path(&p.to_absolute_path()).unwrap());
+        mut_drv.calculate_output_paths("t7-mut-root", &mut_hdm).unwrap();
+        let mut_root = mut_drv.calculate_derivation_path("t7-mut-root").unwrap();
+        kp.insert(mut_root.clone(), mut_hdm, mut_drv, false, None);
+        let mut w_mut = Worker::new(1);
+        w_mut.want(&mut_root, &kp, true).unwrap();
+        assert!(w_mut.deferred_root_keys.is_empty());
+        assert!(w_mut.registry.contains(&b_dep.to_absolute_path()));
+
+        // 3. CA dep -> IA consumer root
+        let mut ca_dep_drv = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".into(),
+            environment: BTreeMap::from([("name".into(), "t7-ca-dep".into()), ("out".into(), "".into())]),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".into(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            })]),
+            system: "x86_64-linux".into(),
+        };
+        let ca_hdm = ca_dep_drv.hash_derivation_modulo(|_| [0u8; 32]);
+        ca_dep_drv.calculate_output_paths("t7-ca-dep", &ca_hdm).unwrap();
+        for o in ca_dep_drv.outputs.values_mut() {
+            o.path = None;
+        }
+        let ca_dep = ca_dep_drv.calculate_derivation_path("t7-ca-dep").unwrap();
+        kp.insert(ca_dep.clone(), ca_hdm, ca_dep_drv, true, None);
+        let (ca_consumer, _) =
+            crate::test_support::build_and_register("t7-ca-consumer", &[(ca_dep.clone(), "out")], &mut kp);
+        let mut w_ca = Worker::new(1);
+        w_ca.want(&ca_consumer, &kp, true).unwrap();
+        assert!(w_ca.deferred_root_keys.is_empty());
+        assert!(w_ca.registry.contains(&ca_dep.to_absolute_path()));
+
+        // 4. Bound-plan consumer root
+        let (plan_prod, _) =
+            crate::test_support::build_and_register_multi("t7-plan-prod", &["out", "plan"], &[], &mut kp);
+        declare_native_plan_output(&mut kp, &plan_prod, "plan");
+        let (bound_root, _) = register_bound_consumer(&mut kp, &plan_prod);
+        let mut w_bound = Worker::new(1);
+        w_bound.want(&bound_root, &kp, true).unwrap();
+        assert!(w_bound.deferred_root_keys.is_empty());
+        assert!(w_bound.registry.contains(&plan_prod.to_absolute_path()));
+    }
+
+    // T8: Watch retraction, cross-generation shared dep, and streaming cancellation during
+    // Pending/preflight
+    #[tokio::test]
+    async fn worker_preflight_watch_retraction_replacement_and_streaming_cancellation() {
+        // (a) & (b): Watch gen 1 preflight-hits R1 (without expanding B1); gen 2 replaces R1 with
+        // uncached R2 sharing B1 -> watch_retain_metadata preserves B1 and R2 builds B1 + R2 cleanly!
+        // Also test pre-commit replacement of deferred R_uncommitted -> retracted cleanly.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let pis = Arc::new(test_pis());
+            let mut build_kp = DerivationRegistry::default();
+            let (b1, b1_drv) = crate::test_support::build_and_register("t8-b1", &[], &mut build_kp);
+            let (r1, r1_drv) = crate::test_support::build_and_register("t8-r1", &[(b1.clone(), "out")], &mut build_kp);
+            let (r2, r2_drv) = crate::test_support::build_and_register("t8-r2", &[(b1.clone(), "out")], &mut build_kp);
+            let (r_uncommitted, r_uncommitted_drv) =
+                crate::test_support::build_and_register("t8-uncommitted", &[(b1.clone(), "out")], &mut build_kp);
+
+            let r1_out = r1_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), r1_out, &r1, vec![]).await;
+
+            let b1_hdm = build_kp.get_hdm_by_drv_path(&b1.to_absolute_path()).unwrap();
+            let r1_hdm = build_kp.get_hdm_by_drv_path(&r1.to_absolute_path()).unwrap();
+            let r2_hdm = build_kp.get_hdm_by_drv_path(&r2.to_absolute_path()).unwrap();
+            let r_uncommitted_hdm = build_kp.get_hdm_by_drv_path(&r_uncommitted.to_absolute_path()).unwrap();
+
+            let mut builder = signed_worker_builder(
+                bs,
+                CancellableWatchMock {
+                    mock,
+                    calls: calls.clone(),
+                },
+                pis,
+                temp.path(),
+            );
+            let mut watch_paths = DerivationRegistry::default();
+            let (tx, mut updates) = mpsc::channel(8);
+            let (events_tx, mut events) = mpsc::channel(8);
+
+            // Gen 1: R1 (preflight hit, B1 unexpanded)
+            tx.send(WatchWorkerUpdate {
+                generation: 1,
+                roots: vec![EvalMessage {
+                    label: "gen1".into(),
+                    drv_path: r1.clone(),
+                    new_entries: vec![
+                        (b1.clone(), b1_hdm, b1_drv.clone(), false, vec![], None),
+                        (r1.clone(), r1_hdm, r1_drv, false, vec![], None),
+                    ],
+                }],
+            })
+            .await
+            .unwrap();
+
+            let mut worker = Worker::new(1);
+            let controller = async move {
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => commit.send(()).unwrap(),
+                    other => panic!("unexpected gen 1 event: {other:?}"),
+                }
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 1,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty());
+                        assert_eq!(outcomes.len(), 1);
+                        assert!(outcomes[0].cached);
+                    }
+                    other => panic!("unexpected gen 1 settled: {other:?}"),
+                }
+
+                // Gen 2: R_uncommitted (do NOT commit! Immediately supersede with Gen 3: R2 -> B1).
+                tx.send(WatchWorkerUpdate {
+                    generation: 2,
+                    roots: vec![EvalMessage {
+                        label: "gen2-uncommitted".into(),
+                        drv_path: r_uncommitted.clone(),
+                        new_entries: vec![(r_uncommitted, r_uncommitted_hdm, r_uncommitted_drv, false, vec![], None)],
+                    }],
+                })
+                .await
+                .unwrap();
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => {
+                        drop(commit); // Reject/supersede without dispatching preflight!
+                    }
+                    other => panic!("unexpected gen 2 event: {other:?}"),
+                }
+
+                // Gen 3: R2 (uncached, depends on B1)
+                tx.send(WatchWorkerUpdate {
+                    generation: 3,
+                    roots: vec![EvalMessage {
+                        label: "gen3".into(),
+                        drv_path: r2.clone(),
+                        new_entries: vec![(r2, r2_hdm, r2_drv, false, vec![], None)],
+                    }],
+                })
+                .await
+                .unwrap();
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 3, commit }) => commit.send(()).unwrap(),
+                    other => panic!("unexpected gen 3 event: {other:?}"),
+                }
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 3,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty(), "gen 3 failed: {failed:?}");
+                        assert_eq!(outcomes.len(), 1);
+                        assert!(!outcomes[0].cached);
+                    }
+                    other => panic!("unexpected gen 3 settled: {other:?}"),
+                }
+                drop(tx);
+            };
+
+            let (res, ()) =
+                tokio::join!(worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx), controller);
+            res.unwrap();
+            assert!(worker.deferred_root_keys.is_empty());
+            assert!(worker.pending_preflight_roots.is_empty());
+            assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 2, "only B1 and R2 built in gen 3");
+        }
+
+        // (c): run_streaming_cancellable cancelled while deferred root is Pending -> clean Failed
+        // termination, 0 exports, 0 builds, no "unobserved scheduling state" error.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (b_dep, _) = crate::test_support::build_and_register("t8c-dep", &[], &mut kp);
+            let (root, root_drv) = crate::test_support::build_and_register("t8c-root", &[(b_dep, "out")], &mut kp);
+            let root_out = root_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), root_out.clone(), &root, vec![]).await;
+
+            let mut builder = signed_worker_builder(bs, crate::test_support::PanicBuildService, pis, temp.path());
+            let mut worker = Worker::new(1);
+            worker.want(&root, &kp, true).unwrap();
+            assert_eq!(worker.registry.get(&root.to_absolute_path()).unwrap().state, GoalState::Pending);
+
+            let (cancel_tx, cancel_rx) = watch::channel(true);
+            let (_eval_tx, mut eval_rx) = mpsc::channel(1);
+            let result = worker
+                .run_streaming_cancellable(&mut builder, &mut kp, &mut eval_rx, None, cancel_rx)
+                .await
+                .unwrap();
+            drop(cancel_tx);
+            assert!(result.outcomes.is_empty(), "cancelled preflight must accept 0 outcomes");
+            assert_eq!(result.failed.len(), 1);
+            let root_physical = PathBuf::from(root_out.to_absolute_path_with_prefix(temp.path().to_str().unwrap()));
+            assert!(!root_physical.exists(), "cancelled preflight must not export root");
+            assert!(worker.deferred_root_keys.is_empty());
+            assert!(worker.pending_preflight_roots.is_empty());
+        }
+    }
+
+    // T9: Already-satisfied root, diamond deferred expansion, and CausalTraceCollector validation
+    #[tokio::test]
+    async fn worker_preflight_satisfied_drvs_diamond_expansion_and_causal_trace() {
+        // (a) Already-satisfied root skips preflight deferral.
+        {
+            let mut kp = DerivationRegistry::default();
+            let (b_dep, _) = crate::test_support::build_and_register("t9a-dep", &[], &mut kp);
+            let (root, _) = crate::test_support::build_and_register("t9a-root", &[(b_dep, "out")], &mut kp);
+            let mut worker = Worker::new(1);
+            worker.set_satisfied_drvs(BTreeSet::from([root.to_absolute_path()]));
+            worker.want(&root, &kp, true).unwrap();
+            assert!(worker.deferred_root_keys.is_empty());
+        }
+
+        // (b) & (c): Diamond deferred expansion + CausalTraceCollector on hit and miss.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (d_shared, _) = crate::test_support::build_and_register("t9-shared", &[], &mut kp);
+            let (a_left, _) = crate::test_support::build_and_register("t9-left", &[(d_shared.clone(), "out")], &mut kp);
+            let (c_right, _) = crate::test_support::build_and_register("t9-right", &[(d_shared, "out")], &mut kp);
+            let (root_miss, _) = crate::test_support::build_and_register(
+                "t9-diamond-miss",
+                &[(a_left, "out"), (c_right, "out")],
+                &mut kp,
+            );
+            let (hit_dep, _) = crate::test_support::build_and_register("t9-hit-dep", &[], &mut kp);
+            let (root_hit, root_hit_drv) =
+                crate::test_support::build_and_register("t9-hit", &[(hit_dep, "out")], &mut kp);
+            put_signed_worker_path_info(
+                &bs,
+                pis.as_ref(),
+                root_hit_drv.outputs["out"].path.clone().unwrap(),
+                &root_hit,
+                vec![],
+            )
+            .await;
+
+            let mut builder = signed_worker_builder(bs, mock, pis, temp.path());
+            let mut worker = Worker::new(2);
+            worker.enable_causal_trace(nix_compat::store_path::STORE_DIR);
+            worker.want(&root_hit, &kp, true).unwrap();
+            worker.want(&root_miss, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            assert_eq!(result.outcomes.len(), 2);
+            assert_eq!(calls.lock().unwrap().len(), 4, "d_shared + a_left + c_right + root_miss");
+            let trace = worker.take_causal_trace().unwrap().unwrap();
+            assert!(
+                trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::CacheHit),
+                "expected CacheHit in trace"
+            );
+            assert!(
+                trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::CacheMiss),
+                "expected CacheMiss in trace"
+            );
+        }
+    }
+
+    fn make_mutable_workspace_drv(
+        name: &str,
+        deps: &[(StorePath<String>, &str)],
+        kp: &mut DerivationRegistry,
+    ) -> (StorePath<String>, Derivation) {
+        let mutable_policy = serde_json::to_string(&crate::WorkspacePolicy {
+            mode: crate::WorkspaceMode::MutableSession,
+            workspace_id: Some(format!("{name}-sess")),
+            ..crate::WorkspacePolicy::default()
+        })
+        .unwrap();
+        let mut input_derivations = BTreeMap::new();
+        for (dp, on) in deps {
+            input_derivations.entry(dp.clone()).or_insert_with(BTreeSet::new).insert((*on).to_string());
+        }
+        let mut drv = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".into(),
+            environment: BTreeMap::from([
+                ("name".into(), name.into()),
+                ("out".into(), "".into()),
+                (crate::WORKSPACE_POLICY_ENV.into(), mutable_policy.into()),
+            ]),
+            input_derivations,
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".into(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            })]),
+            system: "x86_64-linux".into(),
+        };
+        let hdm = drv.hash_derivation_modulo(|p| kp.get_hdm_by_drv_path(&p.to_absolute_path()).unwrap());
+        drv.calculate_output_paths(name, &hdm).unwrap();
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
+        kp.insert(drv_path.clone(), hdm, drv.clone(), false, None);
+        (drv_path, drv)
+    }
+
+    // T10a (probe_1): Uncommitted deferred root R1 demoted to non-root dependency of ineligible C
+    // settles cleanly in Gen 2 with b1 + r1 + c built and valid CausalTrace.
+    #[tokio::test]
+    async fn worker_preflight_watch_demoted_deferred_root_with_ineligible_waiter() {
+        let temp = tempfile::tempdir().unwrap();
+        let bs = MemoryBlobService::default();
+        let (mock, _) = MockBuildService::new(bs.clone());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let pis = Arc::new(test_pis());
+        let mut build_kp = DerivationRegistry::default();
+        let (b1, b1_drv) = crate::test_support::build_and_register("t10a-b1", &[], &mut build_kp);
+        let (r1, r1_drv) = crate::test_support::build_and_register("t10a-r1", &[(b1.clone(), "out")], &mut build_kp);
+        let (c, c_drv) = make_mutable_workspace_drv("t10a-c", &[(r1.clone(), "out")], &mut build_kp);
+        assert!(crate::orchestrate::is_preflight_eligible_root(&r1, &build_kp));
+        assert!(!crate::orchestrate::is_preflight_eligible_root(&c, &build_kp));
+
+        let b1_hdm = build_kp.get_hdm_by_drv_path(&b1.to_absolute_path()).unwrap();
+        let r1_hdm = build_kp.get_hdm_by_drv_path(&r1.to_absolute_path()).unwrap();
+        let c_hdm = build_kp.get_hdm_by_drv_path(&c.to_absolute_path()).unwrap();
+
+        let mut builder = signed_worker_builder(
+            bs,
+            CancellableWatchMock {
+                mock,
+                calls: calls.clone(),
+            },
+            pis,
+            temp.path(),
+        );
+        let mut watch_paths = DerivationRegistry::default();
+        let (tx, mut updates) = mpsc::channel(8);
+        let (events_tx, mut events) = mpsc::channel(8);
+        let mut worker = Worker::new(1);
+        worker.enable_causal_trace(nix_compat::store_path::STORE_DIR);
+
+        let b1_for_ctrl = b1.clone();
+        let r1_for_ctrl = r1.clone();
+        let c_for_ctrl = c.clone();
+        let controller = async move {
+            tx.send(WatchWorkerUpdate {
+                generation: 1,
+                roots: vec![
+                    EvalMessage {
+                        label: "gen1-r1".into(),
+                        drv_path: r1_for_ctrl.clone(),
+                        new_entries: vec![
+                            (b1_for_ctrl, b1_hdm, b1_drv, false, vec![], None),
+                            (r1_for_ctrl, r1_hdm, r1_drv, false, vec![], None),
+                        ],
+                    },
+                    EvalMessage {
+                        label: "gen1-c".into(),
+                        drv_path: c_for_ctrl.clone(),
+                        new_entries: vec![(c_for_ctrl.clone(), c_hdm, c_drv, false, vec![], None)],
+                    },
+                ],
+            })
+            .await
+            .unwrap();
+
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => drop(commit),
+                other => panic!("unexpected gen 1 event: {other:?}"),
+            }
+
+            tx.send(WatchWorkerUpdate {
+                generation: 2,
+                roots: vec![EvalMessage {
+                    label: "gen2-c".into(),
+                    drv_path: c_for_ctrl.clone(),
+                    new_entries: vec![],
+                }],
+            })
+            .await
+            .unwrap();
+
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                other => panic!("unexpected gen 2 event: {other:?}"),
+            }
+            match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                Some(WatchWorkerEvent::Settled {
+                    generation: 2,
+                    outcomes,
+                    failed,
+                    ..
+                }) => {
+                    assert!(failed.is_empty(), "gen 2 failed: {failed:?}");
+                    assert_eq!(outcomes.len(), 1);
+                    assert_eq!(outcomes[0].drv_path, c_for_ctrl);
+                    assert!(!outcomes[0].cached);
+                }
+                other => panic!("unexpected gen 2 settled: {other:?}"),
+            }
+            drop(tx);
+        };
+
+        let (res, ()) =
+            tokio::join!(worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx), controller);
+        res.unwrap();
+        assert!(worker.deferred_root_keys.is_empty());
+        assert!(worker.pending_preflight_roots.is_empty());
+        assert!(worker.registry.is_empty());
+        assert_eq!(calls.load(Ordering::Relaxed), 3, "b1, r1, and c must all build");
+        let trace = worker.take_causal_trace().unwrap().unwrap();
+        for drv in [&b1, &r1, &c] {
+            let hash = blake3::hash(drv.to_absolute_path().as_bytes()).to_hex().to_string();
+            assert!(
+                trace.records.iter().any(|r| {
+                    r.kind == mantle_causal_trace_core::ActionKind::Succeeded
+                        && r.goal_blake3.as_deref() == Some(hash.as_str())
+                }),
+                "expected Succeeded trace record for {drv}"
+            );
+        }
+        assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::DependencyReady));
+    }
+
+    // T10b (probe_1b): Uncommitted deferred root R1 demoted when BOTH R1 and C are
+    // preflight-eligible and C misses preflight in Gen 2 (both Gen 1 arrival orders).
+    #[tokio::test]
+    async fn worker_preflight_watch_demoted_deferred_root_both_eligible_misses() {
+        for r1_first in [true, false] {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let calls = Arc::new(AtomicUsize::new(0));
+            let pis = Arc::new(test_pis());
+            let mut build_kp = DerivationRegistry::default();
+            let (b1, b1_drv) = crate::test_support::build_and_register("t10b-b1", &[], &mut build_kp);
+            let (r1, r1_drv) =
+                crate::test_support::build_and_register("t10b-r1", &[(b1.clone(), "out")], &mut build_kp);
+            let (c, c_drv) = crate::test_support::build_and_register("t10b-c", &[(r1.clone(), "out")], &mut build_kp);
+            assert!(crate::orchestrate::is_preflight_eligible_root(&r1, &build_kp));
+            assert!(crate::orchestrate::is_preflight_eligible_root(&c, &build_kp));
+
+            let b1_hdm = build_kp.get_hdm_by_drv_path(&b1.to_absolute_path()).unwrap();
+            let r1_hdm = build_kp.get_hdm_by_drv_path(&r1.to_absolute_path()).unwrap();
+            let c_hdm = build_kp.get_hdm_by_drv_path(&c.to_absolute_path()).unwrap();
+
+            let mut builder = signed_worker_builder(
+                bs,
+                CancellableWatchMock {
+                    mock,
+                    calls: calls.clone(),
+                },
+                pis,
+                temp.path(),
+            );
+            let mut watch_paths = DerivationRegistry::default();
+            let (tx, mut updates) = mpsc::channel(8);
+            let (events_tx, mut events) = mpsc::channel(8);
+            let mut worker = Worker::new(1);
+            worker.enable_causal_trace(nix_compat::store_path::STORE_DIR);
+
+            let gen1_entries = vec![
+                (b1.clone(), b1_hdm, b1_drv, false, vec![], None),
+                (r1.clone(), r1_hdm, r1_drv, false, vec![], None),
+                (c.clone(), c_hdm, c_drv, false, vec![], None),
+            ];
+            let mut gen1_roots = if r1_first {
+                vec![
+                    EvalMessage {
+                        label: "gen1-r1".into(),
+                        drv_path: r1.clone(),
+                        new_entries: vec![],
+                    },
+                    EvalMessage {
+                        label: "gen1-c".into(),
+                        drv_path: c.clone(),
+                        new_entries: vec![],
+                    },
+                ]
+            } else {
+                vec![
+                    EvalMessage {
+                        label: "gen1-c".into(),
+                        drv_path: c.clone(),
+                        new_entries: vec![],
+                    },
+                    EvalMessage {
+                        label: "gen1-r1".into(),
+                        drv_path: r1.clone(),
+                        new_entries: vec![],
+                    },
+                ]
+            };
+            gen1_roots[0].new_entries = gen1_entries;
+            let c_for_ctrl = c.clone();
+
+            let controller = async move {
+                tx.send(WatchWorkerUpdate {
+                    generation: 1,
+                    roots: gen1_roots,
+                })
+                .await
+                .unwrap();
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => drop(commit),
+                    other => panic!("unexpected gen 1 event: {other:?}"),
+                }
+
+                tx.send(WatchWorkerUpdate {
+                    generation: 2,
+                    roots: vec![EvalMessage {
+                        label: "gen2-c".into(),
+                        drv_path: c_for_ctrl.clone(),
+                        new_entries: vec![],
+                    }],
+                })
+                .await
+                .unwrap();
+
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                    other => panic!("unexpected gen 2 event: {other:?}"),
+                }
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 2,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty(), "r1_first={r1_first} failed: {failed:?}");
+                        assert_eq!(outcomes.len(), 1);
+                        assert_eq!(outcomes[0].drv_path, c_for_ctrl);
+                        assert!(!outcomes[0].cached);
+                    }
+                    other => panic!("unexpected gen 2 settled: {other:?}"),
+                }
+                drop(tx);
+            };
+
+            let (res, ()) =
+                tokio::join!(worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx), controller);
+            res.unwrap();
+            assert!(worker.deferred_root_keys.is_empty());
+            assert!(worker.pending_preflight_roots.is_empty());
+            assert!(worker.registry.is_empty());
+            assert_eq!(calls.load(Ordering::Relaxed), 3, "b1, r1, and c must build (r1_first={r1_first})");
+            let trace = worker.take_causal_trace().unwrap().unwrap();
+            for drv in [&b1, &r1, &c] {
+                let hash = blake3::hash(drv.to_absolute_path().as_bytes()).to_hex().to_string();
+                assert!(
+                    trace.records.iter().any(|r| {
+                        r.kind == mantle_causal_trace_core::ActionKind::Succeeded
+                            && r.goal_blake3.as_deref() == Some(hash.as_str())
+                    }),
+                    "expected Succeeded trace record for {drv} (r1_first={r1_first})"
+                );
+            }
+            assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::CacheMiss));
+            assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::DependencyReady));
+        }
+    }
+
+    // T10b (2-hop chain): Demoted chain C -> R2 -> R1 -> B1 settles cleanly across
+    // eligible ([r1, r2, c] / [c, r2, r1]) and ineligible C ([r1, r2, c]) cases.
+    #[tokio::test]
+    async fn worker_preflight_watch_demoted_deferred_root_two_hop_chain() {
+        for (c_eligible, r1_first) in [(true, true), (true, false), (false, true)] {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let calls = Arc::new(AtomicUsize::new(0));
+            let pis = Arc::new(test_pis());
+            let mut build_kp = DerivationRegistry::default();
+            let (b1, b1_drv) = crate::test_support::build_and_register("t10b2-b1", &[], &mut build_kp);
+            let (r1, r1_drv) =
+                crate::test_support::build_and_register("t10b2-r1", &[(b1.clone(), "out")], &mut build_kp);
+            let (r2, r2_drv) =
+                crate::test_support::build_and_register("t10b2-r2", &[(r1.clone(), "out")], &mut build_kp);
+            let (c, c_drv) = if c_eligible {
+                crate::test_support::build_and_register("t10b2-c", &[(r2.clone(), "out")], &mut build_kp)
+            } else {
+                make_mutable_workspace_drv("t10b2-c", &[(r2.clone(), "out")], &mut build_kp)
+            };
+            assert!(crate::orchestrate::is_preflight_eligible_root(&r1, &build_kp));
+            assert!(crate::orchestrate::is_preflight_eligible_root(&r2, &build_kp));
+            assert_eq!(crate::orchestrate::is_preflight_eligible_root(&c, &build_kp), c_eligible);
+
+            let b1_hdm = build_kp.get_hdm_by_drv_path(&b1.to_absolute_path()).unwrap();
+            let r1_hdm = build_kp.get_hdm_by_drv_path(&r1.to_absolute_path()).unwrap();
+            let r2_hdm = build_kp.get_hdm_by_drv_path(&r2.to_absolute_path()).unwrap();
+            let c_hdm = build_kp.get_hdm_by_drv_path(&c.to_absolute_path()).unwrap();
+
+            let mut builder = signed_worker_builder(
+                bs,
+                CancellableWatchMock {
+                    mock,
+                    calls: calls.clone(),
+                },
+                pis,
+                temp.path(),
+            );
+            let mut watch_paths = DerivationRegistry::default();
+            let (tx, mut updates) = mpsc::channel(8);
+            let (events_tx, mut events) = mpsc::channel(8);
+            let mut worker = Worker::new(1);
+            worker.enable_causal_trace(nix_compat::store_path::STORE_DIR);
+
+            let b1_r1_entries = vec![
+                (b1.clone(), b1_hdm, b1_drv, false, vec![], None),
+                (r1.clone(), r1_hdm, r1_drv, false, vec![], None),
+                (r2.clone(), r2_hdm, r2_drv, false, vec![], None),
+                (c.clone(), c_hdm, c_drv, false, vec![], None),
+            ];
+            let r1_msg = EvalMessage {
+                label: "gen1-r1".into(),
+                drv_path: r1.clone(),
+                new_entries: vec![],
+            };
+            let r2_msg = EvalMessage {
+                label: "gen1-r2".into(),
+                drv_path: r2.clone(),
+                new_entries: vec![],
+            };
+            let c_msg = EvalMessage {
+                label: "gen1-c".into(),
+                drv_path: c.clone(),
+                new_entries: vec![],
+            };
+            let mut gen1_roots = if r1_first {
+                vec![r1_msg, r2_msg, c_msg]
+            } else {
+                vec![c_msg, r2_msg, r1_msg]
+            };
+            gen1_roots[0].new_entries = b1_r1_entries;
+            let c_for_ctrl = c.clone();
+
+            let controller = async move {
+                tx.send(WatchWorkerUpdate {
+                    generation: 1,
+                    roots: gen1_roots,
+                })
+                .await
+                .unwrap();
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => drop(commit),
+                    other => panic!("unexpected gen 1 event: {other:?}"),
+                }
+
+                tx.send(WatchWorkerUpdate {
+                    generation: 2,
+                    roots: vec![EvalMessage {
+                        label: "gen2-c".into(),
+                        drv_path: c_for_ctrl.clone(),
+                        new_entries: vec![],
+                    }],
+                })
+                .await
+                .unwrap();
+
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                    other => panic!("unexpected gen 2 event: {other:?}"),
+                }
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 2,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty(), "c_eligible={c_eligible} r1_first={r1_first} failed: {failed:?}");
+                        assert_eq!(outcomes.len(), 1);
+                        assert_eq!(outcomes[0].drv_path, c_for_ctrl);
+                        assert!(!outcomes[0].cached);
+                    }
+                    other => panic!("unexpected gen 2 settled: {other:?}"),
+                }
+                drop(tx);
+            };
+
+            let (res, ()) =
+                tokio::join!(worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx), controller);
+            res.unwrap();
+            assert!(worker.deferred_root_keys.is_empty());
+            assert!(worker.pending_preflight_roots.is_empty());
+            assert!(worker.registry.is_empty());
+            assert_eq!(calls.load(Ordering::Relaxed), 4, "b1, r1, r2, and c must all build");
+            let trace = worker.take_causal_trace().unwrap().unwrap();
+            for drv in [&b1, &r1, &r2, &c] {
+                let hash = blake3::hash(drv.to_absolute_path().as_bytes()).to_hex().to_string();
+                assert!(
+                    trace.records.iter().any(|r| {
+                        r.kind == mantle_causal_trace_core::ActionKind::Succeeded
+                            && r.goal_blake3.as_deref() == Some(hash.as_str())
+                    }),
+                    "expected Succeeded trace record for {drv}"
+                );
+            }
+            assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::DependencyReady));
+        }
+    }
+
+    // T10c: Both R1 and C preflight-eligible (both [r1, c] and [c, r1] Gen 1 orders),
+    // C hits preflight in Gen 2 (0 BuildService calls, empty join_set on Settled),
+    // and Gen 3 re-adding [R1, C] builds b1 + r1 cleanly (2 calls) with valid CausalTrace.
+    #[tokio::test]
+    async fn worker_preflight_watch_demoted_root_skips_builds_on_consumer_hit_and_recovers_on_gen3_readd() {
+        for r1_first in [true, false] {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let calls = Arc::new(AtomicUsize::new(0));
+            let pis = Arc::new(test_pis());
+            let mut build_kp = DerivationRegistry::default();
+            let (b1, b1_drv) = crate::test_support::build_and_register("t10c-b1", &[], &mut build_kp);
+            let (r1, r1_drv) =
+                crate::test_support::build_and_register("t10c-r1", &[(b1.clone(), "out")], &mut build_kp);
+            let (c, c_drv) = crate::test_support::build_and_register("t10c-c", &[(r1.clone(), "out")], &mut build_kp);
+            assert!(crate::orchestrate::is_preflight_eligible_root(&r1, &build_kp));
+            assert!(crate::orchestrate::is_preflight_eligible_root(&c, &build_kp));
+
+            let c_out = c_drv.outputs["out"].path.clone().unwrap();
+            put_signed_worker_path_info(&bs, pis.as_ref(), c_out, &c, vec![]).await;
+
+            let b1_hdm = build_kp.get_hdm_by_drv_path(&b1.to_absolute_path()).unwrap();
+            let r1_hdm = build_kp.get_hdm_by_drv_path(&r1.to_absolute_path()).unwrap();
+            let c_hdm = build_kp.get_hdm_by_drv_path(&c.to_absolute_path()).unwrap();
+
+            let mut builder = signed_worker_builder(
+                bs,
+                CancellableWatchMock {
+                    mock,
+                    calls: calls.clone(),
+                },
+                pis,
+                temp.path(),
+            );
+            let mut watch_paths = DerivationRegistry::default();
+            let (tx, mut updates) = mpsc::channel(8);
+            let (events_tx, mut events) = mpsc::channel(8);
+            let mut worker = Worker::new(1);
+            worker.enable_causal_trace(nix_compat::store_path::STORE_DIR);
+
+            let gen1_entries = vec![
+                (b1.clone(), b1_hdm, b1_drv, false, vec![], None),
+                (r1.clone(), r1_hdm, r1_drv, false, vec![], None),
+                (c.clone(), c_hdm, c_drv, false, vec![], None),
+            ];
+            let mut gen1_roots = if r1_first {
+                vec![
+                    EvalMessage {
+                        label: "gen1-r1".into(),
+                        drv_path: r1.clone(),
+                        new_entries: vec![],
+                    },
+                    EvalMessage {
+                        label: "gen1-c".into(),
+                        drv_path: c.clone(),
+                        new_entries: vec![],
+                    },
+                ]
+            } else {
+                vec![
+                    EvalMessage {
+                        label: "gen1-c".into(),
+                        drv_path: c.clone(),
+                        new_entries: vec![],
+                    },
+                    EvalMessage {
+                        label: "gen1-r1".into(),
+                        drv_path: r1.clone(),
+                        new_entries: vec![],
+                    },
+                ]
+            };
+            gen1_roots[0].new_entries = gen1_entries;
+
+            let calls_ctrl = calls.clone();
+            let r1_for_ctrl = r1.clone();
+            let c_for_ctrl = c.clone();
+            let controller = async move {
+                tx.send(WatchWorkerUpdate {
+                    generation: 1,
+                    roots: gen1_roots,
+                })
+                .await
+                .unwrap();
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 1, commit }) => drop(commit),
+                    other => panic!("unexpected gen 1 event: {other:?}"),
+                }
+
+                tx.send(WatchWorkerUpdate {
+                    generation: 2,
+                    roots: vec![EvalMessage {
+                        label: "gen2-c".into(),
+                        drv_path: c_for_ctrl.clone(),
+                        new_entries: vec![],
+                    }],
+                })
+                .await
+                .unwrap();
+
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 2, commit }) => commit.send(()).unwrap(),
+                    other => panic!("unexpected gen 2 event: {other:?}"),
+                }
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 2,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty(), "r1_first={r1_first} gen 2 failed: {failed:?}");
+                        assert_eq!(outcomes.len(), 1);
+                        assert_eq!(outcomes[0].drv_path, c_for_ctrl);
+                        assert!(outcomes[0].cached, "C must hit preflight in gen 2");
+                        tokio::task::yield_now().await;
+                        assert_eq!(
+                            calls_ctrl.load(Ordering::Relaxed),
+                            0,
+                            "0 BuildService calls allowed when C hits preflight and R1 is demoted (r1_first={r1_first})"
+                        );
+                    }
+                    other => panic!("unexpected gen 2 settled: {other:?}"),
+                }
+
+                tx.send(WatchWorkerUpdate {
+                    generation: 3,
+                    roots: vec![
+                        EvalMessage {
+                            label: "gen3-r1".into(),
+                            drv_path: r1_for_ctrl.clone(),
+                            new_entries: vec![],
+                        },
+                        EvalMessage {
+                            label: "gen3-c".into(),
+                            drv_path: c_for_ctrl.clone(),
+                            new_entries: vec![],
+                        },
+                    ],
+                })
+                .await
+                .unwrap();
+
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::CandidateReady { generation: 3, commit }) => commit.send(()).unwrap(),
+                    other => panic!("unexpected gen 3 event: {other:?}"),
+                }
+                match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await.unwrap() {
+                    Some(WatchWorkerEvent::Settled {
+                        generation: 3,
+                        outcomes,
+                        failed,
+                        ..
+                    }) => {
+                        assert!(failed.is_empty(), "r1_first={r1_first} gen 3 failed: {failed:?}");
+                        assert_eq!(outcomes.len(), 2);
+                        assert!(!outcomes.iter().find(|o| o.drv_path == r1_for_ctrl).unwrap().cached);
+                        assert!(outcomes.iter().find(|o| o.drv_path == c_for_ctrl).unwrap().cached);
+                    }
+                    other => panic!("unexpected gen 3 settled: {other:?}"),
+                }
+                drop(tx);
+            };
+
+            let (res, ()) =
+                tokio::join!(worker.run_watch(&mut builder, &mut watch_paths, &mut updates, &events_tx), controller);
+            res.unwrap();
+            assert!(worker.deferred_root_keys.is_empty());
+            assert!(worker.pending_preflight_roots.is_empty());
+            assert!(worker.registry.is_empty());
+            assert_eq!(calls.load(Ordering::Relaxed), 2, "only b1 and r1 build in gen 3 (r1_first={r1_first})");
+            let trace = worker.take_causal_trace().unwrap().unwrap();
+            for drv in [&b1, &r1] {
+                let hash = blake3::hash(drv.to_absolute_path().as_bytes()).to_hex().to_string();
+                assert!(
+                    trace.records.iter().any(|r| {
+                        r.kind == mantle_causal_trace_core::ActionKind::Succeeded
+                            && r.goal_blake3.as_deref() == Some(hash.as_str())
+                    }),
+                    "expected Succeeded trace record for {drv} (r1_first={r1_first})"
+                );
+            }
+            let c_hash = blake3::hash(c.to_absolute_path().as_bytes()).to_hex().to_string();
+            assert!(trace.records.iter().any(|r| {
+                r.kind == mantle_causal_trace_core::ActionKind::CacheHit
+                    && r.goal_blake3.as_deref() == Some(c_hash.as_str())
+            }));
+            assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::CacheMiss));
+            assert!(trace.records.iter().any(|r| r.kind == mantle_causal_trace_core::ActionKind::DependencyReady));
+        }
+    }
+
+    /// Test-only scheduler mutation helper for `#40` mutation check `(b)`:
+    /// drops the dependency wait edges on `root_drv_path` so it dispatches
+    /// without waiting for its upstream dependencies.
+    pub(crate) async fn run_with_dropped_wait_mutation<BServ>(
+        root_drv_path: &StorePath<String>,
+        builder: &mut Builder<BServ>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<WorkerResult, Error>
+    where
+        BServ: BuildService + 'static,
+    {
+        let mut worker = Worker::new(1);
+        worker.want(root_drv_path, known_paths, true)?;
+        let root_key = root_drv_path.to_absolute_path();
+        if let Some(goal) = worker.registry.get_mut(&root_key) {
+            goal.waitees.clear();
+            goal.state = GoalState::Pending;
+            let _ = goal.inspect(Vec::new())?;
+        }
+        worker.enqueue_ready_goal(&root_key)?;
+        worker.run(builder, known_paths).await
+    }
+
+    impl Worker {
+        pub(crate) fn demanded_outputs_for(&self, drv_path: &StorePath<String>) -> Option<&BTreeSet<String>> {
+            self.goal_demands.get(&drv_path.to_absolute_path())
+        }
+    }
+
+    #[tokio::test]
+    async fn live_cpu_diagnostics_leave_derivation_identities_and_warm_cache_reuse_invariant() {
+        use crate::action_result::action_ref_for_derivation;
+        use crate::action_result::policy_refs_for_derivation;
+        use crate::live_cpu::AllocatedCores;
+        use crate::live_cpu::LiveCpuActivityClass;
+        use crate::live_cpu::LiveCpuClassifierPolicy;
+        use crate::rust_waits::request_identity;
+
+        struct SampleEmittingService {
+            calls: Arc<AtomicUsize>,
+            blob_service: MemoryBlobService,
+            tx: Arc<std::sync::Mutex<Option<mpsc::Sender<snix_build::buildservice::SandboxCpuSampleEvent>>>>,
+        }
+
+        #[async_trait::async_trait]
+        impl BuildService for SampleEmittingService {
+            async fn do_build(
+                &self,
+                request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                use snix_castore::blobservice::BlobService as _;
+                use tokio::io::AsyncWriteExt as _;
+
+                let count = self.calls.fetch_add(1, Ordering::Relaxed);
+                let maybe_tx = self.tx.lock().unwrap().clone();
+                if let Some(tx) = maybe_tx
+                    && let Some(ctx) = snix_build::buildservice::current_live_cpu_attempt_context()
+                {
+                    let _ = tx.try_send(snix_build::buildservice::SandboxCpuSampleEvent {
+                        attempt_id: u64::try_from(count).unwrap_or(0).saturating_add(1),
+                        generation: ctx.generation,
+                        attempt_label: ctx.attempt_label.clone(),
+                        allocated_cores: 2,
+                        observed_at_usec: 1_000_000,
+                        kind: snix_build::buildservice::SandboxCpuSampleKind::Started {
+                            scope: snix_build::buildservice::SandboxCpuScopeAvailability::OwnedAttemptCgroupV2 {
+                                rel_path: "/user.slice/live-cpu-test".to_string(),
+                            },
+                        },
+                    });
+                    let _ = tx.try_send(snix_build::buildservice::SandboxCpuSampleEvent {
+                        attempt_id: u64::try_from(count).unwrap_or(0).saturating_add(1),
+                        generation: ctx.generation,
+                        attempt_label: ctx.attempt_label.clone(),
+                        allocated_cores: 2,
+                        observed_at_usec: 1_000_000,
+                        kind: snix_build::buildservice::SandboxCpuSampleKind::Sample {
+                            cumulative_cpu_usec: 100_000,
+                        },
+                    });
+                    let _ = tx.try_send(snix_build::buildservice::SandboxCpuSampleEvent {
+                        attempt_id: u64::try_from(count).unwrap_or(0).saturating_add(1),
+                        generation: ctx.generation,
+                        attempt_label: ctx.attempt_label,
+                        allocated_cores: 2,
+                        observed_at_usec: 2_000_000,
+                        kind: snix_build::buildservice::SandboxCpuSampleKind::Sample {
+                            cumulative_cpu_usec: 1_800_000,
+                        },
+                    });
+                }
+                let mut writer = self.blob_service.open_write().await;
+                writer.write_all(b"live-cpu-output").await.unwrap();
+                let digest = writer.close().await.unwrap();
+                let outputs = request
+                    .outputs
+                    .iter()
+                    .map(|_| snix_build::buildservice::BuildOutput {
+                        node: snix_castore::Node::File {
+                            digest,
+                            size: 15,
+                            executable: false,
+                        },
+                        output_needles: BTreeSet::new(),
+                    })
+                    .collect();
+                Ok(snix_build::buildservice::BuildResult {
+                    outputs,
+                    log: None,
+                    timing: None,
+                })
+            }
+        }
+
+        let store_dir = nix_compat::store_path::STORE_DIR;
+        let out_sp = fake_sp("live-cpu-invariance-out");
+        let mut drv = make_drv();
+        drv.outputs.insert("out".to_string(), Output {
+            path: Some(out_sp),
+            ca_hash: None,
+        });
+        let action_ref_before = action_ref_for_derivation(&drv, store_dir);
+        let policy_refs_before = policy_refs_for_derivation(&drv, store_dir, crate::HermeticityMode::Strict).unwrap();
+        let profile = crate::ExecutionProfile::native_compatibility();
+        let req = crate::derivation_to_build_request(
+            &drv,
+            &BTreeMap::new(),
+            store_dir,
+            &profile,
+            crate::HermeticityMode::Strict,
+            2,
+        )
+        .unwrap()
+        .build_request;
+        let req_id_before = request_identity(&req).unwrap();
+
+        let bs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis = test_pis();
+        let out_dir = tempfile::tempdir().unwrap();
+        let keypair = test_keypair();
+        let trusted = test_trusted_keys();
+        let calls = Arc::new(AtomicUsize::new(0));
+
+        let mut policy = LiveCpuClassifierPolicy::standard();
+        policy.sustained_window_ms = 500;
+        let mut worker1 = Worker::new(1);
+        let tx = worker1.enable_live_cpu_diagnostics(policy, AllocatedCores::new(2).unwrap()).unwrap();
+        let tx_slot = Arc::new(std::sync::Mutex::new(Some(tx)));
+
+        let mut paths1 = DerivationRegistry::default();
+        let drv_path = register_drv(&mut paths1, "live-cpu-invariance.drv", &drv);
+        let mut builder = Builder::new(
+            bs.clone(),
+            ds,
+            SampleEmittingService {
+                calls: Arc::clone(&calls),
+                blob_service: bs,
+                tx: Arc::clone(&tx_slot),
+            },
+            pis,
+            out_dir.path().to_path_buf(),
+            store_dir,
+            keypair,
+            trusted,
+            true,
+            false,
+        );
+        worker1.want(&drv_path, &paths1, true).unwrap();
+        let res1 = worker1.run(&mut builder, &mut paths1).await.unwrap();
+        assert_eq!(res1.outcomes.len(), 1);
+        assert!(!res1.outcomes[0].cached);
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+
+        let diag = worker1.take_live_cpu_diagnostics().expect("live cpu diagnostics report");
+        assert_eq!(diag.attempts.len(), 1);
+        assert_eq!(diag.attempts[0].activity_class, LiveCpuActivityClass::Heavy);
+        assert_eq!(diag.attempts[0].latest_cores_used_milli.map(|m| m.as_u32()), Some(1_700));
+        assert_eq!(diag.attempts[0].retired_reason, Some(crate::live_cpu::LiveCpuRetirementReason::Completed));
+
+        // Identities remain bitwise identical after enabling live CPU diagnostics.
+        assert_eq!(action_ref_before, action_ref_for_derivation(&drv, store_dir));
+        assert_eq!(
+            policy_refs_before,
+            policy_refs_for_derivation(&drv, store_dir, crate::HermeticityMode::Strict).unwrap()
+        );
+        assert_eq!(req_id_before, request_identity(&req).unwrap());
+
+        // Second Worker without live CPU diagnostics reuses warm cache from first build!
+        *tx_slot.lock().unwrap() = None;
+        let mut worker2 = Worker::new(1);
+        worker2.want(&drv_path, &paths1, true).unwrap();
+        let res2 = worker2.run(&mut builder, &mut paths1).await.unwrap();
+        assert_eq!(res2.outcomes.len(), 1);
+        assert!(res2.outcomes[0].cached, "live CPU diagnostics must not alter cache reuse");
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn live_cpu_diagnostics_retires_cancelled_watch_attempt_and_rejects_stale_generation() {
+        use crate::live_cpu::AllocatedCores;
+        use crate::live_cpu::AttemptGeneration;
+        use crate::live_cpu::CumulativeCpuUsec;
+        use crate::live_cpu::LiveCpuAttemptMeta;
+        use crate::live_cpu::LiveCpuClassifierPolicy;
+        use crate::live_cpu::LiveCpuIngestDisposition;
+        use crate::live_cpu::LiveCpuRawMeasurement;
+        use crate::live_cpu::LiveCpuSampleEvent;
+        use crate::live_cpu::MonotonicTimestampUsec;
+
+        let mut worker = Worker::new(1);
+        worker.build_cancellations = Some(HashMap::new());
+        let _tx = worker
+            .enable_live_cpu_diagnostics(LiveCpuClassifierPolicy::standard(), AllocatedCores::new(4).unwrap())
+            .unwrap();
+
+        let drv_key = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-cancel-live-cpu.drv".to_string();
+        let ctx1 = worker.prepare_live_cpu_attempt(&drv_key).unwrap();
+        assert_eq!(ctx1.generation, 1);
+
+        worker.watch_request_cancellation(std::slice::from_ref(&drv_key));
+
+        // Stale sample from retired generation 1 must be rejected cleanly.
+        let stale_event = LiveCpuSampleEvent {
+            meta: LiveCpuAttemptMeta {
+                attempt_id: 1,
+                drv_key: drv_key.clone(),
+                generation: AttemptGeneration::new(ctx1.generation).unwrap(),
+                allocated_cores: AllocatedCores::new(4).unwrap(),
+            },
+            measurement: LiveCpuRawMeasurement::Sampled {
+                observed_at_usec: MonotonicTimestampUsec::from_usec(2_000_000),
+                cumulative_cpu_usec: CumulativeCpuUsec::from_usec(500_000),
+            },
+        };
+        assert_eq!(worker.record_live_cpu_event(&stale_event), Some(LiveCpuIngestDisposition::StaleGenerationIgnored));
+
+        // New generation 2 starts cleanly and never absorbs generation 1 samples.
+        let ctx2 = worker.prepare_live_cpu_attempt(&drv_key).unwrap();
+        assert_eq!(ctx2.generation, 2);
+        assert_eq!(worker.record_live_cpu_event(&stale_event), Some(LiveCpuIngestDisposition::StaleGenerationIgnored));
     }
 }

@@ -135,12 +135,40 @@
   "ast_grep_structural_evidence_diagnostics": [],
   "diagnostic_persistence_failures": [],
   "counts": {
-    "succeeded_total": 0,
-    "built_total": 0,
+    "succeeded_total": 1,
+    "built_total": 1,
     "cached_total": 0,
     "failed_total": 0
   },
-  "outcomes": [],
+  "outcomes": [
+    {
+      "drv_key": "/mantle/store/00000000000000000000000000000000-fixture.drv",
+      "label": "fixture",
+      "cached": false,
+      "log_file": null,
+      "outputs": [],
+      "sandbox_timing": {
+        "admission_wait_ms": 5,
+        "execution_ms": 1200
+      },
+      "live_cpu_diagnostics": {
+        "schema": "mantle-live-cpu-diagnostics-v1",
+        "scope_label": "observed-local-build-attempts-only",
+        "scope": "owned-attempt-cgroup-v2",
+        "activity_class": "low-parallelism",
+        "allocated_cores": 4,
+        "latest_cores_used_milli": 1000,
+        "average_cores_used_milli": 1000,
+        "peak_cores_used_milli": 1000,
+        "latest_utilization_per_mille": 250,
+        "sample_count": 3,
+        "window_elapsed_ms": 1000,
+        "sustained_duration_ms": 1000,
+        "retired_reason": "completed",
+        "non_claim": "heuristic local attempt cpu observation only; not proof of bottleneck, scheduler authority, trusted receipt, or host/farm cpu"
+      }
+    }
+  ],
   "failed": [],
   "fod_mismatches": [],
   "finish_gates": [

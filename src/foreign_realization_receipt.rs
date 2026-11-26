@@ -579,7 +579,9 @@ pub(crate) fn build_foreign_realization_receipt(
             "failed-or-blocked"
         } else if cache_only_not_required {
             "not-required-cache-only"
-        } else if outcome.is_none() && outputs.iter().any(|output| output.substitution_transferred_bytes != Some(0)) {
+        } else if outcome.is_none()
+            && outputs.iter().any(|output| output.substitution_transferred_bytes.is_some_and(|bytes| bytes != 0))
+        {
             "substituted"
         } else if outcome.is_none() {
             "already-present"

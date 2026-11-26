@@ -172,7 +172,7 @@ impl serde::Serialize for InputSequence<'_> {
     }
 }
 
-fn request_identity(request: &BuildRequest) -> io::Result<Digest> {
+pub(crate) fn request_identity(request: &BuildRequest) -> io::Result<Digest> {
     use snix_build::buildservice::BuildConstraints;
     let BuildRequest {
         inputs,
@@ -708,5 +708,30 @@ mod tests {
         reordered.constraints.remove(&BuildConstraints::MinMemory(4096));
         reordered.constraints.insert(BuildConstraints::MinMemory(8192));
         assert_ne!(original, context(&reordered, &tools()).unwrap().configuration);
+    }
+
+    #[test]
+    fn local_execution_policy_does_not_contaminate_request_or_action_identity() {
+        let request = BuildRequest {
+            command_args: vec!["/bin/sh".to_string(), "-c".to_string(), "true".to_string()],
+            working_dir: PathBuf::from("build"),
+            scratch_paths: vec![PathBuf::from("build"), PathBuf::from("nix/store")],
+            inputs_dir: PathBuf::from("nix/store"),
+            outputs: vec![PathBuf::from("nix/store/demo-out")],
+            ..BuildRequest::default()
+        };
+        let standard = crate::LocalExecutionPolicy::standard();
+        let mut strict = crate::LocalExecutionPolicy::unlimited();
+        strict.silence_budget = crate::LocalSilenceBudgetPolicy::Bounded {
+            silence_timeout_secs: 60,
+        };
+        strict.resources.memory_mode = crate::LocalEnforcementMode::Required;
+        strict.resources.memory_limit_bytes = Some(64 * 1024 * 1024);
+
+        let id_before = request_identity(&request).unwrap();
+        let _snix_standard = standard.to_snix_execution_policy().unwrap();
+        let _snix_strict = strict.to_snix_execution_policy().unwrap();
+        let id_after = request_identity(&request).unwrap();
+        assert_eq!(id_before, id_after);
     }
 }

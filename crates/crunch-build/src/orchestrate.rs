@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -171,9 +172,277 @@ pub struct BuildOutcome {
     pub sandbox_timing: Option<snix_build::buildservice::SandboxExecutionTiming>,
 }
 
+pub(crate) struct PrepareBuildInput<'a> {
+    pub(crate) drv_path: &'a StorePath<String>,
+    pub(crate) derivation: Arc<Derivation>,
+    pub(crate) is_root: bool,
+    pub(crate) bound_plan_outputs: &'a [(String, StorePath<String>)],
+    pub(crate) demanded_outputs: Option<&'a BTreeSet<String>>,
+}
+
+pub(crate) struct PreflightRootInput<'a> {
+    pub(crate) drv_path: &'a StorePath<String>,
+    pub(crate) derivation: Arc<Derivation>,
+    pub(crate) demanded_outputs: Option<&'a BTreeSet<String>>,
+    pub(crate) cancellation: Option<&'a tokio::sync::watch::Receiver<bool>>,
+}
+
 struct CacheCheckHit {
     infos: BTreeMap<String, PathInfo>,
     substitutions: BTreeMap<String, OutputSubstitutionReport>,
+}
+
+struct CacheCheckRequest<'a> {
+    drv_path: &'a StorePath<String>,
+    derivation: &'a Derivation,
+    is_root: bool,
+    is_demand_projection_eligible: bool,
+    demanded_outputs: Option<&'a BTreeSet<String>>,
+}
+
+struct DemandProjectionInput<'a> {
+    derivation: &'a Derivation,
+    entry: Option<&'a crate::registry::RegistryEntry>,
+    bound_plan_outputs: &'a [(String, StorePath<String>)],
+    is_mutable_workspace: bool,
+    has_resolved_identity: bool,
+}
+
+fn format_available_outputs(derivation: &Derivation) -> String {
+    let available: Vec<&str> = derivation.outputs.keys().map(String::as_str).collect();
+    available.join(", ")
+}
+
+fn validate_demanded_outputs(
+    drv_name: &str,
+    derivation: &Derivation,
+    demanded_outputs: Option<&BTreeSet<String>>,
+) -> Result<(), Error> {
+    assert!(!drv_name.is_empty(), "derivation name must not be empty");
+    let Some(demanded) = demanded_outputs else {
+        return Ok(());
+    };
+    if demanded.is_empty() {
+        return Err(Error::InvalidOutputSelection {
+            drv_name: drv_name.to_string(),
+            output: "<empty>".to_string(),
+            available: format_available_outputs(derivation),
+        });
+    }
+    for output_name in demanded {
+        if !derivation.outputs.contains_key(output_name) {
+            return Err(Error::InvalidOutputSelection {
+                drv_name: drv_name.to_string(),
+                output: output_name.clone(),
+                available: format_available_outputs(derivation),
+            });
+        }
+    }
+    debug_assert!(demanded.iter().all(|name| derivation.outputs.contains_key(name)));
+    Ok(())
+}
+
+fn is_input_addressed_output(output: &nix_compat::derivation::Output) -> bool {
+    if output.path.is_none() {
+        return false;
+    }
+    output.ca_hash.is_none()
+}
+
+fn is_drv_output_path(output: &nix_compat::derivation::Output) -> bool {
+    output.path.as_ref().is_some_and(|path| path.name().ends_with(DERIVATION_SUFFIX))
+}
+
+fn is_demand_projection_eligible(input: DemandProjectionInput<'_>) -> bool {
+    assert!(!input.derivation.outputs.is_empty(), "derivation must declare at least one output");
+    if input.is_mutable_workspace {
+        return false;
+    }
+    if input.has_resolved_identity {
+        return false;
+    }
+    if !input.bound_plan_outputs.is_empty() {
+        return false;
+    }
+    if !input.derivation.outputs.values().all(is_input_addressed_output) {
+        return false;
+    }
+    if input.derivation.environment.contains_key(crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+        return false;
+    }
+    if input.derivation.outputs.values().any(is_drv_output_path) {
+        return false;
+    }
+    let Some(entry) = input.entry else {
+        return false;
+    };
+    debug_assert_eq!(entry.derivation.outputs.len(), input.derivation.outputs.len());
+    if !entry.dynamic_plan_outputs.is_empty() {
+        return false;
+    }
+    entry.dynamic_admission_identity.is_none()
+}
+
+fn is_preflight_eligible_entry_base(entry: &crate::registry::RegistryEntry) -> bool {
+    assert!(!entry.drv_path.name().is_empty(), "registry entry drv_path must have a name");
+    debug_assert!(
+        entry.resolved_drv_path.as_ref().is_none_or(|resolved| !resolved.name().is_empty()),
+        "resolved drv_path must have a name"
+    );
+    if entry.derivation.outputs.is_empty() {
+        return false;
+    }
+    if entry.content_addressed {
+        return false;
+    }
+    if !entry.dynamic_plan_outputs.is_empty() {
+        return false;
+    }
+    if entry.dynamic_admission_identity.is_some() {
+        return false;
+    }
+    if entry.derivation.environment.contains_key(crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY) {
+        return false;
+    }
+    if entry.derivation.outputs.values().any(|output| output.path.is_none()) {
+        return false;
+    }
+    if entry.derivation.outputs.values().any(is_drv_output_path) {
+        return false;
+    }
+    if entry.resolved_drv_path.as_ref().is_some_and(|resolved| resolved != &entry.drv_path) {
+        return false;
+    }
+    matches!(derivation_uses_mutable_workspace(entry.derivation.as_ref()), Ok(false))
+}
+
+fn enqueue_preflight_deps(
+    derivation: &Derivation,
+    known_paths: &DerivationRegistry,
+    visited: &mut BTreeSet<String>,
+    queue: &mut VecDeque<StorePath<String>>,
+    max_entries: usize,
+) -> bool {
+    assert!(max_entries > 0, "max_entries must be positive");
+    assert!(!known_paths.store_dir().is_empty(), "registry store_dir must not be empty");
+    for (dep_sp, dep_outputs) in &derivation.input_derivations {
+        let dep_abs = dep_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+        let Some(dep_entry) = known_paths.get_by_drv_path(&dep_abs) else {
+            return false;
+        };
+        if validate_demanded_outputs(dep_sp.name(), &dep_entry.derivation, Some(dep_outputs)).is_err() {
+            return false;
+        }
+        if !visited.insert(dep_abs) {
+            continue;
+        }
+        if visited.len() > max_entries {
+            return false;
+        }
+        queue.push_back(dep_sp.clone());
+    }
+    debug_assert!(visited.len() <= max_entries);
+    true
+}
+
+pub(crate) fn is_preflight_eligible_root(drv_path: &StorePath<String>, known_paths: &DerivationRegistry) -> bool {
+    assert!(!drv_path.name().is_empty(), "root derivation name must not be empty");
+    assert!(!known_paths.store_dir().is_empty(), "registry store_dir must not be empty");
+    let root_abs = drv_path.to_absolute_path_with_prefix(known_paths.store_dir());
+    let Some(root_entry) = known_paths.get_by_drv_path(&root_abs) else {
+        return false;
+    };
+    if root_entry.derivation.input_derivations.is_empty() {
+        return false;
+    }
+    if !is_preflight_eligible_entry_base(root_entry) {
+        return false;
+    }
+    if !root_entry.derivation.outputs.values().all(is_input_addressed_output) {
+        return false;
+    }
+
+    let Ok(max_entries) = usize::try_from(crate::registry::MAX_ENTRIES) else {
+        return false;
+    };
+    let mut visited: BTreeSet<String> = BTreeSet::from([root_abs]);
+    let mut queue: VecDeque<StorePath<String>> = VecDeque::new();
+    if !enqueue_preflight_deps(root_entry.derivation.as_ref(), known_paths, &mut visited, &mut queue, max_entries) {
+        return false;
+    }
+
+    for _ in 0..crate::registry::MAX_ENTRIES {
+        let Some(current_sp) = queue.pop_front() else {
+            debug_assert!(visited.len() <= max_entries);
+            return true;
+        };
+        let current_abs = current_sp.to_absolute_path_with_prefix(known_paths.store_dir());
+        let Some(entry) = known_paths.get_by_drv_path(&current_abs) else {
+            return false;
+        };
+        if !is_preflight_eligible_entry_base(entry) {
+            return false;
+        }
+        if !enqueue_preflight_deps(entry.derivation.as_ref(), known_paths, &mut visited, &mut queue, max_entries) {
+            return false;
+        }
+    }
+
+    queue.is_empty()
+}
+
+fn is_preflight_cancelled(cancellation: Option<&tokio::sync::watch::Receiver<bool>>) -> bool {
+    cancellation.is_some_and(|receiver| *receiver.borrow() || receiver.has_changed().is_err())
+}
+
+fn projected_derivation_for_outputs(derivation: &Derivation, selected: &BTreeSet<String>) -> Derivation {
+    assert!(!selected.is_empty(), "projected derivation requires at least one output");
+    let mut projected = derivation.clone();
+    projected.outputs.retain(|name, _| selected.contains(name));
+    assert_eq!(projected.outputs.len(), selected.len(), "projected outputs must match selection");
+    projected
+}
+
+fn single_output_probe_derivation(derivation: &Derivation, store_path: StorePath<String>) -> Derivation {
+    assert!(!store_path.name().is_empty(), "probe store path name must not be empty");
+    let mut probe = derivation.clone();
+    probe.outputs = BTreeMap::from([("out".to_string(), nix_compat::derivation::Output {
+        path: Some(store_path),
+        ca_hash: None,
+    })]);
+    assert_eq!(probe.outputs.len(), 1);
+    probe
+}
+
+fn sibling_output_name_for_path<'a>(derivation: &'a Derivation, path: &StorePath<String>) -> Option<&'a str> {
+    derivation.outputs.iter().find_map(|(name, output)| {
+        if output.path.as_ref() == Some(path) {
+            Some(name.as_str())
+        } else {
+            None
+        }
+    })
+}
+
+struct PlainCacheEligibilityInput<'a> {
+    derivation: &'a Derivation,
+    bound_plan_outputs: &'a [(String, StorePath<String>)],
+    is_mutable_workspace: bool,
+    has_resolved_identity: bool,
+}
+
+fn is_plain_pathinfo_cache_eligible(input: PlainCacheEligibilityInput<'_>) -> bool {
+    if input.is_mutable_workspace {
+        return false;
+    }
+    if !input.bound_plan_outputs.is_empty() {
+        return false;
+    }
+    if input.has_resolved_identity {
+        return false;
+    }
+    let is_ca = input.derivation.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
+    !is_ca
 }
 
 struct SharedActionLookup<'a> {
@@ -388,10 +657,13 @@ fn build_pool_closure_entries(
         let (Some(json), Some(hdm)) = (json_by_path.get(path), hdm_by_path.get(path)) else {
             continue;
         };
-        total_bytes = total_bytes.saturating_add(json.len());
-        if total_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
+        let Some(next_bytes) = total_bytes.checked_add(json.len()) else {
+            break;
+        };
+        if next_bytes > MAX_POOL_GOAL_CLOSURE_BYTES {
             break;
         }
+        total_bytes = next_bytes;
         let mut outputs = Vec::new();
         for (output_name, output) in &derivation.outputs {
             if output.path.is_some() {
@@ -1010,6 +1282,7 @@ where BServ: BuildService + 'static
     /// fetchers inline; for sandbox builds, returns the prepared metadata
     /// needed to dispatch `do_build` and later `finish_build`.
     // r[impl mantle.ca_input_resolution.early_cutoff]
+    #[cfg(test)]
     pub(crate) async fn prepare_build(
         &mut self,
         drv_path: &StorePath<String>,
@@ -1018,7 +1291,33 @@ where BServ: BuildService + 'static
         is_root: bool,
         bound_plan_outputs: &[(String, StorePath<String>)],
     ) -> Result<PrepareResult, Error> {
+        self.prepare_build_with_demand(
+            PrepareBuildInput {
+                drv_path,
+                derivation,
+                is_root,
+                bound_plan_outputs,
+                demanded_outputs: None,
+            },
+            known_paths,
+        )
+        .await
+    }
+
+    pub(crate) async fn prepare_build_with_demand(
+        &mut self,
+        input: PrepareBuildInput<'_>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<PrepareResult, Error> {
+        let PrepareBuildInput {
+            drv_path,
+            derivation,
+            is_root,
+            bound_plan_outputs,
+            demanded_outputs,
+        } = input;
         let drv_name = drv_path.name().to_string();
+        validate_demanded_outputs(&drv_name, &derivation, demanded_outputs)?;
         let (admitted, remaining_hdms) = self.collect_resolvable_input_facts(&derivation, known_paths).await?;
         let resolved =
             resolve_ca_inputs(derivation.clone(), drv_path, &admitted, &remaining_hdms, self.store.store_dir())
@@ -1029,6 +1328,8 @@ where BServ: BuildService + 'static
                     | ca_input_resolution::ResolutionFailure::Limit => Error::Store(failure.to_string()),
                 })?;
         let derivation_ref = resolved.derivation.as_ref();
+        assert_eq!(derivation_ref.outputs.len(), derivation.outputs.len());
+        validate_demanded_outputs(&drv_name, derivation_ref, demanded_outputs)?;
         let drv_absolute = drv_path.to_absolute_path_with_prefix(self.store.store_dir());
         known_paths.record_resolved_derivation(&drv_absolute, resolved.derivation.clone(), resolved.path.clone())?;
         let prior_action_results_count = self.action_result_reports.len();
@@ -1085,15 +1386,35 @@ where BServ: BuildService + 'static
         // 2. PathInfo alone cannot prove the realized plan-root mapping.
         // For bound consumers, only the signed action result above can reuse
         // unchanged roots; a changed mapping must execute or fail closed.
-        let is_ca = derivation_ref.outputs.values().all(|output| output.path.is_none() && output.ca_hash.is_none());
-        let is_plain_pathinfo_cache_eligible =
-            !is_mutable_workspace && bound_plan_outputs.is_empty() && !is_ca && resolved.identity.is_none();
-        if is_plain_pathinfo_cache_eligible
-            && let Some(cached_hit) = self.check_cache(&resolved.path, derivation_ref, is_root).await?
+        let has_resolved_identity = resolved.identity.is_some();
+        let is_plain_cache_eligible = is_plain_pathinfo_cache_eligible(PlainCacheEligibilityInput {
+            derivation: derivation_ref,
+            bound_plan_outputs,
+            is_mutable_workspace,
+            has_resolved_identity,
+        });
+        let entry = known_paths.get_by_drv_path(&drv_absolute);
+        let is_projection_eligible = is_demand_projection_eligible(DemandProjectionInput {
+            derivation: derivation_ref,
+            entry,
+            bound_plan_outputs,
+            is_mutable_workspace,
+            has_resolved_identity,
+        });
+        if is_plain_cache_eligible
+            && let Some(cached_hit) = self
+                .check_cache(CacheCheckRequest {
+                    drv_path: &resolved.path,
+                    derivation: derivation_ref,
+                    is_root,
+                    is_demand_projection_eligible: is_projection_eligible,
+                    demanded_outputs,
+                })
+                .await?
         {
             self.record_cached_output_paths(drv_path, derivation_ref, &cached_hit.infos, known_paths)?;
             self.label_resolved_report(prior_action_results_count, drv_path, &resolved, "reused");
-            info!(drv = %drv_name, "all outputs cached, skipping build");
+            info!(drv = %drv_name, "all demanded outputs cached, skipping build");
             return Ok(PrepareResult::Done(BuildOutcome {
                 drv_path: drv_path.clone(),
                 outputs: cached_hit.infos,
@@ -2180,16 +2501,48 @@ where BServ: BuildService + 'static
         Ok(())
     }
 
-    /// Check cache: every output must have signed PathInfo and complete content.
-    /// CA mappings are hints only; a signed action result must authorize reuse.
-    /// Delegates to `self.store.check_cache()`, then verifies signatures.
-    async fn check_cache(
+    fn verify_single_path_info_signature(
+        &self,
+        drv_path: &StorePath<String>,
+        output_name: &str,
+        path_info: &PathInfo,
+    ) -> bool {
+        assert!(!output_name.is_empty(), "output name must not be empty");
+        if self.trust_unsigned {
+            return true;
+        }
+        if self.store.is_overlay_composed() {
+            return true;
+        }
+        let result =
+            signing::verify_pathinfo_signatures_with_store_dir(path_info, &self.trusted_keys, self.store.store_dir());
+        if !result.is_trusted() {
+            if result.total_sigs == 0 {
+                tracing::warn!(
+                    drv = %drv_path.name(),
+                    output = %output_name,
+                    "cache hit rejected: unsigned PathInfo (run `crunch store sign --all` to fix)"
+                );
+            } else {
+                tracing::warn!(
+                    drv = %drv_path.name(),
+                    output = %output_name,
+                    untrusted = ?result.untrusted_names,
+                    "cache hit rejected: no trusted signature"
+                );
+            }
+            return false;
+        }
+        true
+    }
+
+    async fn check_cache_all_outputs(
         &mut self,
         drv_path: &StorePath<String>,
         derivation: &Derivation,
         is_root: bool,
     ) -> Result<Option<CacheCheckHit>, Error> {
-        self.store.set_remote_admission_trust(self.trusted_keys.clone(), self.trust_unsigned);
+        assert!(!derivation.outputs.is_empty(), "derivation must declare at least one output");
         let cached = self.store.check_cache(drv_path, derivation, is_root, self.root_retention_source).await.map_err(
             |error| match error {
                 crunch_store::Error::Cache(message) => Error::CacheVerification(message),
@@ -2201,7 +2554,6 @@ where BServ: BuildService + 'static
             return Ok(None);
         };
         let infos: BTreeMap<String, PathInfo> = cached_infos.into_iter().collect();
-
         let substitutions = infos
             .iter()
             .filter_map(|(output_name, path_info)| {
@@ -2211,39 +2563,350 @@ where BServ: BuildService + 'static
             })
             .collect::<BTreeMap<_, _>>();
 
-        if self.trust_unsigned || self.store.is_overlay_composed() {
-            // Overlay composition verifies the selected PathInfo against the
-            // selected layer's accepted keys before this boundary.
-            return Ok(Some(CacheCheckHit { infos, substitutions }));
-        }
-
-        // Verify signatures on every single-store cached output.
         for (output_name, path_info) in &infos {
-            let result = signing::verify_pathinfo_signatures_with_store_dir(
-                path_info,
-                &self.trusted_keys,
-                self.store.store_dir(),
-            );
-            if !result.is_trusted() {
-                if result.total_sigs == 0 {
-                    tracing::warn!(
-                        drv = %drv_path.name(),
-                        output = %output_name,
-                        "cache hit rejected: unsigned PathInfo (run `crunch store sign --all` to fix)"
-                    );
-                } else {
-                    tracing::warn!(
-                        drv = %drv_path.name(),
-                        output = %output_name,
-                        untrusted = ?result.untrusted_names,
-                        "cache hit rejected: no trusted signature"
-                    );
-                }
+            if !self.verify_single_path_info_signature(drv_path, output_name, path_info) {
                 return Ok(None);
             }
         }
-
         Ok(Some(CacheCheckHit { infos, substitutions }))
+    }
+
+    async fn check_cache_projected_siblings(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        initial_outputs: &BTreeSet<String>,
+    ) -> Result<Option<CacheCheckHit>, Error> {
+        assert!(!derivation.outputs.is_empty(), "derivation must declare at least one output");
+        assert!(!initial_outputs.is_empty(), "projected cache check requires at least one output");
+        let mut pending_outputs = initial_outputs.clone();
+        let mut checked_outputs = BTreeSet::new();
+        let mut infos = BTreeMap::new();
+        let mut substitutions = BTreeMap::new();
+
+        for _ in 0..derivation.outputs.len() {
+            if pending_outputs.is_empty() {
+                break;
+            }
+            let projected = projected_derivation_for_outputs(derivation, &pending_outputs);
+            let cached =
+                self.store.check_cache(drv_path, &projected, false, None).await.map_err(|error| match error {
+                    crunch_store::Error::Cache(message) => Error::CacheVerification(message),
+                    other => Error::Store(format!("{other}")),
+                })?;
+            let Some(cached_infos) = cached else {
+                return Ok(None);
+            };
+
+            let mut batch_substitution_by_output: BTreeMap<String, OutputSubstitutionReport> = cached_infos
+                .iter()
+                .filter_map(|(output_name, path_info)| {
+                    self.store
+                        .take_output_substitution_report(&path_info.store_path)
+                        .map(|report| (output_name.clone(), report))
+                })
+                .collect();
+
+            let mut newly_added = Vec::with_capacity(cached_infos.len());
+            for (output_name, path_info) in cached_infos {
+                if infos.len() >= derivation.outputs.len() {
+                    return Err(Error::Store("cached output count exceeds derivation outputs".to_string()));
+                }
+                if !self.verify_single_path_info_signature(drv_path, &output_name, &path_info) {
+                    return Ok(None);
+                }
+                if let Some(substitution_record) = batch_substitution_by_output.remove(&output_name)
+                    && substitutions.len() < derivation.outputs.len()
+                {
+                    substitutions.insert(output_name.clone(), substitution_record);
+                }
+                checked_outputs.insert(output_name.clone());
+                newly_added.push(path_info.clone());
+                infos.insert(output_name, path_info);
+            }
+
+            let mut next_pending = BTreeSet::new();
+            for path_info in &newly_added {
+                for ref_path in &path_info.references {
+                    if let Some(sibling_name) = sibling_output_name_for_path(derivation, ref_path)
+                        && !checked_outputs.contains(sibling_name)
+                    {
+                        next_pending.insert(sibling_name.to_string());
+                    }
+                }
+            }
+            pending_outputs = next_pending;
+        }
+
+        debug_assert!(pending_outputs.is_empty(), "sibling fixed-point must converge");
+        Ok(Some(CacheCheckHit { infos, substitutions }))
+    }
+
+    async fn can_allow_host_input_source_member(
+        &mut self,
+        derivation: &Derivation,
+        member: &StorePath<String>,
+    ) -> Result<bool, Error> {
+        assert!(!member.name().is_empty(), "closure member name must not be empty");
+        if self.hermeticity_mode.is_strict() {
+            return Ok(false);
+        }
+        if self.forbid_host_store_fallback {
+            return Ok(false);
+        }
+        if !derivation.input_sources.contains(member) {
+            return Ok(false);
+        }
+        if self.preferred_source_host_path(member).exists() {
+            return Ok(true);
+        }
+        let cached_node = self
+            .store
+            .cached_node_for_path(member)
+            .await
+            .map_err(|error| Error::Store(format!("checking cached source member {member}: {error}")))?;
+        Ok(cached_node.is_some())
+    }
+
+    async fn verify_runtime_closure_member(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        member: &StorePath<String>,
+        hit: &mut CacheCheckHit,
+    ) -> Result<bool, Error> {
+        assert!(!member.name().is_empty(), "runtime closure member must have a name");
+        let probe_drv = single_output_probe_derivation(derivation, member.clone());
+        let cached = self.store.check_cache(drv_path, &probe_drv, false, None).await.map_err(|error| match error {
+            crunch_store::Error::Cache(message) => Error::CacheVerification(message),
+            other => Error::Store(format!("{other}")),
+        })?;
+        let substitution_record = self.store.take_output_substitution_report(member);
+        let Some(mut map) = cached else {
+            return self.can_allow_host_input_source_member(derivation, member).await;
+        };
+        let Some(member_pi) = map.remove("out") else {
+            return Ok(false);
+        };
+        if !self.verify_single_path_info_signature(drv_path, "closure-ref", &member_pi) {
+            return Ok(false);
+        }
+        if let Some(sibling_name) = sibling_output_name_for_path(derivation, member)
+            && !hit.infos.contains_key(sibling_name)
+        {
+            if let Some(record) = substitution_record {
+                hit.substitutions.insert(sibling_name.to_string(), record);
+            }
+            hit.infos.insert(sibling_name.to_string(), member_pi);
+        }
+        Ok(true)
+    }
+
+    async fn verify_projected_runtime_closure(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        hit: &mut CacheCheckHit,
+    ) -> Result<bool, Error> {
+        assert!(!hit.infos.is_empty(), "cache hit must contain at least one output");
+        let checked_paths: BTreeSet<StorePath<String>> =
+            hit.infos.values().map(|path_info| path_info.store_path.clone()).collect();
+        let has_external_ref = hit
+            .infos
+            .values()
+            .any(|path_info| path_info.references.iter().any(|reference| !checked_paths.contains(reference)));
+        if !has_external_ref {
+            return Ok(true);
+        }
+
+        let mut verified_members = checked_paths;
+        let root_paths: Vec<StorePath<String>> =
+            hit.infos.values().map(|path_info| path_info.store_path.clone()).collect();
+        for root_path in root_paths {
+            let closure = match self.store.resolve_closure(&root_path, self.closure_fallback_mode()).await {
+                Ok(closure) => closure,
+                Err(crunch_store::Error::MissingClosureFacts { .. }) => return Ok(false),
+                Err(other) => return Err(Error::Store(format!("resolving cached runtime closure: {other}"))),
+            };
+            self.hermeticity_audit_events
+                .extend(closure.audit_events.into_iter().map(HermeticityAuditEvent::from));
+            for member in closure.paths {
+                if !verified_members.insert(member.clone()) {
+                    continue;
+                }
+                let is_member_valid = self.verify_runtime_closure_member(drv_path, derivation, &member, hit).await?;
+                if !is_member_valid {
+                    return Ok(false);
+                }
+            }
+        }
+        Ok(true)
+    }
+
+    async fn export_verified_cache_hit_roots(
+        &mut self,
+        drv_path: &StorePath<String>,
+        derivation: &Derivation,
+        hit: &CacheCheckHit,
+        is_remote_root_forced: bool,
+    ) -> Result<(), Error> {
+        assert!(!hit.infos.is_empty(), "cache hit must contain at least one output to export");
+        for (output_name, path_info) in &hit.infos {
+            let root_source = if is_remote_root_forced || hit.substitutions.contains_key(output_name) {
+                self.root_retention_source.map(GcRootSource::for_remote_result)
+            } else {
+                self.root_retention_source
+            };
+            let materialized_path_info = if self.store.is_overlay_composed() {
+                let materialize_derivation = single_output_probe_derivation(derivation, path_info.store_path.clone());
+                let cached =
+                    self.store.check_cache(drv_path, &materialize_derivation, true, root_source).await.map_err(
+                        |error| {
+                            Error::Store(format!("exporting overlay cached root {}: {error}", path_info.store_path))
+                        },
+                    )?;
+                drop(self.store.take_output_substitution_report(&path_info.store_path));
+                cached.and_then(|mut map| map.remove("out")).ok_or_else(|| {
+                    Error::Store(format!("verified cached root vanished before export: {}", path_info.store_path))
+                })?
+            } else {
+                self.store
+                    .export_late_root_output(&path_info.store_path, root_source)
+                    .await
+                    .map_err(|error| Error::Store(format!("exporting cached root {}: {error}", path_info.store_path)))?
+            };
+            if (materialized_path_info.nar_sha256, materialized_path_info.nar_size)
+                != (path_info.nar_sha256, path_info.nar_size)
+            {
+                return Err(Error::Store(format!(
+                    "cached root output changed during verification: {}",
+                    path_info.store_path
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Check cache: every demanded output (plus transitive sibling and runtime
+    /// closure dependencies on demand-projection-eligible lanes) must have
+    /// trusted PathInfo and complete content.
+    /// CA mappings are hints only; a signed action result must authorize reuse.
+    async fn check_cache(&mut self, request: CacheCheckRequest<'_>) -> Result<Option<CacheCheckHit>, Error> {
+        self.store.set_remote_admission_trust(self.trusted_keys.clone(), self.trust_unsigned);
+        if !request.is_demand_projection_eligible {
+            return self.check_cache_all_outputs(request.drv_path, request.derivation, request.is_root).await;
+        }
+        let initial_outputs = match request.demanded_outputs {
+            Some(demanded) => demanded.clone(),
+            None => request.derivation.outputs.keys().cloned().collect(),
+        };
+        let Some(mut hit) =
+            self.check_cache_projected_siblings(request.drv_path, request.derivation, &initial_outputs).await?
+        else {
+            return Ok(None);
+        };
+        let is_closure_complete =
+            self.verify_projected_runtime_closure(request.drv_path, request.derivation, &mut hit).await?;
+        if !is_closure_complete {
+            return Ok(None);
+        }
+        if request.is_root {
+            self.export_verified_cache_hit_roots(request.drv_path, request.derivation, &hit, false).await?;
+        }
+        Ok(Some(hit))
+    }
+
+    fn downgrade_preflight_action_result_report(&mut self, prior_action_results_count: usize) {
+        let Some(report) = self.action_result_reports.get_mut(prior_action_results_count) else {
+            return;
+        };
+        report.disposition = ACTION_RESULT_DISPOSITION_MISS.to_string();
+        report.selected_result_ref = None;
+        report.diagnostics.push("preflight-runtime-closure-incomplete".to_string());
+    }
+
+    /// Authenticate and materialize a preflight-eligible root and its runtime
+    /// closure before expanding build-only dependencies.
+    pub(crate) async fn preflight_cached_root(
+        &mut self,
+        input: PreflightRootInput<'_>,
+        known_paths: &mut DerivationRegistry,
+    ) -> Result<Option<BuildOutcome>, Error> {
+        let PreflightRootInput {
+            drv_path,
+            derivation,
+            demanded_outputs,
+            cancellation,
+        } = input;
+        let drv_name = drv_path.name().to_string();
+        assert!(!drv_name.is_empty(), "preflight derivation name must not be empty");
+        assert!(!derivation.outputs.is_empty(), "preflight derivation must declare outputs");
+        validate_demanded_outputs(&drv_name, derivation.as_ref(), demanded_outputs)?;
+        if is_preflight_cancelled(cancellation) {
+            return Ok(None);
+        }
+
+        self.store.set_remote_admission_trust(self.trusted_keys.clone(), self.trust_unsigned);
+        let action_ref = action_ref_for_derivation(derivation.as_ref(), self.store.store_dir());
+        let prior_action_results_count = self.action_result_reports.len();
+        if let Some(mut shared_hit) = self
+            .check_shared_action_result(
+                SharedActionLookup {
+                    drv_path,
+                    derivation: derivation.as_ref(),
+                    original_drv_path: drv_path,
+                    action_ref: &action_ref,
+                    is_root: false,
+                },
+                known_paths,
+            )
+            .await?
+        {
+            if self.verify_projected_runtime_closure(drv_path, derivation.as_ref(), &mut shared_hit).await? {
+                if is_preflight_cancelled(cancellation) {
+                    return Ok(None);
+                }
+                self.export_verified_cache_hit_roots(drv_path, derivation.as_ref(), &shared_hit, true).await?;
+                return Ok(Some(BuildOutcome {
+                    drv_path: drv_path.clone(),
+                    outputs: shared_hit.infos,
+                    substitutions: shared_hit.substitutions,
+                    cached: true,
+                    log: None,
+                    sandbox_timing: None,
+                }));
+            }
+            self.downgrade_preflight_action_result_report(prior_action_results_count);
+        }
+
+        if is_preflight_cancelled(cancellation) {
+            return Ok(None);
+        }
+        let Some(cached_hit) = self
+            .check_cache(CacheCheckRequest {
+                drv_path,
+                derivation: derivation.as_ref(),
+                is_root: false,
+                is_demand_projection_eligible: true,
+                demanded_outputs,
+            })
+            .await?
+        else {
+            return Ok(None);
+        };
+        if is_preflight_cancelled(cancellation) {
+            return Ok(None);
+        }
+        self.export_verified_cache_hit_roots(drv_path, derivation.as_ref(), &cached_hit, false).await?;
+        self.record_cached_output_paths(drv_path, derivation.as_ref(), &cached_hit.infos, known_paths)?;
+        Ok(Some(BuildOutcome {
+            drv_path: drv_path.clone(),
+            outputs: cached_hit.infos,
+            substitutions: cached_hit.substitutions,
+            cached: true,
+            log: None,
+            sandbox_timing: None,
+        }))
     }
 
     fn record_cached_output_paths(
@@ -2266,7 +2929,7 @@ where BServ: BuildService + 'static
     }
 
     /// Collect build-input provenance for native attestations.
-    fn build_artifact_provenance(
+    pub(crate) fn build_artifact_provenance(
         &self,
         derivation: &Derivation,
         original_drv_path: &StorePath<String>,
@@ -6465,6 +7128,1516 @@ mod tests {
                         .any(|diagnostic| { diagnostic.starts_with("action-result-publication-create-dir:") })
                 );
             }
+        }
+    }
+
+    fn make_sized_pool_closure_derivation(
+        index: usize,
+        payload_len: usize,
+        fixed_output: bool,
+        registry: &mut DerivationRegistry,
+    ) -> (String, Arc<Derivation>, usize) {
+        let name = format!("pool-closure-{index:02}");
+        let (_, mut drv) = build_and_register(&name, &[], registry);
+        for output in drv.outputs.values_mut() {
+            output.path = None;
+            if fixed_output {
+                output.ca_hash =
+                    Some(nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([0u8; 32])));
+            }
+        }
+        drv.environment.insert("out".to_owned(), bstr::BString::from(""));
+        drv.arguments[1] = format!("echo {name} {} > $out", "a".repeat(payload_len));
+        let hdm = drv.hash_derivation_modulo(|parent| {
+            registry.get_hdm_by_drv_path(&parent.to_absolute_path()).expect("parent should be in registry")
+        });
+        drv.calculate_output_paths(&name, &hdm).unwrap();
+        let drv_path = drv.calculate_derivation_path(&name).unwrap();
+        let abs = drv_path.to_absolute_path();
+        let json_len = serde_json::to_string(&drv).unwrap().len();
+        registry.insert(drv_path, hdm, drv.clone(), false, None);
+        (abs, Arc::new(drv), json_len)
+    }
+
+    #[test]
+    fn build_pool_closure_entries_bounds_total_bytes_at_limit() {
+        use crate::distributed::MAX_POOL_GOAL_CLOSURE_BYTES;
+
+        let prefix_count = 64_usize;
+        let prefix_payload_len = 1_032_000_usize;
+
+        for (target_offset, expect_all_65) in [
+            (MAX_POOL_GOAL_CLOSURE_BYTES - 1, true),
+            (MAX_POOL_GOAL_CLOSURE_BYTES, true),
+            (MAX_POOL_GOAL_CLOSURE_BYTES + 1, false),
+        ] {
+            let mut registry = DerivationRegistry::default();
+            let mut collected = Vec::with_capacity(prefix_count + 1);
+            let mut prefix_bytes = 0_usize;
+            for idx in 0..prefix_count {
+                let (abs, drv, json_len) =
+                    make_sized_pool_closure_derivation(idx, prefix_payload_len, false, &mut registry);
+                prefix_bytes += json_len;
+                collected.push((abs, drv));
+            }
+            let mut base_64_registry = DerivationRegistry::default();
+            let (_, _, base_len_64) = make_sized_pool_closure_derivation(prefix_count, 0, true, &mut base_64_registry);
+            let remaining = target_offset.checked_sub(prefix_bytes).unwrap();
+            let last_payload = remaining.checked_sub(base_len_64).unwrap();
+            let (last_abs, last_drv, last_json_len) =
+                make_sized_pool_closure_derivation(prefix_count, last_payload, true, &mut registry);
+            assert_eq!(prefix_bytes + last_json_len, target_offset);
+            collected.push((last_abs, last_drv));
+
+            let entries = build_pool_closure_entries(&collected, &registry, nix_compat::store_path::STORE_DIR);
+            let emitted_bytes: usize = entries.iter().map(|entry| entry.derivation_json.len()).sum();
+            assert!(emitted_bytes <= MAX_POOL_GOAL_CLOSURE_BYTES);
+            if expect_all_65 {
+                assert_eq!(entries.len(), prefix_count + 1);
+                assert_eq!(emitted_bytes, target_offset);
+            } else {
+                assert_eq!(entries.len(), prefix_count);
+                assert_eq!(emitted_bytes, prefix_bytes);
+            }
+        }
+    }
+
+    struct SequencePathInfoService {
+        queues: Arc<Mutex<HashMap<[u8; 20], std::collections::VecDeque<PathInfo>>>>,
+    }
+
+    impl SequencePathInfoService {
+        fn new() -> Self {
+            Self {
+                queues: Arc::new(Mutex::new(HashMap::new())),
+            }
+        }
+
+        fn push(&self, path_info: PathInfo) {
+            self.queues.lock().unwrap().entry(*path_info.store_path.digest()).or_default().push_back(path_info);
+        }
+    }
+
+    #[async_trait]
+    impl PathInfoService for SequencePathInfoService {
+        async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, pathinfoservice::Error> {
+            let mut guard = self.queues.lock().unwrap();
+            let Some(queue) = guard.get_mut(&digest) else {
+                return Ok(None);
+            };
+            if queue.len() > 1 {
+                Ok(queue.pop_front())
+            } else {
+                Ok(queue.front().cloned())
+            }
+        }
+
+        async fn put(&self, path_info: PathInfo) -> Result<PathInfo, pathinfoservice::Error> {
+            self.push(path_info.clone());
+            Ok(path_info)
+        }
+
+        fn list(&self) -> futures::stream::BoxStream<'static, Result<PathInfo, pathinfoservice::Error>> {
+            let entries: Vec<_> =
+                self.queues.lock().unwrap().values().flat_map(|queue| queue.iter().cloned()).collect();
+            futures::stream::iter(entries.into_iter().map(Ok)).boxed()
+        }
+    }
+
+    async fn register_signed_source_in_store(
+        blobs: &MemoryBlobService,
+        pis: &Arc<dyn PathInfoService>,
+        path: &StorePath<String>,
+        bytes: &[u8],
+    ) {
+        let node = put_blob(blobs, bytes).await;
+        let mut info = PathInfo {
+            store_path: path.clone(),
+            node,
+            references: vec![],
+            nar_size: u64::try_from(bytes.len()).unwrap(),
+            nar_sha256: [3u8; 32],
+            signatures: vec![],
+            deriver: None,
+            ca: None,
+        };
+        sign_with_test_key(&mut info);
+        pis.put(info).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bound_plan_consumer_changed_realized_root_recomputes_action_ref_and_misses_cache() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis = Arc::new(test_pis()) as Arc<dyn PathInfoService>;
+        let (service, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs.clone()),
+            Arc::new(ds.clone()),
+            service,
+            pis.clone(),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let root_a = make_source_path("bound-root-a", 71);
+        let root_b = make_source_path("bound-root-b", 72);
+        register_signed_source_in_store(&blobs, &pis, &root_a, b"root-a").await;
+        register_signed_source_in_store(&blobs, &pis, &root_b, b"root-b").await;
+
+        let mut registry = DerivationRegistry::default();
+        let (consumer_path, consumer_drv) = build_and_register("bound-consumer-swap", &[], &mut registry);
+        let consumer_arc = Arc::new(consumer_drv.clone());
+        let consumer_abs = consumer_path.to_absolute_path();
+        let binding_a = vec![("p".to_owned(), root_a)];
+        let binding_b = vec![("p".to_owned(), root_b)];
+
+        let (prepared_a, req_a) = match builder
+            .prepare_build(&consumer_path, consumer_arc.clone(), &mut registry, true, &binding_a)
+            .await
+            .unwrap()
+        {
+            PrepareResult::NeedsBuild {
+                prepared,
+                build_request,
+            } => (prepared, build_request),
+            PrepareResult::Done(_) => panic!("initial bound consumer must build"),
+        };
+        let ref_a = registry.get_by_drv_path(&consumer_abs).unwrap().resolved_action_ref.clone().unwrap();
+        let expected_ref_a =
+            action_ref_for_bound_roots(&consumer_drv, &binding_a, nix_compat::store_path::STORE_DIR).unwrap();
+        assert_eq!(ref_a, expected_ref_a);
+        let build_res_a = builder.build_service().do_build(*req_a).await.unwrap();
+        let outcome_a = builder.finish_build(&prepared_a, build_res_a, &mut registry).await.unwrap();
+        assert!(!outcome_a.cached);
+        builder.take_action_result_reports();
+
+        // Same binding_a hits shared action result.
+        let hit_a = builder
+            .prepare_build(&consumer_path, consumer_arc.clone(), &mut registry, true, &binding_a)
+            .await
+            .unwrap();
+        assert!(matches!(hit_a, PrepareResult::Done(ref outcome) if outcome.cached));
+        builder.take_action_result_reports();
+
+        // Swapping binding_a -> binding_b keeps evaluated drv_path unchanged, recomputes
+        // action_ref, bypasses check_cache despite PathInfo existing, and misses.
+        let miss_b =
+            builder.prepare_build(&consumer_path, consumer_arc, &mut registry, true, &binding_b).await.unwrap();
+        assert!(
+            matches!(miss_b, PrepareResult::NeedsBuild { .. }),
+            "swapped bound_plan_outputs must miss shared and local cache"
+        );
+        let ref_b = registry.get_by_drv_path(&consumer_abs).unwrap().resolved_action_ref.clone().unwrap();
+        let expected_ref_b =
+            action_ref_for_bound_roots(&consumer_drv, &binding_b, nix_compat::store_path::STORE_DIR).unwrap();
+        assert_eq!(ref_b, expected_ref_b);
+        assert_ne!(ref_a, ref_b);
+        let reports = builder.take_action_result_reports();
+        assert!(reports.iter().any(|report| report.action_ref == ref_b && report.disposition == "miss"));
+        assert_eq!(calls.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn admit_resolved_input_realisation_rejects_path_disagreement_with_completed_ca_parent() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let (service, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(tmp_ds()),
+            service,
+            Arc::new(test_pis()),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut registry = DerivationRegistry::default();
+        let (parent_path, _) = build_and_register_ca("ca-parent-disagree", &mut registry);
+        let _ = builder.build(&parent_path, &mut registry).await.unwrap();
+        let child_path = register_ca_dependent("ca-child-disagree", &parent_path, &mut registry);
+        let child_drv = registry.get_by_drv_path(&child_path.to_absolute_path()).unwrap().derivation.clone();
+
+        let wrong_path = make_source_path("disagreed-ca-out", 73);
+        registry
+            .get_by_drv_path_mut(&parent_path.to_absolute_path())
+            .unwrap()
+            .resolved_outputs
+            .insert("out".to_owned(), wrong_path);
+
+        let err = match builder.prepare_build(&child_path, child_drv, &mut registry, true, &[]).await {
+            Ok(_) => panic!("disagreeing resolved parent output path must fail closed"),
+            Err(error) => error,
+        };
+        assert!(matches!(err, Error::CacheVerification(_)), "expected CacheVerification, got: {err:?}");
+        assert!(err.to_string().contains("path disagrees with completed goal"), "unexpected error: {err}");
+        assert_eq!(calls.lock().unwrap().len(), 1, "dependent must not execute after disagreement");
+    }
+
+    #[tokio::test]
+    async fn indexed_shared_action_result_with_missing_blob_or_untrusted_pathinfo_is_rejected() {
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs_full = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let pis_trusted = Arc::new(test_pis()) as Arc<dyn PathInfoService>;
+        let mut registry = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("indexed-incomplete", &[], &mut registry);
+        let (service1, _) = MockBuildService::new(blobs_full.clone());
+        let mut builder1 = Builder::with_state_dir(
+            Arc::new(blobs_full.clone()),
+            Arc::new(ds.clone()),
+            service1,
+            pis_trusted.clone(),
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let built = builder1.build(&drv_path, &mut registry).await.unwrap();
+        let out_info = built.outputs["out"].clone();
+
+        // Case A: ActionResultIndex + SignedActionResultRecord exist, PathInfo exists,
+        // but castore blob is missing from BlobService.
+        let empty_blobs = MemoryBlobService::default();
+        let (service2, calls2) = MockBuildService::new(empty_blobs.clone());
+        let mut builder_missing_blob = Builder::with_state_dir(
+            Arc::new(empty_blobs),
+            Arc::new(ds.clone()),
+            service2,
+            pis_trusted,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut reg2 = DerivationRegistry::default();
+        let (drv_path2, drv2) = build_and_register("indexed-incomplete", &[], &mut reg2);
+        assert_eq!(drv_path2, drv_path);
+        let prep_missing =
+            builder_missing_blob.prepare_build(&drv_path2, Arc::new(drv2), &mut reg2, true, &[]).await.unwrap();
+        assert!(matches!(prep_missing, PrepareResult::NeedsBuild { .. }));
+        assert_eq!(calls2.lock().unwrap().len(), 0);
+        let reports_missing = builder_missing_blob.take_action_result_reports();
+        assert!(reports_missing.iter().any(|report| {
+            report.phase == "discovery"
+                && report.disposition == "miss"
+                && !report.candidate_decisions.is_empty()
+                && report.candidate_decisions.iter().all(|decision| !decision.admitted)
+        }));
+
+        // Case B: Blob exists, ActionResultIndex + SignedActionResultRecord exist,
+        // but PathInfo carries an untrusted signer's signature.
+        let pis_untrusted = Arc::new(test_pis()) as Arc<dyn PathInfoService>;
+        let wrong_secret = ed25519_dalek::SigningKey::from_bytes(&[42u8; 32]);
+        let wrong_key = nix_compat::narinfo::SigningKey::new("untrusted-signer".to_owned(), wrong_secret);
+        let mut untrusted_info = out_info;
+        untrusted_info.signatures.clear();
+        crate::signing::sign_pathinfo(&mut untrusted_info, &wrong_key);
+        pis_untrusted.put(untrusted_info).await.unwrap();
+
+        let (service3, calls3) = MockBuildService::new(blobs_full.clone());
+        let mut builder_untrusted_pi = Builder::with_state_dir(
+            Arc::new(blobs_full),
+            Arc::new(ds),
+            service3,
+            pis_untrusted,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            test_keypair(),
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let mut reg3 = DerivationRegistry::default();
+        let (_, _) = build_and_register("indexed-incomplete", &[], &mut reg3);
+        let prep_untrusted =
+            builder_untrusted_pi.prepare_build(&drv_path, Arc::new(drv), &mut reg3, true, &[]).await.unwrap();
+        assert!(matches!(prep_untrusted, PrepareResult::NeedsBuild { .. }));
+        assert_eq!(calls3.lock().unwrap().len(), 0);
+        let reports_untrusted = builder_untrusted_pi.take_action_result_reports();
+        assert!(reports_untrusted.iter().any(|report| {
+            report.phase == "discovery"
+                && report.candidate_decisions.iter().any(|decision| {
+                    !decision.admitted
+                        && decision.diagnostics.iter().any(|diag| diag == "action-result-pathinfo-signature-untrusted")
+                })
+        }));
+    }
+
+    #[tokio::test]
+    async fn ia_conflicting_signed_action_results_fail_closed() {
+        use crunch_store::ActionResultStore as _;
+
+        let state_dir = tempfile::tempdir().unwrap();
+        let output_dir = tempfile::tempdir().unwrap();
+        let blobs = MemoryBlobService::default();
+        let ds = tmp_ds();
+        let keypair = test_keypair();
+        let mut registry = DerivationRegistry::default();
+        let (drv_path, drv) = build_and_register("ia-conflict-target", &[], &mut registry);
+        let out_path = drv.outputs["out"].path.clone().unwrap();
+
+        let node_a = put_blob(&blobs, b"ia-candidate-a").await;
+        let mut info_a = PathInfo {
+            store_path: out_path.clone(),
+            node: node_a,
+            references: vec![],
+            nar_size: 14,
+            nar_sha256: [11u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        sign_with_test_key(&mut info_a);
+
+        let node_b = put_blob(&blobs, b"ia-candidate-b-different").await;
+        let mut info_b = PathInfo {
+            store_path: out_path,
+            node: node_b,
+            references: vec![],
+            nar_size: 24,
+            nar_sha256: [12u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        sign_with_test_key(&mut info_b);
+
+        let record_a = signed_record_for_outputs(
+            &drv,
+            &BTreeMap::from([("out".to_owned(), info_a.clone())]),
+            nix_compat::store_path::STORE_DIR,
+            HermeticityMode::Practical,
+            &keypair,
+        )
+        .unwrap();
+        let record_b = signed_record_for_outputs(
+            &drv,
+            &BTreeMap::from([("out".to_owned(), info_b.clone())]),
+            nix_compat::store_path::STORE_DIR,
+            HermeticityMode::Practical,
+            &keypair,
+        )
+        .unwrap();
+
+        let local = crunch_store::LocalActionResultStore::new(state_dir.path());
+        local.publish(&record_a).await.unwrap();
+        local.publish(&record_b).await.unwrap();
+        let action_ref = action_ref_for_derivation(&drv, nix_compat::store_path::STORE_DIR);
+        let lookup = local.lookup(&action_ref).await.unwrap();
+        assert_eq!(lookup.records.len(), 2);
+
+        let seq_pis = Arc::new(SequencePathInfoService::new());
+        for rec in &lookup.records {
+            if rec.record.result_ref == record_a.record.result_ref {
+                seq_pis.push(info_a.clone());
+            } else {
+                seq_pis.push(info_b.clone());
+            }
+        }
+
+        let (service, calls) = MockBuildService::new(blobs.clone());
+        let mut builder = Builder::with_state_dir(
+            Arc::new(blobs),
+            Arc::new(ds),
+            service,
+            seq_pis,
+            output_dir.path().to_path_buf(),
+            Some(state_dir.path().to_path_buf()),
+            None,
+            nix_compat::store_path::STORE_DIR,
+            keypair,
+            test_trusted_keys(),
+            false,
+            false,
+        );
+        let err = match builder.prepare_build(&drv_path, Arc::new(drv), &mut registry, true, &[]).await {
+            Ok(_) => panic!("conflicting IA signed action results must fail closed"),
+            Err(error) => error,
+        };
+        assert!(matches!(err, Error::CacheVerification(_)), "expected CacheVerification, got: {err:?}");
+        assert!(err.to_string().contains("conflicting-action-results"), "unexpected error: {err}");
+        assert_eq!(calls.lock().unwrap().len(), 0, "conflicting IA reuse must never execute");
+    }
+
+    async fn put_signed_path_info(
+        bs: &MemoryBlobService,
+        pis: &LruPathInfoService,
+        store_path: StorePath<String>,
+        drv_path: &StorePath<String>,
+        references: Vec<StorePath<String>>,
+        keypair: &crate::signing::KeyPair,
+    ) -> PathInfo {
+        let content = format!("payload-for-{}", store_path.name());
+        let node = put_blob(bs, content.as_bytes()).await;
+        let mut info = PathInfo {
+            store_path,
+            node,
+            references,
+            nar_size: content.len() as u64,
+            nar_sha256: [9u8; 32],
+            signatures: vec![],
+            deriver: Some(drv_path.clone()),
+            ca: None,
+        };
+        crate::signing::sign_pathinfo_with_store_dir(
+            &mut info,
+            &keypair.signing_key,
+            nix_compat::store_path::STORE_DIR,
+        );
+        pis.put(info.clone()).await.unwrap();
+        info
+    }
+
+    #[tokio::test]
+    async fn implicit_sibling_runtime_ref_required_while_unreferenced_dev_optional() {
+        use crate::test_support::build_and_register_multi;
+
+        // Case A: sdk:out + sdk:lib trusted & complete (out -> lib), sdk:dev absent -> 0 producer builds.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (sdk_drv_path, sdk_drv) = build_and_register_multi("sdk-sibling", &["out", "lib", "dev"], &[], &mut kp);
+            let (consumer_drv_path, _) =
+                build_and_register_multi("consumer-sibling", &["out"], &[(sdk_drv_path.clone(), "out")], &mut kp);
+
+            let out_path = sdk_drv.outputs["out"].path.clone().unwrap();
+            let lib_path = sdk_drv.outputs["lib"].path.clone().unwrap();
+            let keypair = test_keypair();
+            put_signed_path_info(&bs, &pis, lib_path.clone(), &sdk_drv_path, vec![], &keypair).await;
+            put_signed_path_info(&bs, &pis, out_path.clone(), &sdk_drv_path, vec![lib_path.clone()], &keypair).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                keypair,
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let mut worker = crate::worker::Worker::new(1);
+            worker.want(&consumer_drv_path, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            let sdk_outcome = result.all_outcomes.iter().find(|outcome| outcome.drv_path == sdk_drv_path).unwrap();
+            assert!(sdk_outcome.cached, "sdk:out+lib should hit cache with dev absent");
+            assert!(sdk_outcome.outputs.contains_key("out"));
+            assert!(sdk_outcome.outputs.contains_key("lib"));
+            assert!(!sdk_outcome.outputs.contains_key("dev"));
+            assert_eq!(calls.lock().unwrap().len(), 1, "only consumer should execute");
+        }
+
+        // Case B: sdk:out cached, but referenced sibling sdk:lib is missing -> sdk must rebuild.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (sdk_drv_path, sdk_drv) =
+                build_and_register_multi("sdk-missing-lib", &["out", "lib", "dev"], &[], &mut kp);
+            let (consumer_drv_path, _) =
+                build_and_register_multi("consumer-missing-lib", &["out"], &[(sdk_drv_path.clone(), "out")], &mut kp);
+
+            let out_path = sdk_drv.outputs["out"].path.clone().unwrap();
+            let lib_path = sdk_drv.outputs["lib"].path.clone().unwrap();
+            let keypair = test_keypair();
+            put_signed_path_info(&bs, &pis, out_path, &sdk_drv_path, vec![lib_path], &keypair).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                keypair,
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let mut worker = crate::worker::Worker::new(1);
+            worker.want(&consumer_drv_path, &kp, true).unwrap();
+            let result = worker.run(&mut builder, &mut kp).await.unwrap();
+            assert!(result.failed.is_empty(), "{:?}", result.failed);
+            let sdk_outcome = result.all_outcomes.iter().find(|outcome| outcome.drv_path == sdk_drv_path).unwrap();
+            assert!(!sdk_outcome.cached, "missing sibling runtime ref must force full rebuild");
+            assert_eq!(calls.lock().unwrap().len(), 2, "sdk and consumer must both execute");
+        }
+
+        // Case C: sdk:out cached, transitive non-sibling runtime ref ext_dep missing -> cannot reuse
+        // sdk:out.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (ext_drv_path, ext_drv) = build_and_register("ext-runtime-dep", &[], &mut kp);
+            let ext_out = ext_drv.outputs["out"].path.clone().unwrap();
+            let (sdk_drv_path, sdk_drv) = build_and_register_multi("sdk-ext-ref", &["out", "dev"], &[], &mut kp);
+
+            let out_path = sdk_drv.outputs["out"].path.clone().unwrap();
+            let keypair = test_keypair();
+            put_signed_path_info(&bs, &pis, out_path, &sdk_drv_path, vec![ext_out.clone()], &keypair).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                keypair,
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let demanded = BTreeSet::from(["out".to_string()]);
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &sdk_drv_path,
+                        derivation: Arc::new(sdk_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(
+                matches!(prepared, PrepareResult::NeedsBuild { .. }),
+                "missing external runtime ref {ext_drv_path} must reject partial reuse"
+            );
+            assert_eq!(calls.lock().unwrap().len(), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn fail_closed_corrupt_or_untrusted_demanded_output_and_closure_ref() {
+        use crate::test_support::build_and_register_multi;
+
+        let rogue_secret = ed25519_dalek::SigningKey::from_bytes(&[77u8; 32]);
+        let rogue_key = nix_compat::narinfo::SigningKey::new("rogue-signer".to_owned(), rogue_secret);
+        let rogue_keypair = crate::signing::KeyPair {
+            signing_key: rogue_key,
+            verifying_key: nix_compat::narinfo::VerifyingKey::new(
+                "rogue-signer".to_owned(),
+                ed25519_dalek::SigningKey::from_bytes(&[77u8; 32]).verifying_key(),
+            ),
+        };
+
+        // (a) Demanded output signed by untrusted key -> rejects partial reuse.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, calls) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (sdk_drv_path, sdk_drv) = build_and_register_multi("untrusted-out", &["out", "dev"], &[], &mut kp);
+            let out_path = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, out_path, &sdk_drv_path, vec![], &rogue_keypair).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let demanded = BTreeSet::from(["out".to_string()]);
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &sdk_drv_path,
+                        derivation: Arc::new(sdk_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+            assert_eq!(calls.lock().unwrap().len(), 0);
+        }
+
+        // (b) Demanded out is missing its castore blob while PathInfo exists -> rejects partial reuse.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (sdk_drv_path, sdk_drv) = build_and_register_multi("corrupt-blob-out", &["out", "dev"], &[], &mut kp);
+            let out_path = sdk_drv.outputs["out"].path.clone().unwrap();
+            let missing_digest = blake3::hash(b"never-written-blob").into();
+            let mut info = PathInfo {
+                store_path: out_path,
+                node: Node::File {
+                    digest: missing_digest,
+                    size: 18,
+                    executable: false,
+                },
+                references: vec![],
+                nar_size: 18,
+                nar_sha256: [5u8; 32],
+                signatures: vec![],
+                deriver: Some(sdk_drv_path.clone()),
+                ca: None,
+            };
+            crate::signing::sign_pathinfo_with_store_dir(
+                &mut info,
+                &test_keypair().signing_key,
+                nix_compat::store_path::STORE_DIR,
+            );
+            pis.put(info).await.unwrap();
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let demanded = BTreeSet::from(["out".to_string()]);
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &sdk_drv_path,
+                        derivation: Arc::new(sdk_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+        }
+
+        // (c) Demanded out is trusted, sibling lib is signed by untrusted key -> rejects partial reuse.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (sdk_drv_path, sdk_drv) =
+                build_and_register_multi("untrusted-sibling", &["out", "lib", "dev"], &[], &mut kp);
+            let out_path = sdk_drv.outputs["out"].path.clone().unwrap();
+            let lib_path = sdk_drv.outputs["lib"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, lib_path.clone(), &sdk_drv_path, vec![], &rogue_keypair).await;
+            put_signed_path_info(&bs, &pis, out_path, &sdk_drv_path, vec![lib_path], &test_keypair()).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let demanded = BTreeSet::from(["out".to_string()]);
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &sdk_drv_path,
+                        derivation: Arc::new(sdk_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+        }
+
+        // (d) Demanded out is trusted, external runtime ref ext_dep is signed by untrusted key -> rejects
+        // partial reuse.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (ext_drv_path, ext_drv) = build_and_register("untrusted-ext", &[], &mut kp);
+            let ext_out = ext_drv.outputs["out"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, ext_out.clone(), &ext_drv_path, vec![], &rogue_keypair).await;
+
+            let (sdk_drv_path, sdk_drv) = build_and_register_multi("sdk-untrusted-ext", &["out", "dev"], &[], &mut kp);
+            let out_path = sdk_drv.outputs["out"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, out_path, &sdk_drv_path, vec![ext_out], &test_keypair()).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let demanded = BTreeSet::from(["out".to_string()]);
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &sdk_drv_path,
+                        derivation: Arc::new(sdk_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+        }
+    }
+
+    #[tokio::test]
+    async fn unsupported_lanes_preserve_all_output_fail_closed_semantics() {
+        use crate::test_support::build_and_register_multi;
+
+        let demanded_out = BTreeSet::from(["out".to_string()]);
+
+        // (a) CA derivation lane must NOT reuse partial out when dev is absent.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (ca_drv_path, ca_drv) = build_and_register_multi_ca("ca-multi", &["out", "dev"], &mut kp);
+            let out_path = StorePath::from_name_and_digest_fixed("ca-multi-out", [31u8; 20]).unwrap();
+            put_signed_path_info(&bs, &pis, out_path.clone(), &ca_drv_path, vec![], &test_keypair()).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            builder
+                .store
+                .insert_ca_mapping(&ca_drv_path.to_absolute_path(), "out", &out_path.to_absolute_path());
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &ca_drv_path,
+                        derivation: Arc::new(ca_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded_out),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+        }
+
+        // (b) CA-resolved IA lane must NOT use plain PathInfo partial reuse when dev is absent.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (ca_parent, ca_parent_drv) = build_and_register_ca("ca-parent-lane", &mut kp);
+            let parent_realized = StorePath::from_name_and_digest_fixed("ca-parent-realized", [32u8; 20]).unwrap();
+            let parent_pi =
+                put_signed_path_info(&bs, &pis, parent_realized.clone(), &ca_parent, vec![], &test_keypair()).await;
+            let parent_record = signed_record_for_outputs(
+                &ca_parent_drv,
+                &BTreeMap::from([("out".to_owned(), parent_pi)]),
+                nix_compat::store_path::STORE_DIR,
+                HermeticityMode::Practical,
+                &test_keypair(),
+            )
+            .unwrap();
+            use crunch_store::ActionResultStore as _;
+            let local_ar = crunch_store::LocalActionResultStore::new(&temp.path().join("state"));
+            local_ar.publish(&parent_record).await.unwrap();
+            kp.resolve_output(&ca_parent.to_absolute_path(), "out", parent_realized.clone()).unwrap();
+
+            let mut resolved_consumer = build_and_register_multi("ca-resolved-ia", &["out", "dev"], &[], &mut kp);
+            resolved_consumer.1.input_derivations.insert(ca_parent.clone(), BTreeSet::from(["out".to_string()]));
+            let consumer_out = resolved_consumer.1.outputs["out"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, consumer_out, &resolved_consumer.0, vec![], &test_keypair()).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                Some(temp.path().join("state")),
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &resolved_consumer.0,
+                        derivation: Arc::new(resolved_consumer.1),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded_out),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+        }
+
+        // (c) FOD lane must NOT reuse partial out when dev is absent.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let out_path = StorePath::from_name_and_digest_fixed("fod-multi-out", [33u8; 20]).unwrap();
+            let dev_path = StorePath::from_name_and_digest_fixed("fod-multi-dev", [34u8; 20]).unwrap();
+            let fod_hash = nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([1u8; 32]));
+            let fod_drv = Derivation {
+                arguments: vec![],
+                builder: "builtin:fetchurl".to_string(),
+                environment: BTreeMap::from([
+                    ("name".to_string(), "fod-multi".into()),
+                    ("outputs".to_string(), "out dev".into()),
+                    ("out".to_string(), out_path.to_absolute_path().into()),
+                    ("dev".to_string(), dev_path.to_absolute_path().into()),
+                ]),
+                input_derivations: BTreeMap::new(),
+                input_sources: BTreeSet::new(),
+                outputs: BTreeMap::from([
+                    ("out".to_string(), Output {
+                        path: Some(out_path.clone()),
+                        ca_hash: Some(fod_hash),
+                    }),
+                    ("dev".to_string(), Output {
+                        path: Some(dev_path),
+                        ca_hash: None,
+                    }),
+                ]),
+                system: "x86_64-linux".to_string(),
+            };
+            let hdm = fod_drv.hash_derivation_modulo(|_| [0u8; 32]);
+            let fod_drv_path = fod_drv.calculate_derivation_path("fod-multi").unwrap();
+            kp.insert(fod_drv_path.clone(), hdm, fod_drv.clone(), false, None);
+            put_signed_path_info(&bs, &pis, out_path, &fod_drv_path, vec![], &test_keypair()).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &fod_drv_path,
+                        derivation: Arc::new(fod_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded_out),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+        }
+
+        // (d) Bound-plan consumer lane must NOT reuse partial out when dev is absent.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let mut bound_drv = Derivation {
+                arguments: vec!["-c".into(), "echo __MANTLE_BOUND_ROOT__ > $out".into()],
+                builder: "/bin/sh".into(),
+                environment: BTreeMap::from([
+                    ("name".into(), "bound-consumer".into()),
+                    ("system".into(), "x86_64-linux".into()),
+                    ("builder".into(), "/bin/sh".into()),
+                    ("outputs".into(), "out dev".into()),
+                    ("out".into(), "".into()),
+                    ("dev".into(), "".into()),
+                ]),
+                input_derivations: BTreeMap::new(),
+                input_sources: BTreeSet::new(),
+                outputs: BTreeMap::from([
+                    ("out".into(), Output {
+                        path: None,
+                        ca_hash: None,
+                    }),
+                    ("dev".into(), Output {
+                        path: None,
+                        ca_hash: None,
+                    }),
+                ]),
+                system: "x86_64-linux".into(),
+            };
+            let hdm = bound_drv.hash_derivation_modulo(|_| [0u8; 32]);
+            bound_drv.calculate_output_paths("bound-consumer", &hdm).unwrap();
+            let bound_drv_path = bound_drv.calculate_derivation_path("bound-consumer").unwrap();
+            kp.insert(bound_drv_path.clone(), hdm, bound_drv.clone(), false, None);
+            let out_path = bound_drv.outputs["out"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, out_path, &bound_drv_path, vec![], &test_keypair()).await;
+            let bound_root = StorePath::from_name_and_digest_fixed("bound-root", [35u8; 20]).unwrap();
+            put_signed_path_info(&bs, &pis, bound_root.clone(), &bound_drv_path, vec![], &test_keypair()).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let bound_pair = vec![("__MANTLE_BOUND_ROOT__".to_string(), bound_root)];
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &bound_drv_path,
+                        derivation: Arc::new(bound_drv),
+                        is_root: true,
+                        bound_plan_outputs: &bound_pair,
+                        demanded_outputs: Some(&demanded_out),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared, PrepareResult::NeedsBuild { .. }));
+        }
+
+        // (e) Dynamic-plan producer and .drv output lanes must NOT reuse partial out when dev is absent.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (dyn_drv_path, dyn_drv) = build_and_register_multi("dyn-producer", &["out", "dev"], &[], &mut kp);
+            kp.get_by_drv_path_mut(&dyn_drv_path.to_absolute_path()).unwrap().dynamic_plan_outputs =
+                vec!["dev".to_string()];
+            let out_path = dyn_drv.outputs["out"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, out_path, &dyn_drv_path, vec![], &test_keypair()).await;
+
+            let (drv_out_path, drv_out_drv) =
+                build_and_register_multi("drv-output-producer.drv", &["out", "dev"], &[], &mut kp);
+            let drv_out_file = drv_out_drv.outputs["out"].path.clone().unwrap();
+            put_signed_path_info(&bs, &pis, drv_out_file, &drv_out_path, vec![], &test_keypair()).await;
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                None,
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let prepared_dyn = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &dyn_drv_path,
+                        derivation: Arc::new(dyn_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded_out),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared_dyn, PrepareResult::NeedsBuild { .. }));
+
+            let prepared_drv_out = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &drv_out_path,
+                        derivation: Arc::new(drv_out_drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded_out),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(prepared_drv_out, PrepareResult::NeedsBuild { .. }));
+        }
+
+        // (f) Signed ActionResultRecord lane still requires ALL outputs (does not admit partial
+        // ActionResultRecord).
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = test_pis();
+            let (mock, _) = MockBuildService::new(bs.clone());
+            let mut kp = DerivationRegistry::default();
+            let (drv_path, drv) = build_and_register_multi("ar-partial", &["out", "dev"], &[], &mut kp);
+            let out_path = drv.outputs["out"].path.clone().unwrap();
+            let out_pi = put_signed_path_info(&bs, &pis, out_path, &drv_path, vec![], &test_keypair()).await;
+
+            // Publish an action result record covering ONLY "out" (missing "dev") while dev PathInfo is absent.
+            let mut partial_drv = drv.clone();
+            partial_drv.outputs.retain(|name, _| name == "out");
+            let partial_record = signed_record_for_outputs_with_action_ref(
+                &partial_drv,
+                &BTreeMap::from([("out".to_owned(), out_pi)]),
+                crate::action_result::SignedRecordContext {
+                    store_dir: nix_compat::store_path::STORE_DIR,
+                    hermeticity_mode: HermeticityMode::Practical,
+                    keypair: &test_keypair(),
+                    action_ref: action_ref_for_derivation(&drv, nix_compat::store_path::STORE_DIR),
+                },
+            )
+            .unwrap();
+            use crunch_store::ActionResultStore as _;
+            let local_ar = crunch_store::LocalActionResultStore::new(&temp.path().join("state"));
+            local_ar.publish(&partial_record).await.unwrap();
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                mock,
+                Arc::new(pis),
+                temp.path().join("store"),
+                Some(temp.path().join("state")),
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let prepared = builder
+                .prepare_build_with_demand(
+                    PrepareBuildInput {
+                        drv_path: &drv_path,
+                        derivation: Arc::new(drv),
+                        is_root: true,
+                        bound_plan_outputs: &[],
+                        demanded_outputs: Some(&demanded_out),
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            // Shared action result must NOT admit the partial record (reports miss); plain PathInfo may still
+            // hit IA out.
+            let reports = builder.take_action_result_reports();
+            assert_eq!(reports[0].disposition, ACTION_RESULT_DISPOSITION_MISS);
+            assert!(matches!(prepared, PrepareResult::Done(_)));
+        }
+    }
+
+    #[test]
+    fn preflight_eligibility_allows_ia_and_fod_ancestors_but_rejects_ca_dynamic_bound_and_mutable() {
+        let mut kp = DerivationRegistry::default();
+
+        // Leaf IA root -> ineligible (leave leaves on eager path).
+        let (leaf_ia, _) = build_and_register("preflight-leaf-ia", &[], &mut kp);
+        assert!(!is_preflight_eligible_root(&leaf_ia, &kp));
+
+        // FOD ancestor (path.is_some() + ca_hash.is_some()).
+        let fod_out = StorePath::from_name_and_digest_fixed("fod-ancestor-out", [41u8; 20]).unwrap();
+        let fod_hash = nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([7u8; 32]));
+        let fod_drv = Derivation {
+            arguments: vec![],
+            builder: "builtin:fetchurl".to_string(),
+            environment: BTreeMap::from([
+                ("name".to_string(), "fod-ancestor".into()),
+                ("out".to_string(), fod_out.to_absolute_path().into()),
+            ]),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_string(), nix_compat::derivation::Output {
+                path: Some(fod_out),
+                ca_hash: Some(fod_hash),
+            })]),
+            system: "x86_64-linux".to_string(),
+        };
+        let fod_hdm = fod_drv.hash_derivation_modulo(|_| [0u8; 32]);
+        let fod_path = fod_drv.calculate_derivation_path("fod-ancestor").unwrap();
+        kp.insert(fod_path.clone(), fod_hdm, fod_drv, false, None);
+        assert!(!is_preflight_eligible_root(&fod_path, &kp));
+
+        // FOD root with non-empty input_derivations -> ineligible on root.
+        let (fod_dep, _) = build_and_register("fod-dep", &[], &mut kp);
+        let fod_root_out = StorePath::from_name_and_digest_fixed("fod-root-out", [42u8; 20]).unwrap();
+        let fod_root_drv = Derivation {
+            arguments: vec![],
+            builder: "builtin:fetchurl".to_string(),
+            environment: BTreeMap::from([
+                ("name".to_string(), "fod-root".into()),
+                ("out".to_string(), fod_root_out.to_absolute_path().into()),
+            ]),
+            input_derivations: BTreeMap::from([(fod_dep, BTreeSet::from(["out".to_string()]))]),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_string(), nix_compat::derivation::Output {
+                path: Some(fod_root_out),
+                ca_hash: Some(nix_compat::nixhash::CAHash::Flat(nix_compat::nixhash::NixHash::Sha256([8u8; 32]))),
+            })]),
+            system: "x86_64-linux".to_string(),
+        };
+        let fod_root_hdm =
+            fod_root_drv.hash_derivation_modulo(|p| kp.get_hdm_by_drv_path(&p.to_absolute_path()).unwrap());
+        let fod_root_path = fod_root_drv.calculate_derivation_path("fod-root").unwrap();
+        kp.insert(fod_root_path.clone(), fod_root_hdm, fod_root_drv, false, None);
+        assert!(!is_preflight_eligible_root(&fod_root_path, &kp));
+
+        // Ordinary IA root depending on FOD ancestor + IA dep -> eligible!
+        let (ia_mid, _) = build_and_register("ia-mid", &[(fod_path, "out")], &mut kp);
+        let (ia_root, _) = build_and_register("ia-root", &[(ia_mid, "out")], &mut kp);
+        assert!(is_preflight_eligible_root(&ia_root, &kp));
+
+        // Missing transitive dep -> ineligible.
+        let missing_dep = StorePath::from_name_and_digest_fixed("missing-dep.drv", [43u8; 20]).unwrap();
+        kp.insert(missing_dep.clone(), [43u8; 32], leaf_ia_dummy_drv(), false, None);
+        let (missing_parent_root, _) = build_and_register("has-missing-dep", &[(missing_dep.clone(), "out")], &mut kp);
+        let mut live_without_dep = BTreeSet::from([missing_parent_root.to_absolute_path()]);
+        live_without_dep.insert(ia_root.to_absolute_path());
+        // Check directly with a fresh registry lacking `missing_dep`.
+        let mut partial_kp = DerivationRegistry::default();
+        let entry = kp.get_by_drv_path(&missing_parent_root.to_absolute_path()).unwrap();
+        partial_kp.insert(
+            missing_parent_root.clone(),
+            entry.hash_derivation_modulo,
+            entry.derivation.clone(),
+            false,
+            None,
+        );
+        assert!(!is_preflight_eligible_root(&missing_parent_root, &partial_kp));
+
+        // CA root and IA root with CA transitive dep -> ineligible.
+        let (ca_leaf, _) = build_and_register_ca("ca-leaf", &mut kp);
+        let ca_consumer = register_ca_dependent("ca-consumer", &ca_leaf, &mut kp);
+        assert!(!is_preflight_eligible_root(&ca_leaf, &kp));
+        assert!(!is_preflight_eligible_root(&ca_consumer, &kp));
+
+        // Dynamic plan producer (direct & transitive) -> ineligible.
+        let (dyn_prod, _) = build_and_register("dyn-prod", &[(leaf_ia.clone(), "out")], &mut kp);
+        kp.get_by_drv_path_mut(&dyn_prod.to_absolute_path()).unwrap().dynamic_plan_outputs = vec!["out".to_string()];
+        let (dyn_consumer, _) = build_and_register("dyn-consumer", &[(dyn_prod.clone(), "out")], &mut kp);
+        assert!(!is_preflight_eligible_root(&dyn_prod, &kp));
+        assert!(!is_preflight_eligible_root(&dyn_consumer, &kp));
+
+        // .drv output producer -> ineligible.
+        let (drv_prod, _) = build_and_register("drv-prod.drv", &[(leaf_ia.clone(), "out")], &mut kp);
+        let (drv_prod_consumer, _) = build_and_register("drv-prod-consumer", &[(drv_prod.clone(), "out")], &mut kp);
+        assert!(!is_preflight_eligible_root(&drv_prod, &kp));
+        assert!(!is_preflight_eligible_root(&drv_prod_consumer, &kp));
+
+        // Bound-plan consumer -> ineligible.
+        let mut bound_drv = leaf_ia_dummy_drv();
+        bound_drv.outputs.get_mut("out").unwrap().path = None;
+        bound_drv.environment.insert("out".to_string(), "".into());
+        bound_drv.input_derivations.insert(leaf_ia.clone(), BTreeSet::from(["out".to_string()]));
+        bound_drv
+            .environment
+            .insert(crate::plan_output_binding::PLAN_OUTPUT_BINDINGS_ENV_KEY.to_string(), "[]".into());
+        let bound_hdm = bound_drv.hash_derivation_modulo(|_| [1u8; 32]);
+        bound_drv.calculate_output_paths("bound-direct", &bound_hdm).unwrap();
+        let bound_path = bound_drv.calculate_derivation_path("bound-direct").unwrap();
+        kp.insert(bound_path.clone(), bound_hdm, bound_drv, false, None);
+        assert!(!is_preflight_eligible_root(&bound_path, &kp));
+
+        // Mutable workspace (direct & transitive) -> ineligible.
+        let mutable_policy = serde_json::to_string(&crate::WorkspacePolicy {
+            mode: crate::WorkspaceMode::MutableSession,
+            workspace_id: Some("sess-1".to_string()),
+            ..crate::WorkspacePolicy::default()
+        })
+        .unwrap();
+        let (mut_dep, _) = build_and_register_with_workspace("mutable-dep", &[], &mut kp, Some(mutable_policy));
+        let (mut_consumer, _) = build_and_register("mutable-consumer", &[(mut_dep, "out")], &mut kp);
+        assert!(!is_preflight_eligible_root(&mut_consumer, &kp));
+    }
+
+    fn leaf_ia_dummy_drv() -> Derivation {
+        let mut drv = Derivation {
+            arguments: vec![],
+            builder: "/bin/sh".to_string(),
+            environment: BTreeMap::from([("name".to_string(), "dummy".into()), ("out".to_string(), "".into())]),
+            input_derivations: BTreeMap::new(),
+            input_sources: BTreeSet::new(),
+            outputs: BTreeMap::from([("out".to_string(), nix_compat::derivation::Output {
+                path: None,
+                ca_hash: None,
+            })]),
+            system: "x86_64-linux".to_string(),
+        };
+        let hdm = drv.hash_derivation_modulo(|_| [0u8; 32]);
+        drv.calculate_output_paths("dummy", &hdm).unwrap();
+        drv
+    }
+
+    #[tokio::test]
+    async fn preflight_cached_root_verifies_runtime_closure_before_export_and_handles_batch_sig_rejection() {
+        use crunch_store::ActionResultStore as _;
+
+        // (a) Shared ActionResultRecord whose runtime closure member is missing must NOT export root
+        // and must downgrade ActionResultRuntimeReport to miss.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let state_dir = temp.path().join("state");
+            let output_dir = temp.path().join("store");
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (dep, _) = build_and_register("ar-closure-dep", &[], &mut kp);
+            let (root, root_drv) = build_and_register("ar-closure-root", &[(dep, "out")], &mut kp);
+            let root_out = root_drv.outputs["out"].path.clone().unwrap();
+            let missing_runtime_ref = make_source_path("missing-runtime-lib", 77);
+            let root_pi = put_signed_path_info(
+                &bs,
+                pis.as_ref(),
+                root_out.clone(),
+                &root,
+                vec![missing_runtime_ref],
+                &test_keypair(),
+            )
+            .await;
+
+            let record = signed_record_for_outputs(
+                &root_drv,
+                &BTreeMap::from([("out".to_owned(), root_pi)]),
+                nix_compat::store_path::STORE_DIR,
+                HermeticityMode::Practical,
+                &test_keypair(),
+            )
+            .unwrap();
+            crunch_store::LocalActionResultStore::new(&state_dir).publish(&record).await.unwrap();
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs),
+                Arc::new(ds),
+                PanicSandboxService,
+                pis,
+                output_dir.clone(),
+                Some(state_dir),
+                None,
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let preflight = builder
+                .preflight_cached_root(
+                    PreflightRootInput {
+                        drv_path: &root,
+                        derivation: Arc::new(root_drv),
+                        demanded_outputs: None,
+                        cancellation: None,
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(preflight.is_none(), "incomplete runtime closure must miss preflight");
+            let exported_root_path = PathBuf::from(root_out.to_absolute_path_with_prefix(output_dir.to_str().unwrap()));
+            assert!(!exported_root_path.exists(), "root must not be exported before runtime closure verification");
+            let reports = builder.take_action_result_reports();
+            assert_eq!(reports[0].disposition, ACTION_RESULT_DISPOSITION_MISS);
+            assert!(reports[0].selected_result_ref.is_none());
+            assert!(reports[0].diagnostics.iter().any(|d| d == "preflight-runtime-closure-incomplete"));
+        }
+
+        // (b) Multi-output batch substitution where one output has a valid signature and a sibling
+        // in the same batch has a bad signature must drain all substitution reports without panicking
+        // on fallback re-check.
+        {
+            let temp = tempfile::tempdir().unwrap();
+            let bs = MemoryBlobService::default();
+            let ds = tmp_ds();
+            let local_pis = Arc::new(test_pis());
+            let remote_pis = Arc::new(test_pis());
+            let mut kp = DerivationRegistry::default();
+            let (dep, _) = build_and_register("batch-sig-dep", &[], &mut kp);
+            let (root, root_drv) = crate::test_support::build_and_register_multi(
+                "batch-sig-root",
+                &["aaa", "zzz"],
+                &[(dep, "out")],
+                &mut kp,
+            );
+
+            let aaa_path = root_drv.outputs["aaa"].path.clone().unwrap();
+            let zzz_path = root_drv.outputs["zzz"].path.clone().unwrap();
+            put_signed_path_info(&bs, remote_pis.as_ref(), aaa_path.clone(), &root, vec![], &test_keypair()).await;
+            let mut bad_zzz =
+                put_signed_path_info(&bs, remote_pis.as_ref(), zzz_path.clone(), &root, vec![], &test_keypair()).await;
+            corrupt_signature_bytes(&mut bad_zzz);
+            remote_pis.put(bad_zzz).await.unwrap();
+
+            let mut builder = Builder::with_state_dir(
+                Arc::new(bs.clone()),
+                Arc::new(ds),
+                PanicSandboxService,
+                local_pis,
+                temp.path().join("store"),
+                None,
+                Some(remote_pis.clone()),
+                nix_compat::store_path::STORE_DIR,
+                test_keypair(),
+                test_trusted_keys(),
+                false,
+                false,
+            );
+            let first = builder
+                .preflight_cached_root(
+                    PreflightRootInput {
+                        drv_path: &root,
+                        derivation: Arc::new(root_drv.clone()),
+                        demanded_outputs: None,
+                        cancellation: None,
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(first.is_none());
+
+            // Now repair zzz signature in remote and re-run check_cache: must not trip
+            // StoreHandle's `debug_assert!(previous.is_none())` for aaa or zzz!
+            put_signed_path_info(&bs, remote_pis.as_ref(), zzz_path, &root, vec![], &test_keypair()).await;
+            let second = builder
+                .preflight_cached_root(
+                    PreflightRootInput {
+                        drv_path: &root,
+                        derivation: Arc::new(root_drv),
+                        demanded_outputs: None,
+                        cancellation: None,
+                    },
+                    &mut kp,
+                )
+                .await
+                .unwrap();
+            assert!(second.is_some());
         }
     }
 }

@@ -3056,4 +3056,163 @@ mod tests {
         assert_eq!(SystemSelector.select(&goal, &endpoints), Ok(1));
         assert_eq!(SystemSelector.select(&goal, &[String::from("worker-a")]), Err(PoolSelectionError::NoFit));
     }
+
+    #[test]
+    fn remote_first_and_local_realizer_preserve_configured_local_execution_policy() {
+        use snix_build::buildservice::BuildService as _;
+        use snix_build::buildservice::SandboxFailureClass;
+        use snix_build::buildservice::classified_io_error;
+
+        struct TightBudgetLocalService {
+            policy: crate::LocalExecutionPolicy,
+        }
+
+        #[async_trait::async_trait]
+        impl snix_build::buildservice::BuildService for TightBudgetLocalService {
+            async fn do_build(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                let snix_policy = self.policy.to_snix_execution_policy().unwrap();
+                match snix_policy.wall_deadline {
+                    snix_build::buildservice::SandboxWallDeadline::Bounded { wall_deadline_ms } => {
+                        Err(classified_io_error(
+                            std::io::ErrorKind::TimedOut,
+                            SandboxFailureClass::WallDeadlineExceeded,
+                            format!("bounded fallback enforced {wall_deadline_ms} ms"),
+                        ))
+                    }
+                    snix_build::buildservice::SandboxWallDeadline::Unlimited => Ok(build_result("unlimited")),
+                }
+            }
+        }
+
+        struct FailingRemoteRealizer;
+
+        #[async_trait::async_trait]
+        impl DerivationRealizer for FailingRemoteRealizer {
+            fn profile(&self) -> RealizerProfileFacts {
+                RealizerProfileFacts {
+                    name: "failing-remote".to_string(),
+                    version: 1,
+                    capabilities: vec!["remote".to_string()],
+                    parameters: BTreeMap::new(),
+                }
+            }
+
+            async fn realize(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                Err(std::io::Error::other("remote unreachable"))
+            }
+        }
+
+        let mut policy = crate::LocalExecutionPolicy::standard();
+        policy.wall_deadline = crate::LocalWallDeadlinePolicy::Bounded { wall_deadline_secs: 5 };
+        let local = TightBudgetLocalService { policy: policy.clone() };
+        let realizer = LocalBuildServiceRealizer::new(local, FailingRemoteRealizer.profile());
+        let remote_first = RemoteFirstBuildService::new(
+            FailingRemoteRealizer,
+            TightBudgetLocalService { policy },
+            RemoteBuildFallbackPolicy::OnRemoteFailure,
+        );
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let fallback_err = rt.block_on(remote_first.do_build(concrete_build_request())).unwrap_err();
+        assert_eq!(fallback_err.kind(), std::io::ErrorKind::TimedOut);
+        assert!(fallback_err.to_string().contains("5000 ms"));
+
+        let realizer_err = rt.block_on(realizer.realize(concrete_build_request())).unwrap_err();
+        assert_eq!(realizer_err.kind(), std::io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn remote_first_and_local_realizer_enforce_real_bubblewrap_tight_budget() {
+        use snix_build::buildservice::BubblewrapBuildService;
+        use snix_build::buildservice::BuildConstraints;
+        use snix_build::buildservice::BuildRequest;
+        use snix_build::buildservice::BuildService as _;
+        use snix_build::buildservice::ClassifiedBuildServiceError;
+        use snix_build::buildservice::SandboxFailureClass;
+        use snix_castore::blobservice::MemoryBlobService;
+
+        if !crate::test_support::real_bwrap_and_shell_available() {
+            eprintln!("skipping: real bwrap and static sandbox shell unavailable");
+            return;
+        }
+
+        struct FailingRemoteRealizer;
+
+        #[async_trait::async_trait]
+        impl DerivationRealizer for FailingRemoteRealizer {
+            fn profile(&self) -> RealizerProfileFacts {
+                RealizerProfileFacts {
+                    name: "failing-remote".to_string(),
+                    version: 1,
+                    capabilities: vec!["remote".to_string()],
+                    parameters: BTreeMap::new(),
+                }
+            }
+
+            async fn realize(
+                &self,
+                _request: snix_build::buildservice::BuildRequest,
+            ) -> std::io::Result<snix_build::buildservice::BuildResult> {
+                Err(std::io::Error::other("remote unreachable"))
+            }
+        }
+
+        let workdir = tempfile::tempdir().unwrap();
+        let mut policy = crate::LocalExecutionPolicy::standard();
+        policy.wall_deadline = crate::LocalWallDeadlinePolicy::Bounded { wall_deadline_secs: 1 };
+        let snix_policy = policy.to_snix_execution_policy().unwrap();
+        let ds = crate::test_support::tmp_ds();
+        let local_bwrap =
+            BubblewrapBuildService::new(workdir.path().to_path_buf(), MemoryBlobService::default(), ds.clone())
+                .with_execution_policy(snix_policy.clone())
+                .unwrap();
+        let realizer_bwrap =
+            BubblewrapBuildService::new(workdir.path().to_path_buf(), MemoryBlobService::default(), ds)
+                .with_execution_policy(snix_policy)
+                .unwrap();
+
+        let realizer = LocalBuildServiceRealizer::new(realizer_bwrap, FailingRemoteRealizer.profile());
+        let remote_first = RemoteFirstBuildService::new(
+            FailingRemoteRealizer,
+            local_bwrap,
+            RemoteBuildFallbackPolicy::OnRemoteFailure,
+        );
+
+        let make_req = || BuildRequest {
+            working_dir: std::path::PathBuf::from("build"),
+            scratch_paths: vec![std::path::PathBuf::from("build"), std::path::PathBuf::from("nix/store")],
+            inputs_dir: std::path::PathBuf::from("nix/store"),
+            outputs: vec![std::path::PathBuf::from("nix/store/fallback-out")],
+            constraints: std::iter::once(BuildConstraints::ProvideBinSh).collect(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "/bin/busybox sleep 5; /bin/busybox echo late > /nix/store/fallback-out".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let fallback_err = rt.block_on(remote_first.do_build(make_req())).unwrap_err();
+        assert_eq!(fallback_err.kind(), std::io::ErrorKind::TimedOut);
+        let fallback_classified = fallback_err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<ClassifiedBuildServiceError>())
+            .expect("RemoteFirst fallback timeout must carry ClassifiedBuildServiceError");
+        assert_eq!(fallback_classified.class, SandboxFailureClass::WallDeadlineExceeded);
+
+        let realizer_err = rt.block_on(realizer.realize(make_req())).unwrap_err();
+        assert_eq!(realizer_err.kind(), std::io::ErrorKind::TimedOut);
+        let realizer_classified = realizer_err
+            .get_ref()
+            .and_then(|e| e.downcast_ref::<ClassifiedBuildServiceError>())
+            .expect("LocalBuildServiceRealizer timeout must carry ClassifiedBuildServiceError");
+        assert_eq!(realizer_classified.class, SandboxFailureClass::WallDeadlineExceeded);
+    }
 }

@@ -48,6 +48,6 @@ impl BuildService for IrpcBuildService {
             .rpc(DoBuildRequest(request))
             .await
             .map_err(|e| std::io::Error::other(e.to_string()))?
-            .map_err(|e| std::io::Error::other(e))
+            .map_err(std::io::Error::other)
     }
 }

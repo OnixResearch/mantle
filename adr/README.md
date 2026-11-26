@@ -168,3 +168,4 @@ compatibility surface, crate name, or historical decision.
 | [0168](0168-admit-a-trellis-verus-producer-job-in-the-verification-bridge.md) | Admit a Trellis-owned Verus producer job in the verification bridge | Accepted |
 | [0169](0169-build-preserved-roots-from-cache-hydrated-inputs.md) | Build preserved roots from cache-hydrated inputs | Accepted |
 | [0170](0170-wake-castore-fuse-channels-before-joining.md) | Wake castore FUSE channels before joining the inputs daemon | Accepted |
+| [0171](0171-specify-scheduler-rebuilder-contract.md) | Specify and enforce the scheduler–rebuilder contract | Accepted |

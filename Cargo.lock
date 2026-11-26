@@ -1766,6 +1766,7 @@ dependencies = [
  "bzip2-rs",
  "crunch-action-result-core",
  "crunch-attestation",
+ "crunch-eval",
  "crunch-glue",
  "crunch-remote-core",
  "crunch-rustc-wrapper",
