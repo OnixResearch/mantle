@@ -220,13 +220,20 @@ fn expected_attempt_count(selected: &[String], invocation: &Invocation) -> Resul
 }
 fn check_attempt_completeness(result_document: &Report, expected: usize) -> Result<()> {
     let attempt_count = result_document.attempts.len();
-    let is_complete = attempt_count == expected;
-    let is_cancelled = result_document.outcome == Outcome::Cancelled;
-    let is_failure_absent = result_document.collection_failure.is_none();
-    let is_partial_allowed = is_cancelled || is_failure_absent;
-    if attempt_count > expected || (!is_complete && !is_partial_allowed) {
+    if attempt_count > expected {
         return Err("test-result-incomplete".into());
     }
+    let is_complete = attempt_count == expected;
+    let is_cancelled = result_document.outcome == Outcome::Cancelled;
+    let is_collection_failed = result_document.collection_failure.is_some();
+    let is_empty_collection_failure = is_collection_failed && attempt_count == 0;
+    let is_partial_allowed = is_cancelled || is_empty_collection_failure;
+    let is_attempt_count_valid = is_complete || is_partial_allowed;
+    if !is_attempt_count_valid {
+        return Err("test-result-incomplete".into());
+    }
+    debug_assert!(attempt_count <= expected);
+    debug_assert!(is_attempt_count_valid);
     Ok(())
 }
 fn check_attempt_order(result_document: &Report, selected: &[String]) -> Result<()> {

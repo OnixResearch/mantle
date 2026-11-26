@@ -1,16 +1,14 @@
 #![feature(register_tool)]
 #![register_tool(tigerstyle)]
-#[path = "../src/elf_dynamic_fixup_core.rs"]
-mod elf_dynamic_fixup_core;
 
 use std::fs;
 use std::process::Command;
 
-use elf_dynamic_fixup_core::DependencyRewrite;
-use elf_dynamic_fixup_core::EntryKind;
-use elf_dynamic_fixup_core::Refusal;
-use elf_dynamic_fixup_core::apply_plan;
-use elf_dynamic_fixup_core::plan_dynamic_relocation;
+use mantle::elf_dynamic_fixup_core::DependencyRewrite;
+use mantle::elf_dynamic_fixup_core::EntryKind;
+use mantle::elf_dynamic_fixup_core::Refusal;
+use mantle::elf_dynamic_fixup_core::apply_plan;
+use mantle::elf_dynamic_fixup_core::plan_dynamic_relocation;
 use snix_castore::refscan::ReferenceScanner;
 
 const HASH: &str = "0123456789abcdfghijklmnpqrsvwxyz";

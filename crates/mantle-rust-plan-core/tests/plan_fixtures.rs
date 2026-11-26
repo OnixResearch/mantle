@@ -931,3 +931,294 @@ fn typed_receipt_preimage_hashes_exact_field_order_without_new_domain() {
     };
     assert_ne!(hash_legacy_receipt_preimage(&differing).unwrap(), expected);
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+struct SampleReplayEvidence {
+    schema_version: u32,
+    unit_id: String,
+    package_id: String,
+    blocker_class: String,
+    rustc_args_digest_blake3: String,
+    environment_digest_blake3: String,
+    toolchain_policy_digest_blake3: String,
+    artifact_identity_digest_blake3: String,
+    declared_outputs_digest_blake3: String,
+    dependency_artifacts_digest_blake3: String,
+    host_artifacts_digest_blake3: String,
+    output_artifacts_digest_blake3: String,
+    consumed_artifact_roles_digest_blake3: String,
+    declared_output_count: u32,
+    dependency_artifact_count: u32,
+    host_artifact_count: u32,
+    output_artifact_count: u32,
+    consumed_artifact_role_count: u32,
+}
+
+fn replay_facts(evidence: &SampleReplayEvidence) -> mantle_rust_plan_core::ReplayEvidenceFacts<'_> {
+    mantle_rust_plan_core::ReplayEvidenceFacts {
+        schema_version: evidence.schema_version,
+        unit_id: &evidence.unit_id,
+        package_id: &evidence.package_id,
+        blocker_class: &evidence.blocker_class,
+        rustc_args_digest_blake3: &evidence.rustc_args_digest_blake3,
+        environment_digest_blake3: &evidence.environment_digest_blake3,
+        toolchain_policy_digest_blake3: &evidence.toolchain_policy_digest_blake3,
+        artifact_identity_digest_blake3: &evidence.artifact_identity_digest_blake3,
+        declared_outputs_digest_blake3: &evidence.declared_outputs_digest_blake3,
+        dependency_artifacts_digest_blake3: &evidence.dependency_artifacts_digest_blake3,
+        host_artifacts_digest_blake3: &evidence.host_artifacts_digest_blake3,
+        output_artifacts_digest_blake3: &evidence.output_artifacts_digest_blake3,
+        consumed_artifact_roles_digest_blake3: &evidence.consumed_artifact_roles_digest_blake3,
+        declared_output_count: evidence.declared_output_count,
+        dependency_artifact_count: evidence.dependency_artifact_count,
+        host_artifact_count: evidence.host_artifact_count,
+        output_artifact_count: evidence.output_artifact_count,
+        consumed_artifact_role_count: evidence.consumed_artifact_role_count,
+    }
+}
+
+fn valid_sample_replay_evidence() -> SampleReplayEvidence {
+    let digest = "a".repeat(64);
+    SampleReplayEvidence {
+        schema_version: mantle_rust_plan_core::RUST_UNIT_REPLAY_EVIDENCE_SCHEMA_VERSION,
+        unit_id: String::from("unit:app:lib"),
+        package_id: String::from("path+file://app#app@0.1.0"),
+        blocker_class: String::from("none"),
+        rustc_args_digest_blake3: digest.clone(),
+        environment_digest_blake3: digest.clone(),
+        toolchain_policy_digest_blake3: digest.clone(),
+        artifact_identity_digest_blake3: digest.clone(),
+        declared_outputs_digest_blake3: digest.clone(),
+        dependency_artifacts_digest_blake3: digest.clone(),
+        host_artifacts_digest_blake3: digest.clone(),
+        output_artifacts_digest_blake3: digest.clone(),
+        consumed_artifact_roles_digest_blake3: digest,
+        declared_output_count: 1,
+        dependency_artifact_count: 2,
+        host_artifact_count: 0,
+        output_artifact_count: 1,
+        consumed_artifact_role_count: 2,
+    }
+}
+
+#[test]
+fn role_sensitive_artifact_graph_validation_covers_positive_and_negative_fixtures() {
+    use mantle_rust_plan_core::RoleSensitiveArtifactGraphRequest;
+    use mantle_rust_plan_core::RoleValidationDependency;
+    use mantle_rust_plan_core::RoleValidationHostArtifact;
+    use mantle_rust_plan_core::RoleValidationUnit;
+    use mantle_rust_plan_core::validate_role_sensitive_artifact_graph;
+
+    let digest_a = format!("b3:{}", "a".repeat(64));
+    let digest_a_upper = format!("blake3:{}", "A".repeat(64));
+    let digest_b = "b".repeat(64);
+    let host_triple = "x86_64-unknown-linux-gnu";
+    let producer_args = vec![String::from("metadata=meta1234")];
+    let empty_args: Vec<String> = Vec::new();
+
+    let host_dep = RoleValidationUnit {
+        unit_id: "u:host-dep",
+        package_id: "pkg:host-dep",
+        target_name: "host_dep",
+        target_kind: "lib",
+        execution_kind: "host-dependency",
+        selected_triple: host_triple,
+        rustc_metadata_hash: "meta1234",
+        args: &producer_args,
+        toolchain_policy_digest: Some(&digest_a),
+        dependency_artifacts: Vec::new(),
+        consumed_host_artifacts: Vec::new(),
+    };
+    let host_unit = RoleValidationUnit {
+        unit_id: "u:host",
+        package_id: "pkg:host",
+        target_name: "build",
+        target_kind: "custom-build",
+        execution_kind: "host",
+        selected_triple: host_triple,
+        rustc_metadata_hash: "meta1234",
+        args: &producer_args,
+        toolchain_policy_digest: Some(&digest_a_upper),
+        dependency_artifacts: vec![RoleValidationDependency {
+            name: "host_dep",
+            package_id: "pkg:host-dep",
+            producer_unit_id: Some("u:host-dep"),
+        }],
+        consumed_host_artifacts: Vec::new(),
+    };
+    let target_unit = RoleValidationUnit {
+        unit_id: "u:target",
+        package_id: "pkg:target",
+        target_name: "app",
+        target_kind: "bin",
+        execution_kind: "target",
+        selected_triple: "aarch64-unknown-linux-gnu",
+        rustc_metadata_hash: "meta9999",
+        args: &empty_args,
+        toolchain_policy_digest: None,
+        dependency_artifacts: Vec::new(),
+        consumed_host_artifacts: vec![RoleValidationHostArtifact {
+            package_id: "pkg:host",
+            target_name: "build",
+            target_kind: "custom-build",
+            producer_unit_id: Some("u:host"),
+        }],
+    };
+    let valid_units = [host_dep.clone(), host_unit.clone(), target_unit];
+    assert_eq!(
+        validate_role_sensitive_artifact_graph(&RoleSensitiveArtifactGraphRequest {
+            host_triple,
+            units: &valid_units,
+        }),
+        None
+    );
+
+    // 1. Host unit with non-host triple
+    let mut bad_host = host_unit.clone();
+    bad_host.selected_triple = "aarch64-unknown-linux-gnu";
+    let blocker = validate_role_sensitive_artifact_graph(&RoleSensitiveArtifactGraphRequest {
+        host_triple,
+        units: &[bad_host],
+    })
+    .unwrap();
+    assert_eq!(blocker.code, "artifact-identity-mismatch");
+    assert!(blocker.message.contains("expected role host"));
+
+    // 2. Host consumer bound to target dependency
+    let mut target_producer = host_dep.clone();
+    target_producer.execution_kind = "target";
+    let blocker = validate_role_sensitive_artifact_graph(&RoleSensitiveArtifactGraphRequest {
+        host_triple,
+        units: &[target_producer, host_unit.clone()],
+    })
+    .unwrap();
+    assert!(blocker.message.contains("expected role host-dependency"));
+    assert!(blocker.message.contains("got role target"));
+
+    // 3. Dependency source package mismatch
+    let mut wrong_pkg_consumer = host_unit.clone();
+    wrong_pkg_consumer.dependency_artifacts[0].package_id = "pkg:other";
+    let blocker = validate_role_sensitive_artifact_graph(&RoleSensitiveArtifactGraphRequest {
+        host_triple,
+        units: &[host_dep.clone(), wrong_pkg_consumer],
+    })
+    .unwrap();
+    assert!(blocker.message.contains("expected source package"));
+
+    // 4. Producer metadata hash mismatch
+    let mut wrong_meta_producer = host_dep.clone();
+    wrong_meta_producer.rustc_metadata_hash = "deadbeef";
+    let blocker = validate_role_sensitive_artifact_graph(&RoleSensitiveArtifactGraphRequest {
+        host_triple,
+        units: &[wrong_meta_producer, host_unit.clone()],
+    })
+    .unwrap();
+    assert!(blocker.message.contains("expected metadata hash"));
+    assert!(blocker.message.contains("got metadata hash"));
+
+    // 5. Toolchain policy digest mismatch
+    let mut mismatch_consumer = host_unit;
+    mismatch_consumer.toolchain_policy_digest = Some(&digest_b);
+    let blocker = validate_role_sensitive_artifact_graph(&RoleSensitiveArtifactGraphRequest {
+        host_triple,
+        units: &[host_dep, mismatch_consumer],
+    })
+    .unwrap();
+    assert!(blocker.message.contains("expected toolchain-policy digest"));
+
+    // 6. Unknown execution kind
+    let mut unknown_kind = valid_units[0].clone();
+    unknown_kind.execution_kind = "mystery";
+    let blocker = validate_role_sensitive_artifact_graph(&RoleSensitiveArtifactGraphRequest {
+        host_triple,
+        units: &[unknown_kind],
+    })
+    .unwrap();
+    assert!(blocker.message.contains("known-execution-kind"));
+}
+
+#[test]
+fn diagnostic_redaction_bounds_lines_strips_nul_and_redacts_temp_paths() {
+    use mantle_rust_plan_core::REDACTED_DIAGNOSTIC_MAX_LINES;
+    use mantle_rust_plan_core::REDACTED_DIAGNOSTIC_TEMP_PATH;
+    use mantle_rust_plan_core::redact_temp_paths;
+    use mantle_rust_plan_core::redacted_diagnostic;
+
+    assert_eq!(redacted_diagnostic(b""), "rustc exited with a nonzero status");
+    assert_eq!(redacted_diagnostic(b"\n"), "rustc exited with a nonzero status");
+    assert_eq!(redacted_diagnostic(b"error at /workspace/src/lib.rs:3:1\n"), "error at /workspace/src/lib.rs:3:1");
+
+    let max_lines = usize::try_from(REDACTED_DIAGNOSTIC_MAX_LINES).unwrap();
+    let many_lines = (0..=max_lines)
+        .map(|i| format!("err-{i}: `/tmp/work-{i}/out.rs` \"/var/tmp/sub-{i}/x.rs\"\0"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let redacted = redacted_diagnostic(many_lines.as_bytes());
+    assert_eq!(redacted.lines().count(), max_lines);
+    assert!(!redacted.contains('\0'));
+    assert!(!redacted.contains("/tmp/"));
+    assert!(!redacted.contains("/var/tmp/"));
+    assert!(redacted.contains(REDACTED_DIAGNOSTIC_TEMP_PATH));
+
+    assert_eq!(
+        redact_temp_paths("see (/var/tmp/abc/def) and [/tmp/xyz]"),
+        format!("see ({REDACTED_DIAGNOSTIC_TEMP_PATH}) and [{REDACTED_DIAGNOSTIC_TEMP_PATH}]")
+    );
+}
+
+#[test]
+fn replay_evidence_validation_and_json_parsing_cover_positive_and_negative_cases() {
+    use mantle_rust_plan_core::RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS;
+    use mantle_rust_plan_core::RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES;
+    use mantle_rust_plan_core::ReplayEvidenceError;
+    use mantle_rust_plan_core::parse_rust_unit_replay_evidence_json;
+    use mantle_rust_plan_core::validate_rust_unit_replay_evidence;
+
+    let valid = valid_sample_replay_evidence();
+    assert!(validate_rust_unit_replay_evidence(&replay_facts(&valid)).is_ok());
+    let encoded = serde_json::to_vec(&valid).unwrap();
+    let decoded: SampleReplayEvidence = parse_rust_unit_replay_evidence_json(&encoded, replay_facts).unwrap();
+    assert_eq!(decoded, valid);
+
+    let oversized = vec![b' '; usize::try_from(RUST_UNIT_REPLAY_EVIDENCE_MAX_JSON_BYTES).unwrap() + 1];
+    assert!(matches!(
+        parse_rust_unit_replay_evidence_json::<SampleReplayEvidence>(&oversized, replay_facts),
+        Err(ReplayEvidenceError::JsonTooLarge { .. })
+    ));
+
+    assert!(matches!(
+        parse_rust_unit_replay_evidence_json::<SampleReplayEvidence>(b"{", replay_facts),
+        Err(ReplayEvidenceError::MalformedJson(_))
+    ));
+
+    let mut wrong_version = valid_sample_replay_evidence();
+    wrong_version.schema_version = 99;
+    assert!(matches!(
+        validate_rust_unit_replay_evidence(&replay_facts(&wrong_version)),
+        Err(ReplayEvidenceError::UnsupportedSchemaVersion)
+    ));
+
+    let mut empty_id = valid_sample_replay_evidence();
+    empty_id.unit_id.clear();
+    assert!(matches!(
+        validate_rust_unit_replay_evidence(&replay_facts(&empty_id)),
+        Err(ReplayEvidenceError::EmptyIdentity)
+    ));
+
+    let mut bad_digest = valid_sample_replay_evidence();
+    bad_digest.environment_digest_blake3 = "A".repeat(64);
+    let err = validate_rust_unit_replay_evidence(&replay_facts(&bad_digest)).unwrap_err();
+    assert!(matches!(err, ReplayEvidenceError::InvalidBlake3Field {
+        field: "environment_digest_blake3"
+    }));
+    assert!(err.to_string().contains("BLAKE3"));
+
+    let mut over_limit = valid_sample_replay_evidence();
+    over_limit.output_artifact_count = RUST_UNIT_REPLAY_EVIDENCE_MAX_BOUNDARY_ITEMS + 1;
+    assert!(matches!(
+        validate_rust_unit_replay_evidence(&replay_facts(&over_limit)),
+        Err(ReplayEvidenceError::CountExceedsLimit {
+            field: "output_artifact_count"
+        })
+    ));
+}

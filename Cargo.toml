@@ -193,7 +193,7 @@ path = "src/main.rs"
 
 [[bin]]
 name = "crunch"
-path = "src/main.rs"
+path = "src/bin/crunch.rs"
 
 [[bin]]
 name = "generate-operator-command-contract"

@@ -104,3 +104,32 @@ fn is_lower_hex(value: &str) -> bool {
     debug_assert!(is_lower_hexadecimal || !value.is_empty() || value.is_empty());
     value.len() == BLAKE3_HEX_LENGTH && is_lower_hexadecimal
 }
+
+/// Check whether `value` is an exact 64-character lowercase hexadecimal digest.
+pub fn is_lowercase_blake3_hex(value: &str) -> bool {
+    if value.len() != BLAKE3_HEX_LENGTH {
+        return false;
+    }
+    debug_assert_eq!(value.len(), BLAKE3_HEX_LENGTH);
+    let is_lowercase_hex = value.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    if !is_lowercase_hex {
+        return false;
+    }
+    debug_assert!(value.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    true
+}
+
+/// Normalize an optional `b3:` / `blake3:` prefixed 64-char hex digest to lowercase.
+pub fn normalize_blake3_hex(value: &str) -> Option<String> {
+    let candidate = value.strip_prefix("b3:").or_else(|| value.strip_prefix("blake3:")).unwrap_or(value);
+    debug_assert!(candidate.len() <= value.len());
+    if candidate.len() != BLAKE3_HEX_LENGTH {
+        return None;
+    }
+    if !candidate.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    let normalized = candidate.to_ascii_lowercase();
+    debug_assert_eq!(normalized.len(), BLAKE3_HEX_LENGTH);
+    Some(normalized)
+}

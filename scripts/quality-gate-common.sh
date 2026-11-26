@@ -33,6 +33,8 @@ readonly -a FIRST_PARTY_PACKAGES=(
   crunch-zephyr
   mantle-cargo-build-bundle-core
   mantle-causal-trace-core
+  mantle-rust-plan-core
+  mantle-rust-plan-app
   crunch-attestation
   crunch-build
   crunch-delta

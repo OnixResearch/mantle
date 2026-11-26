@@ -34,11 +34,9 @@ const GENERATED_PAYLOAD_OBJECT_KIND: &str = "generated-payload";
 const PATH_TRAVERSAL_SEGMENT: &str = "..";
 const PLAINTEXT_SECRET_MARKER: &str = "plaintext-secret:";
 const ENFORCED_STATUS: &str = "enforced";
-const UNSUPPORTED_STATUS: &str = "unsupported";
 const NETWORK_RESULT_DENIED: &str = "denied";
 const NETWORK_POLICY_OFFLINE: &str = "offline";
 const EMPTY_DIGEST_INPUT: &str = "";
-const ZERO_COUNT: u32 = 0;
 const MAX_DECLARED_REFS: usize = 4096;
 const MAX_REFERENCE_OBSERVATIONS: usize = 8192;
 

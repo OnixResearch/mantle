@@ -26,7 +26,7 @@ const ADAPTER_PATH: &str = "src/nix_derivation_adapter.rs";
 const ADMISSION_CONFIG_PATH: &str = "config/nix-derivation-admission.ncl";
 const WORKSPACE_MANIFEST_PATH: &str = "Cargo.toml";
 const WORKSPACE_LOCK_PATH: &str = "Cargo.lock";
-const MAIN_PATH: &str = "src/main.rs";
+const LIB_PATH: &str = "src/lib.rs";
 const PRODUCER_SHELL_PATH: &str = "src/foreign_import_cmd.rs";
 const DIRECT_IMPORT: &str = "nix_derivation::";
 const DIRECT_USE: &str = "use nix_derivation";
@@ -84,7 +84,7 @@ fn validate_contract_files(files: &[FileEntry]) -> Vec<String> {
     );
     require_fragment(files, WORKSPACE_LOCK_PATH, "name = \"nix-derivation\"", &mut findings);
     require_fragment(files, WORKSPACE_LOCK_PATH, &format!("checksum = \"{PACKAGE_CHECKSUM_SHA256}\""), &mut findings);
-    require_fragment(files, MAIN_PATH, "mod nix_derivation_adapter;", &mut findings);
+    require_fragment(files, LIB_PATH, "mod nix_derivation_adapter;", &mut findings);
     require_fragment(
         files,
         PRODUCER_SHELL_PATH,

@@ -4,11 +4,13 @@ use std::path::PathBuf;
 use clap::Args;
 use clap::Subcommand;
 use crunch_store::StoreConfig;
-use mantle::user_profile_cmd::ProfileOperation;
-use mantle::user_profile_cmd::ProfileRequest;
+use mantle_application_contract::rust_operations::RustEvidence;
+use mantle_application_contract::rust_operations::RustOperation;
 use nix_compat::narinfo::VerifyingKey;
 
 use crate::errors::RunError;
+use crate::user_profile_cmd::ProfileOperation;
+use crate::user_profile_cmd::ProfileRequest;
 
 #[derive(Args, Debug, Clone)]
 pub struct ProfileArgs {
@@ -52,48 +54,53 @@ pub enum ProfileAction {
 }
 
 fn expected_generation(args: &ProfileArgs) -> Result<Option<u64>, RunError> {
-    let mutation = !matches!(args.action, ProfileAction::List | ProfileAction::Generations);
+    let is_inspection = matches!(args.action, ProfileAction::List | ProfileAction::Generations);
     let Some(value) = args.expect_generation.as_deref() else {
-        return if mutation {
-            Err(RunError::Internal("profile mutations require --expect-generation empty|N".into()))
-        } else {
-            Ok(None)
-        };
+        if is_inspection {
+            return Ok(None);
+        }
+        return Err(RunError::Internal("profile mutations require --expect-generation empty|N".into()));
     };
     if value == "empty" {
         return Ok(None);
     }
-    let number = value.parse::<u64>().map_err(|_| RunError::Internal("invalid profile expected generation".into()))?;
-    if number == 0 || number.to_string() != value {
+    debug_assert_ne!(value, "empty");
+    let generation_num =
+        value.parse::<u64>().map_err(|_| RunError::Internal("invalid profile expected generation".into()))?;
+    if generation_num == 0 || generation_num.to_string() != value {
         return Err(RunError::Internal("profile expected generation must be canonical positive u64 or empty".into()));
     }
-    Ok(Some(number))
+    debug_assert!(generation_num > 0);
+    Ok(Some(generation_num))
 }
 
-pub fn run(args: &ProfileArgs, store: StoreConfig) -> Result<(), RunError> {
-    let expected_active = expected_generation(args)?;
-    if !args.profile.is_absolute() {
-        return Err(RunError::Internal("profile target must be absolute".into()));
-    }
-    let trusted_keys = args
-        .trusted_public_keys
+fn parse_trusted_keys(raw_keys: &[String]) -> Result<Vec<VerifyingKey>, RunError> {
+    let trusted_keys = raw_keys
         .iter()
         .map(|key| {
             VerifyingKey::parse(key).map_err(|error| RunError::Internal(format!("profile trusted key: {error}")))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let operation = match &args.action {
-        ProfileAction::Install { package, replace } => ProfileOperation::Install {
-            package: crate::rust_plan_execution::through_rust_port(
-                mantle_application_contract::rust_operations::RustOperation::ReadProfilePackage,
-                || mantle::user_profile_cmd::read_package_request(package).map_err(RunError::Build),
-                |package| mantle_application_contract::rust_operations::RustEvidence::ProfilePackage {
-                    name: &package.name,
-                    output_path: &package.output_path,
-                },
-            )?,
-            replace: *replace,
-        },
+    debug_assert_eq!(trusted_keys.len(), raw_keys.len());
+    Ok(trusted_keys)
+}
+
+fn build_profile_operation(action: &ProfileAction) -> Result<ProfileOperation, RunError> {
+    let operation = match action {
+        ProfileAction::Install { package, replace } => {
+            debug_assert!(!package.as_os_str().is_empty());
+            ProfileOperation::Install {
+                package: crate::rust_plan_execution::through_rust_port(
+                    RustOperation::ReadProfilePackage,
+                    || crate::user_profile_cmd::read_package_request(package).map_err(RunError::Build),
+                    |package| RustEvidence::ProfilePackage {
+                        name: &package.name,
+                        output_path: &package.output_path,
+                    },
+                )?,
+                replace: *replace,
+            }
+        }
         ProfileAction::Remove { name } => ProfileOperation::Remove { name: name.clone() },
         ProfileAction::List => ProfileOperation::List,
         ProfileAction::Generations => ProfileOperation::Generations,
@@ -105,11 +112,11 @@ pub fn run(args: &ProfileArgs, store: StoreConfig) -> Result<(), RunError> {
             generation: *generation,
         },
     };
-    let runtime =
-        tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("profile runtime: {error}")))?;
-    use mantle_application_contract::rust_operations::RustEvidence;
-    use mantle_application_contract::rust_operations::RustOperation;
-    let (operation_name, inspection, removal) = match &args.action {
+    Ok(operation)
+}
+
+fn profile_operation_metadata(action: &ProfileAction) -> (&'static str, bool, bool) {
+    match action {
         ProfileAction::Install { .. } => ("install", false, false),
         ProfileAction::Remove { .. } => ("remove", false, false),
         ProfileAction::List => ("list", true, false),
@@ -117,16 +124,31 @@ pub fn run(args: &ProfileArgs, store: StoreConfig) -> Result<(), RunError> {
         ProfileAction::Switch { .. } => ("switch", false, false),
         ProfileAction::Rollback => ("rollback", false, false),
         ProfileAction::RemoveGeneration { .. } => ("remove-generation", false, true),
+    }
+}
+
+pub fn run(args: &ProfileArgs, store: StoreConfig) -> Result<(), RunError> {
+    let expected_active = expected_generation(args)?;
+    if !args.profile.is_absolute() {
+        return Err(RunError::Internal("profile target must be absolute".into()));
+    }
+    debug_assert!(args.profile.is_absolute());
+    let trusted_keys = parse_trusted_keys(&args.trusted_public_keys)?;
+    let operation = build_profile_operation(&args.action)?;
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|error| RunError::Internal(format!("profile runtime: {error}")))?;
+    let (operation_name, is_inspection, is_removal) = profile_operation_metadata(&args.action);
+    debug_assert!(!operation_name.is_empty());
+    let rust_operation = if is_inspection {
+        RustOperation::InspectProfile
+    } else {
+        RustOperation::MutateProfile
     };
-    let report = crate::rust_plan_execution::through_rust_port(
-        if inspection {
-            RustOperation::InspectProfile
-        } else {
-            RustOperation::MutateProfile
-        },
+    let profile_result = crate::rust_plan_execution::through_rust_port(
+        rust_operation,
         || {
             runtime
-                .block_on(mantle::user_profile_cmd::execute_profile(ProfileRequest {
+                .block_on(crate::user_profile_cmd::execute_profile(ProfileRequest {
                     profile: args.profile.clone(),
                     store,
                     trusted_keys,
@@ -136,23 +158,26 @@ pub fn run(args: &ProfileArgs, store: StoreConfig) -> Result<(), RunError> {
                 }))
                 .map_err(RunError::Build)
         },
-        |report| RustEvidence::Profile {
-            schema_valid: report.schema == "mantle-user-profile-report-v1",
-            operation_matches: report.operation == operation_name,
-            applied: report.applied,
+        |outcome| RustEvidence::Profile {
+            schema_valid: outcome.schema == "mantle-user-profile-report-v1",
+            operation_matches: outcome.operation == operation_name,
+            applied: outcome.applied,
             apply_requested: args.apply,
-            inspection,
-            removal,
-            admission_checked: report.admission_checked,
-            active: report.active,
-            previous_active: report.previous_active,
-            target: report.target_generation,
-            target_retained: report
+            inspection: is_inspection,
+            removal: is_removal,
+            admission_checked: outcome.admission_checked,
+            active: outcome.active,
+            previous_active: outcome.previous_active,
+            target: outcome.target_generation,
+            target_retained: outcome
                 .target_generation
-                .is_some_and(|target| report.retained_generations.contains(&target)),
-            has_manifest: report.manifest.is_some(),
+                .is_some_and(|target| outcome.retained_generations.contains(&target)),
+            has_manifest: outcome.manifest.is_some(),
         },
     )?;
-    println!("{}", serde_json::to_string_pretty(&report).map_err(|error| RunError::Internal(error.to_string()))?);
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&profile_result).map_err(|error| RunError::Internal(error.to_string()))?
+    );
     Ok(())
 }

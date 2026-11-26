@@ -2,6 +2,7 @@
 
 use alloc::collections::BTreeMap;
 use alloc::collections::BTreeSet;
+use alloc::format;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -11,10 +12,33 @@ use serde::Serialize;
 
 use crate::digest::Blake3Digest;
 use crate::digest::domain_digest;
+use crate::digest::normalize_blake3_hex;
 use crate::model::MAX_ARGS_PER_EFFECT;
 use crate::model::MAX_ENVIRONMENT_ENTRIES_PER_EFFECT;
 use crate::model::PlanBlocker;
 use crate::model::count_exceeds;
+
+/// Maximum diagnostic lines preserved from a failed rustc process.
+pub const REDACTED_DIAGNOSTIC_MAX_LINES: u32 = 12;
+const REDACTED_DIAGNOSTIC_MAX_LINES_COUNT: usize = 12;
+/// Replacement marker for temporary directory paths in diagnostics.
+pub const REDACTED_DIAGNOSTIC_TEMP_PATH: &str = "<redacted-temp-path>";
+const TEMP_PATH_PREFIXES: &[&str] = &["/tmp/", "/var/tmp/"];
+
+const TARGET_EXECUTION_KIND: &str = "target";
+const HOST_EXECUTION_KIND: &str = "host";
+const HOST_DEPENDENCY_EXECUTION_KIND: &str = "host-dependency";
+const RUSTC_METADATA_ARG_PREFIX: &str = "metadata=";
+
+const _: () = {
+    assert!(REDACTED_DIAGNOSTIC_MAX_LINES > 0);
+    assert!(!REDACTED_DIAGNOSTIC_TEMP_PATH.is_empty());
+    assert!(!TEMP_PATH_PREFIXES.is_empty());
+    assert!(!TARGET_EXECUTION_KIND.is_empty());
+    assert!(!HOST_EXECUTION_KIND.is_empty());
+    assert!(!HOST_DEPENDENCY_EXECUTION_KIND.is_empty());
+    assert!(!RUSTC_METADATA_ARG_PREFIX.is_empty());
+};
 
 /// Accepted effect identity prefix for actual selected native units.
 const EFFECT_ID_PREFIX: &str = "effect:";
@@ -1224,6 +1248,403 @@ fn classify_observations<'a>(
         };
     }
     PlanExecutionOutcome::Completed
+}
+
+/// Borrowed dependency edge facts for role-sensitive artifact graph validation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoleValidationDependency<'a> {
+    pub name: &'a str,
+    pub package_id: &'a str,
+    pub producer_unit_id: Option<&'a str>,
+}
+
+/// Borrowed host-artifact edge facts for role-sensitive artifact graph validation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoleValidationHostArtifact<'a> {
+    pub package_id: &'a str,
+    pub target_name: &'a str,
+    pub target_kind: &'a str,
+    pub producer_unit_id: Option<&'a str>,
+}
+
+/// Borrowed unit facts for role-sensitive artifact graph validation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoleValidationUnit<'a> {
+    pub unit_id: &'a str,
+    pub package_id: &'a str,
+    pub target_name: &'a str,
+    pub target_kind: &'a str,
+    pub execution_kind: &'a str,
+    pub selected_triple: &'a str,
+    pub rustc_metadata_hash: &'a str,
+    pub args: &'a [String],
+    pub toolchain_policy_digest: Option<&'a str>,
+    pub dependency_artifacts: Vec<RoleValidationDependency<'a>>,
+    pub consumed_host_artifacts: Vec<RoleValidationHostArtifact<'a>>,
+}
+
+/// Request payload for validating role/triple/identity invariants across a unit graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoleSensitiveArtifactGraphRequest<'a> {
+    pub host_triple: &'a str,
+    pub units: &'a [RoleValidationUnit<'a>],
+}
+
+/// Validate target/host/host-dependency roles, triples, package IDs, metadata hashes,
+/// and toolchain policy digests across the selected derivation graph.
+pub fn validate_role_sensitive_artifact_graph(request: &RoleSensitiveArtifactGraphRequest<'_>) -> Option<PlanBlocker> {
+    if count_exceeds(request.units.len(), MAX_UNITS) {
+        return Some(PlanBlocker::new("unit-limit", "units", "selected units exceed the admitted bound"));
+    }
+    let unit_indices_by_id: BTreeMap<&str, usize> =
+        request.units.iter().enumerate().map(|(index, unit)| (unit.unit_id, index)).collect();
+    debug_assert!(!request.host_triple.is_empty());
+    debug_assert!(unit_indices_by_id.len() <= request.units.len());
+    for unit in request.units {
+        if let Some(blocker) = validate_unit_role_triple(unit, request.host_triple) {
+            return Some(blocker);
+        }
+        for dependency in &unit.dependency_artifacts {
+            if let Some(blocker) =
+                validate_dependency_artifact_role(unit, dependency, request.units, &unit_indices_by_id)
+            {
+                return Some(blocker);
+            }
+        }
+        let host_ctx = HostRoleValidationContext {
+            units: request.units,
+            unit_indices_by_id: &unit_indices_by_id,
+            expected_triple: request.host_triple,
+        };
+        for artifact in &unit.consumed_host_artifacts {
+            if let Some(blocker) = validate_host_artifact_role(unit, artifact, &host_ctx) {
+                return Some(blocker);
+            }
+        }
+    }
+    None
+}
+
+struct HostRoleValidationContext<'a> {
+    units: &'a [RoleValidationUnit<'a>],
+    unit_indices_by_id: &'a BTreeMap<&'a str, usize>,
+    expected_triple: &'a str,
+}
+
+fn validate_unit_role_triple(unit: &RoleValidationUnit<'_>, host_triple: &str) -> Option<PlanBlocker> {
+    debug_assert!(!host_triple.is_empty());
+    debug_assert!(!unit.unit_id.is_empty());
+    if unit.execution_kind == TARGET_EXECUTION_KIND {
+        if unit.selected_triple.is_empty() {
+            return Some(role_mismatch_blocker(RoleMismatch {
+                unit_id: unit.unit_id,
+                edge: "unit",
+                expected_role: TARGET_EXECUTION_KIND,
+                expected_triple: "non-empty-target-triple",
+                actual_role: unit.execution_kind,
+                actual_triple: unit.selected_triple,
+            }));
+        }
+        return None;
+    }
+    let is_host_kind =
+        unit.execution_kind == HOST_EXECUTION_KIND || unit.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND;
+    if is_host_kind {
+        if unit.selected_triple != host_triple {
+            return Some(role_mismatch_blocker(RoleMismatch {
+                unit_id: unit.unit_id,
+                edge: "unit",
+                expected_role: unit.execution_kind,
+                expected_triple: host_triple,
+                actual_role: unit.execution_kind,
+                actual_triple: unit.selected_triple,
+            }));
+        }
+        return None;
+    }
+    Some(role_mismatch_blocker(RoleMismatch {
+        unit_id: unit.unit_id,
+        edge: "unit",
+        expected_role: "known-execution-kind",
+        expected_triple: "known-selected-triple",
+        actual_role: unit.execution_kind,
+        actual_triple: unit.selected_triple,
+    }))
+}
+
+fn validate_dependency_artifact_role(
+    consumer: &RoleValidationUnit<'_>,
+    dependency: &RoleValidationDependency<'_>,
+    units: &[RoleValidationUnit<'_>],
+    unit_indices_by_id: &BTreeMap<&str, usize>,
+) -> Option<PlanBlocker> {
+    let expected_role = expected_dependency_artifact_role(consumer);
+    let expected_triple = consumer.selected_triple;
+    debug_assert!(!expected_role.is_empty());
+    debug_assert!(unit_indices_by_id.len() <= units.len());
+    let producer = dependency_artifact_producer(consumer, dependency, expected_role, units, unit_indices_by_id)?;
+    let is_role_matched = producer.execution_kind == expected_role;
+    let is_triple_matched = producer.selected_triple == expected_triple;
+    let is_valid_edge = is_role_matched && is_triple_matched;
+    if !is_valid_edge {
+        let edge = format!("dependency:{}", dependency.name);
+        return Some(role_mismatch_blocker(RoleMismatch {
+            unit_id: consumer.unit_id,
+            edge: &edge,
+            expected_role,
+            expected_triple,
+            actual_role: producer.execution_kind,
+            actual_triple: producer.selected_triple,
+        }));
+    }
+    validate_dependency_artifact_identity(consumer, dependency, producer)
+}
+
+fn validate_host_artifact_role(
+    consumer: &RoleValidationUnit<'_>,
+    artifact: &RoleValidationHostArtifact<'_>,
+    context: &HostRoleValidationContext<'_>,
+) -> Option<PlanBlocker> {
+    debug_assert!(!context.expected_triple.is_empty());
+    debug_assert!(context.unit_indices_by_id.len() <= context.units.len());
+    let producer = host_artifact_producer(artifact, context.units, context.unit_indices_by_id)?;
+    let is_host_role = producer.execution_kind == HOST_EXECUTION_KIND;
+    let is_triple_matched = producer.selected_triple == context.expected_triple;
+    let is_valid_host = is_host_role && is_triple_matched;
+    if !is_valid_host {
+        let edge = format!("host-artifact:{}", artifact.target_name);
+        return Some(role_mismatch_blocker(RoleMismatch {
+            unit_id: consumer.unit_id,
+            edge: &edge,
+            expected_role: HOST_EXECUTION_KIND,
+            expected_triple: context.expected_triple,
+            actual_role: producer.execution_kind,
+            actual_triple: producer.selected_triple,
+        }));
+    }
+    None
+}
+
+fn validate_dependency_artifact_identity(
+    consumer: &RoleValidationUnit<'_>,
+    dependency: &RoleValidationDependency<'_>,
+    producer: &RoleValidationUnit<'_>,
+) -> Option<PlanBlocker> {
+    let edge = format!("dependency:{}", dependency.name);
+    debug_assert!(!edge.is_empty());
+    debug_assert!(!consumer.unit_id.is_empty());
+    if dependency.package_id != producer.package_id {
+        return Some(identity_mismatch_blocker(IdentityMismatch {
+            unit_id: consumer.unit_id,
+            edge: &edge,
+            field: "source package",
+            expected: dependency.package_id,
+            observed: producer.package_id,
+        }));
+    }
+    let observed_metadata = rustc_metadata_hash_from_args(producer.args);
+    if observed_metadata != Some(producer.rustc_metadata_hash) {
+        let observed = observed_metadata.unwrap_or("missing");
+        return Some(identity_mismatch_blocker(IdentityMismatch {
+            unit_id: consumer.unit_id,
+            edge: &edge,
+            field: "metadata hash",
+            expected: producer.rustc_metadata_hash,
+            observed,
+        }));
+    }
+    validate_dependency_toolchain_policy_digest(consumer, dependency, producer)
+}
+
+fn validate_dependency_toolchain_policy_digest(
+    consumer: &RoleValidationUnit<'_>,
+    dependency: &RoleValidationDependency<'_>,
+    producer: &RoleValidationUnit<'_>,
+) -> Option<PlanBlocker> {
+    let expected_raw = consumer.toolchain_policy_digest?;
+    let observed_raw = producer.toolchain_policy_digest?;
+    let expected = normalize_blake3_hex(expected_raw)?;
+    let observed = normalize_blake3_hex(observed_raw)?;
+    debug_assert_eq!(expected.len(), crate::digest::BLAKE3_HEX_LENGTH);
+    debug_assert_eq!(observed.len(), crate::digest::BLAKE3_HEX_LENGTH);
+    if expected == observed {
+        return None;
+    }
+    let edge = format!("dependency:{}", dependency.name);
+    Some(identity_mismatch_blocker(IdentityMismatch {
+        unit_id: consumer.unit_id,
+        edge: &edge,
+        field: "toolchain-policy digest",
+        expected: &expected,
+        observed: &observed,
+    }))
+}
+
+fn rustc_metadata_hash_from_args(args: &[String]) -> Option<&str> {
+    let found = args.iter().find_map(|arg| arg.strip_prefix(RUSTC_METADATA_ARG_PREFIX));
+    debug_assert!(found.is_none_or(|_| !args.is_empty()));
+    debug_assert!(found.is_none_or(|_| args.iter().any(|arg| arg.starts_with(RUSTC_METADATA_ARG_PREFIX))));
+    found
+}
+
+fn expected_dependency_artifact_role(consumer: &RoleValidationUnit<'_>) -> &'static str {
+    let is_host_consumer =
+        consumer.execution_kind == HOST_EXECUTION_KIND || consumer.execution_kind == HOST_DEPENDENCY_EXECUTION_KIND;
+    let expected = if is_host_consumer {
+        HOST_DEPENDENCY_EXECUTION_KIND
+    } else {
+        TARGET_EXECUTION_KIND
+    };
+    debug_assert!(!consumer.unit_id.is_empty());
+    debug_assert!(!expected.is_empty());
+    expected
+}
+
+fn dependency_artifact_producer<'a>(
+    consumer: &RoleValidationUnit<'_>,
+    dependency: &RoleValidationDependency<'_>,
+    expected_role: &str,
+    units: &'a [RoleValidationUnit<'a>],
+    unit_indices_by_id: &BTreeMap<&str, usize>,
+) -> Option<&'a RoleValidationUnit<'a>> {
+    debug_assert!(!expected_role.is_empty());
+    debug_assert!(unit_indices_by_id.len() <= units.len());
+    if let Some(producer_unit_id) = dependency.producer_unit_id {
+        return unit_indices_by_id.get(producer_unit_id).and_then(|index| units.get(*index));
+    }
+    units.iter().find(|candidate| {
+        candidate.package_id == dependency.package_id
+            && candidate.target_kind == "lib"
+            && candidate.execution_kind == expected_role
+            && candidate.unit_id != consumer.unit_id
+    })
+}
+
+fn host_artifact_producer<'a>(
+    artifact: &RoleValidationHostArtifact<'_>,
+    units: &'a [RoleValidationUnit<'a>],
+    unit_indices_by_id: &BTreeMap<&str, usize>,
+) -> Option<&'a RoleValidationUnit<'a>> {
+    debug_assert!(!units.is_empty());
+    debug_assert!(unit_indices_by_id.len() <= units.len());
+    if let Some(producer_unit_id) = artifact.producer_unit_id {
+        return unit_indices_by_id.get(producer_unit_id).and_then(|index| units.get(*index));
+    }
+    units.iter().find(|candidate| {
+        candidate.package_id == artifact.package_id
+            && candidate.target_name == artifact.target_name
+            && candidate.target_kind == artifact.target_kind
+    })
+}
+
+struct RoleMismatch<'a> {
+    unit_id: &'a str,
+    edge: &'a str,
+    expected_role: &'a str,
+    expected_triple: &'a str,
+    actual_role: &'a str,
+    actual_triple: &'a str,
+}
+
+fn role_mismatch_blocker(inputs: RoleMismatch<'_>) -> PlanBlocker {
+    let message = format!(
+        "unit {} {} expected role {} triple {}, got role {} triple {}",
+        inputs.unit_id,
+        inputs.edge,
+        inputs.expected_role,
+        inputs.expected_triple,
+        inputs.actual_role,
+        inputs.actual_triple
+    );
+    let subject = if inputs.unit_id.is_empty() {
+        "unit"
+    } else {
+        inputs.unit_id
+    };
+    debug_assert!(!message.is_empty());
+    debug_assert!(!subject.is_empty());
+    PlanBlocker::new("artifact-identity-mismatch", subject, &message)
+}
+
+struct IdentityMismatch<'a> {
+    unit_id: &'a str,
+    edge: &'a str,
+    field: &'a str,
+    expected: &'a str,
+    observed: &'a str,
+}
+
+fn identity_mismatch_blocker(inputs: IdentityMismatch<'_>) -> PlanBlocker {
+    let message = format!(
+        "unit {} {} expected {} {}, got {} {}",
+        inputs.unit_id, inputs.edge, inputs.field, inputs.expected, inputs.field, inputs.observed
+    );
+    let subject = if inputs.unit_id.is_empty() {
+        "unit"
+    } else {
+        inputs.unit_id
+    };
+    debug_assert!(!message.is_empty());
+    debug_assert!(!subject.is_empty());
+    PlanBlocker::new("artifact-identity-mismatch", subject, &message)
+}
+
+/// Produce a bounded, NUL-free, temp-path-redacted diagnostic string from stderr bytes.
+pub fn redacted_diagnostic(stderr: &[u8]) -> String {
+    let text = String::from_utf8_lossy(stderr);
+    let compact = text.lines().take(REDACTED_DIAGNOSTIC_MAX_LINES_COUNT).collect::<Vec<_>>().join("\n");
+    debug_assert_eq!(u32::try_from(REDACTED_DIAGNOSTIC_MAX_LINES_COUNT), Ok(REDACTED_DIAGNOSTIC_MAX_LINES));
+    if compact.is_empty() {
+        debug_assert!(compact.is_empty());
+        debug_assert!(text.lines().all(str::is_empty));
+        return String::from("rustc exited with a nonzero status");
+    }
+    let sanitized = compact.replace('\0', "");
+    let redacted = redact_temp_paths(&sanitized);
+    debug_assert!(!redacted.contains('\0'));
+    redacted
+}
+
+/// Redact temporary directory paths (`/tmp/...`, `/var/tmp/...`) in diagnostic text.
+pub fn redact_temp_paths(text: &str) -> String {
+    let mut redacted = String::with_capacity(text.len());
+    let mut cursor = 0usize;
+    for _ in 0..=text.len() {
+        if cursor >= text.len() {
+            break;
+        }
+        let Some((prefix_offset, prefix)) = next_temp_path_prefix(&text[cursor..]) else {
+            redacted.push_str(&text[cursor..]);
+            break;
+        };
+        let start = cursor.saturating_add(prefix_offset);
+        redacted.push_str(&text[cursor..start]);
+        redacted.push_str(REDACTED_DIAGNOSTIC_TEMP_PATH);
+        let path_start = start.saturating_add(prefix.len());
+        let path_tail = text[path_start..]
+            .find(temp_path_delimiter)
+            .map_or(text.len(), |offset| path_start.saturating_add(offset));
+        debug_assert!(start >= cursor);
+        debug_assert!(path_tail >= path_start);
+        cursor = path_tail;
+    }
+    debug_assert!(!redacted.contains("/tmp/"));
+    debug_assert!(!redacted.contains("/var/tmp/"));
+    redacted
+}
+
+fn next_temp_path_prefix(text: &str) -> Option<(usize, &'static str)> {
+    let found = TEMP_PATH_PREFIXES
+        .iter()
+        .filter_map(|prefix| text.find(prefix).map(|offset| (offset, *prefix)))
+        .min_by_key(|(offset, _prefix)| *offset);
+    debug_assert!(found.is_none_or(|(offset, _)| offset < text.len()));
+    debug_assert!(found.is_none_or(|(offset, prefix)| text[offset..].starts_with(prefix)));
+    found
+}
+
+fn temp_path_delimiter(ch: char) -> bool {
+    ch.is_whitespace() || matches!(ch, '"' | '\'' | '`' | ')' | '(' | '[' | ']')
 }
 
 fn observation_exit_is_consistent(observation: &UnitObservation) -> bool {
