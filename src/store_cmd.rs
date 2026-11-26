@@ -24,6 +24,7 @@ const COMPOSITION_REQUEST_INITIAL_CAPACITY: usize = 8_192;
 const NAR_SHA256_BYTES: usize = 32;
 const NAR_SHA256_HEX_BYTES: usize = NAR_SHA256_BYTES * 2;
 const BLAKE3_HEX_BYTES: usize = 64;
+const STORE_CMD_LOCK_WAIT_TIMEOUT_MS: u64 = 300_000;
 
 use crate::errors::RunError;
 use crate::signing_key::load_configured_trusted_public_keys;
@@ -190,11 +191,19 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
                 gate_restricted_info_path(&path, context.store_dir, view)?;
             }
             let store = open_store(context).await?;
-            cmd_store_info(&store, context.plan.operation, &path, context.view, context.is_json_output).await
+            cmd_store_info(
+                &store,
+                context.plan.operation,
+                &path,
+                context.view,
+                context.base_state_dirs,
+                context.is_json_output,
+            )
+            .await
         }
         crate::StoreAction::Roots { migrate } => {
             let _guard = if migrate {
-                Some(store_mutation_guard(context)?)
+                Some(store_mutation_guard(context, "store-roots-migrate")?)
             } else {
                 None
             };
@@ -209,7 +218,7 @@ async fn cmd_store_async(action: crate::StoreAction, context: StoreCommandContex
             preflight_store_backend(context)?;
             let _guard = if context.backend == crunch_store::StoreBackend::Casita {
                 Some(
-                    crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
+                    crunch_store::StoreMutationGuard::try_acquire_for(context.state_dir, "store-usage")
                         .map_err(|error| RunError::Build(format!("{error}")))?,
                 )
             } else {
@@ -248,12 +257,12 @@ async fn cmd_store_mutation_or_transfer(
 ) -> Result<(), RunError> {
     match action {
         crate::StoreAction::Pin { path, owner, reason } => {
-            let _guard = store_mutation_guard(context)?;
+            let _guard = store_mutation_guard(context, "store-pin")?;
             let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_pin(&store, context.plan.operation, &path, &owner, &reason).await
         }
         crate::StoreAction::Unpin { path, owner, reason } => {
-            let _guard = store_mutation_guard(context)?;
+            let _guard = store_mutation_guard(context, "store-unpin")?;
             let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_unpin(&store, context.plan.operation, &path, &owner, reason.as_deref()).await
         }
@@ -280,7 +289,7 @@ async fn cmd_store_mutation_or_transfer(
             .await
         }
         crate::StoreAction::Sign { path, all, signing_key } => {
-            let _guard = store_mutation_guard(context)?;
+            let _guard = store_mutation_guard(context, "store-sign")?;
             let mut store = open_store_under_guard(context, &_guard).await?;
             let admin = store.store_admin();
             cmd_store_sign(
@@ -301,7 +310,7 @@ async fn cmd_store_mutation_or_transfer(
             if !context.backend.profile().core.contains(&"store-repair-final-nar") {
                 return Err(RunError::Build(format!("{}-repair-final-nar-unsupported", context.backend.as_str())));
             }
-            let _guard = store_mutation_guard(context)?;
+            let _guard = store_mutation_guard(context, "store-repair-final-nar")?;
             let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_repair_final_nar(
                 &store,
@@ -370,7 +379,7 @@ async fn cmd_store_gc_action(
     preflight_store_backend(context)?;
     let _guard = if execute || context.backend == crunch_store::StoreBackend::Casita {
         Some(
-            crunch_store::StoreMutationGuard::try_acquire(context.state_dir)
+            crunch_store::StoreMutationGuard::try_acquire_for(context.state_dir, "store-gc")
                 .map_err(|error| RunError::Build(format!("{error}")))?,
         )
     } else {
@@ -477,9 +486,13 @@ fn preflight_store_backend(context: StoreCommandContext<'_>) -> Result<(), RunEr
     .map_err(|error| RunError::Internal(format!("opening store: {error}")))
 }
 
-fn store_mutation_guard(context: StoreCommandContext<'_>) -> Result<crunch_store::StoreMutationGuard, RunError> {
+fn store_mutation_guard(
+    context: StoreCommandContext<'_>,
+    role: &str,
+) -> Result<crunch_store::StoreMutationGuard, RunError> {
+    assert!(!role.is_empty(), "store mutation lock role must not be empty");
     preflight_store_backend(context)?;
-    crunch_store::StoreMutationGuard::acquire_wait(context.state_dir)
+    crunch_store::StoreMutationGuard::acquire_wait_bounded(context.state_dir, role, STORE_CMD_LOCK_WAIT_TIMEOUT_MS)
         .map_err(|e| RunError::Internal(format!("acquiring store mutation lock: {e}")))
 }
 
@@ -538,7 +551,7 @@ async fn cmd_store_verify_action(context: StoreCommandContext<'_>, action: Store
 }
 
 async fn cmd_store_push_action(context: StoreCommandContext<'_>, action: StorePushAction) -> Result<(), RunError> {
-    let _guard = store_mutation_guard(context)?;
+    let _guard = store_mutation_guard(context, "mantle store push")?;
     let store = open_store_under_guard(context, &_guard).await?;
     cmd_store_push(&store, context.plan, StorePushRequest {
         destination_dir: &action.destination_dir,
@@ -555,7 +568,7 @@ async fn cmd_store_pull_action(context: StoreCommandContext<'_>, action: StorePu
         action.foreign_realization_receipt.as_deref(),
         context.store_dir,
     )?;
-    let _guard = store_mutation_guard(context)?;
+    let _guard = store_mutation_guard(context, "mantle store pull")?;
     let store = open_store_under_guard(context, &_guard).await?;
     cmd_store_pull(&store, context.plan.operation, StorePullRequest {
         source_url: &action.source_url,
@@ -799,11 +812,30 @@ async fn restricted_info_entries(
     Ok((entries, parsed.to_string()))
 }
 
+fn build_store_info_closure_options(
+    store: &crunch_store::StoreHandle,
+    base_state_dirs: &[PathBuf],
+) -> Result<crunch_store::RuntimeClosureQueryOptions, RunError> {
+    assert!(!store.store_dir().is_empty());
+    debug_assert!(!store.state_dir().as_os_str().is_empty());
+    let options = crunch_store::RuntimeClosureQueryOptions::for_store(store)
+        .and_then(|opts| opts.with_base_state_dirs(base_state_dirs))
+        .map_err(|error| RunError::Internal(format!("configuring runtime closure query: {error}")))?;
+    if store.backend() == crunch_store::StoreBackend::Casita {
+        return Ok(options);
+    }
+    let Some(configured_keys) = load_configured_trusted_public_keys(None, store.state_dir())? else {
+        return Ok(options);
+    };
+    Ok(options.with_trusted_public_keys(&configured_keys))
+}
+
 async fn cmd_store_info(
     store: &crunch_store::StoreHandle,
     plan: StorePlan,
     path: &str,
     view: Option<&std::sync::Arc<dyn crunch_store::LogicalPathView>>,
+    base_state_dirs: &[std::path::PathBuf],
     is_json_output: bool,
 ) -> Result<(), RunError> {
     if path.is_empty() {
@@ -829,15 +861,25 @@ async fn cmd_store_info(
     debug_assert!(u32::try_from(details.len()).is_ok());
     // Overlay composition and retention interests describe paths and state beyond
     // one exact path, so a restricted view reads neither.
-    let (overlay, interests) = if view.is_some() {
-        (None, Vec::new())
+    let (overlay, interests, runtime_closure) = if view.is_some() {
+        (None, Vec::new(), None)
     } else {
         let overlay = store
             .overlay_report()
             .map_err(|error| RunError::Internal(format!("building overlay report: {error}")))?;
         let interests = crunch_store::list_interest_reports(store.state_dir())
             .map_err(|error| RunError::Internal(format!("listing retention interests: {error}")))?;
-        (overlay, interests)
+        let runtime_closure = if details.len() == 1 {
+            let options = build_store_info_closure_options(store, base_state_dirs)?;
+            let explanation =
+                crunch_store::store_runtime_closure(store, &[details[0].value.store_path.clone()], options)
+                    .await
+                    .map_err(|error| RunError::Internal(format!("explaining runtime closure: {error}")))?;
+            Some(explanation)
+        } else {
+            None
+        };
+        (overlay, interests, runtime_closure)
     };
     classify_store_result(plan, StoreFacts::Rows {
         rows: details.len(),
@@ -865,6 +907,7 @@ async fn cmd_store_info(
                 })
             })
             .collect::<Vec<_>>();
+        let runtime_closure_json = runtime_closure.as_ref().map(runtime_closure_to_json);
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
@@ -873,6 +916,7 @@ async fn cmd_store_info(
                 "backend_capabilities": store.backend().profile(),
                 "overlay": overlay,
                 "paths": paths,
+                "runtime_closure": runtime_closure_json,
             }))
             .map_err(|error| RunError::Internal(format!("serializing store info: {error}")))?
         );
@@ -935,7 +979,187 @@ async fn cmd_store_info(
             }
         }
     }
+    if let Some(closure) = runtime_closure.as_ref() {
+        print_runtime_closure_summary(closure);
+    }
     Ok(())
+}
+
+fn print_runtime_closure_summary(closure: &crunch_store::RuntimeClosureExplanation) {
+    assert!(!closure.roots.is_empty());
+    assert!(!closure.snapshot_blake3.is_empty());
+    println!(
+        "runtime_closure: root={} snapshot={} completeness={} complete_size_total={} observed_known_nar_bytes={} members={} has_cycle={}",
+        closure.roots[0],
+        closure.snapshot_blake3,
+        closure.completeness.as_str(),
+        closure.is_complete_size_total,
+        closure.observed_known_nar_bytes,
+        closure.observed_member_count,
+        closure.has_cycle,
+    );
+    for contributor in &closure.largest_members {
+        println!(
+            "  LARGEST_MEMBER path={} nar_size_bytes={:?} closure_exclusive_bytes={:?} depth={}",
+            contributor.path_id,
+            contributor.nar_size_bytes,
+            contributor.closure_exclusive_bytes,
+            contributor.min_depth_count,
+        );
+    }
+    for member in &closure.members {
+        for why in &member.why_present {
+            println!("  WHY_PRESENT path={} hops={}", member.path_id, why.hops.join(" -> "));
+        }
+    }
+    for issue in &closure.issues {
+        println!(
+            "  CLOSURE_ISSUE code={} path={} detail={}",
+            issue.code.as_str(),
+            issue.path_id.as_deref().unwrap_or("-"),
+            issue.detail,
+        );
+    }
+    for non_claim in &closure.non_claims {
+        println!("  CLOSURE_NON_CLAIM {non_claim}");
+    }
+}
+
+fn runtime_closure_to_json(closure: &crunch_store::RuntimeClosureExplanation) -> serde_json::Value {
+    assert!(!closure.schema.is_empty());
+    assert!(!closure.snapshot_blake3.is_empty());
+    let issues: Vec<serde_json::Value> = closure
+        .issues
+        .iter()
+        .map(|issue| {
+            serde_json::json!({
+                "code": issue.code.as_str(),
+                "path_id": issue.path_id,
+                "detail": issue.detail,
+            })
+        })
+        .collect();
+    let largest_members: Vec<serde_json::Value> = closure
+        .largest_members
+        .iter()
+        .map(|member| {
+            serde_json::json!({
+                "path_id": member.path_id,
+                "nar_size_bytes": member.nar_size_bytes,
+                "closure_exclusive_bytes": member.closure_exclusive_bytes,
+                "min_depth_count": member.min_depth_count,
+                "source": runtime_closure_source_to_json(&member.source),
+            })
+        })
+        .collect();
+    let members: Vec<serde_json::Value> = closure.members.iter().map(runtime_closure_member_to_json).collect();
+    serde_json::json!({
+        "schema": closure.schema,
+        "snapshot_blake3": closure.snapshot_blake3,
+        "store_prefix": closure.store_prefix,
+        "roots": closure.roots,
+        "completeness": closure.completeness.as_str(),
+        "is_complete_size_total": closure.is_complete_size_total,
+        "observed_known_nar_bytes": closure.observed_known_nar_bytes,
+        "observed_member_count": closure.observed_member_count,
+        "known_size_member_count": closure.known_size_member_count,
+        "unknown_size_member_count": closure.unknown_size_member_count,
+        "unknown_reference_member_count": closure.unknown_reference_member_count,
+        "examined_edge_count": closure.examined_edge_count,
+        "has_cycle": closure.has_cycle,
+        "issues": issues,
+        "largest_members": largest_members,
+        "members": members,
+        "non_claims": closure.non_claims,
+    })
+}
+
+fn runtime_closure_member_to_json(member: &crunch_store::RuntimeClosureMemberReport) -> serde_json::Value {
+    assert!(!member.path_id.is_empty());
+    assert!(!member.exclusive_bytes_meaning.is_empty());
+    let why_present: Vec<serde_json::Value> = member
+        .why_present
+        .iter()
+        .map(|why| {
+            serde_json::json!({
+                "root_id": why.root_id,
+                "hops": why.hops,
+                "is_truncated": why.is_truncated,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "path_id": member.path_id,
+        "is_root": member.is_root,
+        "min_depth_count": member.min_depth_count,
+        "nar_sha256_hex": member.nar_sha256_hex,
+        "nar_size_bytes": member.nar_size_bytes,
+        "size_unavailable_reason": member.size_unavailable_reason,
+        "closure_inclusive_bytes": member.closure_inclusive_bytes,
+        "closure_exclusive_bytes": member.closure_exclusive_bytes,
+        "exclusive_bytes_meaning": member.exclusive_bytes_meaning,
+        "references": member.references,
+        "references_unavailable_reason": member.references_unavailable_reason,
+        "why_present": why_present,
+        "is_why_paths_truncated": member.is_why_paths_truncated,
+        "source": runtime_closure_source_to_json(&member.source),
+        "trust": runtime_closure_trust_to_json(&member.trust),
+        "state": member.state.as_str(),
+        "detail": member.detail,
+    })
+}
+
+fn runtime_closure_source_to_json(source: &crunch_store::RuntimeClosureSourceKind) -> serde_json::Value {
+    assert!(!source.as_kind_str().is_empty());
+    debug_assert!(matches!(
+        source,
+        crunch_store::RuntimeClosureSourceKind::LocalOverlay
+            | crunch_store::RuntimeClosureSourceKind::LocalBase { .. }
+            | crunch_store::RuntimeClosureSourceKind::RemoteSubstituter { .. }
+            | crunch_store::RuntimeClosureSourceKind::Unavailable
+    ));
+    match source {
+        crunch_store::RuntimeClosureSourceKind::LocalOverlay => serde_json::json!({ "kind": "local-overlay" }),
+        crunch_store::RuntimeClosureSourceKind::LocalBase { layer_index } => serde_json::json!({
+            "kind": "local-base",
+            "layer_index": layer_index,
+        }),
+        crunch_store::RuntimeClosureSourceKind::RemoteSubstituter { source_id } => serde_json::json!({
+            "kind": "remote-substituter",
+            "source_id": source_id,
+        }),
+        crunch_store::RuntimeClosureSourceKind::Unavailable => serde_json::json!({ "kind": "unavailable" }),
+    }
+}
+
+fn runtime_closure_trust_to_json(trust: &crunch_store::RuntimeClosureTrustStatus) -> serde_json::Value {
+    assert!(!trust.as_kind_str().is_empty());
+    debug_assert!(matches!(
+        trust,
+        crunch_store::RuntimeClosureTrustStatus::Trusted { .. }
+            | crunch_store::RuntimeClosureTrustStatus::Untrusted { .. }
+            | crunch_store::RuntimeClosureTrustStatus::Unsigned
+            | crunch_store::RuntimeClosureTrustStatus::NotVerified { .. }
+    ));
+    match trust {
+        crunch_store::RuntimeClosureTrustStatus::Trusted {
+            trusted_signature_count,
+            total_signature_count,
+        } => serde_json::json!({
+            "kind": "trusted",
+            "trusted_signature_count": trusted_signature_count,
+            "total_signature_count": total_signature_count,
+        }),
+        crunch_store::RuntimeClosureTrustStatus::Untrusted { total_signature_count } => serde_json::json!({
+            "kind": "untrusted",
+            "total_signature_count": total_signature_count,
+        }),
+        crunch_store::RuntimeClosureTrustStatus::Unsigned => serde_json::json!({ "kind": "unsigned" }),
+        crunch_store::RuntimeClosureTrustStatus::NotVerified { reason } => serde_json::json!({
+            "kind": "not-verified",
+            "reason": reason,
+        }),
+    }
 }
 
 fn print_overlay_summary(report: Option<&crunch_store::StoreOverlayReport>) {
@@ -2083,7 +2307,7 @@ async fn cmd_store_composition(
             let request = read_composition_request(&from)?;
             let prepared = crunch_store::plan_composition_request(&request)
                 .map_err(|error| RunError::Internal(error.to_string()))?;
-            let _guard = store_mutation_guard(context)?;
+            let _guard = store_mutation_guard(context, "mantle store composition realize")?;
             let store = open_store_under_guard(context, &_guard).await?;
             let receipt = execute_store_port(plan, StoreLeaf::CompositionRealize, async {
                 let receipt = crunch_store::realize_composition(&store, &request)
@@ -2204,7 +2428,7 @@ async fn cmd_store_archive(
             trusted_public_keys,
             no_materialize,
         } => {
-            let _guard = store_mutation_guard(context)?;
+            let _guard = store_mutation_guard(context, "mantle store archive import")?;
             let store = open_store_under_guard(context, &_guard).await?;
             cmd_store_archive_import(&store, context.plan.operation, StoreArchiveImportRequest {
                 format,
@@ -2839,5 +3063,129 @@ mod tests {
             assert_eq!(message.contains("opening store"), reaches_open, "{message}");
             assert_eq!(message.contains(crunch_store::RESTRICTED_VIEW_DENIED), !reaches_open, "{message}");
         }
+    }
+
+    #[tokio::test]
+    async fn unrestricted_store_info_explains_runtime_closure_without_mutating_roots() {
+        use nix_compat::store_path::StorePath;
+        let fixture = view_fixture().await;
+        let store = open_store(view_context(&fixture, VIEW_STORE_DIR, None, &crate::StoreAction::List)).await.unwrap();
+        let dep = StorePath::<String>::from_name_and_digest_fixed("closure-dep", [31_u8; 20]).unwrap();
+        let app = StorePath::<String>::from_name_and_digest_fixed("closure-app", [32_u8; 20]).unwrap();
+        for (sp, size, refs) in [(dep.clone(), 40_u64, vec![]), (app.clone(), 12_u64, vec![dep.clone()])] {
+            store
+                .pathinfo_service()
+                .put(snix_store::path_info::PathInfo {
+                    store_path: sp,
+                    node: snix_castore::Node::Symlink {
+                        target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+                    },
+                    references: refs,
+                    nar_size: size,
+                    nar_sha256: [9; 32],
+                    signatures: Vec::new(),
+                    deriver: None,
+                    ca: None,
+                })
+                .await
+                .unwrap();
+        }
+        let options = crunch_store::RuntimeClosureQueryOptions::for_store(&store).unwrap();
+        let explanation =
+            crunch_store::store_runtime_closure(&store, std::slice::from_ref(&app), options).await.unwrap();
+        assert_eq!(explanation.observed_member_count, 2);
+        assert_eq!(explanation.observed_known_nar_bytes, 52);
+        assert_eq!(explanation.completeness, crunch_store::RuntimeClosureCompleteness::Complete);
+        assert!(store.list_retained_roots().unwrap().is_empty());
+        drop(store);
+
+        let action = info("closure-app");
+        cmd_store_async(action.clone(), view_context(&fixture, VIEW_STORE_DIR, None, &action))
+            .await
+            .expect("unrestricted store info with single match explains runtime closure");
+    }
+
+    #[tokio::test]
+    async fn unrestricted_store_info_honors_configured_trusted_public_keys_alongside_local_signing_key() {
+        use nix_compat::narinfo::SigningKey;
+        use nix_compat::narinfo::VerifyingKey;
+        use nix_compat::narinfo::fingerprint_with_store_dir;
+        use nix_compat::store_path::StorePath;
+        use nix_compat::store_path::StorePathRef;
+
+        let fixture = view_fixture().await;
+        let local_key_line =
+            "local-store-1:cCta2MEsRNuYCgWYyeRXLyfoFpKhQJKn8gLMeXWAb7vIpRKKo/3JoxJ24OYa3DxT2JVV38KjK/1ywHWuMe2JEw==";
+        std::fs::write(fixture.state.path().join("signing-key"), format!("{local_key_line}\n")).unwrap();
+        let (local_signing, _) = nix_compat::narinfo::parse_keypair(local_key_line).unwrap();
+
+        let configured_raw = ed25519_dalek::SigningKey::from_bytes(&[61_u8; 32]);
+        let configured_verifying = VerifyingKey::new("configured-extra-1".to_string(), configured_raw.verifying_key());
+        let configured_signing = SigningKey::new("configured-extra-1".to_string(), configured_raw);
+        std::fs::write(fixture.state.path().join("trusted-public-keys"), format!("{configured_verifying}\n")).unwrap();
+
+        let other_raw = ed25519_dalek::SigningKey::from_bytes(&[62_u8; 32]);
+        let other_signing = SigningKey::new("imported-other-1".to_string(), other_raw);
+
+        let store = open_store(view_context(&fixture, VIEW_STORE_DIR, None, &crate::StoreAction::List)).await.unwrap();
+        let sign_pi =
+            |name: &str, seed: u8, refs: Vec<StorePath<String>>, signer: &SigningKey<ed25519_dalek::SigningKey>| {
+                let sp = StorePath::<String>::from_name_and_digest_fixed(name, [seed; 20]).unwrap();
+                let ref_refs: Vec<StorePathRef<'_>> = refs.iter().map(StorePath::as_ref).collect();
+                let nar_sha256 = [9; 32];
+                let nar_size = 16_u64;
+                let fp =
+                    fingerprint_with_store_dir(&sp.as_ref(), &nar_sha256, nar_size, ref_refs.iter(), VIEW_STORE_DIR);
+                let sig = signer.sign(fp.as_bytes()).to_owned();
+                snix_store::path_info::PathInfo {
+                    store_path: sp,
+                    node: snix_castore::Node::Symlink {
+                        target: snix_castore::SymlinkTarget::try_from("target").unwrap(),
+                    },
+                    references: refs,
+                    nar_size,
+                    nar_sha256,
+                    signatures: vec![sig],
+                    deriver: None,
+                    ca: None,
+                }
+            };
+
+        let other_dep = sign_pi("other-signed-dep", 91, vec![], &other_signing);
+        let configured_dep = sign_pi("configured-signed-dep", 92, vec![], &configured_signing);
+        let app = sign_pi(
+            "signed-app",
+            93,
+            vec![other_dep.store_path.clone(), configured_dep.store_path.clone()],
+            &local_signing,
+        );
+        for pi in [other_dep.clone(), configured_dep.clone(), app.clone()] {
+            store.pathinfo_service().put(pi).await.unwrap();
+        }
+
+        let options = build_store_info_closure_options(&store, &[]).unwrap();
+        let explanation = crunch_store::store_runtime_closure(&store, std::slice::from_ref(&app.store_path), options)
+            .await
+            .unwrap();
+        assert_eq!(explanation.completeness, crunch_store::RuntimeClosureCompleteness::Complete);
+        assert_eq!(explanation.observed_member_count, 3);
+        let configured_member = explanation
+            .members
+            .iter()
+            .find(|m| m.path_id == configured_dep.store_path.to_absolute_path_with_prefix(VIEW_STORE_DIR))
+            .unwrap();
+        assert!(matches!(configured_member.trust, crunch_store::RuntimeClosureTrustStatus::Trusted { .. }));
+        let other_member = explanation
+            .members
+            .iter()
+            .find(|m| m.path_id == other_dep.store_path.to_absolute_path_with_prefix(VIEW_STORE_DIR))
+            .unwrap();
+        assert!(matches!(other_member.trust, crunch_store::RuntimeClosureTrustStatus::Untrusted { .. }));
+        drop(store);
+
+        let action = info("signed-app");
+        cmd_store_async(action.clone(), view_context(&fixture, VIEW_STORE_DIR, None, &action))
+            .await
+            .expect("unrestricted store info succeeds with configured trusted keys and local signing key");
     }
 }

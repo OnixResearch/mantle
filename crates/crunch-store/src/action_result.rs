@@ -1967,4 +1967,78 @@ mod tests {
         assert!(error.contains("index-request"));
         assert!(server.state.lock().unwrap().resources.is_empty());
     }
+
+    #[tokio::test]
+    async fn io_fault_bounded_publication_gc_retry_histories() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = LocalActionResultStore::new(temp.path());
+        let live_record = signed_record("fault-history-live");
+        let dead_record = signed_record("fault-history-dead");
+        let mut requested_vs_applied = Vec::new();
+
+        // Drive fault counters 1..=4 covering record write_temp/sync_temp and
+        // index write_temp/sync_temp, asserting undiscoverability & retry.
+        for counter in 1..=4_u64 {
+            let candidate = signed_record(&format!("fault-step-{counter}"));
+            let fixture = FaultFixture::new(counter).await;
+            let err = store.publish(&candidate).await.unwrap_err();
+            let fired = FIRED_SITE.lock().take().expect("fault site must fire");
+            requested_vs_applied.push((counter, fired, err.clone()));
+            assert!(
+                err.contains("action-result-publication-write-temp")
+                    || err.contains("action-result-publication-sync-temp"),
+                "unexpected fault error class: {err}"
+            );
+            drop(fixture);
+            FaultFixture::assert_restored().await;
+
+            // Interrupted publication must not leave a discoverable hit or orphan temp files.
+            let lookup = store.lookup(&candidate.record.action_ref).await.unwrap();
+            assert!(
+                !lookup.records.iter().any(|r| r.record.result_ref == candidate.record.result_ref),
+                "interrupted publication exposed incomplete hit for counter={counter}"
+            );
+            for subdir in ["records", "indexes"] {
+                let dir_path = temp.path().join("action-results").join(subdir);
+                if dir_path.exists() {
+                    for entry in std::fs::read_dir(&dir_path).unwrap() {
+                        let name = entry.unwrap().file_name().to_string_lossy().to_string();
+                        assert!(!name.contains(".tmp-"), "orphan temp file left behind: {name}");
+                    }
+                }
+            }
+
+            // Retry after fault clears must succeed cleanly: counters 1..=2 fail
+            // during record publication so retry publishes both; counters 3..=4
+            // fail during index publication so retry sees Duplicate record +
+            // Published index.
+            let retried = store.publish(&candidate).await.unwrap();
+            if counter <= 2 {
+                assert_eq!(retried.record_status, ActionResultPublicationStatus::Published);
+            } else {
+                assert_eq!(retried.record_status, ActionResultPublicationStatus::Duplicate);
+            }
+            assert_eq!(retried.index_status, ActionResultPublicationStatus::Published);
+        }
+
+        assert_eq!(requested_vs_applied.len(), 4);
+        store.publish(&live_record).await.unwrap();
+        store.publish(&dead_record).await.unwrap();
+
+        let live_paths = std::collections::BTreeSet::from([live_record.record.outputs[0].store_path.clone()]);
+        let gc_plan = local_action_result_gc_candidates(temp.path(), &live_paths).unwrap();
+        let live_digest = live_record
+            .record
+            .result_ref
+            .strip_prefix(crunch_action_result_core::ACTION_RESULT_REF_PREFIX)
+            .expect("action result ref prefix");
+        assert!(
+            gc_plan.record_paths.iter().all(|path| !path.to_string_lossy().contains(live_digest)),
+            "live output record must not be collected"
+        );
+        assert!(
+            !gc_plan.record_paths.is_empty() && !gc_plan.index_marker_paths.is_empty(),
+            "dead records and indexes must be identified as GC candidates"
+        );
+    }
 }

@@ -492,6 +492,27 @@ impl CasitaStore {
         Ok(())
     }
 
+    pub(crate) fn forget_gc_removed_root(
+        &self,
+        output_path: Option<&StorePath<String>>,
+        castore_name: &RootName,
+    ) -> Result<(), Error> {
+        if let Some(path) = output_path {
+            let _ = self
+                .observed_roots
+                .lock()
+                .map_err(|_| Error::Store("Casita root observation mutex poisoned".to_string()))?
+                .remove(path.digest());
+        } else {
+            let _ = self
+                .observed_castore_roots
+                .lock()
+                .map_err(|_| Error::Store("Casita castore root observation mutex poisoned".to_string()))?
+                .remove(castore_name);
+        }
+        Ok(())
+    }
+
     pub(crate) async fn rehydrate_castore_payload_root(&self, node: &Node) -> Result<(), Error> {
         self.require_recovered_gc()?;
         let name = Self::castore_root_name(node)?;

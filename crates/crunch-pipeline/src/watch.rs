@@ -54,6 +54,10 @@ const _: () = assert!(MAX_EVALUATIONS_PER_WINDOW > 0);
 const MAX_SNAPSHOT_BYTES: usize = 16_777_216;
 const MAX_SNAPSHOT_FILE_BYTES: usize = 2_097_152;
 const WORKER_EVENT_CAPACITY: usize = 16;
+#[cfg(target_os = "linux")]
+const WATCH_MUTATION_LOCK_POLL_INTERVAL_MS: u64 = 25;
+#[cfg(target_os = "linux")]
+const WATCH_MUTATION_LOCK_WAIT_TIMEOUT_MS: u64 = 300_000;
 
 /// Admission notices describe the actual admitted goal set. A `Settled` notice
 /// contains only the current Worker's terminal roots, not an evaluation result.
@@ -759,6 +763,60 @@ async fn coordinate(
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+async fn acquire_watch_mutation_guard(
+    state_dir: &Path,
+    shutdown: &mut watch::Receiver<bool>,
+) -> Result<crunch_store::StoreMutationGuard, Error> {
+    assert!(!state_dir.as_os_str().is_empty(), "state_dir must not be empty");
+    const {
+        assert!(WATCH_MUTATION_LOCK_WAIT_TIMEOUT_MS >= WATCH_MUTATION_LOCK_POLL_INTERVAL_MS);
+    }
+    acquire_watch_mutation_guard_with_timeout(state_dir, shutdown, WATCH_MUTATION_LOCK_WAIT_TIMEOUT_MS).await
+}
+
+#[cfg(target_os = "linux")]
+async fn acquire_watch_mutation_guard_with_timeout(
+    state_dir: &Path,
+    shutdown: &mut watch::Receiver<bool>,
+    timeout_ms: u64,
+) -> Result<crunch_store::StoreMutationGuard, Error> {
+    assert!(!state_dir.as_os_str().is_empty(), "state_dir must not be empty");
+    let max_polls = timeout_ms.checked_div(WATCH_MUTATION_LOCK_POLL_INTERVAL_MS).unwrap_or(0).saturating_add(1);
+    assert!(max_polls >= 1);
+    for poll_index in 0..max_polls {
+        let waited_ms = poll_index.saturating_mul(WATCH_MUTATION_LOCK_POLL_INTERVAL_MS);
+        if *shutdown.borrow() {
+            let busy = crunch_store::StoreMutationGuard::format_busy_diagnostic(state_dir, waited_ms);
+            return Err(Error::Internal(format!(
+                "watch shutdown requested while waiting for store mutation lock: {busy}"
+            )));
+        }
+        if let Some(guard) = crunch_store::StoreMutationGuard::try_acquire_nonblocking(state_dir, "watch")
+            .map_err(|error| Error::Internal(format!("acquiring watch store mutation lock: {error}")))?
+        {
+            return Ok(guard);
+        }
+        if poll_index.saturating_add(1) >= max_polls {
+            break;
+        }
+        tokio::select! {
+            biased;
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() {
+                    let busy = crunch_store::StoreMutationGuard::format_busy_diagnostic(state_dir, waited_ms);
+                    return Err(Error::Internal(format!(
+                        "watch shutdown requested while waiting for store mutation lock: {busy}"
+                    )));
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_millis(WATCH_MUTATION_LOCK_POLL_INTERVAL_MS)) => {}
+        }
+    }
+    let busy = crunch_store::StoreMutationGuard::format_busy_diagnostic(state_dir, timeout_ms);
+    Err(Error::Internal(format!("timed out waiting for watch store mutation lock: {busy}")))
+}
+
 /// Poll parsed Nickel imports and persist one store, builder, Worker and goal
 /// registry until `shutdown` becomes true or its sender closes. `notices` must
 /// be drained by the caller; a closed receiver terminates the watch with error.
@@ -795,8 +853,7 @@ async fn watch_build_configured(
     store_config
         .preflight_backend_identity()
         .map_err(|error| Error::Internal(format!("opening watch store: {error}")))?;
-    let mutation_guard = crunch_store::StoreMutationGuard::acquire_wait(&config.state_dir)
-        .map_err(|error| Error::Internal(format!("acquiring watch store mutation lock: {error}")))?;
+    let mutation_guard = acquire_watch_mutation_guard(&config.state_dir, shutdown).await?;
     let mut store = if config.base_state_dirs.is_empty() {
         crunch_store::StoreHandle::open(store_config).await
     } else {
@@ -1077,5 +1134,28 @@ mod tests {
         ));
         assert!(!config.output_dir.exists());
         assert!(!config.state_dir.exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn contended_watch_build_cancels_promptly_on_shutdown() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root.ncl");
+        std::fs::write(&root, "{ out = { name = \"a\", builder = \"/bin/sh\" } }").unwrap();
+        let config = test_config(&dir, root);
+        let _holder = crunch_store::StoreMutationGuard::try_acquire_for(&config.state_dir, "build-holder").unwrap();
+        let (shutdown_sender, mut shutdown) = watch::channel(false);
+        let (notices, _receiver) = mpsc::channel(4);
+
+        let releaser = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            let _ = shutdown_sender.send(true);
+        });
+
+        let err = watch_build(&config, "contended-watch".to_string(), &mut shutdown, &notices).await.unwrap_err();
+        releaser.await.unwrap();
+        let msg = err.to_string();
+        assert!(msg.contains("watch shutdown requested while waiting for store mutation lock"), "{msg}");
+        assert!(msg.contains("role=build-holder"), "{msg}");
     }
 }
