@@ -238,8 +238,8 @@ leaf files or revert the churn immediately.
 - **CLI query depth**: `src/main.rs` is shared by the `mantle` and `crunch`
   binaries. Its 256 recursion limit accommodates the exhaustive async
   attestation dispatcher when nightly 1.99 lays out that future.
-- **Linker/build env**: clang + mold + `-Wl,--allow-multiple-definition`
-  (`.cargo/config.toml`), pkg-config + openssl-dev — all supplied by
+- **Linker/build env**: clang + mold (strict duplicate-definition diagnostics,
+  no blanket `--allow-multiple-definition`), pkg-config + openssl-dev — all supplied by
   `nix develop`. Bare host cargo typically fails with `linker 'clang' not found`.
 - **`SNIX_BUILD_SANDBOX_SHELL`** must be set when compiling vendored snix-build
   (`env!` at compile time). For real sandbox builds it must be a

@@ -180,7 +180,7 @@ target = "x86_64-unknown-linux-musl"
 
 [target.x86_64-unknown-linux-musl]
 linker = "gcc"
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition", "-C", "link-arg=-L${GCC_LIB}"]
+rustflags = ["-C", "link-arg=-L${GCC_LIB}"]
 CARGOEOF
 
       echo "=== .cargo/config.toml ==="
