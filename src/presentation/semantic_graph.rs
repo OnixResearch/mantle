@@ -59,27 +59,37 @@ pub(crate) fn render_why_result(
     format: OutputFormat,
     result: &semantic_graph::WhyResult<'_>,
 ) -> Result<String, RunError> {
+    debug_assert!(!result.target.is_empty());
+    debug_assert!(!result.node.id.is_empty());
     if format.is_machine_readable() {
-        let public = PublicWhy {
-            schema: result.schema,
-            target: &result.target,
-            state: result.state,
-            node: public_node(result.node),
-            producing_recipe: result.producing_recipe.map(public_node),
-            sources: PublicNodes(&result.sources),
-            providers: PublicNodes(&result.providers),
-            sandboxes: PublicNodes(&result.sandboxes),
-            proof_receipts: PublicNodes(&result.proof_receipts),
-            witness_requests: PublicNodes(&result.witness_requests),
-            release_evidence: PublicNodes(&result.release_evidence),
-            configuration: result.configuration,
-            action: result.action,
-            layers: result.layers.as_ref(),
-            authoring: result.authoring.as_ref(),
-            observed_execution: result.observed_execution,
-        };
-        return serde_json::to_string_pretty(&public).map_err(|err| RunError::Internal(err.to_string()));
+        return render_why_json(result);
     }
+    render_why_human(result)
+}
+
+fn render_why_json(result: &semantic_graph::WhyResult<'_>) -> Result<String, RunError> {
+    let public = PublicWhy {
+        schema: result.schema,
+        target: &result.target,
+        state: result.state,
+        node: public_node(result.node),
+        producing_recipe: result.producing_recipe.map(public_node),
+        sources: PublicNodes(&result.sources),
+        providers: PublicNodes(&result.providers),
+        sandboxes: PublicNodes(&result.sandboxes),
+        proof_receipts: PublicNodes(&result.proof_receipts),
+        witness_requests: PublicNodes(&result.witness_requests),
+        release_evidence: PublicNodes(&result.release_evidence),
+        configuration: result.configuration,
+        action: result.action,
+        layers: result.layers.as_ref(),
+        authoring: result.authoring.as_ref(),
+        observed_execution: result.observed_execution,
+    };
+    serde_json::to_string_pretty(&public).map_err(|err| RunError::Internal(err.to_string()))
+}
+
+fn render_why_human(result: &semantic_graph::WhyResult<'_>) -> Result<String, RunError> {
     let mut out = format!("why {}\nnode: {} [{}]\n", result.target, result.node.id, result.node.kind);
     append_state(&mut out, result.state);
     if let Some(layers) = &result.layers {

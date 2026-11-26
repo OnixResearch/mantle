@@ -207,9 +207,9 @@ struct OpenFileDescriptorLimitPlan {
 pub(super) struct AttemptStorageMetrics {
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub(super) estimated_bytes: u64,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "BTreeMap::new", skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) bytes_written_by_stage: BTreeMap<String, u64>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default = "BTreeMap::new", skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) bytes_shared_by_stage: BTreeMap<String, u64>,
 }
 
@@ -3276,11 +3276,13 @@ fn prune_unreferenced_shared_store(run_root: &Path) -> Result<(usize, usize, u64
         };
         if name == crate::source_bundle::SHARED_TREES_DIR_NAME && entry.is_dir() {
             for tree in read_dir_sorted_entries(&entry)? {
-                if let Some(digest) = tree.file_name().and_then(|value| value.to_str())
-                    && !digest.starts_with('.')
-                    && !retained.contains(digest)
-                    && tree.is_dir()
-                {
+                let Some(digest) = tree.file_name().and_then(|value| value.to_str()) else {
+                    continue;
+                };
+                if digest.starts_with('.') || retained.contains(digest) {
+                    continue;
+                }
+                if tree.is_dir() {
                     reclaimed_bytes = reclaimed_bytes.saturating_add(remove_dir_reclaiming_bytes(&tree)?);
                     pruned_trees += 1;
                 }
@@ -3330,7 +3332,7 @@ fn extract_manifest_record_digests(path: &Path, digests: &mut BTreeSet<String>) 
     #[derive(Deserialize)]
     struct BundleDigestScan {
         format: Option<String>,
-        #[serde(default)]
+        #[serde(default = "Vec::new")]
         records: Vec<RecordDigestScan>,
     }
     #[derive(Deserialize)]

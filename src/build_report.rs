@@ -477,14 +477,14 @@ pub fn render_build_json_report_with_frontend_artifact_attestations(
             None,
         );
     }
-    let build_document = build_json_report(
+    let build_document = build_json_report(BuildJsonReportInput {
         config,
         result,
         logs_dir,
         diagnostic_persistence_failures,
         frontend_artifact_attestations,
-        None,
-    );
+        live_cpu_report: None,
+    });
     serde_json::to_string_pretty(&build_document)
 }
 
@@ -495,8 +495,14 @@ pub fn render_build_json_report_with_live_cpu_diagnostics(
     diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
     live_cpu_report: Option<&crunch_build::LiveCpuDiagnosticsReport>,
 ) -> Result<String, serde_json::Error> {
-    let build_document =
-        build_json_report(config, result, logs_dir, diagnostic_persistence_failures, &[], live_cpu_report);
+    let build_document = build_json_report(BuildJsonReportInput {
+        config,
+        result,
+        logs_dir,
+        diagnostic_persistence_failures,
+        frontend_artifact_attestations: &[],
+        live_cpu_report,
+    });
     serde_json::to_string_pretty(&build_document)
 }
 
@@ -589,14 +595,24 @@ fn build_json_live_cpu_attempt_dto(attempt: &crunch_build::LiveCpuAttemptStatus)
     }
 }
 
-fn build_json_report(
-    config: &BuildConfig,
-    result: &PipelineResult,
-    logs_dir: &Path,
-    diagnostic_persistence_failures: &[DiagnosticPersistenceFailure],
-    frontend_artifact_attestations: &[FrontendArtifactAdmissionAttestation],
-    live_cpu_report: Option<&crunch_build::LiveCpuDiagnosticsReport>,
-) -> BuildJsonReport {
+struct BuildJsonReportInput<'a> {
+    config: &'a BuildConfig,
+    result: &'a PipelineResult,
+    logs_dir: &'a Path,
+    diagnostic_persistence_failures: &'a [DiagnosticPersistenceFailure],
+    frontend_artifact_attestations: &'a [FrontendArtifactAdmissionAttestation],
+    live_cpu_report: Option<&'a crunch_build::LiveCpuDiagnosticsReport>,
+}
+
+fn build_json_report(input: BuildJsonReportInput<'_>) -> BuildJsonReport {
+    let BuildJsonReportInput {
+        config,
+        result,
+        logs_dir,
+        diagnostic_persistence_failures,
+        frontend_artifact_attestations,
+        live_cpu_report,
+    } = input;
     debug_assert_eq!(config.hermeticity_mode, result.hermeticity_mode, "config/result hermeticity modes must match");
     let mut outcome_rows = build_outcome_reports(config, result, logs_dir);
     if let Some(cpu_report) = live_cpu_report {
@@ -1886,7 +1902,14 @@ mod tests {
             }],
         };
 
-        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[], None);
+        let report = build_json_report(BuildJsonReportInput {
+            config: &config,
+            result: &result,
+            logs_dir: logs_dir.path(),
+            diagnostic_persistence_failures: &[],
+            frontend_artifact_attestations: &[],
+            live_cpu_report: None,
+        });
         let logical_path = output_path.to_absolute_path_with_prefix(&config.store_dir);
 
         assert_eq!(report.hermeticity_mode, "practical");
@@ -2115,7 +2138,14 @@ mod tests {
             store_layer_selections: Vec::new(),
         };
 
-        let report = build_json_report(&config, &result, logs_dir.path(), &[], &[], None);
+        let report = build_json_report(BuildJsonReportInput {
+            config: &config,
+            result: &result,
+            logs_dir: logs_dir.path(),
+            diagnostic_persistence_failures: &[],
+            frontend_artifact_attestations: &[],
+            live_cpu_report: None,
+        });
 
         assert_eq!(report.cargo_build_evidence.len(), 1);
         assert_eq!(report.cargo_build_evidence[0].label, "demo");

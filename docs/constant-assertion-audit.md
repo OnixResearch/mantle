@@ -74,12 +74,12 @@ Measured with `python3 scripts/check-constant-assertions.py --audit-all`:
 - `crates/crunch-build/src/workspace.rs` (`2`): `L528, L529`
 - `crates/crunch-build/src/workspace_shell.rs` (`1`): `L679`
 - `crates/crunch-store/src/pull.rs` (`1`): `L1011`
-- `src/elf_local_symbol_core.rs` (`1`): `L163`
+- `src/elf_local_symbol_core.rs` (`1`): `L185`
 - `src/remote_build/attenuated_admission.rs` (`3`): `L204, L335, L336`
 - `src/remote_build.rs` (`2`): `L12927, L12928`
 - `src/self_build.rs` (`6`): `L2133, L2466, L2467, L2544, L3034, L3168`
 - `src/source_built_fixed_point_resume_bundle.rs` (`1`): `L204`
-- `src/source_built_fixed_point_shell.rs` (`1`): `L1522`
+- `src/source_built_fixed_point_shell.rs` (`1`): `L1673`
 
 ### Other Unowned Summary (`82` files, `262` assertions)
 - **`src/` (`59` files, `197` assertions)** — top files (`>= 5` assertions): `src/cargo_free_self_build.rs` (`14`), `src/stagex_binutils.rs` (`14`), `src/foreign_import_cmd.rs` (`13`), `src/bootstrap_validate.rs` (`10`), `src/project_cmd.rs` (`10`), `src/ast_grep_evidence.rs` (`9`), `src/frontend_artifact_export.rs` (`8`), `src/full_source_provider.rs` (`8`), `src/cairn_release_handoff.rs` (`6`), `src/frontend_artifact_spec.rs` (`6`), `src/offline_cargo.rs` (`6`), `src/nickel_export_core_adapter.rs` (`5`), `src/nix_free_demo_cmd.rs` (`5`), `src/stagex_bash_full.rs` (`5`), plus `45` files (`1–4` assertions each; `78` assertions).

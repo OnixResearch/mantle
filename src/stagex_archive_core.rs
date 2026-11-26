@@ -350,12 +350,10 @@ fn validate_long_name_offset(table: &[u8], offset: usize) -> Result<(), StagexAr
 }
 
 fn validate_plain_member_name(name: &[u8]) -> Result<(), StagexArchiveError> {
-    if name.is_empty()
-        || name.len() > ARCHIVE_MEMBER_NAME_BYTES_MAX
-        || name == b"."
-        || name == b".."
-        || name == b"__.SYMDEF"
-    {
+    if name.is_empty() || name.len() > ARCHIVE_MEMBER_NAME_BYTES_MAX {
+        return Err(StagexArchiveError::InvalidMemberName);
+    }
+    if name == b"." || name == b".." || name == b"__.SYMDEF" {
         return Err(StagexArchiveError::InvalidMemberName);
     }
     if !name.iter().all(|byte| byte.is_ascii_alphanumeric() || matches!(*byte, b'.' | b'_' | b'+' | b'-')) {

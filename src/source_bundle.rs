@@ -2513,24 +2513,7 @@ pub(crate) fn import_source_bundle_shared(
                 fs::create_dir_all(&records_dir).map_err(|err| {
                     RunError::Internal(format!("creating source records dir {}: {err}", records_dir.display()))
                 })?;
-                let mut is_linked = false;
-                if let Some(shared_dir) = shared_records_dir {
-                    let shared_record = shared_dir.join(format!("{}.json", record.content_blake3));
-                    if shared_record.exists() {
-                        let verified = read_record(&shared_record)?;
-                        if &verified != record {
-                            return Err(RunError::Internal(format!(
-                                "shared source record {} conflicts with import manifest",
-                                record.content_blake3
-                            )));
-                        }
-                        if fs::hard_link(&shared_record, &target).is_ok() {
-                            is_linked = true;
-                            let len = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
-                            stats.bytes_shared = stats.bytes_shared.saturating_add(len);
-                        }
-                    }
-                }
+                let is_linked = try_link_shared_source_record(shared_records_dir, &target, record, &mut stats)?;
                 if !is_linked {
                     write_record_atomically(&target, record)?;
                     let len = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
@@ -2559,6 +2542,36 @@ pub(crate) fn import_source_bundle_shared(
         },
         stats,
     ))
+}
+
+fn try_link_shared_source_record(
+    shared_records_dir: Option<&Path>,
+    target: &Path,
+    record: &SourceRecord,
+    stats: &mut SharedStoreWriteStats,
+) -> Result<bool, RunError> {
+    debug_assert!(!record.content_blake3.is_empty());
+    let Some(shared_dir) = shared_records_dir else {
+        return Ok(false);
+    };
+    let shared_record = shared_dir.join(format!("{}.json", record.content_blake3));
+    if !shared_record.exists() {
+        return Ok(false);
+    }
+    let verified = read_record(&shared_record)?;
+    if &verified != record {
+        return Err(RunError::Internal(format!(
+            "shared source record {} conflicts with import manifest",
+            record.content_blake3
+        )));
+    }
+    if fs::hard_link(&shared_record, target).is_err() {
+        return Ok(false);
+    }
+    let len = fs::metadata(target).map(|m| m.len()).unwrap_or(0);
+    stats.bytes_shared = stats.bytes_shared.saturating_add(len);
+    debug_assert!(target.exists());
+    Ok(true)
 }
 
 // r[impl bootstrap_inventory.fresh_clone_source_hydration]

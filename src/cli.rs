@@ -13212,14 +13212,11 @@ let Plan = {
             "2",
         ]))
         .expect("CLI parser test");
-        assert!(matches!(
-            args.command,
-            Command::SelfBuild {
-                reclaim_attempts: Some(_),
-                keep_cohorts: 2,
-                ..
-            }
-        ));
+        assert!(matches!(args.command, Command::SelfBuild {
+            reclaim_attempts: Some(_),
+            keep_cohorts: 2,
+            ..
+        }));
     }
 
     #[test]
