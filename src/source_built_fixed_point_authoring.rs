@@ -30,6 +30,9 @@ struct PreparationReport {
     output_profile_blake3: String,
     source_profile: PathBuf,
     program_records: BTreeMap<String, String>,
+    estimated_bytes: u64,
+    bytes_written_by_stage: BTreeMap<String, u64>,
+    bytes_shared_by_stage: BTreeMap<String, u64>,
     non_claim: String,
 }
 
@@ -74,12 +77,16 @@ fn prepare_source_profile(
     verify_original_mantle_source(&prepared.source_root, &prepared.plan)?;
     let program_records =
         programs.iter().map(|record| (record.identity.clone(), record.content_blake3.clone())).collect();
+    let shared_records_dir = super::shared_source_records_dir(&prepared.final_dir);
+    let mut storage_metrics = prepared.storage_metrics.clone();
     let native_path = &roots[&SourceAuthorityRole::NativeSourceBundle];
     let native = crate::source_bundle::read_source_bundle(native_path)?;
     let mut native_records = native.records;
     append_program_records(&mut native_records, &programs, options.source_records_max)?;
     let native = assemble_source_bundle(native_records, &profile.store_prefix)?;
-    crate::source_bundle::write_source_bundle(native_path, &native)?;
+    let native_stats =
+        crate::source_bundle::write_referenced_source_bundle(native_path, &shared_records_dir, &native, true)?;
+    storage_metrics.record_stage("source-program-authoring", native_stats);
     // The Rust actions read the authored program from the Rust source-archive
     // root; its record is captured below so the proof's role digest stays exact.
     // The StageX closure keeps its canonical manifest identity: it is pinned by
@@ -94,14 +101,23 @@ fn prepare_source_profile(
     // authored program is materialized beside them rather than over them.
     let rust_program_staging = tempfile::tempdir().map_err(|error| proof_error(error.to_string()))?;
     crate::source_bundle::materialize_source_record_payload(rust_program, rust_program_staging.path())?;
+    let mut rust_copied_bytes = 0u64;
     for file in &rust_program.files {
         let source = rust_program_staging.path().join(&file.path);
         let destination = rust_root.join(&file.path);
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent).map_err(|error| proof_error(error.to_string()))?;
         }
-        fs::copy(&source, &destination).map_err(|error| proof_error(error.to_string()))?;
+        if destination.exists() {
+            fs::remove_file(&destination).map_err(|error| proof_error(error.to_string()))?;
+        }
+        let copied = fs::copy(&source, &destination).map_err(|error| proof_error(error.to_string()))?;
+        rust_copied_bytes = rust_copied_bytes.saturating_add(copied);
     }
+    storage_metrics.record_stage("source-program-authoring", crate::source_bundle::SharedStoreWriteStats {
+        bytes_written: rust_copied_bytes,
+        bytes_shared: 0,
+    });
     for record in &mut profile.records {
         if record.identity == native_identity {
             crate::source_bundle::recapture_source_record_payload(record, native_path)?;
@@ -112,7 +128,13 @@ fn prepare_source_profile(
     append_program_records(&mut profile.records, &programs, options.source_records_max)?;
     let profile = assemble_source_bundle(profile.records, &profile.store_prefix)?;
     source_built_fixed_point_profile_records(&profile)?;
-    crate::source_bundle::write_source_bundle(&prepared.staging_dir.join(PROFILE_FILE), &profile)?;
+    let profile_stats = crate::source_bundle::write_referenced_source_bundle(
+        &prepared.staging_dir.join(PROFILE_FILE),
+        &shared_records_dir,
+        &profile,
+        false,
+    )?;
+    storage_metrics.record_stage("source-program-authoring", profile_stats);
     let report = PreparationReport {
         schema: "mantle-source-built-source-programs-v1".into(),
         input_profile_blake3: options.expected_source_profile_blake3.into(),
@@ -120,6 +142,9 @@ fn prepare_source_profile(
         output_profile_blake3: profile.manifest_blake3,
         source_profile: prepared.final_dir.join(PROFILE_FILE),
         program_records,
+        estimated_bytes: storage_metrics.estimated_bytes,
+        bytes_written_by_stage: storage_metrics.bytes_written_by_stage,
+        bytes_shared_by_stage: storage_metrics.bytes_shared_by_stage,
         non_claim: NON_CLAIM.into(),
     };
     write_json_create_new(&prepared.staging_dir.join(REPORT_FILE), &report)?;

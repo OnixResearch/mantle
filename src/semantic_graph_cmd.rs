@@ -90,6 +90,17 @@ fn render_why(
 ) -> Result<String, RunError> {
     debug_assert_eq!(request.kind, GraphQueryKind::Why);
     debug_assert!(request.limits.nodes > 0);
+    if graph.inspection.authoring.selected_outputs.contains_key(&request.target) {
+        let explanation = graph.explain_selected_output(&request.target).map_err(|error| report_error(ctx, error))?;
+        classify(request, plan, GraphQueryFacts {
+            observed_target: &explanation.handle_id,
+            nodes: u32::from(explanation.producer_node.is_some()),
+            edges: 0,
+            aliases: 0,
+            dependents: count(explanation.diagnostics.len())?,
+        })?;
+        return presentation::render_selected_output_explanation(ctx.output_format(), &explanation);
+    }
     let result = graph.why(&request.target).map_err(|error| report_error(ctx, error))?;
     classify(request, plan, GraphQueryFacts {
         observed_target: &result.target,

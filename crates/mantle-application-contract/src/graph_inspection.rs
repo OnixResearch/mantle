@@ -20,6 +20,10 @@ pub const MAX_GRAPH_NODES: u32 = 65_536;
 pub const MAX_GRAPH_EDGES: u32 = 262_144;
 pub const MAX_GRAPH_STEPS: u32 = 1_048_576;
 pub const MAX_GRAPH_DEPTH: u32 = 4096;
+pub const MAX_CONSTRUCTOR_PATH_LEN: u32 = 32;
+pub const MAX_DIAGNOSTIC_TEXT_BYTES: u32 = 256;
+pub const MAX_AUTHORING_RECORDS: u32 = 65_536;
+pub const COMPOSED_IMPACT_RULE_VERSION: &str = "mantle-composed-impact-v1";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -112,6 +116,225 @@ fn empty_actions() -> BTreeMap<String, Action> {
     BTreeMap::new()
 }
 
+/// Explicit graph inspection layers, never conflating authoring with execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GraphLayer {
+    Authoring,
+    NormalizedRecipe,
+    ConfiguredAction,
+    ObservedExecution,
+}
+
+fn no_u32() -> Option<u32> {
+    None
+}
+fn no_i32() -> Option<i32> {
+    None
+}
+fn no_string() -> Option<String> {
+    None
+}
+fn no_origin() -> Option<SourceOrigin> {
+    None
+}
+fn no_output_set() -> Option<BTreeSet<String>> {
+    None
+}
+fn empty_strings() -> Vec<String> {
+    Vec::new()
+}
+fn empty_templates() -> BTreeMap<String, TemplateFact> {
+    BTreeMap::new()
+}
+fn empty_instances() -> BTreeMap<String, TemplateInstance> {
+    BTreeMap::new()
+}
+fn empty_references() -> Vec<RecipeReference> {
+    Vec::new()
+}
+fn empty_selected_outputs() -> BTreeMap<String, SelectedOutputHandle> {
+    BTreeMap::new()
+}
+fn empty_diagnostics() -> Vec<AuthoringDiagnostic> {
+    Vec::new()
+}
+fn empty_authoring() -> AuthoringFacts {
+    AuthoringFacts::default()
+}
+fn empty_observed_execution() -> BTreeMap<String, ObservedExecution> {
+    BTreeMap::new()
+}
+
+/// Bounded source-origin location for authoring inspection only.
+/// Excluded from canonical recipe and configured-target identities.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceOrigin {
+    pub file: String,
+    #[serde(default = "no_u32", skip_serializing_if = "Option::is_none")]
+    pub line: Option<u32>,
+    #[serde(default = "no_u32", skip_serializing_if = "Option::is_none")]
+    pub column: Option<u32>,
+}
+
+/// Reusable authoring template declaration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TemplateFact {
+    /// Presentation name only; never sufficient template identity.
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default = "no_origin", skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SourceOrigin>,
+}
+
+/// One concrete authoring template instantiation producing a canonical recipe.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TemplateInstance {
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    pub recipe_id: String,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub root: Option<String>,
+    #[serde(default = "empty_strings", skip_serializing_if = "Vec::is_empty")]
+    pub constructor_path: Vec<String>,
+    #[serde(default = "no_origin", skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SourceOrigin>,
+    /// Presentation metadata only; excluded from instance identity.
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+impl TemplateInstance {
+    /// Canonical instance identity over template, constructor path, and root.
+    /// Excludes presentation display names and line/column metadata.
+    pub fn identity(&self) -> Result<String, String> {
+        let preimage = (&self.template_id, &self.constructor_path, &self.root);
+        identity(b"mantle-template-instance-v1\0", "instance", &preimage)
+    }
+}
+
+/// One authoring edge referencing a canonical recipe from an instance or root.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecipeReference {
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub referencer_instance: Option<String>,
+    pub target_recipe: String,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub handle_id: Option<String>,
+    #[serde(default = "no_origin", skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SourceOrigin>,
+}
+
+/// Retained selected-output handle linking a consumer to an actual producer output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SelectedOutputHandle {
+    pub producer_recipe: String,
+    pub output_name: String,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub consumer_instance: Option<String>,
+    #[serde(default = "no_origin", skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SourceOrigin>,
+    #[serde(default = "no_output_set", skip_serializing_if = "Option::is_none")]
+    pub declared_outputs: Option<BTreeSet<String>>,
+}
+
+impl SelectedOutputHandle {
+    /// Stable identity of the producer-recipe and selected output-name pair.
+    pub fn identity(&self) -> Result<String, String> {
+        let preimage = (&self.producer_recipe, &self.output_name);
+        identity(b"mantle-selected-output-v1\0", "select", &preimage)
+    }
+
+    /// Whether the selected output exists in known producer outputs (`None` when unknown).
+    pub fn selection_valid(&self) -> Option<bool> {
+        self.declared_outputs.as_ref().map(|outputs| outputs.contains(&self.output_name))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AuthoringDiagnosticKind {
+    InvalidOutputSelection,
+    ContractFailure,
+    IdentityCollision,
+    UnavailableProvenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuthoringDiagnostic {
+    pub kind: AuthoringDiagnosticKind,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub root: Option<String>,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub instance_id: Option<String>,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub recipe_id: Option<String>,
+    #[serde(default = "no_string", skip_serializing_if = "Option::is_none")]
+    pub output_name: Option<String>,
+    #[serde(default = "no_origin", skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SourceOrigin>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionOutcome {
+    CacheHit,
+    Executed,
+    Failed,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservedExecution {
+    pub outcome: ExecutionOutcome,
+    #[serde(default = "no_i32", skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    #[serde(default = "no_output_set", skip_serializing_if = "Option::is_none")]
+    pub produced_outputs: Option<BTreeSet<String>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AuthoringFacts {
+    #[serde(default = "empty_templates", skip_serializing_if = "BTreeMap::is_empty")]
+    pub templates: BTreeMap<String, TemplateFact>,
+    #[serde(default = "empty_instances", skip_serializing_if = "BTreeMap::is_empty")]
+    pub instances: BTreeMap<String, TemplateInstance>,
+    #[serde(default = "empty_references", skip_serializing_if = "Vec::is_empty")]
+    pub references: Vec<RecipeReference>,
+    #[serde(default = "empty_selected_outputs", skip_serializing_if = "BTreeMap::is_empty")]
+    pub selected_outputs: BTreeMap<String, SelectedOutputHandle>,
+    #[serde(default = "empty_diagnostics", skip_serializing_if = "Vec::is_empty")]
+    pub diagnostics: Vec<AuthoringDiagnostic>,
+}
+
+impl AuthoringFacts {
+    pub fn is_empty(&self) -> bool {
+        let is_maps_empty = self.templates.is_empty() && self.instances.is_empty();
+        let is_vecs_empty = self.references.is_empty() && self.diagnostics.is_empty();
+        is_maps_empty && is_vecs_empty && self.selected_outputs.is_empty()
+    }
+
+    pub fn record_count(&self) -> Result<u32, String> {
+        let total = self
+            .templates
+            .len()
+            .saturating_add(self.instances.len())
+            .saturating_add(self.references.len())
+            .saturating_add(self.selected_outputs.len())
+            .saturating_add(self.diagnostics.len());
+        u32::try_from(total).map_err(|_| String::from("authoring record count exceeds u32"))
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InspectionFacts {
@@ -121,6 +344,17 @@ pub struct InspectionFacts {
     pub configured: BTreeMap<String, Configuration>,
     #[serde(default = "empty_actions")]
     pub actions: BTreeMap<String, Action>,
+    #[serde(default = "empty_authoring", skip_serializing_if = "AuthoringFacts::is_empty")]
+    pub authoring: AuthoringFacts,
+    #[serde(default = "empty_observed_execution", skip_serializing_if = "BTreeMap::is_empty")]
+    pub observed_execution: BTreeMap<String, ObservedExecution>,
+}
+
+impl InspectionFacts {
+    /// Whether v2 authoring or observed-execution facts are recorded.
+    pub fn has_v2_facts(&self) -> bool {
+        !self.authoring.is_empty() || !self.observed_execution.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -306,6 +540,53 @@ impl<'a> DependencyIndex<'a> {
             examined_edges: steps,
         })
     }
+
+    fn reverse_reachability_parents(
+        &self,
+        seeds: &BTreeSet<String>,
+    ) -> Result<(BTreeMap<&'a str, &'a str>, u32), String> {
+        if seeds.is_empty() {
+            return Err(String::from("impact query requires at least one seed"));
+        }
+        let max_nodes = self.forward.len();
+        let mut parents = BTreeMap::new();
+        let mut queue = VecDeque::with_capacity(max_nodes);
+        for seed in seeds {
+            let canonical =
+                self.forward.get_key_value(seed.as_str()).map(|(id, _)| *id).ok_or("missing query target")?;
+            if parents.contains_key(canonical) {
+                continue;
+            }
+            if parents.len() >= max_nodes {
+                return Err(String::from("graph traversal exceeds node bound"));
+            }
+            parents.insert(canonical, canonical);
+            queue.push_back((canonical, 0u32));
+        }
+        let mut steps = 0u32;
+        while let Some((id, depth)) = queue.pop_front() {
+            for next in &self.reverse[id] {
+                steps = steps.checked_add(1).ok_or("graph traversal step overflow")?;
+                if steps > self.limits.steps {
+                    return Err(String::from("graph traversal exceeds step bound"));
+                }
+                if parents.contains_key(next) {
+                    continue;
+                }
+                if depth >= self.limits.depth {
+                    return Err(String::from("graph traversal exceeds depth bound"));
+                }
+                if parents.len() >= max_nodes {
+                    return Err(String::from("graph traversal exceeds node bound"));
+                }
+                parents.insert(*next, id);
+                queue.push_back((*next, depth.saturating_add(1)));
+            }
+        }
+        debug_assert!(!parents.is_empty());
+        debug_assert!(steps <= self.limits.steps);
+        Ok((parents, steps))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -471,6 +752,322 @@ impl ConfigurationComparison {
     }
 }
 
+/// Optional execution-policy predicate for composed impact inspection.
+/// Missing action policy facts never evaluate to `NotMatched` (always `Unavailable`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyFilter {
+    #[serde(default = "no_bool", skip_serializing_if = "Option::is_none")]
+    pub sandboxed: Option<bool>,
+    #[serde(default = "no_network_policy", skip_serializing_if = "Option::is_none")]
+    pub network: Option<NetworkPolicy>,
+    #[serde(default = "no_bool", skip_serializing_if = "Option::is_none")]
+    pub cache_read: Option<bool>,
+    #[serde(default = "no_bool", skip_serializing_if = "Option::is_none")]
+    pub allow_remote: Option<bool>,
+}
+
+fn no_bool() -> Option<bool> {
+    None
+}
+
+fn no_network_policy() -> Option<NetworkPolicy> {
+    None
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PolicyMatch {
+    Matched,
+    NotMatched,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ImpactOutcome {
+    Complete,
+    Partial,
+    Unsupported,
+    Exhausted,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ImpactedAction {
+    pub affected_node: String,
+    pub action_id: Option<String>,
+    pub configured_target: Option<String>,
+    pub semantic_target: Option<String>,
+    pub configuration: Option<Blake3Digest>,
+    pub toolchain: Option<Blake3Digest>,
+    pub role: Option<String>,
+    pub policy: Option<ExecutionPolicy>,
+    pub policy_match: PolicyMatch,
+    pub is_action_complete: bool,
+    pub supporting_path: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ComposedImpactResult {
+    pub schema: &'static str,
+    pub rule_version: &'static str,
+    pub snapshot_digest: Blake3Digest,
+    pub graph_state: EvaluationState,
+    pub outcome: ImpactOutcome,
+    pub limits: QueryLimits,
+    pub seeds: BTreeSet<String>,
+    pub impacted_nodes: Vec<String>,
+    pub impacted_actions: Vec<ImpactedAction>,
+    pub unavailable_nodes: Vec<String>,
+    pub examined_edges: u32,
+}
+
+pub struct ComposedImpactInput<'a> {
+    pub ids: &'a [&'a str],
+    pub depends_on_edges: &'a [(&'a str, &'a str)],
+    pub action_for_edges: &'a [(&'a str, &'a str)],
+    pub configured_from_edges: &'a [(&'a str, &'a str)],
+    pub inspection: &'a InspectionFacts,
+    pub snapshot_digest: Blake3Digest,
+    pub seeds: &'a BTreeSet<String>,
+    pub policy_filter: Option<&'a PolicyFilter>,
+    pub limits: QueryLimits,
+}
+
+/// Evaluate whether an optional `ExecutionPolicy` satisfies `PolicyFilter`.
+/// Unknown (`None`) policy facts remain `Unavailable`, never `NotMatched`.
+pub fn evaluate_policy_filter(policy: Option<&ExecutionPolicy>, filter: Option<&PolicyFilter>) -> PolicyMatch {
+    let Some(policy) = policy else {
+        return PolicyMatch::Unavailable;
+    };
+    let Some(filter) = filter else {
+        return PolicyMatch::Matched;
+    };
+    let is_sandbox_ok = filter.sandboxed.is_none_or(|expected| policy.sandboxed == expected);
+    let is_network_ok = filter.network.as_ref().is_none_or(|expected| &policy.network == expected);
+    let is_cache_ok = filter.cache_read.is_none_or(|expected| policy.cache_read == expected);
+    let is_remote_ok = filter.allow_remote.is_none_or(|expected| policy.allow_remote == expected);
+    let is_all_ok = is_sandbox_ok && is_network_ok && is_cache_ok && is_remote_ok;
+    debug_assert!(is_all_ok || !is_sandbox_ok || !is_network_ok || !is_cache_ok || !is_remote_ok);
+    debug_assert!(!is_all_ok || (is_sandbox_ok && is_network_ok));
+    if is_all_ok {
+        PolicyMatch::Matched
+    } else {
+        PolicyMatch::NotMatched
+    }
+}
+
+/// Bounded composed impact query joining reverse `DependsOn` reachability
+/// with declared actions, configured targets, configurations, and policies.
+pub fn composed_impact(input: &ComposedImpactInput<'_>) -> Result<ComposedImpactResult, String> {
+    let index = DependencyIndex::new(input.ids, input.depends_on_edges, input.limits)?;
+    let (parents, examined_edges) = index.reverse_reachability_parents(input.seeds)?;
+    let paths = build_supporting_paths(&parents)?;
+    let (impacted_actions, unavailable_nodes) = collect_impacted_actions(input, &paths)?;
+    let impacted_nodes: Vec<String> = paths.keys().cloned().collect();
+    let outcome = classify_impact_outcome(input.inspection.state, &unavailable_nodes, &impacted_actions);
+    debug_assert_eq!(impacted_nodes.len(), paths.len());
+    debug_assert!(examined_edges <= input.limits.steps);
+    Ok(ComposedImpactResult {
+        schema: "mantle-composed-impact-v1",
+        rule_version: COMPOSED_IMPACT_RULE_VERSION,
+        snapshot_digest: input.snapshot_digest.clone(),
+        graph_state: input.inspection.state,
+        outcome,
+        limits: input.limits,
+        seeds: input.seeds.clone(),
+        impacted_nodes,
+        impacted_actions,
+        unavailable_nodes: unavailable_nodes.into_iter().collect(),
+        examined_edges,
+    })
+}
+
+fn collect_impacted_actions(
+    input: &ComposedImpactInput<'_>,
+    paths: &BTreeMap<String, Vec<String>>,
+) -> Result<(Vec<ImpactedAction>, BTreeSet<String>), String> {
+    let action_to_config = build_edge_map(input.action_for_edges);
+    let config_to_semantic = build_edge_map(input.configured_from_edges);
+    let max_impacted_actions = paths.len().saturating_mul(input.inspection.actions.len().max(1));
+    let step_cap = usize::try_from(MAX_GRAPH_STEPS).map_err(|_| String::from("step bound exceeds usize"))?;
+    let mut impacted_actions = Vec::with_capacity(max_impacted_actions.min(step_cap));
+    let mut unavailable_nodes = BTreeSet::new();
+
+    for (node_id, path) in paths {
+        let mut is_node_resolved = false;
+        if let Some(action) = input.inspection.actions.get(node_id) {
+            is_node_resolved = true;
+            if impacted_actions.len() >= max_impacted_actions {
+                return Err(String::from("composed impact action count exceeds bound"));
+            }
+            impacted_actions.push(build_impacted_action_record(ImpactRecordContext {
+                affected_node: node_id,
+                action_id: node_id,
+                action,
+                input,
+                action_to_config: &action_to_config,
+                supporting_path: path,
+            }));
+        } else {
+            let matching_actions = collect_actions_for_node(node_id, input, &action_to_config, &config_to_semantic);
+            for (action_id, action) in matching_actions {
+                is_node_resolved = true;
+                if impacted_actions.len() >= max_impacted_actions {
+                    return Err(String::from("composed impact action count exceeds bound"));
+                }
+                impacted_actions.push(build_impacted_action_record(ImpactRecordContext {
+                    affected_node: node_id,
+                    action_id,
+                    action,
+                    input,
+                    action_to_config: &action_to_config,
+                    supporting_path: path,
+                }));
+            }
+        }
+        if !is_node_resolved {
+            unavailable_nodes.insert(node_id.clone());
+        }
+    }
+
+    impacted_actions.sort_by(|left, right| {
+        (&left.affected_node, &left.action_id, &left.configured_target).cmp(&(
+            &right.affected_node,
+            &right.action_id,
+            &right.configured_target,
+        ))
+    });
+    debug_assert!(impacted_actions.len() <= max_impacted_actions);
+    debug_assert!(unavailable_nodes.len() <= paths.len());
+    Ok((impacted_actions, unavailable_nodes))
+}
+
+fn build_supporting_paths(parents: &BTreeMap<&str, &str>) -> Result<BTreeMap<String, Vec<String>>, String> {
+    let max_paths = parents.len();
+    let mut paths = BTreeMap::new();
+    for id in parents.keys() {
+        let mut cursor = *id;
+        let mut path = Vec::with_capacity(max_paths);
+        path.push(cursor.to_string());
+        while let Some(parent) = parents.get(cursor).copied() {
+            if parent == cursor {
+                break;
+            }
+            if path.len() >= max_paths {
+                return Err(String::from("supporting path exceeds parent tree bound"));
+            }
+            path.push(parent.to_string());
+            cursor = parent;
+        }
+        if paths.len() >= max_paths {
+            return Err(String::from("supporting path count exceeds parent tree bound"));
+        }
+        paths.insert((*id).to_string(), path);
+    }
+    debug_assert_eq!(paths.len(), parents.len());
+    debug_assert!(paths.values().all(|path| !path.is_empty()));
+    Ok(paths)
+}
+
+fn build_edge_map<'a>(edges: &[(&'a str, &'a str)]) -> BTreeMap<&'a str, BTreeSet<&'a str>> {
+    let mut map: BTreeMap<&'a str, BTreeSet<&'a str>> = BTreeMap::new();
+    for (from, to) in edges {
+        map.entry(*from).or_default().insert(*to);
+    }
+    debug_assert!(map.values().all(|targets| !targets.is_empty()));
+    debug_assert!(map.len() <= edges.len());
+    map
+}
+
+fn collect_actions_for_node<'a>(
+    node_id: &str,
+    input: &'a ComposedImpactInput<'a>,
+    action_to_config: &BTreeMap<&'a str, BTreeSet<&'a str>>,
+    config_to_semantic: &BTreeMap<&'a str, BTreeSet<&'a str>>,
+) -> Vec<(&'a str, &'a Action)> {
+    let mut matched_configs = BTreeSet::new();
+    if input.inspection.configured.contains_key(node_id) {
+        matched_configs.insert(node_id);
+    }
+    for (cfg_id, config) in &input.inspection.configured {
+        let is_semantic_match = config.semantic_target == node_id;
+        let is_edge_match = config_to_semantic.get(cfg_id.as_str()).is_some_and(|targets| targets.contains(node_id));
+        if is_semantic_match || is_edge_match {
+            matched_configs.insert(cfg_id.as_str());
+        }
+    }
+    let mut actions = Vec::with_capacity(input.inspection.actions.len());
+    for (action_id, action) in &input.inspection.actions {
+        let is_direct_cfg = matched_configs.contains(action.configured_target.as_str());
+        let is_edge_cfg = action_to_config
+            .get(action_id.as_str())
+            .is_some_and(|targets| targets.iter().any(|cfg| matched_configs.contains(cfg)));
+        if is_direct_cfg || is_edge_cfg {
+            actions.push((action_id.as_str(), action));
+        }
+    }
+    debug_assert!(actions.len() <= input.inspection.actions.len());
+    debug_assert!(matched_configs.len() <= input.inspection.configured.len().saturating_add(1));
+    actions
+}
+
+struct ImpactRecordContext<'a> {
+    affected_node: &'a str,
+    action_id: &'a str,
+    action: &'a Action,
+    input: &'a ComposedImpactInput<'a>,
+    action_to_config: &'a BTreeMap<&'a str, BTreeSet<&'a str>>,
+    supporting_path: &'a [String],
+}
+
+fn build_impacted_action_record(ctx: ImpactRecordContext<'_>) -> ImpactedAction {
+    let configured_target = Some(ctx.action.configured_target.clone());
+    let config_fact = ctx.input.inspection.configured.get(&ctx.action.configured_target).or_else(|| {
+        ctx.action_to_config
+            .get(ctx.action_id)
+            .and_then(|cfgs| cfgs.iter().find_map(|cfg| ctx.input.inspection.configured.get(*cfg)))
+    });
+    let policy_match = evaluate_policy_filter(ctx.action.policy.as_ref(), ctx.input.policy_filter);
+    debug_assert!(!ctx.action_id.is_empty());
+    debug_assert!(!ctx.supporting_path.is_empty());
+    ImpactedAction {
+        affected_node: ctx.affected_node.to_string(),
+        action_id: Some(ctx.action_id.to_string()),
+        configured_target,
+        semantic_target: config_fact.map(|cfg| cfg.semantic_target.clone()),
+        configuration: config_fact.map(|cfg| cfg.configuration.clone()),
+        toolchain: config_fact.map(|cfg| cfg.toolchain.clone()),
+        role: Some(ctx.action.role.clone()),
+        policy: ctx.action.policy.clone(),
+        policy_match,
+        is_action_complete: ctx.action.is_complete(),
+        supporting_path: ctx.supporting_path.to_vec(),
+    }
+}
+
+fn classify_impact_outcome(
+    graph_state: EvaluationState,
+    unavailable_nodes: &BTreeSet<String>,
+    impacted_actions: &[ImpactedAction],
+) -> ImpactOutcome {
+    if graph_state != EvaluationState::Complete {
+        return ImpactOutcome::Partial;
+    }
+    let has_incomplete_action = impacted_actions
+        .iter()
+        .any(|item| !item.is_action_complete || item.policy_match == PolicyMatch::Unavailable);
+    let is_missing_facts = !unavailable_nodes.is_empty() || has_incomplete_action;
+    debug_assert!(graph_state == EvaluationState::Complete);
+    debug_assert!(is_missing_facts || (unavailable_nodes.is_empty() && !has_incomplete_action));
+    if is_missing_facts {
+        ImpactOutcome::Partial
+    } else {
+        ImpactOutcome::Complete
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -633,5 +1230,202 @@ mod tests {
         comparison.attach_dependencies(&known, &BTreeSet::new());
         assert_eq!(comparison.dependencies, FactChange::Changed);
         assert_eq!(comparison.observed_dependencies_removed, ["shared"]);
+    }
+
+    #[test]
+    fn template_instances_and_selected_outputs_exclude_display_names_from_identity() {
+        let mut left = TemplateInstance {
+            template_id: Some(String::from("template:branch")),
+            recipe_id: String::from("recipe:canonical-branch"),
+            root: Some(String::from("diamond-result")),
+            constructor_path: alloc::vec![String::from("branch"), String::from("left")],
+            origin: Some(SourceOrigin {
+                file: String::from("examples/diamond-dependency.ncl"),
+                line: Some(43),
+                column: Some(12),
+            }),
+            display_name: Some(String::from("diamond-branch")),
+        };
+        let mut right = left.clone();
+        right.constructor_path = alloc::vec![String::from("branch"), String::from("right")];
+        // Even with identical display_name and identical canonical recipe_id,
+        // two instances of one template have distinct instance identities.
+        assert_ne!(left.identity().unwrap(), right.identity().unwrap());
+        let before_rename = left.identity().unwrap();
+        left.display_name = Some(String::from("renamed-left"));
+        left.origin.as_mut().unwrap().line = Some(99);
+        assert_eq!(before_rename, left.identity().unwrap());
+
+        let valid_handle = SelectedOutputHandle {
+            producer_recipe: String::from("recipe:example-sdk"),
+            output_name: String::from("dev"),
+            consumer_instance: Some(before_rename),
+            origin: None,
+            declared_outputs: Some(BTreeSet::from([String::from("out"), String::from("dev")])),
+        };
+        assert_eq!(valid_handle.selection_valid(), Some(true));
+        let invalid_handle = SelectedOutputHandle {
+            output_name: String::from("missing"),
+            ..valid_handle.clone()
+        };
+        assert_eq!(invalid_handle.selection_valid(), Some(false));
+        let unknown_handle = SelectedOutputHandle {
+            declared_outputs: None,
+            ..valid_handle
+        };
+        assert_eq!(unknown_handle.selection_valid(), None);
+    }
+
+    #[test]
+    fn composed_impact_matches_reverse_traversal_and_preserves_unknowns() {
+        let mut debug_cfg = config(b"debug");
+        debug_cfg.semantic_target = String::from("recipe:diamond-left");
+        let mut release_cfg = config(b"release");
+        release_cfg.semantic_target = String::from("recipe:diamond-left");
+        let debug_id = debug_cfg.identity().unwrap();
+        let release_id = release_cfg.identity().unwrap();
+
+        let compile_debug = action(&debug_cfg);
+        let mut link_debug = action(&debug_cfg);
+        link_debug.role = String::from("link");
+        let mut compile_release = action(&release_cfg);
+        compile_release.policy.as_mut().unwrap().cache_read = false;
+        let mut missing_policy = action(&release_cfg);
+        missing_policy.role = String::from("package");
+        missing_policy.policy = None;
+
+        let cd_id = compile_debug.identity().unwrap();
+        let ld_id = link_debug.identity().unwrap();
+        let cr_id = compile_release.identity().unwrap();
+        let mp_id = missing_policy.identity().unwrap();
+
+        let ids = [
+            "recipe:diamond-shared",
+            "recipe:diamond-left",
+            "recipe:diamond-right",
+            "recipe:diamond-result",
+            "recipe:unrelated",
+            debug_id.as_str(),
+            release_id.as_str(),
+            cd_id.as_str(),
+            ld_id.as_str(),
+            cr_id.as_str(),
+            mp_id.as_str(),
+        ];
+        let depends_on = [
+            ("recipe:diamond-result", "recipe:diamond-left"),
+            ("recipe:diamond-result", "recipe:diamond-right"),
+            ("recipe:diamond-left", "recipe:diamond-shared"),
+            ("recipe:diamond-right", "recipe:diamond-shared"),
+        ];
+        let action_for = [
+            (cd_id.as_str(), debug_id.as_str()),
+            (ld_id.as_str(), debug_id.as_str()),
+            (cr_id.as_str(), release_id.as_str()),
+            (mp_id.as_str(), release_id.as_str()),
+        ];
+        let configured_from = [
+            (debug_id.as_str(), "recipe:diamond-left"),
+            (release_id.as_str(), "recipe:diamond-left"),
+        ];
+        let inspection = InspectionFacts {
+            state: EvaluationState::Complete,
+            configured: BTreeMap::from([(debug_id.clone(), debug_cfg), (release_id.clone(), release_cfg)]),
+            actions: BTreeMap::from([
+                (cd_id.clone(), compile_debug),
+                (ld_id.clone(), link_debug),
+                (cr_id.clone(), compile_release),
+                (mp_id.clone(), missing_policy),
+            ]),
+            authoring: AuthoringFacts::default(),
+            observed_execution: BTreeMap::new(),
+        };
+        let seeds = BTreeSet::from([String::from("recipe:diamond-shared")]);
+        let filter = PolicyFilter {
+            sandboxed: None,
+            network: None,
+            cache_read: Some(true),
+            allow_remote: None,
+        };
+        let result = composed_impact(&ComposedImpactInput {
+            ids: &ids,
+            depends_on_edges: &depends_on,
+            action_for_edges: &action_for,
+            configured_from_edges: &configured_from,
+            inspection: &inspection,
+            snapshot_digest: digest(b"snap-1"),
+            seeds: &seeds,
+            policy_filter: Some(&filter),
+            limits: QueryLimits::default(),
+        })
+        .unwrap();
+
+        // Differential comparison against DependencyIndex::traverse baseline:
+        let baseline = DependencyIndex::new(&ids, &depends_on, QueryLimits::default())
+            .unwrap()
+            .traverse("recipe:diamond-shared", Direction::ReverseDependencies, None)
+            .unwrap();
+        assert_eq!(result.impacted_nodes, baseline.identities);
+        assert!(!result.impacted_nodes.contains(&String::from("recipe:unrelated")));
+        // Missing policy and nodes without actions keep outcome Partial, never Complete.
+        assert_eq!(result.outcome, ImpactOutcome::Partial);
+        assert_eq!(result.impacted_actions.len(), 4);
+        let mp_record =
+            result.impacted_actions.iter().find(|r| r.action_id.as_deref() == Some(mp_id.as_str())).unwrap();
+        assert_eq!(mp_record.policy_match, PolicyMatch::Unavailable);
+        let cr_record =
+            result.impacted_actions.iter().find(|r| r.action_id.as_deref() == Some(cr_id.as_str())).unwrap();
+        assert_eq!(cr_record.policy_match, PolicyMatch::NotMatched);
+        let cd_record =
+            result.impacted_actions.iter().find(|r| r.action_id.as_deref() == Some(cd_id.as_str())).unwrap();
+        assert_eq!(cd_record.policy_match, PolicyMatch::Matched);
+
+        // Removing one diamond path still reaches diamond-result via the other;
+        // removing both paths drops diamond-result.
+        let one_cut = [
+            ("recipe:diamond-result", "recipe:diamond-right"),
+            ("recipe:diamond-left", "recipe:diamond-shared"),
+            ("recipe:diamond-right", "recipe:diamond-shared"),
+        ];
+        let one_cut_res = composed_impact(&ComposedImpactInput {
+            ids: &ids,
+            depends_on_edges: &one_cut,
+            action_for_edges: &action_for,
+            configured_from_edges: &configured_from,
+            inspection: &inspection,
+            snapshot_digest: digest(b"snap-2"),
+            seeds: &seeds,
+            policy_filter: Some(&filter),
+            limits: QueryLimits::default(),
+        })
+        .unwrap();
+        assert!(one_cut_res.impacted_nodes.contains(&String::from("recipe:diamond-result")));
+        assert_eq!(
+            one_cut_res
+                .impacted_actions
+                .iter()
+                .find(|r| r.action_id.as_deref() == Some(cd_id.as_str()))
+                .unwrap()
+                .supporting_path,
+            ["recipe:diamond-left", "recipe:diamond-shared"]
+        );
+
+        let both_cut = [
+            ("recipe:diamond-left", "recipe:diamond-shared"),
+            ("recipe:diamond-right", "recipe:diamond-shared"),
+        ];
+        let both_cut_res = composed_impact(&ComposedImpactInput {
+            ids: &ids,
+            depends_on_edges: &both_cut,
+            action_for_edges: &action_for,
+            configured_from_edges: &configured_from,
+            inspection: &inspection,
+            snapshot_digest: digest(b"snap-3"),
+            seeds: &seeds,
+            policy_filter: Some(&filter),
+            limits: QueryLimits::default(),
+        })
+        .unwrap();
+        assert!(!both_cut_res.impacted_nodes.contains(&String::from("recipe:diamond-result")));
     }
 }

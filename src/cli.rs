@@ -867,6 +867,15 @@ pub(crate) enum Command {
         #[arg(long, requires = "source_built_fixed_point", conflicts_with_all = ["dev_provider_cache", "dev_resume", "dev_fast_fail"])]
         prepare_source_programs: bool,
 
+        /// Reclaim superseded prepared cohorts and unpublished staging directories under a run
+        /// root.
+        #[arg(long, conflicts_with_all = ["cargo_free", "source_built_fixed_point"])]
+        reclaim_attempts: Option<PathBuf>,
+
+        /// Number of most recent prepared cohorts to retain during --reclaim-attempts.
+        #[arg(long, default_value_t = 1, requires = "reclaim_attempts")]
+        keep_cohorts: usize,
+
         /// Authenticated source-built-fixed-point source profile.
         #[arg(long, requires = "source_built_fixed_point")]
         source_profile: Option<PathBuf>,
@@ -9823,6 +9832,8 @@ fn run_package_command(request: PackageCommandRequest<'_>) -> Result<(), RunErro
 struct SelfBuildProofOptions<'a> {
     source_built_fixed_point: bool,
     prepare_source_programs: bool,
+    reclaim_attempts: Option<&'a Path>,
+    keep_cohorts: usize,
     source_profile: Option<&'a Path>,
     expected_source_profile_blake3: Option<&'a str>,
     expected_stagex_lineage_blake3: Option<&'a str>,
@@ -9849,6 +9860,8 @@ fn parse_self_build_proof_options(command: &Command) -> Result<SelfBuildProofOpt
     let Command::SelfBuild {
         source_built_fixed_point,
         prepare_source_programs,
+        reclaim_attempts,
+        keep_cohorts,
         source_profile,
         expected_source_profile_blake3,
         expected_stagex_lineage_blake3,
@@ -9877,6 +9890,8 @@ fn parse_self_build_proof_options(command: &Command) -> Result<SelfBuildProofOpt
     let options = SelfBuildProofOptions {
         source_built_fixed_point: *source_built_fixed_point,
         prepare_source_programs: *prepare_source_programs,
+        reclaim_attempts: reclaim_attempts.as_deref(),
+        keep_cohorts: *keep_cohorts,
         source_profile: source_profile.as_deref(),
         expected_source_profile_blake3: expected_source_profile_blake3.as_deref(),
         expected_stagex_lineage_blake3: expected_stagex_lineage_blake3.as_deref(),
@@ -9952,6 +9967,8 @@ fn self_build_request_from_command<'a>(
         offline_source_state_dir: offline_source_state_dir.as_deref(),
         source_built_fixed_point: proof_options.source_built_fixed_point,
         prepare_source_programs: proof_options.prepare_source_programs,
+        reclaim_attempts: proof_options.reclaim_attempts,
+        keep_cohorts: proof_options.keep_cohorts,
         source_profile: proof_options.source_profile,
         expected_source_profile_blake3: proof_options.expected_source_profile_blake3,
         expected_stagex_lineage_blake3: proof_options.expected_stagex_lineage_blake3,
@@ -9998,6 +10015,8 @@ struct SelfBuildCommandRequest<'a> {
     offline_source_state_dir: Option<&'a Path>,
     source_built_fixed_point: bool,
     prepare_source_programs: bool,
+    reclaim_attempts: Option<&'a Path>,
+    keep_cohorts: usize,
     source_profile: Option<&'a Path>,
     expected_source_profile_blake3: Option<&'a str>,
     expected_stagex_lineage_blake3: Option<&'a str>,
@@ -10023,6 +10042,9 @@ struct SelfBuildCommandRequest<'a> {
 fn run_self_build_command(request: SelfBuildCommandRequest<'_>) -> Result<(), RunError> {
     debug_assert!(request.ctx.store_prefix.starts_with('/'));
     debug_assert!(!request.rustc.as_os_str().is_empty());
+    if let Some(run_root) = request.reclaim_attempts {
+        return source_built_fixed_point_shell::cmd_reclaim_attempts(run_root, request.keep_cohorts, request.ctx.json);
+    }
     if request.source_built_fixed_point {
         return run_source_built_fixed_point(&request);
     }
@@ -13177,6 +13199,27 @@ let Plan = {
         assert!(matches!(name_to_build_target(Some("./tool")), project_build::BuildTarget::File(_)));
         assert!(matches!(name_to_build_target(Some("tool")), project_build::BuildTarget::Selector(_)));
         assert!(matches!(name_to_build_target(None), project_build::BuildTarget::ProjectDefault));
+    }
+
+    #[test]
+    fn self_build_cli_accepts_reclaim_attempts_and_keep_cohorts() {
+        let args = parse_args_with_cli_test_stack(Vec::from([
+            "mantle",
+            "self-build",
+            "--reclaim-attempts",
+            "/tmp/source-built-runs",
+            "--keep-cohorts",
+            "2",
+        ]))
+        .expect("CLI parser test");
+        assert!(matches!(
+            args.command,
+            Command::SelfBuild {
+                reclaim_attempts: Some(_),
+                keep_cohorts: 2,
+                ..
+            }
+        ));
     }
 
     #[test]

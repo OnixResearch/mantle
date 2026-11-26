@@ -26,6 +26,9 @@ use url::Url;
 use crate::errors::RunError;
 
 pub const SOURCE_BUNDLE_FORMAT: &str = "mantle-source-bundle-v1";
+pub const SOURCE_BUNDLE_REF_FORMAT: &str = "mantle-source-bundle-ref-v1";
+pub const SHARED_SOURCE_RECORDS_DIR_NAME: &str = ".mantle-source-records";
+pub const SHARED_TREES_DIR_NAME: &str = "trees";
 pub const SOURCE_OFFLINE_PREFLIGHT_FORMAT: &str = "mantle-source-offline-preflight-v1";
 pub const BOOTSTRAP_SOURCE_PROFILE_FORMAT: &str = "mantle-bootstrap-source-profile-v1";
 pub const SELF_BUILD_HYDRATION_REPORT_FORMAT: &str = "mantle-self-build-source-hydration-v1";
@@ -246,6 +249,40 @@ pub struct SourceBundleManifest {
     pub records: Vec<SourceRecord>,
     pub manifest_blake3: String,
     pub non_claim: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceRecordRef {
+    pub kind: SourceRecordKind,
+    pub identity: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub store_prefix: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<SourceAdapterMetadata>,
+    #[serde(default = "empty_source_record_metadata", skip_serializing_if = "BTreeMap::is_empty")]
+    pub metadata: BTreeMap<String, String>,
+    pub payload_bytes: u64,
+    pub content_blake3: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store_path_attestation: Option<StorePathAttestation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceBundleRefManifest {
+    pub format: String,
+    pub version: u32,
+    pub store_prefix: String,
+    pub roots: Vec<String>,
+    pub records_dir: String,
+    pub records: Vec<SourceRecordRef>,
+    pub manifest_blake3: String,
+    pub non_claim: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct SharedStoreWriteStats {
+    pub(crate) bytes_written: u64,
+    pub(crate) bytes_shared: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -681,7 +718,15 @@ trait SourceBundleEffectPort {
         fetch_missing: bool,
     ) -> Result<(SourceBundleManifest, u32), RunError>;
     fn read(&mut self, path: &Path) -> Result<(SourceBundleManifest, u64), RunError>;
+    fn read_with_records_dir(&mut self, path: &Path) -> Result<(SourceBundleManifest, u64, Option<PathBuf>), RunError>;
     fn publish(&mut self, path: &Path, manifest: &SourceBundleManifest, replace: bool) -> Result<(), RunError>;
+    fn publish_shared(
+        &mut self,
+        path: &Path,
+        records_dir: &Path,
+        manifest: &SourceBundleManifest,
+        replace: bool,
+    ) -> Result<SharedStoreWriteStats, RunError>;
     fn import(
         &mut self,
         manifest: &SourceBundleManifest,
@@ -784,12 +829,26 @@ impl SourceBundleEffectPort for SourceBundleFilePort {
         let bytes = self.published_bytes(path)?;
         Ok((manifest, bytes))
     }
+    fn read_with_records_dir(&mut self, path: &Path) -> Result<(SourceBundleManifest, u64, Option<PathBuf>), RunError> {
+        let (manifest, records_dir) = read_source_bundle_with_records_dir(path)?;
+        let bytes = self.published_bytes(path)?;
+        Ok((manifest, bytes, records_dir))
+    }
     fn publish(&mut self, path: &Path, manifest: &SourceBundleManifest, replace: bool) -> Result<(), RunError> {
         if replace {
             write_source_bundle(path, manifest)
         } else {
             write_source_bundle_no_replace(path, manifest)
         }
+    }
+    fn publish_shared(
+        &mut self,
+        path: &Path,
+        records_dir: &Path,
+        manifest: &SourceBundleManifest,
+        replace: bool,
+    ) -> Result<SharedStoreWriteStats, RunError> {
+        write_referenced_source_bundle(path, records_dir, manifest, replace)
     }
     fn import(
         &mut self,
@@ -2212,6 +2271,12 @@ fn write_source_bundle_no_replace(path: &Path, manifest: &SourceBundleManifest) 
 }
 
 pub fn read_source_bundle(path: &Path) -> Result<SourceBundleManifest, RunError> {
+    read_source_bundle_with_records_dir(path).map(|(manifest, _)| manifest)
+}
+
+pub(crate) fn read_source_bundle_with_records_dir(
+    path: &Path,
+) -> Result<(SourceBundleManifest, Option<PathBuf>), RunError> {
     let file = fs::File::open(path)
         .map_err(|error| RunError::Internal(format!("reading source bundle {}: {error}", path.display())))?;
     let bytes = file
@@ -2225,11 +2290,169 @@ pub fn read_source_bundle(path: &Path) -> Result<SourceBundleManifest, RunError>
             mantle_application_contract::MAX_SOURCE_BUNDLE_EFFECT_BYTES
         )));
     }
-    let reader = BufReader::new(file);
-    let manifest = serde_json::from_reader::<_, SourceBundleManifest>(reader)
+    let raw = fs::read(path)
+        .map_err(|error| RunError::Internal(format!("reading source bundle {}: {error}", path.display())))?;
+    #[derive(Deserialize)]
+    struct FormatHeader {
+        format: String,
+    }
+    let header: FormatHeader = serde_json::from_slice(&raw)
+        .map_err(|error| RunError::Internal(format!("parsing source bundle {}: {error}", path.display())))?;
+    if header.format == SOURCE_BUNDLE_REF_FORMAT {
+        let ref_manifest: SourceBundleRefManifest = serde_json::from_slice(&raw).map_err(|error| {
+            RunError::Internal(format!("parsing referenced source bundle {}: {error}", path.display()))
+        })?;
+        let records_dir = resolve_records_dir_for_manifest(path, &ref_manifest.records_dir)?;
+        let manifest = hydrate_referenced_manifest(&ref_manifest, &records_dir)?;
+        return Ok((manifest, Some(records_dir)));
+    }
+    let manifest: SourceBundleManifest = serde_json::from_slice(&raw)
         .map_err(|error| RunError::Internal(format!("parsing source bundle {}: {error}", path.display())))?;
     validate_manifest(&manifest)?;
+    Ok((manifest, None))
+}
+
+fn resolve_records_dir_for_manifest(manifest_path: &Path, records_dir: &str) -> Result<PathBuf, RunError> {
+    if records_dir.trim().is_empty() {
+        return Err(RunError::Internal("referenced source bundle records_dir must not be empty".to_string()));
+    }
+    let candidate = Path::new(records_dir);
+    if candidate.is_absolute() {
+        return Ok(candidate.to_path_buf());
+    }
+    let parent = manifest_path.parent().filter(|dir| !dir.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    Ok(parent.join(candidate))
+}
+
+fn hydrate_referenced_manifest(
+    ref_manifest: &SourceBundleRefManifest,
+    records_dir: &Path,
+) -> Result<SourceBundleManifest, RunError> {
+    if ref_manifest.format != SOURCE_BUNDLE_REF_FORMAT
+        || ref_manifest.version != SOURCE_BUNDLE_VERSION
+        || !ref_manifest.store_prefix.starts_with('/')
+        || ref_manifest.non_claim != SOURCE_BUNDLE_NON_CLAIM
+        || ref_manifest.records.len() > MAX_SOURCE_RECORDS
+    {
+        return Err(RunError::Internal("referenced source bundle header is invalid".to_string()));
+    }
+    let mut records = Vec::with_capacity(ref_manifest.records.len());
+    for record_ref in &ref_manifest.records {
+        validate_blake3_hex(Blake3HexValidation {
+            value: &record_ref.content_blake3,
+            label: "referenced source record content_blake3",
+        })?;
+        let record_path = records_dir.join(format!("{}.json", record_ref.content_blake3));
+        let record = read_record(&record_path).map_err(|error| {
+            RunError::Internal(format!(
+                "reading referenced source record {} ({}): {error}",
+                record_ref.identity,
+                record_path.display()
+            ))
+        })?;
+        let is_metadata_match = record.kind == record_ref.kind
+            && record.identity == record_ref.identity
+            && record.store_prefix == record_ref.store_prefix
+            && record.adapter == record_ref.adapter
+            && record.metadata == record_ref.metadata
+            && record.payload_bytes == record_ref.payload_bytes
+            && record.content_blake3 == record_ref.content_blake3
+            && record.store_path_attestation == record_ref.store_path_attestation;
+        if !is_metadata_match {
+            return Err(RunError::Internal(format!(
+                "referenced source record {} does not match manifest reference metadata",
+                record_ref.identity
+            )));
+        }
+        records.push(record);
+    }
+    let manifest = SourceBundleManifest {
+        format: SOURCE_BUNDLE_FORMAT.to_string(),
+        version: ref_manifest.version,
+        store_prefix: ref_manifest.store_prefix.clone(),
+        roots: ref_manifest.roots.clone(),
+        records,
+        manifest_blake3: ref_manifest.manifest_blake3.clone(),
+        non_claim: ref_manifest.non_claim.clone(),
+    };
+    validate_manifest(&manifest)?;
     Ok(manifest)
+}
+
+pub(crate) fn write_referenced_source_bundle(
+    path: &Path,
+    records_dir: &Path,
+    manifest: &SourceBundleManifest,
+    replace: bool,
+) -> Result<SharedStoreWriteStats, RunError> {
+    validate_manifest(manifest)?;
+    fs::create_dir_all(records_dir).map_err(|error| {
+        RunError::Internal(format!("creating shared source records dir {}: {error}", records_dir.display()))
+    })?;
+    let mut stats = SharedStoreWriteStats::default();
+    for record in &manifest.records {
+        let target = records_dir.join(format!("{}.json", record.content_blake3));
+        if target.exists() {
+            let existing = read_record(&target)?;
+            if &existing != record {
+                return Err(RunError::Internal(format!("shared source record conflict for {}", record.content_blake3)));
+            }
+            let len = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+            stats.bytes_shared = stats.bytes_shared.saturating_add(len);
+        } else {
+            write_record_atomically(&target, record)?;
+            let len = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+            stats.bytes_written = stats.bytes_written.saturating_add(len);
+        }
+    }
+    let refs = build_source_record_refs(manifest);
+    let parent = path.parent().filter(|candidate| !candidate.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    fs::create_dir_all(parent)
+        .map_err(|error| RunError::Internal(format!("creating referenced bundle dir {}: {error}", parent.display())))?;
+    let records_dir_str = relative_records_dir(parent, records_dir);
+    let ref_manifest = SourceBundleRefManifest {
+        format: SOURCE_BUNDLE_REF_FORMAT.to_string(),
+        version: manifest.version,
+        store_prefix: manifest.store_prefix.clone(),
+        roots: manifest.roots.clone(),
+        records_dir: records_dir_str,
+        records: refs,
+        manifest_blake3: manifest.manifest_blake3.clone(),
+        non_claim: manifest.non_claim.clone(),
+    };
+    if replace {
+        write_json_atomically(path, &ref_manifest, "referenced source bundle")?;
+    } else {
+        write_json_no_replace(path, &ref_manifest, "referenced source bundle")?;
+    }
+    let manifest_len = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    stats.bytes_written = stats.bytes_written.saturating_add(manifest_len);
+    Ok(stats)
+}
+
+fn relative_records_dir(manifest_parent: &Path, records_dir: &Path) -> String {
+    let parent_abs = fs::canonicalize(manifest_parent).unwrap_or_else(|_| manifest_parent.to_path_buf());
+    let records_abs = fs::canonicalize(records_dir).unwrap_or_else(|_| records_dir.to_path_buf());
+    let parent_parts: Vec<_> = parent_abs.components().collect();
+    let records_parts: Vec<_> = records_abs.components().collect();
+    let mut common = 0usize;
+    while common < parent_parts.len() && common < records_parts.len() && parent_parts[common] == records_parts[common] {
+        common += 1;
+    }
+    if common >= 2 || (parent_abs == records_abs) {
+        let mut rel = PathBuf::new();
+        for _ in common..parent_parts.len() {
+            rel.push("..");
+        }
+        for part in &records_parts[common..] {
+            rel.push(part.as_os_str());
+        }
+        if rel.as_os_str().is_empty() {
+            return ".".to_string();
+        }
+        return rel.to_string_lossy().into_owned();
+    }
+    records_dir.to_string_lossy().into_owned()
 }
 
 pub fn import_source_bundle(
@@ -2237,6 +2460,15 @@ pub fn import_source_bundle(
     state_dir: &Path,
     pin: bool,
 ) -> Result<SourceBundleImportReport, RunError> {
+    import_source_bundle_shared(manifest, state_dir, pin, None).map(|(report, _)| report)
+}
+
+pub(crate) fn import_source_bundle_shared(
+    manifest: &SourceBundleManifest,
+    state_dir: &Path,
+    pin: bool,
+    shared_records_dir: Option<&Path>,
+) -> Result<(SourceBundleImportReport, SharedStoreWriteStats), RunError> {
     validate_manifest(manifest)?;
     assert!(manifest.records.len() <= MAX_SOURCE_RECORDS);
     assert_eq!(manifest.non_claim, SOURCE_BUNDLE_NON_CLAIM);
@@ -2266,6 +2498,7 @@ pub fn import_source_bundle(
     }
     let mut written_records_len = 0u32;
     let mut skipped_present_records_len = 0u32;
+    let mut stats = SharedStoreWriteStats::default();
     let mut summaries = Vec::with_capacity(manifest.records.len());
     for (record, (target, outcome, summary)) in manifest.records.iter().zip(plans) {
         match outcome {
@@ -2273,12 +2506,36 @@ pub fn import_source_bundle(
                 skipped_present_records_len = skipped_present_records_len
                     .checked_add(1)
                     .ok_or_else(|| RunError::Internal("present source record count overflow".to_string()))?;
+                let len = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+                stats.bytes_shared = stats.bytes_shared.saturating_add(len);
             }
             crate::source_observation::RecordIngestOutcome::Add => {
                 fs::create_dir_all(&records_dir).map_err(|err| {
                     RunError::Internal(format!("creating source records dir {}: {err}", records_dir.display()))
                 })?;
-                write_record_atomically(&target, record)?;
+                let mut is_linked = false;
+                if let Some(shared_dir) = shared_records_dir {
+                    let shared_record = shared_dir.join(format!("{}.json", record.content_blake3));
+                    if shared_record.exists() {
+                        let verified = read_record(&shared_record)?;
+                        if &verified != record {
+                            return Err(RunError::Internal(format!(
+                                "shared source record {} conflicts with import manifest",
+                                record.content_blake3
+                            )));
+                        }
+                        if fs::hard_link(&shared_record, &target).is_ok() {
+                            is_linked = true;
+                            let len = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+                            stats.bytes_shared = stats.bytes_shared.saturating_add(len);
+                        }
+                    }
+                }
+                if !is_linked {
+                    write_record_atomically(&target, record)?;
+                    let len = fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+                    stats.bytes_written = stats.bytes_written.saturating_add(len);
+                }
                 written_records_len = written_records_len
                     .checked_add(1)
                     .ok_or_else(|| RunError::Internal("imported source record count overflow".to_string()))?;
@@ -2287,17 +2544,21 @@ pub fn import_source_bundle(
         summaries.push(summary);
     }
     if pin {
-        write_pin_atomically(state_dir, manifest)?;
+        let pin_bytes = write_pin_atomically(state_dir, manifest)?;
+        stats.bytes_written = stats.bytes_written.saturating_add(pin_bytes);
     }
     assert_eq!(summaries.len(), manifest.records.len());
-    Ok(SourceBundleImportReport {
-        imported_count: written_records_len,
-        skipped_present_count: skipped_present_records_len,
-        pinned: pin,
-        manifest_blake3: manifest.manifest_blake3.clone(),
-        records: summaries,
-        non_claim: SOURCE_BUNDLE_NON_CLAIM,
-    })
+    Ok((
+        SourceBundleImportReport {
+            imported_count: written_records_len,
+            skipped_present_count: skipped_present_records_len,
+            pinned: pin,
+            manifest_blake3: manifest.manifest_blake3.clone(),
+            records: summaries,
+            non_claim: SOURCE_BUNDLE_NON_CLAIM,
+        },
+        stats,
+    ))
 }
 
 // r[impl bootstrap_inventory.fresh_clone_source_hydration]
@@ -4964,28 +5225,53 @@ fn write_record_atomically(target: &Path, record: &SourceRecord) -> Result<(), R
 
 fn validate_existing_source_pin(state_dir: &Path, manifest: &SourceBundleManifest) -> Result<bool, RunError> {
     let target = source_pins_dir(state_dir).join(format!("{}.json", manifest.manifest_blake3));
-    let bytes = match fs::read(&target) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(RunError::Internal(format!("reading source pin {}: {error}", target.display()))),
-    };
-    let existing: SourceBundleManifest = serde_json::from_slice(&bytes)
-        .map_err(|error| RunError::Internal(format!("parsing source pin {}: {error}", target.display())))?;
+    if !target.exists() {
+        return Ok(false);
+    }
+    let existing = read_source_bundle(&target)?;
     if &existing != manifest {
         return Err(RunError::Internal(format!("source pin identity conflict for {}", manifest.manifest_blake3)));
     }
     Ok(true)
 }
 
-fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Result<(), RunError> {
+fn build_source_record_refs(manifest: &SourceBundleManifest) -> Vec<SourceRecordRef> {
+    manifest
+        .records
+        .iter()
+        .map(|record| SourceRecordRef {
+            kind: record.kind.clone(),
+            identity: record.identity.clone(),
+            store_prefix: record.store_prefix.clone(),
+            adapter: record.adapter.clone(),
+            metadata: record.metadata.clone(),
+            payload_bytes: record.payload_bytes,
+            content_blake3: record.content_blake3.clone(),
+            store_path_attestation: record.store_path_attestation.clone(),
+        })
+        .collect()
+}
+
+fn write_pin_atomically(state_dir: &Path, manifest: &SourceBundleManifest) -> Result<u64, RunError> {
     if validate_existing_source_pin(state_dir, manifest)? {
-        return Ok(());
+        return Ok(0);
     }
     let pins_dir = source_pins_dir(state_dir);
     fs::create_dir_all(&pins_dir)
         .map_err(|err| RunError::Internal(format!("creating source pins dir {}: {err}", pins_dir.display())))?;
     let target = pins_dir.join(format!("{}.json", manifest.manifest_blake3));
-    write_json_no_replace(&target, manifest, "source pin")
+    let ref_manifest = SourceBundleRefManifest {
+        format: SOURCE_BUNDLE_REF_FORMAT.to_string(),
+        version: manifest.version,
+        store_prefix: manifest.store_prefix.clone(),
+        roots: manifest.roots.clone(),
+        records_dir: "../records".to_string(),
+        records: build_source_record_refs(manifest),
+        manifest_blake3: manifest.manifest_blake3.clone(),
+        non_claim: manifest.non_claim.clone(),
+    };
+    write_json_no_replace(&target, &ref_manifest, "source pin")?;
+    Ok(fs::metadata(&target).map(|meta| meta.len()).unwrap_or(0))
 }
 
 fn write_json_no_replace<T: Serialize>(target: &Path, value: &T, label: &str) -> Result<(), RunError> {
@@ -5042,11 +5328,7 @@ fn read_pinned_source_records(state_dir: &Path) -> Result<Vec<SourceRecord>, Run
     assert!(pins_dir.starts_with(state_dir));
     let mut records = Vec::new();
     for path in &paths {
-        let file = fs::File::open(path)
-            .map_err(|error| RunError::Internal(format!("reading source pin {}: {error}", path.display())))?;
-        let manifest = serde_json::from_reader::<_, SourceBundleManifest>(BufReader::new(file))
-            .map_err(|error| RunError::Internal(format!("parsing source pin {}: {error}", path.display())))?;
-        validate_manifest(&manifest)?;
+        let manifest = read_source_bundle(path)?;
         let additional_len = manifest.records.len();
         let next_len = records
             .len()
@@ -5880,13 +6162,31 @@ pub(crate) fn materialize_source_record_exact_payload(record: &SourceRecord, tar
 }
 
 pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
+    materialize_source_record_payload_shared(record, target, None).map(|_| ())
+}
+
+pub(crate) fn materialize_source_record_payload_shared(
+    record: &SourceRecord,
+    target: &Path,
+    shared_cache_root: Option<&Path>,
+) -> Result<SharedStoreWriteStats, RunError> {
     validate_source_record(record, ManifestPayloadValidation::VerifyPayloads)?;
     if record.files.is_empty() {
         return Err(RunError::Internal(format!("source record {} has no materialized payload", record.identity)));
     }
-    fs::create_dir_all(target)
-        .map_err(|err| RunError::Internal(format!("creating materialized source root {}: {err}", target.display())))?;
-    materialize_source_record_files(record, target)?;
+    let stats = match shared_cache_root {
+        Some(cache_root) => materialize_from_shared_tree(record, target, cache_root)?,
+        None => {
+            fs::create_dir_all(target).map_err(|err| {
+                RunError::Internal(format!("creating materialized source root {}: {err}", target.display()))
+            })?;
+            materialize_source_record_files(record, target)?;
+            SharedStoreWriteStats {
+                bytes_written: record.payload_bytes,
+                bytes_shared: 0,
+            }
+        }
+    };
     let observed = materialize_source_record_from_path(record, target, false)?;
     if observed.files != record.files || observed.content_blake3 != record.content_blake3 {
         return Err(RunError::Internal(format!(
@@ -5896,6 +6196,111 @@ pub(crate) fn materialize_source_record_payload(record: &SourceRecord, target: &
     }
     assert_eq!(observed.payload_bytes, record.payload_bytes);
     assert_eq!(observed.files.len(), record.files.len());
+    Ok(stats)
+}
+
+fn materialize_from_shared_tree(
+    record: &SourceRecord,
+    target: &Path,
+    cache_root: &Path,
+) -> Result<SharedStoreWriteStats, RunError> {
+    let trees_dir = cache_root.join(SHARED_TREES_DIR_NAME);
+    fs::create_dir_all(&trees_dir).map_err(|err| {
+        RunError::Internal(format!("creating shared source trees dir {}: {err}", trees_dir.display()))
+    })?;
+    let cached_root = trees_dir.join(&record.content_blake3);
+    let mut stats = SharedStoreWriteStats::default();
+    if cached_root.exists() {
+        verify_materialized_tree_matches_record(record, &cached_root, "cached shared source tree")?;
+        stats.bytes_shared = record.payload_bytes;
+    } else {
+        populate_shared_source_tree(record, &trees_dir, &cached_root)?;
+        stats.bytes_written = record.payload_bytes;
+    }
+    fs::create_dir_all(target)
+        .map_err(|err| RunError::Internal(format!("creating materialized source root {}: {err}", target.display())))?;
+    link_or_copy_materialized_tree(record, &cached_root, target)?;
+    Ok(stats)
+}
+
+fn populate_shared_source_tree(record: &SourceRecord, trees_dir: &Path, cached_root: &Path) -> Result<(), RunError> {
+    let tmp_root = trees_dir.join(format!(".tmp-{}-{}", record.content_blake3, std::process::id()));
+    if tmp_root.exists() {
+        fs::remove_dir_all(&tmp_root).map_err(|err| {
+            RunError::Internal(format!("cleaning stale shared tree temp {}: {err}", tmp_root.display()))
+        })?;
+    }
+    fs::create_dir_all(&tmp_root)
+        .map_err(|err| RunError::Internal(format!("creating shared tree temp {}: {err}", tmp_root.display())))?;
+    materialize_source_record_files(record, &tmp_root)?;
+    verify_materialized_tree_matches_record(record, &tmp_root, "staged shared source tree")?;
+    if let Err(rename_err) = fs::rename(&tmp_root, cached_root) {
+        let _ = fs::remove_dir_all(&tmp_root);
+        if cached_root.exists() {
+            return verify_materialized_tree_matches_record(record, cached_root, "cached shared source tree");
+        }
+        return Err(RunError::Internal(format!(
+            "publishing shared source tree {}: {rename_err}",
+            cached_root.display()
+        )));
+    }
+    Ok(())
+}
+
+fn verify_materialized_tree_matches_record(record: &SourceRecord, root: &Path, label: &str) -> Result<(), RunError> {
+    let observed = materialize_source_record_from_path(record, root, false)?;
+    if observed.files != record.files || observed.content_blake3 != record.content_blake3 {
+        return Err(RunError::Internal(format!(
+            "{label} {} at {} failed integrity verification",
+            record.identity,
+            root.display()
+        )));
+    }
+    Ok(())
+}
+
+fn next_source_file_group_end(files: &[SourceFileEntry], start: usize) -> usize {
+    let path = files[start].path.as_str();
+    let mut end = start + 1;
+    while end < files.len() && files[end].path == path {
+        end += 1;
+    }
+    end
+}
+
+fn link_or_copy_materialized_tree(
+    record: &SourceRecord,
+    source_root: &Path,
+    target_root: &Path,
+) -> Result<(), RunError> {
+    let mut group_start = 0usize;
+    while group_start < record.files.len() {
+        let group_end = next_source_file_group_end(&record.files, group_start);
+        let entry = &record.files[group_start];
+        let src = source_root.join(&entry.path);
+        let dst = prepare_source_output_path(entry, target_root)?;
+        match entry.file_type {
+            SourceFileType::Regular => {
+                if dst.exists() {
+                    fs::remove_file(&dst).map_err(|err| {
+                        RunError::Internal(format!("removing existing source payload {}: {err}", dst.display()))
+                    })?;
+                }
+                if fs::hard_link(&src, &dst).is_err() {
+                    fs::copy(&src, &dst).map_err(|err| {
+                        RunError::Internal(format!(
+                            "copying shared source file {} to {}: {err}",
+                            src.display(),
+                            dst.display()
+                        ))
+                    })?;
+                    set_materialized_file_permissions(&dst, entry.executable)?;
+                }
+            }
+            SourceFileType::Symlink => materialize_symlink_file_entry(entry, &dst)?,
+        }
+        group_start = group_end;
+    }
     Ok(())
 }
 
@@ -5906,11 +6311,7 @@ fn source_record_uses_canonical_chunks(record: &SourceRecord) -> bool {
 fn materialize_source_record_files(record: &SourceRecord, target: &Path) -> Result<(), RunError> {
     let mut group_start = 0usize;
     while group_start < record.files.len() {
-        let path = record.files[group_start].path.as_str();
-        let mut group_end = group_start + 1;
-        while group_end < record.files.len() && record.files[group_end].path == path {
-            group_end += 1;
-        }
+        let group_end = next_source_file_group_end(&record.files, group_start);
         let files = &record.files[group_start..group_end];
         if files[0].chunk_index.is_some() {
             materialize_chunked_regular_file_entries(files, target)?;
@@ -6515,7 +6916,7 @@ fn cmd_refresh_profile_record(
     if from == to {
         return Err(RunError::Internal("source-built profile refresh input and output paths must differ".to_string()));
     }
-    let (manifest, input_bytes) = port.read(from)?;
+    let (manifest, input_bytes, source_records_dir) = port.read_with_records_dir(from)?;
     let input = source_manifest_observation(&manifest, Some(input_bytes))?;
     let original = require_single_profile_record(&manifest, profile.class)?;
     let replacement = port.refreshed_record(
@@ -6527,8 +6928,12 @@ fn cmd_refresh_profile_record(
     )?;
     let supplemental_records = port.supplementary(include_bundles, true)?;
     let (refreshed, report) = (profile.planner)(manifest, replacement, supplemental_records)?;
-    port.publish(to, &refreshed, false)?;
-    let bytes = port.published_bytes(to)?;
+    let target_records_dir = source_records_dir.unwrap_or_else(|| {
+        let parent = to.parent().filter(|candidate| !candidate.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        parent.join(SHARED_SOURCE_RECORDS_DIR_NAME)
+    });
+    let write_stats = port.publish_shared(to, &target_records_dir, &refreshed, false)?;
+    let bytes = write_stats.bytes_written.max(port.published_bytes(to)?);
     let published = source_observation(
         "source-publication",
         mantle_application_contract::EffectKind::WriteFiles,
@@ -10397,6 +10802,162 @@ let Derivation = import "derivation.ncl" in
             "next actions should include unsupported adapter remediation: {:#?}",
             report.next_actions
         );
+    }
+
+    #[test]
+    fn refresh_mantle_source_writes_only_changed_record_and_verifies_blake3() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = source_built_fixed_point_profile_fixture(temp.path());
+        let manifest_v1 = plan_bootstrap_source_bundle_profile(&input, "/mantle/store").unwrap();
+        let shared_dir = temp.path().join("run").join(SHARED_SOURCE_RECORDS_DIR_NAME);
+        let profile_v1 = temp.path().join("run/cohort-1/source-profile.json");
+        let profile_v2 = temp.path().join("run/cohort-2/source-profile.json");
+        write_referenced_source_bundle(&profile_v1, &shared_dir, &manifest_v1, false).unwrap();
+
+        let original_mantle =
+            require_single_profile_record(&manifest_v1, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap().clone();
+        let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(10);
+        for record in &manifest_v1.records {
+            let record_path = shared_dir.join(format!("{}.json", record.content_blake3));
+            fs::File::options()
+                .write(true)
+                .open(&record_path)
+                .unwrap()
+                .set_times(fs::FileTimes::new().set_modified(old))
+                .unwrap();
+        }
+
+        let replacement_root = temp.path().join("replacement-mantle-source");
+        write_fixture(&replacement_root);
+        fs::write(replacement_root.join("src/main.txt"), b"updated mantle source v2").unwrap();
+        fs::create_dir_all(profile_v2.parent().unwrap()).unwrap();
+        cmd_source(
+            crate::SourceAction::Bundle {
+                action: crate::SourceBundleAction::RefreshMantleSource {
+                    from: profile_v1.clone(),
+                    mantle_source: replacement_root,
+                    include_bundles: Vec::new(),
+                    to: profile_v2.clone(),
+                },
+            },
+            temp.path(),
+            temp.path(),
+            crunch_store::StoreBackend::Snix,
+            "/mantle/store",
+            true,
+        )
+        .unwrap();
+
+        let hydrated_v2 = read_source_bundle(&profile_v2).unwrap();
+        validate_manifest(&hydrated_v2).unwrap();
+        assert_ne!(hydrated_v2.manifest_blake3, manifest_v1.manifest_blake3);
+        let updated_mantle =
+            require_single_profile_record(&hydrated_v2, BOOTSTRAP_PROFILE_CLASS_MANTLE_SOURCE).unwrap();
+        assert_ne!(updated_mantle.content_blake3, original_mantle.content_blake3);
+
+        for record in manifest_v1.records.iter().filter(|r| r.identity != original_mantle.identity) {
+            let unchanged_path = shared_dir.join(format!("{}.json", record.content_blake3));
+            assert_eq!(fs::metadata(unchanged_path).unwrap().modified().unwrap(), old);
+        }
+        let changed_path = shared_dir.join(format!("{}.json", updated_mantle.content_blake3));
+        assert_ne!(fs::metadata(changed_path).unwrap().modified().unwrap(), old);
+
+        let raw_v2: serde_json::Value = serde_json::from_slice(&fs::read(&profile_v2).unwrap()).unwrap();
+        assert_eq!(raw_v2["format"], SOURCE_BUNDLE_REF_FORMAT);
+    }
+
+    #[test]
+    fn shared_tree_materialization_hard_links_and_corrupted_shared_record_fails_closed() {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt as _;
+
+        let temp = tempfile::tempdir().unwrap();
+        let fixture_path = temp.path().join("shared-tree-payload.txt");
+        fs::write(&fixture_path, b"shared-tree-fixture-bytes").unwrap();
+        let manifest = plan_source_bundle(
+            &[SourceSpec {
+                kind: SourceRecordKind::LocalPath,
+                identity: "shared-tree-test".to_string(),
+                path: fixture_path,
+                adapter: None,
+            }],
+            "/mantle/store",
+        )
+        .unwrap();
+        let record = &manifest.records[0];
+        let shared_dir = temp.path().join(SHARED_SOURCE_RECORDS_DIR_NAME);
+        let root_a = temp.path().join("cohort-a/inputs/alpha");
+        let root_b = temp.path().join("cohort-b/inputs/alpha");
+
+        let stats_a = materialize_source_record_payload_shared(record, &root_a, Some(&shared_dir)).unwrap();
+        assert_eq!(stats_a.bytes_written, record.payload_bytes);
+        assert_eq!(stats_a.bytes_shared, 0);
+
+        let stats_b = materialize_source_record_payload_shared(record, &root_b, Some(&shared_dir)).unwrap();
+        assert_eq!(stats_b.bytes_written, 0);
+        assert_eq!(stats_b.bytes_shared, record.payload_bytes);
+
+        let rel_file = &record.files[0].path;
+        #[cfg(unix)]
+        assert_eq!(
+            fs::metadata(root_a.join(rel_file)).unwrap().ino(),
+            fs::metadata(root_b.join(rel_file)).unwrap().ino()
+        );
+
+        let cached_file = shared_dir.join(SHARED_TREES_DIR_NAME).join(&record.content_blake3).join(rel_file);
+        fs::write(&cached_file, b"tampered-bytes").unwrap();
+        let root_c = temp.path().join("cohort-c/inputs/alpha");
+        let err = materialize_source_record_payload_shared(record, &root_c, Some(&shared_dir)).unwrap_err();
+        assert!(
+            err.to_string().contains("failed integrity verification") || err.to_string().contains("differs"),
+            "{err}"
+        );
+
+        let bundle_path = temp.path().join("ref-bundle.json");
+        write_referenced_source_bundle(&bundle_path, &shared_dir, &manifest, false).unwrap();
+        let shared_record_file = shared_dir.join(format!("{}.json", record.content_blake3));
+        fs::write(&shared_record_file, b"{corrupt").unwrap();
+        assert!(read_source_bundle(&bundle_path).is_err());
+    }
+
+    #[test]
+    fn shared_import_hard_links_records_and_writes_compact_ref_pin() {
+        #[cfg(unix)]
+        use std::os::unix::fs::MetadataExt as _;
+
+        let temp = tempfile::tempdir().unwrap();
+        let fixture_path = temp.path().join("shared-import-payload.txt");
+        fs::write(&fixture_path, b"shared-import-fixture-bytes").unwrap();
+        let manifest = plan_source_bundle(
+            &[SourceSpec {
+                kind: SourceRecordKind::LocalPath,
+                identity: "shared-import-test".to_string(),
+                path: fixture_path,
+                adapter: None,
+            }],
+            "/mantle/store",
+        )
+        .unwrap();
+        let shared_dir = temp.path().join(SHARED_SOURCE_RECORDS_DIR_NAME);
+        write_referenced_source_bundle(&temp.path().join("ref.json"), &shared_dir, &manifest, false).unwrap();
+
+        let state_dir = temp.path().join("native-state");
+        let (report, stats) = import_source_bundle_shared(&manifest, &state_dir, true, Some(&shared_dir)).unwrap();
+        assert_eq!(report.imported_count, 1);
+        assert!(stats.bytes_shared > 0);
+
+        let record_name = format!("{}.json", manifest.records[0].content_blake3);
+        #[cfg(unix)]
+        assert_eq!(
+            fs::metadata(shared_dir.join(&record_name)).unwrap().ino(),
+            fs::metadata(source_records_dir(&state_dir).join(&record_name)).unwrap().ino()
+        );
+
+        let pin_path = source_pins_dir(&state_dir).join(format!("{}.json", manifest.manifest_blake3));
+        let raw_pin: serde_json::Value = serde_json::from_slice(&fs::read(&pin_path).unwrap()).unwrap();
+        assert_eq!(raw_pin["format"], SOURCE_BUNDLE_REF_FORMAT);
+        let pinned = read_pinned_source_records(&state_dir).unwrap();
+        assert!(pinned.iter().any(|record| record.content_blake3 == manifest.records[0].content_blake3));
     }
 
     #[test]

@@ -1,0 +1,55 @@
+{
+  "schema": "mantle-evidence-size-budget-v1",
+  "default_max_file_bytes": 10485760,
+  "nix_filtered_cairn_max_bytes": 1048576,
+  "nix_required_cairn_roots": [
+    ".cairn/changes/separate-remote-build-hexagon/evidence",
+    ".cairn/archive/2026-07-14-prove-hardware-simulation-build-flow/evidence",
+    ".cairn/archive/2026-10-04-add-store-backend-selection/evidence"
+  ],
+  "exceptions": [
+    {
+      "path": ".cairn/archive/2026-07-30-materialize-stagex-lineage-provider/evidence/protected-transition-v81-binutils-final-2026-07-30/protected-exec-audit.json",
+      "size_bytes": 66045141,
+      "blake3": "29ca382d6c8ca4364d30e1f0e92680bc49c743a45c85ec9b4e7bbbe3ab76bc91",
+      "classification": "historical-immutable-archive",
+      "justification": "Pre-budget archived Stagex transition protected-exec audit retained unmodified for provenance; excluded from Nix source filters."
+    },
+    {
+      "path": ".cairn/archive/2026-07-30-materialize-stagex-lineage-provider/evidence/protected-transition-v81-binutils-final-2026-07-30/transition-report.json",
+      "size_bytes": 68005843,
+      "blake3": "405f809ca3c7876b88a7e98f4746c1bbae518ffc8b1fefdafcef5bc383666a80",
+      "classification": "historical-immutable-archive",
+      "justification": "Pre-budget archived Stagex transition report retained unmodified for provenance; excluded from Nix source filters."
+    },
+    {
+      "path": ".cairn/archive/2026-07-30-materialize-stagex-lineage-provider/evidence/protected-transition-v85-provider-final-2026-07-30/protected-exec-audit.json",
+      "size_bytes": 67411137,
+      "blake3": "f7aa566230cb82fb333a9bbd5c0050347002ea92b81748f278a20c905f91f059",
+      "classification": "historical-immutable-archive",
+      "justification": "Pre-budget archived Stagex provider transition audit retained unmodified for provenance; excluded from Nix source filters."
+    },
+    {
+      "path": ".cairn/archive/2026-07-30-materialize-stagex-lineage-provider/evidence/protected-transition-v85-provider-final-2026-07-30/transition-report.json",
+      "size_bytes": 69373189,
+      "blake3": "e966e3b95dd8293aeedcb09a1544373af61cfcaea018b7c30c32b5e9a0768edd",
+      "classification": "historical-immutable-archive",
+      "justification": "Pre-budget archived Stagex provider transition report retained unmodified for provenance; excluded from Nix source filters."
+    },
+    {
+      "path": ".cairn/archive/2026-07-30-materialize-stagex-lineage-provider/evidence/protected-transition-v86-auth-bound-final-2026-07-30/protected-exec-audit.json",
+      "size_bytes": 66510609,
+      "blake3": "f7528f3df9ecc5e8d2925bef5cb9dcee63a9b93ecd47e512f0bc433c29f21d0b",
+      "classification": "historical-immutable-archive",
+      "justification": "Pre-budget archived Stagex auth-bound transition audit retained unmodified for provenance; excluded from Nix source filters."
+    },
+    {
+      "path": ".cairn/archive/2026-07-30-materialize-stagex-lineage-provider/evidence/protected-transition-v86-auth-bound-final-2026-07-30/transition-report.json",
+      "size_bytes": 68472041,
+      "blake3": "b9088a74ea4693ad2a9985b673a236adbcf94a9ccf87008bcd75d34f3ec6064c",
+      "classification": "historical-immutable-archive",
+      "justification": "Pre-budget archived Stagex auth-bound transition report retained unmodified for provenance; excluded from Nix source filters."
+    }
+  ],
+  "non_claim": "evidence size budget enforcement verifies size bounds and recorded digests only; it does not certify historical evidence as current release proof"
+}
